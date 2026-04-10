@@ -3,18 +3,17 @@
 import React from 'react';
 import { useAuthStore } from '../lib/authStore';
 import HeaderSection from '../components/home/HeaderSection';
-import HeroSection from '../components/home/HeroSection';
-import WhyMarketingSimplifiedSection from '../components/home/WhyMarketingSimplifiedSection';
-import UserPermissionSection from '../components/home/UserPermissionSection';
-import SmartWorkflowSection from '../components/home/SmartWorkflowSection';
-import VisualizeCampaignsSection from '../components/home/VisualizeCampaignsSection';
-import AutomatedEfficiencySection from '../components/home/AutomatedEfficiencySection';
-import UnifiedNotificationsSection from '../components/home/UnifiedNotificationsSection';
-import InsightfulAnalyticsSection from '../components/home/InsightfulAnalyticsSection';
-import HowItWorksSection from '../components/home/HowItWorksSection';
-import TestimonialsSection from '../components/home/TestimonialsSection';
-import CtaSection from '../components/home/CtaSection';
-import FooterSection from '../components/home/FooterSection';
+import NewHeroSection from '../components/home/NewHeroSection';
+import NewWhySection from '../components/home/NewWhySection';
+import NewSmartWorkflowSection from '../components/home/NewSmartWorkflowSection';
+import NewFeatureCarousel from '../components/home/NewFeatureCarousel';
+import NewHowItWorksSection from '../components/home/NewHowItWorksSection';
+import NewTestimonialsSection from '../components/home/NewTestimonialsSection';
+import NewIntegrationsSection from '../components/home/NewIntegrationsSection';
+import NewCtaSection from '../components/home/NewCtaSection';
+import NewFooterSection from '../components/home/NewFooterSection';
+import AiWorkflowsSection from '../components/home/AiWorkflowsSection';
+import FeatureShowcaseSection from '../components/home/FeatureShowcaseSection';
 
 export default function Page() {
   const { initialized, isAuthenticated, user } = useAuthStore();
@@ -45,27 +44,35 @@ export default function Page() {
   const displayRole = user?.roles?.[0] || 'Member';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white scroll-smooth">
-      <HeaderSection
-        isAuthenticated={isAuthenticated}
-        displayName={displayName}
-        displayRole={displayRole}
-        onLoginClick={handleLoginClick}
-        onGetStartedClick={handleGetStartedClick}
-        onRedirectToLogin={redirectToLogin}
-      />
-      <HeroSection onGetStartedClick={handleGetStartedClick} />
-      <WhyMarketingSimplifiedSection />
-      <UserPermissionSection onRedirectToLogin={redirectToLogin} />
-      <SmartWorkflowSection onRedirectToLogin={redirectToLogin} />
-      <VisualizeCampaignsSection onRedirectToLogin={redirectToLogin} />
-      <AutomatedEfficiencySection />
-      <UnifiedNotificationsSection onRedirectToLogin={redirectToLogin} />
-      <InsightfulAnalyticsSection onRedirectToLogin={redirectToLogin} />
-      <HowItWorksSection onGetStartedClick={handleGetStartedClick} />
-      <TestimonialsSection onRedirectToLogin={redirectToLogin} onGetStartedClick={handleGetStartedClick} />
-      <CtaSection onGetStartedClick={handleGetStartedClick} onRedirectToLogin={redirectToLogin} />
-      <FooterSection />
+    <div className="min-h-screen bg-white scroll-smooth relative overflow-hidden">
+      {/* Decorative gradient blobs */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-100/60 blur-[120px]" />
+        <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] rounded-full bg-violet-100/50 blur-[120px]" />
+        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] rounded-full bg-indigo-50/60 blur-[100px]" />
+      </div>
+
+      <div className="relative z-10">
+        <HeaderSection
+          isAuthenticated={isAuthenticated}
+          displayName={displayName}
+          displayRole={displayRole}
+          onLoginClick={handleLoginClick}
+          onGetStartedClick={handleGetStartedClick}
+          onRedirectToLogin={redirectToLogin}
+        />
+        <NewHeroSection onGetStartedClick={handleGetStartedClick} />
+        <AiWorkflowsSection />
+        <NewWhySection />
+        <NewSmartWorkflowSection />
+        <NewFeatureCarousel />
+        <FeatureShowcaseSection />
+        <NewHowItWorksSection onGetStartedClick={handleGetStartedClick} />
+        <NewTestimonialsSection />
+        <NewIntegrationsSection />
+        <NewCtaSection onGetStartedClick={handleGetStartedClick} />
+        <NewFooterSection />
+      </div>
     </div>
   );
 }
