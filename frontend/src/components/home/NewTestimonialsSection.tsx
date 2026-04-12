@@ -3,6 +3,7 @@
 import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import { ArrowRight, Quote, Star } from "lucide-react"
+import { Avatar } from "@/components/avatar/Avatar"
 
 const testimonials = [
   {
@@ -11,6 +12,7 @@ const testimonials = [
     author: "Jack Wilson",
     role: "Senior Media Buyer",
     company: "Agency Partners",
+    avatar: "/avatars/person-1.jpg",
     rating: 5,
   },
   {
@@ -19,6 +21,7 @@ const testimonials = [
     author: "Eve Turner",
     role: "Designer",
     company: "Creative Studio",
+    avatar: "/avatars/person-2.jpg",
     rating: 5,
   },
   {
@@ -27,6 +30,7 @@ const testimonials = [
     author: "Grace Lee",
     role: "Data Analyst",
     company: "Growth Labs",
+    avatar: "/avatars/person-3.jpg",
     rating: 5,
   },
   {
@@ -35,6 +39,7 @@ const testimonials = [
     author: "Marcus Chen",
     role: "Marketing Director",
     company: "Tech Ventures",
+    avatar: "/avatars/person-4.jpg",
     rating: 5,
   },
   {
@@ -43,6 +48,7 @@ const testimonials = [
     author: "Sarah Martinez",
     role: "Media Specialist",
     company: "Digital First",
+    avatar: "/avatars/person-9.jpg",
     rating: 5,
   },
   {
@@ -51,33 +57,36 @@ const testimonials = [
     author: "Tom Anderson",
     role: "Project Manager",
     company: "Brand Works",
+    avatar: "/avatars/person-6.jpg",
     rating: 5,
   },
 ]
 
 function TestimonialCard({ testimonial }: { testimonial: (typeof testimonials)[0] }) {
   return (
-    <div className="glass-card rounded-2xl p-6 min-w-[350px] flex-shrink-0 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col h-[280px]">
-      <div className="mb-4">
-        <Quote className="w-8 h-8 text-indigo-200" />
+    <div className="glass-card rounded-2xl p-4 sm:p-6 min-w-[260px] max-w-[calc(100vw-3rem)] sm:min-w-[350px] sm:max-w-none flex-shrink-0 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col h-auto min-h-[200px] sm:h-[280px]">
+      <div className="mb-2 sm:mb-4">
+        <Quote className="w-6 h-6 sm:w-8 sm:h-8 text-brand-teal/30" />
       </div>
 
-      <div className="flex gap-1 mb-3">
+      <div className="flex gap-1 mb-2 sm:mb-3">
         {[...Array(testimonial.rating)].map((_, i) => (
           <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
         ))}
       </div>
 
-      <p className="text-gray-700 mb-6 flex-grow leading-relaxed">
+      <p className="text-sm sm:text-base text-gray-700 mb-4 sm:mb-6 flex-grow leading-relaxed">
         &quot;{testimonial.quote}&quot;
       </p>
 
       <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
-        <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow bg-gradient-to-br from-indigo-200 to-violet-200">
-          <div className="w-full h-full flex items-center justify-center text-sm font-bold text-indigo-700">
-            {testimonial.author.split(" ").map((n) => n[0]).join("")}
-          </div>
-        </div>
+        <Avatar
+          src={testimonial.avatar}
+          alt={testimonial.author}
+          size="lg"
+          fallback={testimonial.author.split(" ").map((n) => n[0]).join("")}
+          className="ring-2 ring-white shadow flex-shrink-0"
+        />
         <div>
           <div className="font-bold text-gray-900">{testimonial.author}</div>
           <div className="text-sm text-gray-600">{testimonial.role}</div>
@@ -101,9 +110,9 @@ export default function NewTestimonialsSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             What teams{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               love
             </span>{" "}
             about us
@@ -125,12 +134,16 @@ export default function NewTestimonialsSection() {
         <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-gray-50/80 to-transparent z-10 pointer-events-none" />
 
         <div className="overflow-hidden">
-          <div className="flex gap-6 animate-marquee hover:[animation-play-state:paused]">
+          <div className="flex w-max animate-marquee hover:[animation-play-state:paused]">
             {testimonials.map((testimonial) => (
-              <TestimonialCard key={testimonial.id} testimonial={testimonial} />
+              <div key={testimonial.id} className="pr-6">
+                <TestimonialCard testimonial={testimonial} />
+              </div>
             ))}
             {testimonials.map((testimonial) => (
-              <TestimonialCard key={`dup-${testimonial.id}`} testimonial={testimonial} />
+              <div key={`dup-${testimonial.id}`} className="pr-6">
+                <TestimonialCard testimonial={testimonial} />
+              </div>
             ))}
           </div>
         </div>
@@ -142,7 +155,7 @@ export default function NewTestimonialsSection() {
         transition={{ duration: 0.6, delay: 0.4 }}
         className="text-center"
       >
-        <button className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-full hover:from-indigo-600 hover:to-violet-600 transition font-medium text-lg glow-indigo">
+        <button className="inline-flex items-center gap-2 px-8 py-4 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium text-lg glow-brand">
           See All Reviews
           <ArrowRight className="w-5 h-5" />
         </button>

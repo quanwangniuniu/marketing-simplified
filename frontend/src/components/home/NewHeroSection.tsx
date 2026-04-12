@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { AvatarGroup } from "@/components/avatar/AvatarGroup"
 import {
   Bot,
   Table2,
@@ -24,9 +25,9 @@ const modules = [
     id: "ai-agent",
     name: "AI Agent",
     icon: Bot,
-    color: "bg-indigo-500",
-    lightColor: "bg-indigo-50",
-    textColor: "text-indigo-600",
+    color: "bg-brand-teal",
+    lightColor: "bg-brand-teal/10",
+    textColor: "text-brand-teal",
     description: "Autonomous AI that manages your campaigns end-to-end",
     isHighlight: true,
     preview: {
@@ -63,9 +64,9 @@ const modules = [
     id: "meetings",
     name: "Meetings",
     icon: Video,
-    color: "bg-violet-500",
-    lightColor: "bg-violet-50",
-    textColor: "text-violet-600",
+    color: "bg-brand-teal",
+    lightColor: "bg-brand-teal/10",
+    textColor: "text-brand-teal",
     description: "Schedule and manage team meetings seamlessly",
     preview: {
       title: "Upcoming Meetings",
@@ -139,9 +140,9 @@ const modules = [
     id: "decisions",
     name: "Decisions",
     icon: Scale,
-    color: "bg-indigo-500",
-    lightColor: "bg-indigo-50",
-    textColor: "text-indigo-600",
+    color: "bg-brand-teal",
+    lightColor: "bg-brand-teal/10",
+    textColor: "text-brand-teal",
     description: "AI-powered recommendations for smarter decisions",
     preview: {
       title: "AI Recommendations",
@@ -258,21 +259,21 @@ function AIAgentPreview({ module }: { module: Module }) {
                 item.status === "completed"
                   ? "bg-emerald-100"
                   : item.status === "in-progress"
-                    ? "bg-indigo-100"
+                    ? "bg-brand-teal/15"
                     : "bg-gray-100"
               }`}
             >
-              {item.status === "completed" && <CheckSquare className="w-3 h-3 text-emerald-600" />}
-              {item.status === "in-progress" && <Zap className="w-3 h-3 text-indigo-600" />}
+              {item.status === "completed" && <CheckSquare className="w-3 h-3 text-brand-lime" />}
+              {item.status === "in-progress" && <Zap className="w-3 h-3 text-brand-teal" />}
               {item.status === "pending" && <Clock className="w-3 h-3 text-gray-400" />}
             </div>
             <span className="text-sm text-gray-700 flex-1">{item.label}</span>
             <span
               className={`text-xs px-2 py-0.5 rounded-full ${
                 item.status === "completed"
-                  ? "bg-emerald-100 text-emerald-700"
+                  ? "bg-brand-lime/15 text-brand-lime"
                   : item.status === "in-progress"
-                    ? "bg-indigo-100 text-indigo-700"
+                    ? "bg-brand-teal/15 text-brand-teal"
                     : "bg-gray-100 text-gray-500"
               }`}
             >
@@ -362,9 +363,9 @@ function GenericPreview({ module }: { module: Module }) {
                   item.status === "approved" ||
                   item.status === "active" ||
                   item.status === "sent"
-                    ? "bg-emerald-100 text-emerald-700"
+                    ? "bg-brand-lime/15 text-brand-lime"
                     : item.status === "in-progress" || item.status === "review"
-                      ? "bg-indigo-100 text-indigo-700"
+                      ? "bg-brand-teal/15 text-brand-teal"
                       : item.status === "paused" || item.status === "scheduled"
                         ? "bg-amber-100 text-amber-700"
                         : "bg-gray-100 text-gray-600"
@@ -375,23 +376,22 @@ function GenericPreview({ module }: { module: Module }) {
             )}
             {item.confidence && (
               <div className="text-right">
-                <p className="text-sm font-medium text-indigo-600">{item.confidence}</p>
+                <p className="text-sm font-medium text-brand-teal">{item.confidence}</p>
                 <p className="text-xs text-gray-500">{item.impact} impact</p>
               </div>
             )}
             {item.attendees && (
-              <div className="flex -space-x-2">
-                {Array(Math.min(item.attendees, 3))
+              <AvatarGroup
+                spacing="sm"
+                max={3}
+                avatars={Array(item.attendees)
                   .fill(0)
-                  .map((_, j) => (
-                    <div key={j} className="w-6 h-6 rounded-full bg-indigo-200 border-2 border-white" />
-                  ))}
-                {item.attendees > 3 && (
-                  <div className="w-6 h-6 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] text-gray-600">
-                    +{item.attendees - 3}
-                  </div>
-                )}
-              </div>
+                  .map((_, j) => ({
+                    src: `/avatars/person-${(j % 9) + 1}.jpg`,
+                    alt: `Attendee ${j + 1}`,
+                    size: "xs" as const,
+                  }))}
+              />
             )}
             {item.spend && (
               <div className="text-right">
@@ -423,19 +423,20 @@ type NewHeroSectionProps = {
 
 export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProps) {
   const [hoveredModule, setHoveredModule] = useState<string | null>(null)
+  const [selectedModule, setSelectedModule] = useState<string | null>(null)
 
-  const activeModuleId = hoveredModule || "ai-agent"
+  const activeModuleId = hoveredModule || selectedModule || "ai-agent"
   const activeModule = modules.find((m) => m.id === activeModuleId) || modules[0]
-  const shouldBlur = hoveredModule === null
+  const shouldBlur = !hoveredModule && !selectedModule
 
   return (
     <section className="py-8 md:py-16 px-6 overflow-hidden">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4 leading-tight">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 mb-4 leading-tight">
             The Ultimate Work Operating System
             <br />
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               for Advertising Teams
             </span>
           </h1>
@@ -446,7 +447,7 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
           <Button
             size="lg"
             onClick={onGetStartedClick}
-            className="bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white rounded-full px-8 py-3 text-base font-medium glow-indigo"
+            className="bg-brand-gradient hover:saturate-150 transition-all text-white rounded-full px-8 py-3 text-base font-medium glow-brand"
           >
             Get Started <ChevronRight className="w-5 h-5 ml-2" />
           </Button>
@@ -454,7 +455,7 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           <div className="relative lg:col-span-3 order-2 lg:order-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl transform rotate-1 scale-[1.02] opacity-60" />
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/10 to-brand-lime/10 rounded-2xl transform rotate-1 scale-[1.02] opacity-60" />
 
             <motion.div
               className={`relative glass-card rounded-2xl p-6 transition-all duration-500 min-h-[380px] ${
@@ -497,28 +498,32 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
             <div className="glass-card rounded-2xl p-5">
               <h3 className="text-base font-semibold text-gray-900 mb-1">
                 What would you like to{" "}
-                <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
                   explore?
                 </span>
               </h3>
-              <p className="text-xs text-gray-500 mb-4">Hover to preview each module</p>
+              <p className="text-xs text-gray-500 mb-4">Click to select, hover to preview</p>
 
               <div className="grid grid-cols-2 gap-2">
                 {modules.map((module) => {
                   const Icon = module.icon
-                  const isHovered = hoveredModule === module.id
+                  const isSelected = selectedModule === module.id
+                  const isActive = hoveredModule === module.id || isSelected
                   const isAIAgent = module.id === "ai-agent"
 
                   return (
                     <motion.button
                       key={module.id}
                       className={`relative p-3 rounded-xl border transition-all duration-200 text-left ${
-                        isHovered
-                          ? `border-indigo-300 ${module.lightColor}`
-                          : isAIAgent && !hoveredModule
-                            ? "border-indigo-200 bg-indigo-50/50"
-                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        isSelected
+                          ? `border-brand-teal ${module.lightColor} ring-2 ring-brand-teal/30`
+                          : isActive
+                            ? `border-brand-teal/40 ${module.lightColor}`
+                            : isAIAgent && !hoveredModule && !selectedModule
+                              ? "border-brand-teal/25 bg-brand-teal/5"
+                              : "border-gray-200 hover:border-gray-300 bg-white"
                       }`}
+                      onClick={() => setSelectedModule(isSelected ? null : module.id)}
                       onMouseEnter={() => setHoveredModule(module.id)}
                       onMouseLeave={() => setHoveredModule(null)}
                       onFocus={() => setHoveredModule(module.id)}
@@ -526,17 +531,25 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
-                      {isAIAgent && (
-                        <span className="absolute -top-2 -right-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-medium">
+                      {isAIAgent && !selectedModule && (
+                        <span className="absolute -top-2 -right-2 bg-brand-gradient text-white text-[9px] px-1.5 py-0.5 rounded-full font-medium">
                           KEY
                         </span>
                       )}
+                      {isSelected && (
+                        <motion.span
+                          layoutId="selectedBadge"
+                          className="absolute -top-2 -right-2 w-5 h-5 bg-brand-teal rounded-full flex items-center justify-center"
+                        >
+                          <CheckSquare className="w-3 h-3 text-white" />
+                        </motion.span>
+                      )}
                       <div
-                        className={`w-8 h-8 rounded-lg ${isHovered ? module.color : module.lightColor} flex items-center justify-center mb-1.5 transition-colors`}
+                        className={`w-8 h-8 rounded-lg ${isActive ? module.color : module.lightColor} flex items-center justify-center mb-1.5 transition-colors`}
                       >
-                        <Icon className={`w-4 h-4 ${isHovered ? "text-white" : module.textColor}`} />
+                        <Icon className={`w-4 h-4 ${isActive ? "text-white" : module.textColor}`} />
                       </div>
-                      <p className={`text-xs font-medium ${isHovered ? "text-gray-900" : "text-gray-700"}`}>
+                      <p className={`text-xs font-medium ${isActive ? "text-gray-900" : "text-gray-700"}`}>
                         {module.name}
                       </p>
                     </motion.button>
@@ -547,7 +560,7 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <Button
                   onClick={onGetStartedClick}
-                  className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white rounded-full text-sm glow-indigo"
+                  className="w-full bg-brand-gradient hover:saturate-150 transition-all text-white rounded-full text-sm glow-brand"
                 >
                   Get Started <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -555,14 +568,16 @@ export default function NewHeroSection({ onGetStartedClick }: NewHeroSectionProp
             </div>
 
             <div className="mt-4 flex items-center justify-center gap-3">
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gradient-to-br from-indigo-400 to-violet-500"
-                  />
-                ))}
-              </div>
+              <AvatarGroup
+                spacing="sm"
+                max={4}
+                avatars={[
+                  { src: "/avatars/person-5.jpg", alt: "User 1", size: "sm" as const },
+                  { src: "/avatars/person-6.jpg", alt: "User 2", size: "sm" as const },
+                  { src: "/avatars/person-7.jpg", alt: "User 3", size: "sm" as const },
+                  { src: "/avatars/person-8.jpg", alt: "User 4", size: "sm" as const },
+                ]}
+              />
               <p className="text-xs text-gray-500">
                 <span className="font-semibold text-gray-900">2,000+</span> teams trust us
               </p>

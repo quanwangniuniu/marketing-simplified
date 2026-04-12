@@ -2,6 +2,7 @@
 
 import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
+import { Avatar } from "@/components/avatar/Avatar"
 import {
   Table2,
   Scale,
@@ -18,7 +19,7 @@ const features = [
   {
     id: "spreadsheet",
     icon: Table2,
-    gradient: "from-indigo-500 to-indigo-400",
+    gradient: "from-brand-teal to-brand-lime",
     headline: "AI-Driven Anomaly Detection",
     body: "Ingest campaign spreadsheets and let our AI surface outliers, budget drift, and optimization opportunities automatically.",
     visual: <SpreadsheetMockup />,
@@ -26,7 +27,7 @@ const features = [
   {
     id: "decision",
     icon: Scale,
-    gradient: "from-violet-500 to-purple-500",
+    gradient: "from-brand-teal to-brand-lime",
     headline: "Data-Backed Go/No-Go",
     body: "Get AI-powered recommendations grounded in your campaign data. Every decision comes with a confidence score and projected impact.",
     visual: <DecisionMockup />,
@@ -34,7 +35,7 @@ const features = [
   {
     id: "task",
     icon: CheckSquare,
-    gradient: "from-indigo-500 to-violet-500",
+    gradient: "from-brand-teal to-brand-lime",
     headline: "Automated Task Orchestration",
     body: "From brief to launch \u2014 AI creates, assigns, and sequences tasks across your creative team based on project context.",
     visual: <TaskMockup />,
@@ -42,7 +43,7 @@ const features = [
   {
     id: "chat",
     icon: MessageSquare,
-    gradient: "from-violet-500 to-indigo-500",
+    gradient: "from-brand-teal to-brand-lime",
     headline: "Natural Language Project Querying",
     body: "Ask questions about your campaigns, budgets, Miro boards, or calendar in plain English. Get instant, context-aware answers.",
     visual: <ChatMockup />,
@@ -102,9 +103,9 @@ function DecisionMockup() {
           <span className="text-emerald-600 font-semibold">92%</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-indigo-500" />
+          <div className="w-2 h-2 rounded-full bg-brand-teal" />
           <span className="text-gray-500">Impact:</span>
-          <span className="text-indigo-600 font-semibold">High</span>
+          <span className="text-brand-teal font-semibold">High</span>
         </div>
       </div>
       <div className="flex gap-3 mt-auto">
@@ -140,7 +141,7 @@ function TaskMockup() {
                 task.status === "done"
                   ? "bg-emerald-100 text-emerald-600"
                   : task.status === "active"
-                    ? "bg-indigo-100 text-indigo-600 ring-2 ring-indigo-200"
+                    ? "bg-brand-teal/15 text-brand-teal ring-2 ring-brand-teal/25"
                     : "bg-gray-100 text-gray-400"
               }`}
             >
@@ -158,7 +159,7 @@ function TaskMockup() {
               {task.name}
             </span>
             {task.status === "active" && (
-              <span className="ml-auto text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
+              <span className="ml-auto text-[10px] px-2 py-0.5 bg-brand-teal/10 text-brand-teal rounded-full border border-brand-teal/25">
                 In Progress
               </span>
             )}
@@ -166,7 +167,7 @@ function TaskMockup() {
         ))}
       </div>
       <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-        <div className="h-full w-[60%] bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full" />
+        <div className="h-full w-[60%] bg-brand-gradient rounded-full" />
       </div>
     </div>
   )
@@ -177,25 +178,29 @@ function ChatMockup() {
     <div className="bg-white rounded-xl p-4 h-full flex flex-col shadow-sm border border-gray-100">
       <div className="space-y-3 flex-1">
         <div className="flex gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-gray-600">U</span>
-          </div>
+          <Avatar
+            src="https://unsplash.com/photos/man-wearing-eyeglasses-and-blue-shirt-inside-coffee-shop-QJEVpydulGs"
+            alt="User"
+            size="xs"
+            fallback="U"
+            className="flex-shrink-0"
+          />
           <div className="bg-gray-100 rounded-lg rounded-tl-sm px-3 py-2 text-xs text-gray-700 max-w-[80%]">
             What&apos;s my ad spend for Q2 across all channels?
           </div>
         </div>
         <div className="flex gap-2 justify-end">
-          <div className="bg-indigo-50 rounded-lg rounded-tr-sm px-3 py-2 text-xs text-indigo-800 max-w-[80%] border border-indigo-100">
+          <div className="bg-brand-teal/10 rounded-lg rounded-tr-sm px-3 py-2 text-xs text-slate-800 max-w-[80%] border border-brand-teal/20">
             Your total Q2 spend is <span className="font-semibold text-gray-900">$42,600</span> across 4 channels. Facebook leads at $15.2k (+12% MoM).
           </div>
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex-shrink-0 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full bg-brand-gradient flex-shrink-0 flex items-center justify-center">
             <span className="text-[10px] font-bold text-white">AI</span>
           </div>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2 bg-gray-50 rounded-lg border border-gray-200 px-3 py-2">
         <span className="text-xs text-gray-400 flex-1">Ask about your project...</span>
-        <Send className="w-3.5 h-3.5 text-indigo-500" />
+        <Send className="w-3.5 h-3.5 text-brand-teal" />
       </div>
     </div>
   )
@@ -228,7 +233,7 @@ function FeatureRow({
         </div>
         <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">{feature.headline}</h3>
         <p className="text-gray-600 text-lg leading-relaxed">{feature.body}</p>
-        <button className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium text-sm transition">
+        <button className="inline-flex items-center gap-2 text-brand-teal hover:text-brand-teal/80 font-medium text-sm transition">
           Learn more <ArrowRight className="w-4 h-4" />
         </button>
       </div>
@@ -253,9 +258,9 @@ export default function FeatureShowcaseSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-20"
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             The{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               Core Four
             </span>
           </h2>

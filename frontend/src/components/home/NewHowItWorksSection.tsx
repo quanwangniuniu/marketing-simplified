@@ -24,7 +24,7 @@ const steps = [
       "Set project timelines and milestones",
     ],
     icon: Users,
-    gradient: "from-indigo-500 to-violet-500",
+    gradient: "from-brand-teal to-brand-lime",
   },
   {
     id: 2,
@@ -85,9 +85,9 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             How it{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               works
             </span>
             ?
@@ -117,7 +117,7 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
                   onClick={() => setActiveStep(step.id)}
                   className={`relative flex items-start gap-4 p-5 rounded-2xl cursor-pointer transition-all duration-300 ${
                     isActive
-                      ? "glass-card ring-1 ring-indigo-200 shadow-lg shadow-indigo-50"
+                      ? "glass-card ring-1 ring-brand-teal/25 shadow-lg shadow-brand-teal/10"
                       : "bg-gray-50 hover:bg-gray-100 border border-transparent"
                   }`}
                 >
@@ -131,7 +131,7 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
                   </div>
 
                   <div className="flex-1">
-                    <h3 className={`font-bold text-lg mb-1 ${isActive ? "text-indigo-600" : "text-gray-900"}`}>
+                    <h3 className={`font-bold text-lg mb-1 ${isActive ? "text-brand-teal" : "text-gray-900"}`}>
                       {step.title}
                     </h3>
                     <p className="text-gray-500 text-sm">{step.description}</p>
@@ -139,7 +139,7 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
 
                   {isActive && (
                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <Play className="w-4 h-4 text-indigo-600 fill-indigo-600" />
+                      <Play className="w-4 h-4 text-brand-teal fill-brand-teal" />
                     </motion.div>
                   )}
 
@@ -192,7 +192,7 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
                           transition={{ delay: 0.1 * detailIndex }}
                           className="flex items-center gap-3"
                         >
-                          <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                          <CheckCircle className="w-5 h-5 text-brand-lime flex-shrink-0" />
                           <span className="text-gray-700">{detail}</span>
                         </motion.div>
                       ))}
@@ -212,7 +212,7 @@ export default function NewHowItWorksSection({ onGetStartedClick }: NewHowItWork
         >
           <button
             onClick={onGetStartedClick}
-            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-full hover:from-indigo-600 hover:to-violet-600 transition font-medium text-lg glow-indigo"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium text-lg glow-brand"
           >
             Start Your Journey Today
             <ArrowRight className="w-5 h-5" />

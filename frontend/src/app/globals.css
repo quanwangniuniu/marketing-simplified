@@ -537,27 +537,39 @@ input[type="password"]::-webkit-textfield-decoration-container {
   display: none !important;
 }
 
-/* Marquee animation for testimonials */
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
 
-.animate-marquee {
-  animation: marquee 30s linear infinite;
-}
-
-/* Glassmorphism card (light mode) */
+/* Liquid glass card */
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(99, 102, 241, 0.04);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.45) 40%,
+    rgba(240, 244, 255, 0.5) 70%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.4) inset,
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 4px 12px rgba(60, 206, 215, 0.05),
+    0 8px 32px rgba(60, 206, 215, 0.03);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.5) inset,
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(60, 206, 215, 0.08),
+    0 16px 48px rgba(166, 230, 97, 0.04);
+}
+
+/* Brand gradient utility */
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #3cced7, #a6e661);
 }
 
 /* Glow hover for CTAs */
@@ -566,4 +578,11 @@ input[type="password"]::-webkit-textfield-decoration-container {
 }
 .glow-indigo:hover {
   box-shadow: 0 0 30px rgba(99, 102, 241, 0.4), 0 0 60px rgba(99, 102, 241, 0.15);
+}
+
+.glow-brand {
+  transition: box-shadow 0.3s ease, filter 0.3s ease;
+}
+.glow-brand:hover {
+  box-shadow: 0 0 30px rgba(60, 206, 215, 0.4), 0 0 60px rgba(166, 230, 97, 0.15);
 }

@@ -16,7 +16,7 @@ const workflows = [
     id: "spreadsheet-analysis",
     name: "Spreadsheet Analysis",
     icon: Table2,
-    iconGradient: "from-indigo-500 to-indigo-400",
+    iconGradient: "from-brand-teal to-brand-lime",
     action:
       "Hand a campaign spreadsheet to the LLM to detect anomalies and suggest actions.",
     trigger: "Step 1 of default analysis workflow",
@@ -25,7 +25,7 @@ const workflows = [
     id: "follow-up-chat",
     name: "Follow-up Chat",
     icon: MessageSquare,
-    iconGradient: "from-violet-500 to-purple-500",
+    iconGradient: "from-brand-teal to-brand-lime",
     action:
       "Answer the user's follow-up question, optionally producing a forward list.",
     trigger: "After 5-step flow, when user asks in chat",
@@ -63,13 +63,13 @@ export default function AiWorkflowsSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-full text-indigo-600 text-sm font-medium mb-4 border border-indigo-100">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-teal/10 rounded-full text-brand-teal text-sm font-medium mb-4 border border-brand-teal/20">
             <Bot className="w-4 h-4" />
             AI Agent Workflows
           </div>
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             Intelligent automation,{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               built-in
             </span>
           </h2>
@@ -98,7 +98,7 @@ export default function AiWorkflowsSection() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{wf.name}</h3>
-                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                    <div className="flex items-center gap-1.5 text-xs text-brand-teal font-medium">
                       <Zap className="w-3 h-3" />
                       Action
                     </div>
@@ -111,7 +111,7 @@ export default function AiWorkflowsSection() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-gray-400">Trigger:</span>
-                  <span className="inline-flex items-center px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full border border-indigo-200">
+                  <span className="inline-flex items-center px-3 py-1 bg-brand-teal/10 text-brand-teal text-xs font-medium rounded-full border border-brand-teal/25">
                     {wf.trigger}
                   </span>
                 </div>

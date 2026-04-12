@@ -9,18 +9,19 @@ export default function FooterSection() {
           <div className="flex flex-col md:flex-row justify-between items-start mb-4">
             {/* Logo and Email */}
             <div className="mb-4 md:mb-0 md:ml-32">
-              <h3 className="text-2xl font-bold mb-2 text-left">
-                <span className="text-blue-600">Marketing</span>
-                <span className="text-gray-900"> Simplified</span>
-              </h3>
+              <img
+                src="/marketing_simplified_logo.png"
+                alt="Marketing Simplified Logo"
+                className="h-20 w-auto mb-2"
+              />
               <p className="text-gray-600 mb-6 text-left">One platform.<br />Every stage.</p>
               <div className="relative w-fit mt-10">
                 <input
                   type="email"
                   placeholder="Enter Your Email"
-                  className="w-64 px-4 pr-24 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
+                  className="w-64 px-4 pr-24 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-teal text-left"
                 />
-                <button className="absolute right-1 top-1/2 -translate-y-1/2 px-4 py-2 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition text-sm">
+                <button className="absolute right-1 top-1/2 -translate-y-1/2 px-4 py-2 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all text-sm">
                   Submit
                 </button>
               </div>
@@ -76,18 +77,19 @@ export default function FooterSection() {
         <div className="max-w-4xl mx-auto">
           {/* Logo and Email */}
           <div className="mb-8 text-center">
-            <h3 className="text-2xl font-bold mb-2">
-              <span className="text-blue-600">Marketing</span>
-              <span className="text-gray-900"> Simplified</span>
-            </h3>
+            <img
+              src="/marketing_simplified_logo.png"
+              alt="Marketing Simplified Logo"
+              className="h-16 w-auto mb-2 mx-auto"
+            />
             <p className="text-gray-600 mb-10">One platform. Every stage.</p>
             <div className="relative w-full max-w-sm mx-auto mt-10">
               <input
                 type="email"
                 placeholder="Enter Your Email"
-                className="w-full px-4 pr-24 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-4 pr-24 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-teal text-sm"
               />
-              <button className="absolute right-1 top-1/2 -translate-y-1/2 px-4 py-2 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition text-sm">
+              <button className="absolute right-1 top-1/2 -translate-y-1/2 px-4 py-2 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all text-sm">
                 Submit
               </button>
             </div>

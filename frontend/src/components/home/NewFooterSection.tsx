@@ -40,10 +40,11 @@ export default function NewFooterSection() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <h3 className="text-2xl font-bold">
-                <span className="text-indigo-600">Marketing</span>
-                <span className="text-gray-900"> Simplified</span>
-              </h3>
+              <img
+                src="/marketing_simplified_logo.png"
+                alt="Marketing Simplified Logo"
+                className="h-20 w-auto"
+              />
             </Link>
             <p className="text-gray-500 mb-6 max-w-xs">
               One platform. Every stage. The AI-powered platform for media buyers.

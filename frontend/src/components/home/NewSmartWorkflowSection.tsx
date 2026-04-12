@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react"
 import { motion, useInView } from "framer-motion"
+import { Avatar } from "@/components/avatar/Avatar"
 import {
   Search,
   Bell,
@@ -53,8 +54,8 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; bg
   pending: { label: "Pending Review", icon: Clock, bg: "bg-orange-100", text: "text-orange-700" },
   approved: { label: "Approved", icon: CheckCircle, bg: "bg-emerald-100", text: "text-emerald-700" },
   rejected: { label: "Rejected", icon: XCircle, bg: "bg-rose-100", text: "text-rose-700" },
-  scheduled: { label: "Scheduled", icon: Calendar, bg: "bg-indigo-100", text: "text-indigo-700" },
-  "in-progress": { label: "In Progress", icon: RefreshCw, bg: "bg-indigo-100", text: "text-indigo-700" },
+  scheduled: { label: "Scheduled", icon: Calendar, bg: "bg-brand-teal/15", text: "text-brand-teal" },
+  "in-progress": { label: "In Progress", icon: RefreshCw, bg: "bg-brand-teal/15", text: "text-brand-teal" },
   ready: { label: "Report Ready", icon: CheckCircle, bg: "bg-gray-100", text: "text-gray-700" },
 }
 
@@ -63,7 +64,7 @@ const colorMap: Record<string, string> = {
   orange: "bg-orange-400",
   green: "bg-emerald-400",
   red: "bg-rose-400",
-  blue: "bg-indigo-400",
+  blue: "bg-brand-teal",
   gray: "bg-gray-400",
 }
 
@@ -97,7 +98,7 @@ export default function NewSmartWorkflowSection() {
                     <Filter className="w-4 h-4" />
                     <span className="hidden sm:inline">Filters</span>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg text-sm">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-brand-gradient text-white rounded-lg text-sm">
                     <Plus className="w-4 h-4" />
                     <span className="hidden sm:inline">Create task</span>
                   </div>
@@ -113,13 +114,13 @@ export default function NewSmartWorkflowSection() {
               <div className="flex">
                 <div className="w-44 bg-gray-50 border-r border-gray-200 p-3 hidden md:block">
                   <nav className="space-y-1 mb-4">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium text-sm">
-                      <span className="w-1 h-4 bg-indigo-500 rounded-full" />
+                    <div className="flex items-center gap-2 px-3 py-2 bg-brand-teal/10 text-brand-teal rounded-lg font-medium text-sm">
+                      <span className="w-1 h-4 bg-brand-teal rounded-full" />
                       Dashboard
                     </div>
                     <div className="flex items-center justify-between px-3 py-2 text-gray-600 rounded-lg text-sm">
                       Tasks
-                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">
+                      <span className="px-2 py-0.5 bg-brand-teal/15 text-brand-teal text-xs font-semibold rounded-full">
                         16
                       </span>
                     </div>
@@ -140,9 +141,12 @@ export default function NewSmartWorkflowSection() {
                   </div>
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-violet-100 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-semibold text-violet-700">BS</span>
-                      </div>
+                      <Avatar
+                        src="/avatars/person-9.jpg"
+                        alt="Brooklyn S."
+                        size="sm"
+                        fallback="BS"
+                      />
                       <div>
                         <div className="text-xs font-medium text-gray-900">Brooklyn S.</div>
                         <div className="text-xs text-gray-500">Admin</div>
@@ -181,7 +185,7 @@ export default function NewSmartWorkflowSection() {
                               onMouseEnter={() => setActiveTask(task.id)}
                               onMouseLeave={() => setActiveTask(null)}
                               className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer ${
-                                activeTask === task.id ? "ring-2 ring-indigo-500 border-indigo-300" : "border-gray-200"
+                                activeTask === task.id ? "ring-2 ring-brand-teal border-brand-teal/40" : "border-gray-200"
                               }`}
                             >
                               <div className={`h-1 ${colorMap[task.color]} rounded-t-lg`} />
@@ -197,7 +201,12 @@ export default function NewSmartWorkflowSection() {
                                 </div>
                                 <h5 className="text-xs font-semibold text-gray-900 mb-2">{task.title}</h5>
                                 <div className="flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 ring-1 ring-gray-200" />
+                                  <Avatar
+                                    src={`/avatars/person-${(task.id % 9) + 1}.jpg`}
+                                    alt="Assignee"
+                                    size="xs"
+                                    className="ring-1 ring-gray-200"
+                                  />
                                 </div>
                               </div>
                             </motion.div>
@@ -217,7 +226,7 @@ export default function NewSmartWorkflowSection() {
             transition={{ duration: 0.7, delay: 0.4 }}
             className="w-full lg:w-2/5"
           >
-            <div className="bg-indigo-50 rounded-3xl p-8 relative overflow-hidden border border-indigo-100">
+            <div className="bg-brand-teal/5 rounded-3xl p-8 relative overflow-hidden border border-brand-teal/15">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-gray-200 mb-6">
                 <RefreshCw className="w-4 h-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-900">Smart Workflow</span>
@@ -231,12 +240,12 @@ export default function NewSmartWorkflowSection() {
                 transitions so your team stays perfectly aligned.
               </p>
 
-              <button className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-full hover:from-indigo-600 hover:to-violet-600 transition font-medium glow-indigo">
+              <button className="inline-flex items-center gap-2 px-6 py-3 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium glow-brand">
                 Learn More
                 <ArrowRight className="w-5 h-5" />
               </button>
 
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-100 rounded-full opacity-50" />
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-brand-teal/15 rounded-full opacity-50" />
             </div>
           </motion.div>
         </div>

@@ -16,7 +16,7 @@ const personas = [
   {
     id: "designer",
     role: "Designer",
-    avatar: "https://i.pravatar.cc/150?img=1",
+    avatar: "/avatars/person-1.jpg",
     bgColor: "bg-purple-100",
     accentColor: "text-purple-600",
     icon: Palette,
@@ -32,9 +32,9 @@ const personas = [
   {
     id: "senior-buyer",
     role: "Senior Media Buyer",
-    avatar: "https://i.pravatar.cc/150?img=12",
-    bgColor: "bg-indigo-100",
-    accentColor: "text-indigo-600",
+    avatar: "/avatars/person-2.jpg",
+    bgColor: "bg-brand-teal/15",
+    accentColor: "text-brand-teal",
     icon: TrendingUp,
     pain: "Budgets are tracked in spreadsheets, and I never know if the latest version is approved.",
     solution: "Automated budget tracking with approval workflows",
@@ -48,7 +48,7 @@ const personas = [
   {
     id: "specialist",
     role: "Specialist Media Buyer",
-    avatar: "https://i.pravatar.cc/150?img=33",
+    avatar: "/avatars/person-3.jpg",
     bgColor: "bg-emerald-100",
     accentColor: "text-emerald-600",
     icon: Target,
@@ -64,7 +64,7 @@ const personas = [
   {
     id: "analyst",
     role: "Data Analyst",
-    avatar: "https://i.pravatar.cc/150?img=47",
+    avatar: "/avatars/person-4.jpg",
     bgColor: "bg-orange-100",
     accentColor: "text-orange-600",
     icon: BarChart3,
@@ -93,9 +93,9 @@ export default function NewWhySection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             Why{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               Marketing Simplified
             </span>
             ?
@@ -125,14 +125,14 @@ export default function NewWhySection() {
                   onClick={() => setActivePersona(persona)}
                   className={`relative p-5 rounded-2xl text-left transition-all duration-300 ${
                     isActive
-                      ? "glass-card ring-2 ring-indigo-500 shadow-lg shadow-indigo-100"
+                      ? "glass-card ring-2 ring-brand-teal shadow-lg shadow-brand-teal/10"
                       : "glass-card hover:shadow-md"
                   }`}
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <div
                       className={`w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ${
-                        isActive ? "ring-indigo-500" : "ring-gray-200"
+                        isActive ? "ring-brand-teal" : "ring-gray-200"
                       }`}
                     >
                       <img src={persona.avatar} alt={persona.role} className="w-full h-full object-cover" />
@@ -141,7 +141,7 @@ export default function NewWhySection() {
                       <IconComponent className={`w-4 h-4 ${persona.accentColor}`} />
                     </div>
                   </div>
-                  <h3 className={`font-bold text-sm mb-2 ${isActive ? "text-indigo-600" : "text-gray-900"}`}>
+                  <h3 className={`font-bold text-sm mb-2 ${isActive ? "text-brand-teal" : "text-gray-900"}`}>
                     {persona.role}
                   </h3>
                   <p className="text-xs text-gray-500 italic line-clamp-2">
@@ -150,7 +150,7 @@ export default function NewWhySection() {
                   {isActive && (
                     <motion.div
                       layoutId="activeIndicator"
-                      className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-500"
+                      className="absolute top-3 right-3 w-2 h-2 rounded-full bg-brand-teal"
                     />
                   )}
                 </motion.button>
@@ -171,10 +171,10 @@ export default function NewWhySection() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-                className="bg-indigo-50 rounded-3xl p-8 relative overflow-hidden border border-indigo-100"
+                className="bg-brand-teal/5 rounded-3xl p-8 relative overflow-hidden border border-brand-teal/15"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-violet-100 rounded-full translate-y-1/2 -translate-x-1/2 opacity-50" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-teal/15 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-brand-lime/15 rounded-full translate-y-1/2 -translate-x-1/2 opacity-50" />
 
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-6">
@@ -183,7 +183,7 @@ export default function NewWhySection() {
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900">{activePersona.role}</h3>
-                      <div className="flex items-center gap-1 text-sm text-indigo-600">
+                      <div className="flex items-center gap-1 text-sm text-brand-teal">
                         <Sparkles className="w-3 h-3" />
                         <span>Solution</span>
                       </div>
@@ -206,13 +206,13 @@ export default function NewWhySection() {
                         transition={{ delay: 0.1 * index }}
                         className="flex items-start gap-3"
                       >
-                        <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        <CheckCircle className="w-5 h-5 text-brand-lime flex-shrink-0 mt-0.5" />
                         <span className="text-gray-700 text-sm">{benefit}</span>
                       </motion.div>
                     ))}
                   </div>
 
-                  <button className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-full hover:from-indigo-600 hover:to-violet-600 transition font-medium text-sm glow-indigo">
+                  <button className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium text-sm glow-brand">
                     Learn More
                     <ArrowRight className="w-4 h-4" />
                   </button>

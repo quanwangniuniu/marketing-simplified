@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { motion, useInView } from "framer-motion"
 import {
   Bot,
@@ -12,6 +12,8 @@ import {
   Zap,
   Target,
   Brain,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AvatarGroup } from "@/components/avatar/AvatarGroup"
@@ -37,11 +39,11 @@ function AIAgentPreview() {
         className="bg-white rounded-lg p-3 shadow-sm border border-gray-100"
       >
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-full bg-brand-gradient flex items-center justify-center">
             <Zap className="w-3.5 h-3.5 text-white" />
           </div>
           <span className="text-sm font-medium text-gray-900">Campaign analyzed</span>
-          <span className="ml-auto text-xs text-indigo-600">Auto</span>
+          <span className="ml-auto text-xs text-brand-teal">Auto</span>
         </div>
         <p className="text-xs text-gray-500">Identified 3 optimization opportunities</p>
       </motion.div>
@@ -66,17 +68,17 @@ function AIAgentPreview() {
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.6 }}
-        className="bg-white rounded-lg p-3 shadow-sm border border-indigo-200"
+        className="bg-white rounded-lg p-3 shadow-sm border border-brand-teal/30"
       >
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-full bg-brand-gradient flex items-center justify-center">
             <Brain className="w-3.5 h-3.5 text-white" />
           </div>
           <span className="text-sm font-medium text-gray-900">Decision pending</span>
         </div>
         <p className="text-xs text-gray-500 mb-2">Scale winning ad set by 30%?</p>
         <div className="flex gap-2">
-          <span className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-white">Approve</span>
+          <span className="text-xs px-3 py-1 rounded-full bg-brand-gradient text-white">Approve</span>
           <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600">Review</span>
         </div>
       </motion.div>
@@ -131,7 +133,7 @@ function CampaignPreview() {
         </div>
         <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-gradient-to-r from-indigo-500 to-violet-500"
+            className="h-full bg-brand-gradient"
             initial={{ width: 0 }}
             animate={{ width: "68%" }}
             transition={{ duration: 1, delay: 0.5 }}
@@ -161,7 +163,7 @@ function MeetingPreview() {
     <div className="h-full flex flex-col gap-3">
       <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-2">
-          <Video className="w-4 h-4 text-indigo-500" />
+          <Video className="w-4 h-4 text-brand-teal" />
           <span className="text-sm font-medium text-gray-900">Campaign Review</span>
         </div>
         <p className="text-xs text-gray-500 mb-2">Today, 2:00 PM - 3:00 PM</p>
@@ -169,15 +171,15 @@ function MeetingPreview() {
           spacing="sm"
           max={3}
           avatars={[
-            { src: "https://i.pravatar.cc/150?img=10", alt: "Attendee 1", size: "xs" },
-            { src: "https://i.pravatar.cc/150?img=20", alt: "Attendee 2", size: "xs" },
-            { src: "https://i.pravatar.cc/150?img=30", alt: "Attendee 3", size: "xs" },
-            { src: "https://i.pravatar.cc/150?img=40", alt: "Attendee 4", size: "xs" },
-            { src: "https://i.pravatar.cc/150?img=50", alt: "Attendee 5", size: "xs" },
+            { src: "/avatars/person-5.jpg", alt: "Attendee 1", size: "xs" },
+            { src: "/avatars/person-6.jpg", alt: "Attendee 2", size: "xs" },
+            { src: "/avatars/person-7.jpg", alt: "Attendee 3", size: "xs" },
+            { src: "/avatars/person-8.jpg", alt: "Attendee 4", size: "xs" },
+            { src: "/avatars/person-9.jpg", alt: "Attendee 5", size: "xs" },
           ]}
         />
       </div>
-      <div className="bg-white/80 rounded-lg p-3 border border-gray-200">
+      <div className="bg-white/80 rounded-lg p-3 border border-brand-teal/20">
         <p className="text-xs font-medium text-gray-900 mb-1">AI Meeting Notes</p>
         <p className="text-xs text-gray-500">3 action items captured automatically</p>
       </div>
@@ -237,7 +239,7 @@ function DecisionPreview() {
         </div>
       </div>
       <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 text-xs h-8 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white">
+        <Button size="sm" className="flex-1 text-xs h-8 bg-brand-gradient hover:saturate-150 transition-all text-white">
           Approve
         </Button>
         <Button size="sm" variant="outline" className="flex-1 text-xs h-8 border-gray-300 text-gray-700 hover:bg-gray-50">
@@ -255,8 +257,8 @@ const features: FeatureCard[] = [
     subtitle: "AI Agent",
     description: "Your autonomous AI that manages campaigns, optimizes budgets, and makes decisions 24/7",
     icon: Bot,
-    gradient: "from-indigo-500 to-violet-500",
-    bgColor: "bg-gradient-to-br from-indigo-50 to-violet-50",
+    gradient: "from-brand-teal to-brand-lime",
+    bgColor: "bg-gradient-to-br from-brand-teal/10 to-brand-lime/10",
     preview: <AIAgentPreview />,
   },
   {
@@ -285,8 +287,8 @@ const features: FeatureCard[] = [
     subtitle: "Meetings",
     description: "AI-powered meeting scheduler with automatic notes and action items",
     icon: Video,
-    gradient: "from-violet-500 to-purple-500",
-    bgColor: "bg-gradient-to-br from-violet-50 to-purple-50",
+    gradient: "from-brand-teal to-brand-lime",
+    bgColor: "bg-gradient-to-br from-brand-teal/10 to-brand-lime/10",
     preview: <MeetingPreview />,
   },
   {
@@ -317,7 +319,7 @@ function FeatureCardComponent({ feature }: { feature: FeatureCard }) {
   return (
     <motion.div
       className={`relative h-[480px] rounded-2xl overflow-hidden glass-card transition-shadow duration-300 ${
-        isHovered ? "shadow-xl shadow-indigo-100" : ""
+        isHovered ? "shadow-xl shadow-brand-teal/10" : ""
       }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -345,42 +347,62 @@ function FeatureCardComponent({ feature }: { feature: FeatureCard }) {
   )
 }
 
+const CARD_WIDTH = 380
+const GAP = 24
+const SLIDE_WIDTH = CARD_WIDTH + GAP
+const AUTO_PLAY_MS = 2000
+
 export default function NewFeatureCarousel() {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const isInView = useInView(containerRef, { once: true, margin: "-100px" })
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [transitionEnabled, setTransitionEnabled] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
-  const [scrollPosition, setScrollPosition] = useState(0)
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  const total = features.length
+  const extendedFeatures = [...features, ...features, ...features]
+  const homeOffset = total
+
+  const slide = useCallback(
+    (dir: 1 | -1) => {
+      if (isAnimating) return
+      setIsAnimating(true)
+      setTransitionEnabled(true)
+      setCurrentIndex((prev) => prev + dir)
+    },
+    [isAnimating],
+  )
+
+  const goToNext = useCallback(() => slide(1), [slide])
+  const goToPrev = useCallback(() => slide(-1), [slide])
+
+  const handleTransitionEnd = useCallback(() => {
+    if (currentIndex >= total || currentIndex < 0) {
+      setTransitionEnabled(false)
+      setCurrentIndex((prev) => ((prev % total) + total) % total)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setTransitionEnabled(true)
+          setIsAnimating(false)
+        }),
+      )
+    } else {
+      setIsAnimating(false)
+    }
+  }, [currentIndex, total])
 
   useEffect(() => {
-    if (!containerRef.current || isPaused) return
+    if (isPaused || !isInView) return
+    const id = setInterval(goToNext, AUTO_PLAY_MS)
+    return () => clearInterval(id)
+  }, [isPaused, isInView, goToNext])
 
-    const scrollContainer = containerRef.current
-    let animationId: number
-
-    const scroll = () => {
-      if (!isPaused) {
-        setScrollPosition((prev) => {
-          const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth
-          const newPos = prev + 0.5
-          if (newPos >= maxScroll) return 0
-          return newPos
-        })
-      }
-      animationId = requestAnimationFrame(scroll)
-    }
-
-    animationId = requestAnimationFrame(scroll)
-    return () => cancelAnimationFrame(animationId)
-  }, [isPaused])
-
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollLeft = scrollPosition
-    }
-  }, [scrollPosition])
+  const translateX = -(homeOffset + currentIndex) * SLIDE_WIDTH
+  const activeDot = ((currentIndex % total) + total) % total
 
   return (
-    <section className="py-20 bg-gray-50/50 overflow-hidden">
+    <section ref={sectionRef} className="py-20 bg-gray-50/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 mb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -388,9 +410,9 @@ export default function NewFeatureCarousel() {
           transition={{ duration: 0.6 }}
           className="text-center max-w-3xl mx-auto"
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
             Everything you need to{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
               simplify
             </span>{" "}
             media buying
@@ -400,22 +422,86 @@ export default function NewFeatureCarousel() {
       </div>
 
       <div
-        ref={containerRef}
-        className="flex gap-6 overflow-x-auto pb-8 px-8 scrollbar-hide cursor-grab"
-        style={{ scrollBehavior: "auto" }}
+        className="relative"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
       >
-        {features.map((feature, index) => (
-          <motion.div
-            key={feature.id}
-            initial={{ opacity: 0, y: 30 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: index * 0.1 }}
-            className="flex-shrink-0 w-[380px]"
+        <button
+          onClick={goToPrev}
+          aria-label="Previous feature"
+          className="hidden md:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/40 hover:bg-white/70 backdrop-blur-md border border-white/30 shadow-lg items-center justify-center text-gray-400 hover:text-brand-teal transition-all duration-200 cursor-pointer group"
+        >
+          <ChevronLeft className="w-5 h-5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={goToPrev}
+          aria-label="Previous feature"
+          className="flex md:hidden absolute left-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white/60 backdrop-blur-sm border border-gray-200 shadow-md items-center justify-center text-gray-500 cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className="overflow-hidden mx-4 md:mx-0">
+          <div
+            className={`flex pb-8 md:pl-8 lg:pl-12 ${transitionEnabled ? "transition-transform duration-500 ease-in-out" : ""}`}
+            style={{ transform: `translateX(${translateX}px)`, gap: `${GAP}px` }}
+            onTransitionEnd={handleTransitionEnd}
           >
-            <FeatureCardComponent feature={feature} />
-          </motion.div>
+            {extendedFeatures.map((feature, index) => (
+              <motion.div
+                key={`${feature.id}-${index}`}
+                initial={{ opacity: 0, y: 30 }}
+                animate={isInView ? { opacity: 1, y: 0 } : {}}
+                transition={{
+                  duration: 0.6,
+                  delay: Math.min((index % total) * 0.1, 0.5),
+                }}
+                className="flex-shrink-0 w-[380px]"
+              >
+                <FeatureCardComponent feature={feature} />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={goToNext}
+          aria-label="Next feature"
+          className="hidden md:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/40 hover:bg-white/70 backdrop-blur-md border border-white/30 shadow-lg items-center justify-center text-gray-400 hover:text-brand-teal transition-all duration-200 cursor-pointer group"
+        >
+          <ChevronRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={goToNext}
+          aria-label="Next feature"
+          className="flex md:hidden absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white/60 backdrop-blur-sm border border-gray-200 shadow-md items-center justify-center text-gray-500 cursor-pointer"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+
+        <div className="hidden md:block pointer-events-none absolute inset-y-0 left-0 w-24 lg:w-32 z-[5]" style={{ background: 'linear-gradient(to right, rgb(249 250 251 / 0.95), transparent)' }} />
+        <div className="hidden md:block pointer-events-none absolute inset-y-0 right-0 w-24 lg:w-32 z-[5]" style={{ background: 'linear-gradient(to left, rgb(249 250 251 / 0.95), transparent)' }} />
+      </div>
+
+      <div className="flex justify-center gap-2 mt-6">
+        {features.map((_, i) => (
+          <button
+            key={i}
+            aria-label={`Go to feature ${i + 1}`}
+            onClick={() => {
+              if (isAnimating) return
+              setIsAnimating(true)
+              setTransitionEnabled(true)
+              setCurrentIndex(i)
+            }}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === activeDot
+                ? "w-8 bg-brand-gradient"
+                : "w-2 bg-gray-300 hover:bg-gray-400"
+            }`}
+          />
         ))}
       </div>
     </section>
