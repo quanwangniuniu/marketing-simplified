@@ -352,7 +352,7 @@ const GAP = 24
 const SLIDE_WIDTH = CARD_WIDTH + GAP
 const AUTO_PLAY_MS = 2000
 
-export default function NewFeatureCarousel() {
+export default function FeatureCarousel() {
   const sectionRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
   const [currentIndex, setCurrentIndex] = useState(0)

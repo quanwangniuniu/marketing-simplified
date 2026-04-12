@@ -3,15 +3,15 @@
 import React from 'react';
 import { useAuthStore } from '../lib/authStore';
 import HeaderSection from '../components/home/HeaderSection';
-import NewHeroSection from '../components/home/NewHeroSection';
-import NewWhySection from '../components/home/NewWhySection';
-import NewSmartWorkflowSection from '../components/home/NewSmartWorkflowSection';
-import NewFeatureCarousel from '../components/home/NewFeatureCarousel';
-import NewHowItWorksSection from '../components/home/NewHowItWorksSection';
-import NewTestimonialsSection from '../components/home/NewTestimonialsSection';
-import NewIntegrationsSection from '../components/home/NewIntegrationsSection';
-import NewCtaSection from '../components/home/NewCtaSection';
-import NewFooterSection from '../components/home/NewFooterSection';
+import HeroSection from '../components/home/HeroSection';
+import WhyMarketingSimplifiedSection from '../components/home/WhyMarketingSimplifiedSection';
+import SmartWorkflowSection from '../components/home/SmartWorkflowSection';
+import FeatureCarousel from '../components/home/FeatureCarousel';
+import HowItWorksSection from '../components/home/HowItWorksSection';
+import TestimonialsSection from '../components/home/TestimonialsSection';
+import IntegrationsSection from '../components/home/IntegrationsSection';
+import CtaSection from '../components/home/CtaSection';
+import FooterSection from '../components/home/FooterSection';
 import AiWorkflowsSection from '../components/home/AiWorkflowsSection';
 import FeatureShowcaseSection from '../components/home/FeatureShowcaseSection';
 
@@ -61,17 +61,17 @@ export default function Page() {
           onGetStartedClick={handleGetStartedClick}
           onRedirectToLogin={redirectToLogin}
         />
-        <NewHeroSection onGetStartedClick={handleGetStartedClick} />
+        <HeroSection onGetStartedClick={handleGetStartedClick} />
         <AiWorkflowsSection />
-        <NewWhySection />
-        <NewSmartWorkflowSection />
-        <NewFeatureCarousel />
+        <WhyMarketingSimplifiedSection />
+        <SmartWorkflowSection />
+        <FeatureCarousel />
         <FeatureShowcaseSection />
-        <NewHowItWorksSection onGetStartedClick={handleGetStartedClick} />
-        <NewTestimonialsSection />
-        <NewIntegrationsSection />
-        <NewCtaSection onGetStartedClick={handleGetStartedClick} />
-        <NewFooterSection />
+        <HowItWorksSection onGetStartedClick={handleGetStartedClick} />
+        <TestimonialsSection />
+        <IntegrationsSection />
+        <CtaSection onGetStartedClick={handleGetStartedClick} />
+        <FooterSection />
       </div>
     </div>
   );

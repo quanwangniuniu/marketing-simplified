@@ -28,7 +28,7 @@ const workflows = [
     iconGradient: "from-brand-teal to-brand-lime",
     action:
       "Answer the user's follow-up question, optionally producing a forward list.",
-    trigger: "After 5-step flow, when user asks in chat",
+    trigger: "After default analysis workflow, when user asks in chat",
   },
   {
     id: "miro-snapshot",

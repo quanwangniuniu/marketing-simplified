@@ -1,550 +1,255 @@
-import React from 'react';
+"use client"
+
+import { useState, useRef } from "react"
+import { motion, useInView } from "framer-motion"
+import { Avatar } from "@/components/avatar/Avatar"
 import {
+  Search,
   Bell,
-  ChevronRight,
+  User,
   Filter,
-  MoreVertical,
   Plus,
   RefreshCw,
-  Search,
-  User,
-} from 'lucide-react';
+  MoreVertical,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Calendar,
+  ArrowRight,
+  ChevronRight,
+} from "lucide-react"
 
-type SmartWorkflowSectionProps = {
-  onRedirectToLogin: () => void;
-};
+const workflowColumns = [
+  {
+    id: "asset-review",
+    title: "Asset Review",
+    tasks: [
+      { id: 1, title: "Draft Video Ad", status: "draft", color: "yellow" },
+      { id: 2, title: "Banner Ad - Pending", status: "pending", color: "orange" },
+      { id: 3, title: "Display Ad", status: "approved", color: "green" },
+    ],
+  },
+  {
+    id: "budget-approval",
+    title: "Budget Approval",
+    tasks: [
+      { id: 4, title: "$10K Budget Allocation", status: "draft", color: "yellow" },
+      { id: 5, title: "$25K Budget Adjustment", status: "approved", color: "green" },
+      { id: 6, title: "Revised Budget Proposal", status: "rejected", color: "red" },
+    ],
+  },
+  {
+    id: "campaign-execution",
+    title: "Campaign Execution",
+    tasks: [
+      { id: 7, title: "Facebook Ads Launch", status: "scheduled", color: "blue" },
+      { id: 8, title: "Mid-Year Performance", status: "in-progress", color: "blue" },
+      { id: 9, title: "Q3 Campaign Review", status: "ready", color: "gray" },
+    ],
+  },
+]
 
-export default function SmartWorkflowSection({ onRedirectToLogin }: SmartWorkflowSectionProps) {
+const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; bg: string; text: string }> = {
+  draft: { label: "Draft", icon: Clock, bg: "bg-yellow-100", text: "text-yellow-700" },
+  pending: { label: "Pending Review", icon: Clock, bg: "bg-orange-100", text: "text-orange-700" },
+  approved: { label: "Approved", icon: CheckCircle, bg: "bg-emerald-100", text: "text-emerald-700" },
+  rejected: { label: "Rejected", icon: XCircle, bg: "bg-rose-100", text: "text-rose-700" },
+  scheduled: { label: "Scheduled", icon: Calendar, bg: "bg-brand-teal/15", text: "text-brand-teal" },
+  "in-progress": { label: "In Progress", icon: RefreshCw, bg: "bg-brand-teal/15", text: "text-brand-teal" },
+  ready: { label: "Report Ready", icon: CheckCircle, bg: "bg-gray-100", text: "text-gray-700" },
+}
+
+const colorMap: Record<string, string> = {
+  yellow: "bg-yellow-400",
+  orange: "bg-orange-400",
+  green: "bg-emerald-400",
+  red: "bg-rose-400",
+  blue: "bg-brand-teal",
+  gray: "bg-gray-400",
+}
+
+export default function SmartWorkflowSection() {
+  const [activeTask, setActiveTask] = useState<number | null>(null)
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: "-100px" })
+
   return (
-    <>
-      {/* Smart Workflow Section - Desktop */}
-      <section id="solutions" className="hidden md:block py-20 px-6 bg-white">
-        <div className="max-w-7xl mx-auto relative">
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-center relative">
-            {/* Left Card - Workflow Application */}
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden relative z-30 w-full max-w-4xl lg:mt-32">
-              {/* Top Bar */}
-              <div className="bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between">
-                <div className="flex-1 relative max-w-xs">
-                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search"
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+    <section ref={ref} className="py-20 px-6 overflow-hidden">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col lg:flex-row gap-8 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            animate={isInView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="w-full lg:w-3/5"
+          >
+            <div className="glass-card rounded-2xl overflow-hidden shadow-xl">
+              <div className="border-b border-gray-200 px-4 py-3 flex items-center justify-between bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-48">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <div className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-400">
+                      Search tasks...
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={onRedirectToLogin}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    <Filter className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">Filters</span>
-                  </button>
-                  <button
-                    onClick={onRedirectToLogin}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">Create task</span>
-                  </button>
-                  <button
-                    onClick={onRedirectToLogin}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg"
-                  >
-                    <Bell className="w-4 h-4 text-gray-600" />
-                  </button>
-                  <button
-                    onClick={onRedirectToLogin}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg"
-                  >
-                    <User className="w-4 h-4 text-gray-600" />
-                  </button>
+                  <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">
+                    <Filter className="w-4 h-4" />
+                    <span className="hidden sm:inline">Filters</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-brand-gradient text-white rounded-lg text-sm">
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Create task</span>
+                  </div>
+                  <div className="p-2 text-gray-500">
+                    <Bell className="w-4 h-4" />
+                  </div>
+                  <div className="p-2 text-gray-500">
+                    <User className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
 
               <div className="flex">
-                {/* Sidebar */}
-                <div className="w-40 bg-white border-r border-gray-200 p-1.5">
-                  <nav className="space-y-0.5 mb-3">
-                    <span className="flex items-center gap-2 px-2 py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium">
-                      <span className="w-1 h-3 bg-blue-600 rounded-full"></span>
-                      <span className="text-xs">Dashboard</span>
-                    </span>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg">
-                      <span className="text-xs">Tasks</span>
-                      <span className="ml-auto px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-full">16</span>
-                    </span>
+                <div className="w-44 bg-gray-50 border-r border-gray-200 p-3 hidden md:block">
+                  <nav className="space-y-1 mb-4">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-brand-teal/10 text-brand-teal rounded-lg font-medium text-sm">
+                      <span className="w-1 h-4 bg-brand-teal rounded-full" />
+                      Dashboard
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2 text-gray-600 rounded-lg text-sm">
+                      Tasks
+                      <span className="px-2 py-0.5 bg-brand-teal/15 text-brand-teal text-xs font-semibold rounded-full">
+                        16
+                      </span>
+                    </div>
                   </nav>
-
-                  <div className="space-y-0.5 mb-2">
-                    <div className="text-[10px] font-semibold text-gray-400 uppercase mb-0.5 px-2">MAIN</div>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg text-xs">Reports</span>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg text-xs">Teams</span>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg text-xs">Settings</span>
+                  <div className="space-y-1 mb-4">
+                    <div className="text-xs font-semibold text-gray-400 uppercase px-3 mb-2">Main</div>
+                    <div className="px-3 py-2 text-gray-600 rounded-lg text-sm">Reports</div>
+                    <div className="px-3 py-2 text-gray-600 rounded-lg text-sm">Teams</div>
+                    <div className="px-3 py-2 text-gray-600 rounded-lg text-sm">Settings</div>
                   </div>
-
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] font-semibold text-gray-400 uppercase mb-1 px-2">RECOMMEND</div>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg text-xs">
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-gray-400 uppercase px-3 mb-2">Recommend</div>
+                    <div className="flex items-center justify-between px-3 py-2 text-gray-600 rounded-lg text-sm">
                       Team
-                      <ChevronRight className="w-3 h-3 ml-auto" />
-                    </span>
-                    <span className="flex items-center gap-2 px-2 py-1.5 text-gray-600 rounded-lg text-xs">Clients</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                    <div className="px-3 py-2 text-gray-600 rounded-lg text-sm">Clients</div>
                   </div>
-
-                  <div className="mt-auto pt-2 border-t border-gray-200">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                        <span className="text-[10px] font-semibold text-purple-700">BS</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-[10px] font-medium text-gray-900">Brooklyn Simmons</div>
-                        <div className="text-[10px] text-gray-500">Admin</div>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <Avatar
+                        src="/avatars/person-9.jpg"
+                        alt="Brooklyn S."
+                        size="sm"
+                        fallback="BS"
+                      />
+                      <div>
+                        <div className="text-xs font-medium text-gray-900">Brooklyn S.</div>
+                        <div className="text-xs text-gray-500">Admin</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Main Content - Workflow Board */}
-                <div className="flex-1 p-3">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="flex-1 p-4 bg-white">
+                  <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                       Smart Workflow
-                      <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
+                      <RefreshCw className="w-4 h-4 text-gray-400" />
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Asset Review Column */}
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-semibold text-gray-700 mb-1">Asset Review</h4>
-
-                      {/* Draft Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-yellow-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-1.5">
-                            <span className="text-xs font-semibold text-yellow-700 px-1.5 py-0.5 bg-yellow-100 rounded">Draft</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Draft Video Ad</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Pending Review Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-orange-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-orange-700 px-1.5 py-0.5 bg-orange-100 rounded">Pending Review</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Banner Ad - Pending Review</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-green-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Approved Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-green-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-green-700 px-1.5 py-0.5 bg-green-100 rounded">Approved</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Display Ad</h5>
-                          <ul className="text-xs text-gray-600 space-y-1 mb-2">
-                            <li>• Upload assets</li>
-                            <li>• Finalize</li>
-                          </ul>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-purple-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Budget Approval Column */}
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-semibold text-gray-700 mb-1">Budget Approval</h4>
-
-                      {/* Draft Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-yellow-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-yellow-700 px-1.5 py-0.5 bg-yellow-100 rounded">Draft</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">$10K Budget Allocation</h5>
-                          <div className="text-xs text-gray-600 space-y-1">
-                            <p>Pending Submission</p>
-                            <p>Under Approval</p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Approved Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-green-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-green-700 px-1.5 py-0.5 bg-green-100 rounded">Approved</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">$25K Budget Adjustment</h5>
-                          <div className="text-xs text-gray-600 space-y-1">
-                            <p>Launch</p>
-                            <p>Monitor</p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-orange-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Rejected Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-red-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-red-700 px-1.5 py-0.5 bg-red-100 rounded">Rejected</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Revised Budget Proposal</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-blue-100 rounded-full"></div>
-                            <div className="w-5 h-5 bg-green-100 rounded-full -ml-2"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Campaign Execution Column */}
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-semibold text-gray-700 mb-1">Campaign Execution</h4>
-
-                      {/* Scheduled Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-blue-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 bg-blue-100 rounded">Scheduled</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Facebook Ads Launch</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-purple-100 rounded-full"></div>
-                            <div className="w-5 h-5 bg-pink-100 rounded-full -ml-2"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* In Progress Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-blue-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-blue-700 px-1.5 py-0.5 bg-blue-100 rounded">In Progress</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Mid-Year Performance Review</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-orange-100 rounded-full"></div>
-                            <div className="w-5 h-5 bg-green-100 rounded-full -ml-2"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Report Ready Card */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
-                        <div className="h-1.5 bg-gray-400 rounded-t-lg"></div>
-                        <div className="p-2">
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="text-xs font-semibold text-gray-700 px-1.5 py-0.5 bg-gray-100 rounded">Report Ready</span>
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
-                          </div>
-                          <h5 className="text-xs font-semibold text-gray-900 mb-1.5">Q3 Campaign Review</h5>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {workflowColumns.map((column, colIndex) => (
+                      <motion.div
+                        key={column.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={isInView ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.4, delay: 0.3 + colIndex * 0.1 }}
+                        className="space-y-2"
+                      >
+                        <h4 className="text-xs font-semibold text-gray-500 mb-2">{column.title}</h4>
+                        {column.tasks.map((task, taskIndex) => {
+                          const status = statusConfig[task.status]
+                          const StatusIcon = status.icon
+                          return (
+                            <motion.div
+                              key={task.id}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={isInView ? { opacity: 1, scale: 1 } : {}}
+                              transition={{ duration: 0.3, delay: 0.4 + taskIndex * 0.05 }}
+                              onMouseEnter={() => setActiveTask(task.id)}
+                              onMouseLeave={() => setActiveTask(null)}
+                              className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer ${
+                                activeTask === task.id ? "ring-2 ring-brand-teal border-brand-teal/40" : "border-gray-200"
+                              }`}
+                            >
+                              <div className={`h-1 ${colorMap[task.color]} rounded-t-lg`} />
+                              <div className="p-2.5">
+                                <div className="flex items-start justify-between mb-2">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 ${status.bg} ${status.text} text-xs font-medium rounded`}
+                                  >
+                                    <StatusIcon className="w-3 h-3" />
+                                    {status.label}
+                                  </span>
+                                  <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
+                                </div>
+                                <h5 className="text-xs font-semibold text-gray-900 mb-2">{task.title}</h5>
+                                <div className="flex items-center gap-2">
+                                  <Avatar
+                                    src={`/avatars/person-${(task.id % 9) + 1}.jpg`}
+                                    alt="Assignee"
+                                    size="xs"
+                                    className="ring-1 ring-gray-200"
+                                  />
+                                </div>
+                              </div>
+                            </motion.div>
+                          )
+                        })}
+                      </motion.div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
+          </motion.div>
 
-            {/* Right Card - Description */}
-            <div className="bg-blue-50 rounded-2xl shadow-xl p-8 pl-24 relative z-20 w-full max-w-2xl lg:-mt-56 lg:-ml-56">
-              {/* Smart Workflow Label - Top Left */}
-              <div className="absolute top-4 left-4 bg-white rounded-full shadow-lg px-2.5 py-1 flex items-center gap-1.5 z-30 border border-gray-100">
-                <RefreshCw className="w-3.5 h-3.5 text-gray-600" />
-                <h3 className="text-xs font-normal text-gray-900">Smart Workflow</h3>
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            animate={isInView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.7, delay: 0.4 }}
+            className="w-full lg:w-2/5"
+          >
+            <div className="bg-brand-teal/5 rounded-3xl p-8 relative overflow-hidden border border-brand-teal/15">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-gray-200 mb-6">
+                <RefreshCw className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-medium text-gray-900">Smart Workflow</span>
               </div>
-              <div className="flex flex-col items-end">
-                <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-right">
-                  <div className="whitespace-nowrap">Connect every stage in</div>
-                  <div className="whitespace-nowrap">one seamless workflow.</div>
-                </h3>
-                <p className="text-lg text-gray-600 mb-8 max-w-md text-right">
-                  From creative reviews to budget approvals and campaign execution, Marketing Simplified automates task transitions so your team stays perfectly aligned.
-                </p>
-                <button
-                  onClick={onRedirectToLogin}
-                  className="px-6 py-3 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition font-medium"
-                >
-                  Learn More
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Smart Workflow Section - Mobile */}
-      <section className="block md:hidden py-10 px-4 bg-white">
-        <div className="max-w-4xl mx-auto">
-          {/* Main Content Card */}
-          <div className="bg-blue-50 rounded-2xl p-8 mb-6">
-            <div className="mb-8">
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 leading-tight">
+              <h3 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
                 Connect every stage in one seamless workflow.
-              </h2>
-              <p className="text-base text-gray-700 mb-6 leading-relaxed">
-                Marketing Simplified automates task transitions so your team stays perfectly aligned.
+              </h3>
+              <p className="text-lg text-gray-600 mb-8">
+                From creative reviews to budget approvals and campaign execution, Marketing Simplified automates task
+                transitions so your team stays perfectly aligned.
               </p>
-              <div className="flex justify-end">
-                <button className="px-6 py-1.5 bg-blue-800 text-white rounded-full hover:bg-blue-900 transition text-sm font-medium">
-                  Learn More
-                </button>
-              </div>
+
+              <button className="inline-flex items-center gap-2 px-6 py-3 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium glow-brand">
+                Learn More
+                <ArrowRight className="w-5 h-5" />
+              </button>
+
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-brand-teal/15 rounded-full opacity-50" />
             </div>
-
-            {/* Mini App Preview */}
-            <div className="-mx-9 bg-white rounded-2xl shadow-xl p-2 h-auto">
-              <div className="bg-white rounded-sm overflow-hidden">
-                {/* Top Bar */}
-                <div className="bg-white border-b border-gray-200 px-2 py-1 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-[80px] mb-1">
-                      <Search className="absolute left-1 top-4 transform -translate-y-1/2 text-gray-400 w-2 h-2" />
-                      <input
-                        type="text"
-                        placeholder="Search"
-                        className="w-full pl-4 pr-1 py-1 text-[7px] border border-gray-300 rounded focus:outline-none h-[18px]"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button className="flex items-center gap-0.5 px-1.5 py-1 text-[7px] border border-gray-300 rounded h-[18px]">
-                      <Filter className="w-2 h-2" />
-                      <span>Filters</span>
-                    </button>
-                    <button className="px-1.5 py-1 bg-blue-600 text-white rounded text-[7px] font-medium h-[18px]">
-                      Create task
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded h-[18px] w-[18px] flex items-center justify-center">
-                      <Bell className="w-2 h-2 text-gray-600" />
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded h-[18px] w-[18px] flex items-center justify-center">
-                      <User className="w-2 h-2 text-gray-600" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex h-[215px]">
-                  {/* Sidebar */}
-                  <div className="w-[60px] bg-gray-50 border-r border-gray-200 p-1 flex flex-col">
-                    <div className="space-y-0.5">
-                      <button className="w-full flex items-center gap-0.5 px-1 py-0.5 bg-blue-50 text-blue-700 rounded text-[7px] font-medium">
-                        <div className="w-1 h-1 bg-blue-600 rounded-full"></div>
-                        <span>Dashboard</span>
-                      </button>
-                      <button className="w-full flex items-center justify-between px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px]">
-                        <span>Tasks</span>
-                        <span className="px-0.5 py-0 bg-blue-100 text-blue-700 rounded-full text-[6px] font-semibold">16</span>
-                      </button>
-                    </div>
-
-                    <div className="mt-1 pt-1 border-t border-gray-200 space-y-0.5">
-                      <div className="text-[6px] font-semibold text-gray-400 uppercase px-1">MAIN</div>
-                      <button className="w-full px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px] text-left">Reports</button>
-                      <button className="w-full px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px] text-left">Teams</button>
-                      <button className="w-full px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px] text-left">Settings</button>
-                    </div>
-
-                    <div className="mt-1 pt-1 border-t border-gray-200 space-y-0.5">
-                      <div className="text-[6px] font-semibold text-gray-400 uppercase px-1">RECOMMEND</div>
-                      <button className="w-full flex items-center justify-between px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px]">
-                        <span>Team</span>
-                        <ChevronRight className="w-2 h-2" />
-                      </button>
-                      <button className="w-full px-1 py-0.5 text-gray-600 hover:bg-gray-100 rounded text-[7px] text-left">Clients</button>
-                    </div>
-
-                    <div className="mt-auto pt-1 border-t border-gray-200">
-                      <div className="flex items-center gap-0.5">
-                        <div className="w-4 h-4 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-[6px] font-semibold text-purple-700">BS</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Main Content - 3 Column Kanban Board */}
-                  <div className="flex-1 bg-gray-50 p-1.5 overflow-hidden">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="text-[8px] font-bold text-gray-900 flex items-center gap-1">
-                        <RefreshCw className="w-2 h-2 text-gray-400" />
-                        Search
-                      </h3>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5 h-full overflow-auto">
-                      {/* Asset Review Column */}
-                      <div className="space-y-1">
-                        <h4 className="text-[7px] font-semibold text-gray-900 mb-1">Asset Review</h4>
-
-                        {/* Draft Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-yellow-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-yellow-700 px-1 py-0.5 bg-yellow-100 rounded mb-0.5 inline-block">Draft</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Draft Video Ad</div>
-                            <div className="w-3 h-3 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-
-                        {/* Pending Review Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-orange-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-orange-700 px-1 py-0.5 bg-orange-100 rounded mb-0.5 inline-block">Pending Review</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Banner Ad - Pending Review</div>
-                            <div className="w-3 h-3 bg-green-100 rounded-full"></div>
-                          </div>
-                        </div>
-
-                        {/* Approved Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-green-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-green-700 px-1 py-0.5 bg-green-100 rounded mb-0.5 inline-block">Approved</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Display Ad</div>
-                            <div className="text-[6px] text-gray-600 mb-1">
-                              <div>• Upload assets</div>
-                              <div>• Finalize</div>
-                            </div>
-                            <div className="flex items-center gap-0.5">
-                              <div className="w-3 h-3 bg-purple-100 rounded-full"></div>
-                              <div className="w-3 h-3 bg-orange-100 rounded-full -ml-1"></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Budget Approval Column */}
-                      <div className="space-y-1">
-                        <h4 className="text-[7px] font-semibold text-gray-900 mb-1">Budget Approval</h4>
-
-                        {/* Draft Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-yellow-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-yellow-700 px-1 py-0.5 bg-yellow-100 rounded mb-0.5 inline-block">Draft</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">$10K Budget Allocation</div>
-                            <div className="text-[6px] text-gray-600 mb-1">
-                              <div>• Pending Submission</div>
-                              <div>• Under Approval</div>
-                            </div>
-                            <div className="w-3 h-3 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-
-                        {/* Approved Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-green-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-green-700 px-1 py-0.5 bg-green-100 rounded mb-0.5 inline-block">Approved</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">$25K Budget Adjustment</div>
-                            <div className="text-[6px] text-gray-600 mb-1">
-                              <div>• Launch</div>
-                              <div>• Monitor</div>
-                            </div>
-                            <div className="w-3 h-3 bg-orange-100 rounded-full"></div>
-                          </div>
-                        </div>
-
-                        {/* Rejected Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-red-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-red-700 px-1 py-0.5 bg-red-100 rounded mb-0.5 inline-block">Rejected</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Revised Budget Proposal</div>
-                            <div className="flex items-center gap-0.5">
-                              <div className="w-3 h-3 bg-blue-100 rounded-full"></div>
-                              <div className="w-3 h-3 bg-pink-100 rounded-full -ml-1"></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Campaign Execution Column */}
-                      <div className="space-y-1">
-                        <h4 className="text-[7px] font-semibold text-gray-900 mb-1">Campaign Execution</h4>
-
-                        {/* Scheduled Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-blue-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-blue-700 px-1 py-0.5 bg-blue-100 rounded mb-0.5 inline-block">Scheduled</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Facebook Ads Launch</div>
-                            <div className="w-3 h-3 bg-purple-100 rounded-full"></div>
-                          </div>
-                        </div>
-
-                        {/* In Progress Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-blue-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-blue-700 px-1 py-0.5 bg-blue-100 rounded mb-0.5 inline-block">In Progress</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Mid-Year Performance Review</div>
-                            <div className="flex items-center gap-0.5">
-                              <div className="w-3 h-3 bg-orange-100 rounded-full"></div>
-                              <div className="w-3 h-3 bg-green-100 rounded-full -ml-1"></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Report Ready Card */}
-                        <div className="bg-white rounded border border-gray-200 shadow-sm">
-                          <div className="h-0.5 bg-gray-400 rounded-t"></div>
-                          <div className="p-1">
-                            <div className="text-[6px] font-semibold text-gray-700 px-1 py-0.5 bg-gray-100 rounded mb-0.5 inline-block">Report Ready</div>
-                            <div className="text-[7px] font-medium text-gray-900 mb-1">Q3 Campaign Review</div>
-                            <div className="w-3 h-3 bg-blue-100 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </motion.div>
         </div>
-      </section>
-    </>
-  );
+      </div>
+    </section>
+  )
 }
