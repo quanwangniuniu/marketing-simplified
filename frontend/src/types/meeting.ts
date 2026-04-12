@@ -241,3 +241,44 @@ export interface MeetingDocument {
   created_at: string;
   updated_at: string;
 }
+
+/** Follow-up row on a meeting before it becomes a task (SMP-489). */
+export interface MeetingActionItem {
+  id: number;
+  meeting: number;
+  title: string;
+  description: string;
+  order_index: number;
+  created_at?: string;
+  updated_at?: string;
+  converted_task_id: number | null;
+}
+
+export interface MeetingActionItemCreateRequest {
+  title: string;
+  description?: string;
+  order_index?: number;
+}
+
+export interface MeetingActionItemPartialUpdateRequest {
+  title?: string;
+  description?: string;
+  order_index?: number;
+}
+
+export interface ConvertActionItemToTaskRequest {
+  owner_id?: number | null;
+  due_date?: string | null;
+  priority?: string | null;
+  type?: string;
+  current_approver_id?: number | null;
+  create_as_draft?: boolean;
+}
+
+export interface BulkConvertActionItemRow extends ConvertActionItemToTaskRequest {
+  action_item_id: number;
+}
+
+export interface BulkConvertActionItemsRequest {
+  items: BulkConvertActionItemRow[];
+}

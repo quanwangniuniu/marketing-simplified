@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, format, startOfWeek } from "date-fns";
 import toast from "react-hot-toast";
 import Layout from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { CalendarAPI } from "@/lib/api/calendarApi";
+import { CalendarAPI, extractNavigationMetadata } from "@/lib/api/calendarApi";
 import type { CalendarViewType, EventDTO } from "@/lib/api/calendarApi";
 import { useCalendarView } from "@/hooks/useCalendarView";
 import { CalendarToolbar } from "@/components/calendar/CalendarToolbar";
@@ -38,9 +38,10 @@ function CalendarPageContent() {
     useState<EventPanelPosition | null>(null);
   const [viewSwitcherOpen, setViewSwitcherOpen] = useState(false);
 
-  // SMP-400: active event type filter state (all 3 types active by default)
+  // SMP-400: active event type filter state
+  // Bug 2 fix: removed "decision_review" from default active types and filter bar
   const [activeEventTypes, setActiveEventTypes] = useState<Set<string>>(
-    new Set(["decision", "task", "decision_review"])
+    new Set(["decision", "task"])
   );
   const viewSwitcherRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +51,65 @@ function CalendarPageContent() {
     calendarIds: visibleCalendarIds,
     activeEventTypes: Array.from(activeEventTypes),
   });
+
+  // Auto-refresh calendar data when:
+  // 1. Agent creates/updates a calendar event (custom event + localStorage flag)
+  // 2. User returns to this tab/page (visibilitychange, pageshow, focus)
+  //
+  // NOTE: Only ONE set of listeners is registered here to avoid duplicate refetch calls.
+  // A previous version had an additional useEffect with duplicate visibilitychange/focus/pageshow
+  // listeners and a 5-second interval — both have been removed.
+  React.useEffect(() => {
+    const consumePending = () => {
+      const pending = localStorage.getItem("calendar-events-updated");
+      if (pending) {
+        localStorage.removeItem("calendar-events-updated");
+        refetch();
+      }
+    };
+
+    // On mount: consume any pending flag written before this page loaded (navigation case)
+    consumePending();
+
+    const handleRefresh = () => refetch();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "calendar-events-updated") {
+        localStorage.removeItem("calendar-events-updated");
+        refetch();
+      }
+    };
+
+    // Handle bfcache restores (browser back button)
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) consumePending();
+    };
+
+    // Refetch when tab becomes visible again (e.g. returning from Decision/Task detail)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        consumePending();
+        refetch();
+      }
+    };
+
+    window.addEventListener("agent:calendar-updated", handleRefresh);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("agent:calendar-updated", handleRefresh);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refetch]);
+
+  // Refetch calendar events on mount so returning from detail pages shows fresh data
+  React.useEffect(() => {
+    refetch();
+  }, []);
 
   const handleAskAgentFromCalendar = useCallback(() => {
     const ctx = {
@@ -246,56 +306,6 @@ function CalendarPageContent() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Refetch calendar events on mount so returning from detail pages shows fresh data
-  React.useEffect(() => {
-    refetch();
-  }, []);
-
-  // Auto-refresh when the agent creates a calendar event.
-  // On mount: consume any pending flag written before this page loaded (navigation case).
-  // Custom event: same-window floating chat. Storage event: cross-tab.
-  // pageshow / visibilitychange: handle bfcache restores (browser back button).
-  React.useEffect(() => {
-    const consumePending = () => {
-      const pending = localStorage.getItem("calendar-events-updated");
-      if (pending) {
-        localStorage.removeItem("calendar-events-updated");
-        refetch();
-      }
-    };
-
-    consumePending();
-
-    const handleRefresh = () => refetch();
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === "calendar-events-updated") {
-        localStorage.removeItem("calendar-events-updated");
-        refetch();
-      }
-    };
-    const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) consumePending();
-    };
-    // Refetch when tab becomes visible again (e.g. returning from another tab)
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        consumePending();
-        refetch();
-      }
-    };
-
-    window.addEventListener("agent:calendar-updated", handleRefresh);
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("agent:calendar-updated", handleRefresh);
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [refetch]);
-
   return (
     <Layout>
       <div className="flex min-h-screen flex-col bg-[#f8fafd]">
@@ -314,13 +324,15 @@ function CalendarPageContent() {
           onAskAgent={handleAskAgentFromCalendar}
         />
 
-        {/* SMP-400: Derived event type filter bar */}
+        {/* SMP-400: Derived event type filter bar
+            Bug 2 fix: "Reviews" (decision_review) filter has been removed.
+            Only Decision and Task filters are shown. Filtering is pure client-side
+            via activeEventTypes passed to useCalendarView. */}
         <div className="flex items-center gap-2 px-4 py-2 border-b bg-white">
           <span className="text-xs text-gray-500 font-medium">Show:</span>
           {[
             { type: "decision", label: "Decisions", color: "#8B5CF6" },
             { type: "task", label: "Tasks", color: "#10B981" },
-            { type: "decision_review", label: "Reviews", color: "#F59E0B" },
           ].map(({ type, label, color }) => {
             const isActive = activeEventTypes.has(type);
             return (
@@ -383,24 +395,18 @@ function CalendarPageContent() {
               }}
               onEventClick={(event, position) => {
                 // Check if this is a system-derived event (from Decision or Task)
-                if (event.description) {
-                  try {
-                    const meta = JSON.parse(event.description);
-                    if (meta.isDerived) {
-                      // Navigate to Decision detail page with project_id for permission
-                      if (meta.decision_id) {
-                        const query = meta.project_id ? `?project_id=${meta.project_id}` : '';
-                        router.push(`/decisions/${meta.decision_id}${query}`);
-                        return;
-                      }
-                      // Navigate to Task detail page
-                      if (meta.task_id) {
-                        router.push(`/tasks/${meta.task_id}`);
-                        return;
-                      }
-                    }
-                  } catch {
-                    // Not a derived event, fall through to normal event dialog
+                const meta = extractNavigationMetadata(event.description || "");
+                if (meta && meta.isDerived) {
+                  // Navigate to Decision detail page with project_id for permission
+                  if (meta.decision_id) {
+                    const query = meta.project_id ? `?project_id=${meta.project_id}` : '';
+                    router.push(`/decisions/${meta.decision_id}${query}`);
+                    return;
+                  }
+                  // Navigate to Task detail page
+                  if (meta.task_id) {
+                    router.push(`/tasks/${meta.task_id}`);
+                    return;
                   }
                 }
                 // Regular event: open the event detail dialog

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   Plus,
   X,
@@ -26,11 +26,14 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
+import DecisionCommitConfirmationModal from "@/components/decisions/DecisionCommitConfirmationModal"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { DecisionAPI } from "@/lib/api/decisionApi"
 import { useBatchManage } from "@/hooks/useBatchManage"
 import { useProjectStore } from "@/lib/projectStore"
 import { useAgentLayout } from "@/components/agent/AgentLayoutContext"
+import { validateDecisionDraft } from "@/components/decisions/decisionValidation"
+import type { DecisionOptionDraft, DecisionRiskLevel } from "@/types/decision"
 import toast from "react-hot-toast"
 
 // ─── Types ────────────────────────────────────────────
@@ -48,12 +51,6 @@ interface Option {
   description: string
   expectedImpact: string
   riskLevel: "low" | "medium" | "high"
-}
-
-interface ValidationItem {
-  key: string
-  label: string
-  passed: boolean
 }
 
 interface DecisionListItem {
@@ -111,6 +108,13 @@ export function DecisionEditor() {
   const [editingStatus, setEditingStatus] = useState<string>("draft")
   const [isPreDraft, setIsPreDraft] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [commitModalOpen, setCommitModalOpen] = useState(false)
+  const [commitConfirmations, setCommitConfirmations] = useState<Record<string, boolean>>({
+    alternatives: false,
+    risk: false,
+    review: false,
+  })
+  const [confirming, setConfirming] = useState(false)
   const activeProject = useProjectStore((s) => s.activeProject)
 
   // Batch management for pre-draft decisions only
@@ -139,7 +143,8 @@ export function DecisionEditor() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [options, setOptions] = useState<Option[]>([])
   const [selectedOption, setSelectedOption] = useState<string>("")
-  const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium")
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium")
+  const [confidenceScore, setConfidenceScore] = useState<number>(3)
 
   // New signal form
   const [newSignalLabel, setNewSignalLabel] = useState("")
@@ -174,7 +179,8 @@ export function DecisionEditor() {
   const loadDecision = async (d: DecisionListItem) => {
     // Set basic info immediately and switch to edit view
     setTitle(d.title)
-    setPriority((d.risk_level as "low" | "medium" | "high") || "medium")
+    const riskLevel = (d.risk_level || "").toLowerCase()
+    setPriority(riskLevel === "low" || riskLevel === "medium" || riskLevel === "high" ? riskLevel : "medium")
     setContext("")
     setReasoning("")
     setSignals([])
@@ -205,6 +211,9 @@ export function DecisionEditor() {
         if (detail.title) setTitle(detail.title)
         if (detail.contextSummary) setContext(detail.contextSummary)
         if (detail.reasoning) setReasoning(detail.reasoning)
+        const raw = detail as unknown as Record<string, unknown>
+        if (typeof raw.confidenceScore === "number") setConfidenceScore(raw.confidenceScore as number)
+        else if (raw.confidenceScore == null) setConfidenceScore(3)
 
         // Map API signals to local Signal type
         if (detail.signals && detail.signals.length > 0) {
@@ -259,18 +268,132 @@ export function DecisionEditor() {
 
   // ─── Validation ─────────────────────────────────────
 
-  const validationItems: ValidationItem[] = [
-    { key: "title", label: "Title provided", passed: title.trim().length > 0 },
-    { key: "context", label: "Context summary", passed: context.trim().length > 20 },
-    { key: "signals", label: "At least 1 signal", passed: signals.length > 0 },
-    { key: "reasoning", label: "Reasoning provided", passed: reasoning.trim().length > 20 },
-    { key: "options", label: "At least 2 options", passed: options.length >= 2 },
-    { key: "selected", label: "Recommendation selected", passed: selectedOption !== "" },
-    { key: "priority", label: "Priority set", passed: priority !== undefined },
+  const incompleteToastId = "decision-draft-incomplete"
+
+  const draftOptions: DecisionOptionDraft[] = options.map((o, index) => ({
+    text: o.title,
+    isSelected: selectedOption === o.id,
+    order: index,
+  }))
+
+  const draftValidationErrors = validateDecisionDraft(
+    {
+      title,
+      contextSummary: context,
+      reasoning,
+      riskLevel: priority.toUpperCase() as DecisionRiskLevel,
+      confidenceScore,
+      options: draftOptions,
+    },
+    signals.length
+  )
+
+  const validationItems = [
+    { key: "title", label: "Title provided", passed: !draftValidationErrors.title },
+    { key: "context", label: "Context summary", passed: !draftValidationErrors.contextSummary },
+    { key: "signals", label: "At least 1 signal", passed: !draftValidationErrors.signals },
+    { key: "reasoning", label: "Reasoning provided", passed: !draftValidationErrors.reasoning },
+    { key: "options", label: "At least 2 options", passed: !draftValidationErrors.options },
+    { key: "selected", label: "Recommendation selected", passed: !draftValidationErrors.selectedOption },
+    { key: "priority", label: "Priority set", passed: !draftValidationErrors.riskLevel },
+    { key: "confidence", label: "Confidence score (1-5)", passed: !draftValidationErrors.confidenceScore },
   ]
 
   const passedCount = validationItems.filter((v) => v.passed).length
   const allPassed = passedCount === validationItems.length
+
+  const focusOrder = ["title", "context", "signals", "reasoning", "options", "selected", "priority", "confidence"]
+  const [focusMode, setFocusMode] = useState(false)
+  const [focusFailKeys, setFocusFailKeys] = useState<string[]>([])
+
+  const titleSectionRef = useRef<HTMLDivElement | null>(null)
+  const contextSectionRef = useRef<HTMLDivElement | null>(null)
+  const signalsSectionRef = useRef<HTMLDivElement | null>(null)
+  const reasoningSectionRef = useRef<HTMLDivElement | null>(null)
+  const optionsSectionRef = useRef<HTMLDivElement | null>(null)
+  const selectedSectionRef = useRef<HTMLDivElement | null>(null)
+  const prioritySectionRef = useRef<HTMLDivElement | null>(null)
+
+  const isFail = useCallback(
+    (key: string) => focusMode && focusFailKeys.includes(key),
+    [focusMode, focusFailKeys]
+  )
+
+  const scrollToFirstFail = useCallback(
+    (keys: string[]) => {
+      const firstKey = keys[0]
+      if (!firstKey) return
+      const el =
+        firstKey === "title"
+          ? titleSectionRef.current
+          : firstKey === "context"
+          ? contextSectionRef.current
+          : firstKey === "signals"
+          ? signalsSectionRef.current
+          : firstKey === "reasoning"
+          ? reasoningSectionRef.current
+          : firstKey === "options"
+          ? optionsSectionRef.current
+          : firstKey === "selected"
+          ? selectedSectionRef.current
+          : firstKey === "priority"
+          ? prioritySectionRef.current
+          : null
+      el?.scrollIntoView({ behavior: "smooth", block: "center" })
+    },
+    [
+      titleSectionRef,
+      contextSectionRef,
+      signalsSectionRef,
+      reasoningSectionRef,
+      optionsSectionRef,
+      selectedSectionRef,
+      prioritySectionRef,
+    ]
+  )
+
+  const triggerFocus = useCallback(
+    (keys: string[]) => {
+      const uniqueOrdered = focusOrder.filter((k) => keys.includes(k))
+      if (uniqueOrdered.length === 0) return
+      setFocusFailKeys(uniqueOrdered)
+      setFocusMode(true)
+      // Scroll after render so refs are ready.
+      setTimeout(() => scrollToFirstFail(uniqueOrdered), 50)
+    },
+    [focusOrder, scrollToFirstFail]
+  )
+
+  const focusFromValidation = useCallback(() => {
+    const missing: string[] = []
+    if (draftValidationErrors.title) missing.push("title")
+    if (draftValidationErrors.contextSummary) missing.push("context")
+    if (draftValidationErrors.signals) missing.push("signals")
+    if (draftValidationErrors.reasoning) missing.push("reasoning")
+    if (draftValidationErrors.options) missing.push("options")
+    if (draftValidationErrors.selectedOption) missing.push("selected")
+    if (draftValidationErrors.riskLevel) missing.push("priority")
+    if (draftValidationErrors.confidenceScore) missing.push("confidence")
+    triggerFocus(missing)
+  }, [draftValidationErrors, triggerFocus])
+
+  useEffect(() => {
+    if (focusMode && Object.keys(draftValidationErrors).length === 0) {
+      setFocusMode(false)
+      setFocusFailKeys([])
+    }
+  }, [draftValidationErrors, focusMode])
+
+  const backendFieldToFocusKey: Record<string, string> = {
+    title: "title",
+    contextSummary: "context",
+    signals: "signals",
+    options: "options",
+    selectedOption: "selected",
+    reasoning: "reasoning",
+    riskLevel: "priority",
+    confidenceScore: "priority",
+  }
 
   // ─── Signal CRUD ────────────────────────────────────
 
@@ -335,6 +458,7 @@ export function DecisionEditor() {
         contextSummary: context,
         reasoning,
         riskLevel: priority.toUpperCase(),
+        confidenceScore,
         options: options.map((o, index) => ({
           text: o.title,
           isSelected: selectedOption === o.id,
@@ -374,19 +498,55 @@ export function DecisionEditor() {
   }
 
   const submitForReview = async () => {
+    if (Object.keys(draftValidationErrors).length > 0) {
+      focusFromValidation()
+      toast.error("Draft is incomplete. Please address the highlighted fields.", { id: incompleteToastId })
+      return
+    }
+    // Save draft first so modal shows latest data, then open confirmation modal
     setIsSaving(true)
     try {
       const id = await saveDraft(true)
       if (!id) return
+      setCommitConfirmations({ alternatives: false, risk: false, review: false })
+      setCommitModalOpen(true)
+    } catch (err: any) {
+      toast.error("Failed to save draft before review.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleConfirmCommit = async () => {
+    setConfirming(true)
+    try {
+      const id = editingDecisionId
+      if (!id) return
       await DecisionAPI.commit(id, activeProject?.id)
-      toast.success("Decision submitted")
+      toast.success("Decision submitted for review")
+      setCommitModalOpen(false)
       await refreshList()
       setViewMode("list")
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || err?.message || "Failed to submit"
-      toast.error(detail)
+      const fieldErrors =
+        err?.response?.data?.error?.details?.fieldErrors ||
+        err?.response?.data?.details?.fieldErrors
+
+      if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+        const mappedKeys = fieldErrors
+          .map((fe: any) => backendFieldToFocusKey[String(fe?.field)] || null)
+          .filter((k: string | null): k is string => Boolean(k))
+        setCommitModalOpen(false)
+        if (mappedKeys.length > 0) {
+          triggerFocus(mappedKeys)
+        } else {
+          focusFromValidation()
+        }
+      }
+      const detail = err?.response?.data?.error?.message || err?.message || "Failed to submit"
+      toast.error(detail, { id: incompleteToastId })
     } finally {
-      setIsSaving(false)
+      setConfirming(false)
     }
   }
 
@@ -557,7 +717,12 @@ export function DecisionEditor() {
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div
+          className={cn(
+            "flex items-center justify-between",
+            focusMode && "relative z-20"
+          )}
+        >
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setViewMode("list")} className="text-muted-foreground">
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -593,12 +758,12 @@ export function DecisionEditor() {
               ) : (
                 <Button
                   size="sm"
-                  disabled={!allPassed || isSaving}
+                  disabled={isSaving}
                   onClick={submitForReview}
                   className={cn(
                     allPassed && !isSaving
                       ? "bg-blue-600 hover:bg-blue-700 text-white"
-                      : "bg-input text-muted-foreground cursor-not-allowed"
+                      : "bg-input text-muted-foreground hover:bg-input/80"
                   )}
                 >
                   Submit for Review
@@ -608,6 +773,14 @@ export function DecisionEditor() {
           )}
         </div>
 
+        <div className="relative">
+          {focusMode && (
+            <div
+              className="pointer-events-none absolute inset-0 z-10 bg-black/30"
+              aria-hidden="true"
+            />
+          )}
+          <div className="relative z-[11] space-y-6">
         {/* Validation Status Bar */}
         <Card className="bg-card border-border">
           <CardContent className="py-3 px-4">
@@ -629,14 +802,20 @@ export function DecisionEditor() {
             </div>
             <div className="flex flex-wrap gap-2">
               {validationItems.map((item) => (
-                <div
+                <button
                   key={item.key}
                   className={cn(
-                    "flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full",
+                    "flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full transition-colors",
                     item.passed
                       ? "bg-emerald-500/10 text-emerald-400"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   )}
+                  type="button"
+                  onClick={() => {
+                    if (item.passed) return
+                    triggerFocus([item.key])
+                  }}
+                  aria-disabled={item.passed}
                 >
                   {item.passed ? (
                     <Check className="w-3 h-3" />
@@ -644,7 +823,7 @@ export function DecisionEditor() {
                     <span className="w-3 h-3 rounded-full border border-input inline-block" />
                   )}
                   {item.label}
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
@@ -659,7 +838,14 @@ export function DecisionEditor() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div
+              ref={titleSectionRef}
+              id="decision-focus-title"
+              className={cn(
+                "space-y-2",
+                isFail("title") && "relative z-20 ring-1 ring-red-500/40 rounded-lg"
+              )}
+            >
               <Label className="text-muted-foreground">Decision Title</Label>
               <Input
                 value={title}
@@ -668,10 +854,17 @@ export function DecisionEditor() {
                 className="bg-muted border-input text-foreground placeholder:text-muted-foreground/60"
               />
             </div>
-            <div className="space-y-2">
+            <div
+              ref={prioritySectionRef}
+              id="decision-focus-priority"
+              className={cn(
+                "space-y-2",
+                isFail("priority") && "relative z-20 ring-1 ring-red-500/40 rounded-lg"
+              )}
+            >
               <Label className="text-muted-foreground">Priority</Label>
               <div className="flex gap-2">
-                {(["low", "medium", "high", "critical"] as const).map((level) => (
+                {(["low", "medium", "high"] as const).map((level) => (
                   <Button
                     key={level}
                     variant="outline"
@@ -680,9 +873,7 @@ export function DecisionEditor() {
                     className={cn(
                       "capitalize border-input",
                       priority === level
-                        ? level === "critical"
-                          ? "bg-red-500/20 text-red-400 border-red-500/30"
-                          : level === "high"
+                        ? level === "high"
                           ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
                           : level === "medium"
                           ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
@@ -699,26 +890,47 @@ export function DecisionEditor() {
         </Card>
 
         {/* Context Summary */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
-              <Target className="w-4 h-4" />
-              Context Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={context}
-              onChange={(e) => setContext(e.target.value)}
-              placeholder="Describe the situation and background context..."
-              rows={4}
-              className="bg-muted border-input text-foreground placeholder:text-muted-foreground/60"
-            />
-          </CardContent>
-        </Card>
+        <div
+          ref={contextSectionRef}
+          id="decision-focus-context"
+          className={cn(isFail("context") && "relative z-20")}
+        >
+          <Card
+            className={cn(
+              "bg-card border-border",
+              isFail("context") && "border-red-500/50 ring-1 ring-red-500/20"
+            )}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Context Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="Describe the situation and background context..."
+                rows={4}
+                className="bg-muted border-input text-foreground placeholder:text-muted-foreground/60"
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Input Signals */}
-        <Card className="bg-card border-border">
+        <div
+          ref={signalsSectionRef}
+          id="decision-focus-signals"
+          className={cn(isFail("signals") && "relative z-20")}
+        >
+          <Card
+            className={cn(
+              "bg-card border-border",
+              isFail("signals") && "border-red-500/50 ring-1 ring-red-500/20"
+            )}
+          >
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
@@ -803,52 +1015,83 @@ export function DecisionEditor() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </div>
 
         {/* Reasoning */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              Reasoning
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={reasoning}
-              onChange={(e) => setReasoning(e.target.value)}
-              placeholder="Explain the reasoning behind this decision..."
-              rows={4}
-              className="bg-muted border-input text-foreground placeholder:text-muted-foreground/60"
-            />
-          </CardContent>
-        </Card>
+        <div
+          ref={reasoningSectionRef}
+          id="decision-focus-reasoning"
+          className={cn(isFail("reasoning") && "relative z-20")}
+        >
+          <Card
+            className={cn(
+              "bg-card border-border",
+              isFail("reasoning") && "border-red-500/50 ring-1 ring-red-500/20"
+            )}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Reasoning
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={reasoning}
+                onChange={(e) => setReasoning(e.target.value)}
+                placeholder="Explain the reasoning behind this decision..."
+                rows={4}
+                className="bg-muted border-input text-foreground placeholder:text-muted-foreground/60"
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Options */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Options & Recommendation
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowNewOption(true)}
-                className="h-7 text-xs text-blue-400 hover:text-blue-300"
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                Add Option
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {options.length === 0 && !showNewOption && (
-              <p className="text-sm text-muted-foreground text-center py-4">No options added yet</p>
+        <div
+          ref={optionsSectionRef}
+          id="decision-focus-options"
+          className={cn(isFail("options") && "relative z-20")}
+        >
+          <Card
+            className={cn(
+              "bg-card border-border",
+              isFail("options") && "border-red-500/50 ring-1 ring-red-500/20"
             )}
-            <RadioGroup value={selectedOption} onValueChange={setSelectedOption}>
-              {options.map((option) => (
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Options & Recommendation
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowNewOption(true)}
+                  className="h-7 text-xs text-blue-400 hover:text-blue-300"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Add Option
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {options.length === 0 && !showNewOption && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No options added yet
+                </p>
+              )}
+              <div
+                ref={selectedSectionRef}
+                id="decision-focus-selected"
+                className={cn(
+                  isFail("selected") && "relative z-20 ring-1 ring-red-500/40 rounded-lg"
+                )}
+              >
+                <RadioGroup value={selectedOption} onValueChange={setSelectedOption}>
+                  {options.map((option) => (
                 <div
                   key={option.id}
                   className={cn(
@@ -893,7 +1136,8 @@ export function DecisionEditor() {
                   </div>
                 </div>
               ))}
-            </RadioGroup>
+                </RadioGroup>
+              </div>
 
             {/* New Option Form */}
             {showNewOption && (
@@ -959,9 +1203,32 @@ export function DecisionEditor() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
+          </div>
+        </div>
       </div>
+
+      <DecisionCommitConfirmationModal
+        isOpen={commitModalOpen}
+        onClose={() => setCommitModalOpen(false)}
+        onConfirm={handleConfirmCommit}
+        confirming={confirming}
+        contextSummary={context}
+        reasoning={reasoning}
+        riskLevel={priority}
+        confidenceScore={confidenceScore}
+        options={options.map((o, i) => ({ text: o.title, isSelected: selectedOption === o.id, order: i }))}
+        signals={signals.map((s, i) => ({
+          id: i,
+          displayText: `${s.label}: ${s.value}`,
+        }))}
+        confirmations={commitConfirmations}
+        onToggleConfirmation={(key) =>
+          setCommitConfirmations((prev) => ({ ...prev, [key]: !prev[key] }))
+        }
+      />
     </div>
   )
 }

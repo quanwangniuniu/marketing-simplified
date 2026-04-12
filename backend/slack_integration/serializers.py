@@ -20,6 +20,8 @@ class SlackConnectionStatusSerializer(serializers.ModelSerializer):
     Serializer for exposing the current connection status.
     """
     is_connected = serializers.SerializerMethodField()
+    can_manage_slack = serializers.SerializerMethodField()
+    manageable_projects = serializers.SerializerMethodField()
     
     class Meta:
         model = SlackWorkspaceConnection
@@ -29,12 +31,20 @@ class SlackConnectionStatusSerializer(serializers.ModelSerializer):
             'slack_team_name', 
             'default_channel_id', 
             'default_channel_name', 
-            'is_active'
+            'is_active',
+            'can_manage_slack',
+            'manageable_projects',
         ]
         read_only_fields = fields
 
     def get_is_connected(self, obj):
         return obj.is_active
+
+    def get_can_manage_slack(self, obj):
+        return bool(self.context.get("can_manage_slack", False))
+
+    def get_manageable_projects(self, obj):
+        return self.context.get("manageable_projects", [])
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
     """

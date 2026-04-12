@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { scrollToFirstError, validateDecisionDraft } from "@/components/decisions/decisionValidation";
 import Modal from "@/components/ui/Modal";
 import SignalsPanel from "@/components/decisions/SignalsPanel";
 import DecisionWorkspaceEditor from "@/components/decisions/DecisionWorkspaceEditor";
@@ -65,6 +66,7 @@ const DecisionEditModal = ({
   const [saving, setSaving] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitModalOpen, setCommitModalOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const [commitConfirmations, setCommitConfirmations] = useState<
     Record<string, boolean>
   >({
@@ -129,6 +131,7 @@ const DecisionEditModal = ({
       setErrors({});
       setCommitModalOpen(false);
       setCommitSignals([]);
+      setFocusMode(false);
       setCommitConfirmations({
         alternatives: false,
         risk: false,
@@ -162,11 +165,20 @@ const DecisionEditModal = ({
     [title, contextSummary, reasoning, riskLevel, confidenceScore, options],
   );
 
+  const validateLocal = useCallback(
+    (signalCount: number) => validateDecisionDraft(
+      { title, contextSummary, reasoning, riskLevel: riskLevel || null, confidenceScore, options },
+      signalCount,
+    ),
+    [confidenceScore, contextSummary, options, reasoning, riskLevel, title],
+  );
+
   const handleSave = async () => {
     if (!decisionId) return;
     setSaving(true);
     setErrorMessage(null);
     setErrors({});
+    setFocusMode(false);
     try {
       const draft = await DecisionAPI.patchDraft(
         decisionId,
@@ -197,8 +209,60 @@ const DecisionEditModal = ({
     }
   };
 
+  const validateBeforeCommit = useCallback(async () => {
+    if (!decisionId) return { ok: false as const };
+    setErrorMessage(null);
+    setErrors({});
+    setFocusMode(false);
+    try {
+      // Pull signals first so we can validate them before opening the confirm modal.
+      const signalsResponse = await DecisionAPI.listSignals(decisionId, projectId);
+      const nextCommitSignals = signalsResponse.items || [];
+      setCommitSignals(nextCommitSignals);
+
+      const localErrors = validateLocal(nextCommitSignals.length);
+      if (Object.keys(localErrors).length > 0) {
+        setErrors(localErrors);
+        setErrorMessage("Draft is incomplete. Please address the highlighted fields.");
+        setFocusMode(true);
+        scrollToFirstError(localErrors);
+        return { ok: false as const };
+      }
+
+      setSaving(true);
+      const syncedDraft = await DecisionAPI.patchDraft(
+        decisionId,
+        buildDraftPayload(),
+        projectId,
+      );
+      syncDraftState(syncedDraft);
+      return { ok: true as const };
+    } catch (error: any) {
+      const response = error?.response;
+      if (response?.status === 400 && response?.data?.error) {
+        const mapped = mapFieldErrors(
+          response.data as DecisionValidationErrorResponse,
+        );
+        setErrors(mapped);
+        setErrorMessage("Draft is incomplete. Please address the highlighted fields.");
+        setFocusMode(true);
+        scrollToFirstError(mapped);
+      } else if (response?.status === 403) {
+        setErrorMessage("You do not have permission to commit this decision.");
+      } else {
+        console.error("Failed to validate draft before commit:", error);
+        setErrorMessage("Failed to validate draft before commit.");
+      }
+      return { ok: false as const };
+    } finally {
+      setSaving(false);
+    }
+  }, [buildDraftPayload, decisionId, projectId, syncDraftState, validateLocal]);
+
   const handleOpenCommitModal = async () => {
     if (!decisionId) return;
+    const validation = await validateBeforeCommit();
+    if (!validation.ok) return;
     setCommitModalOpen(true);
     setCommitConfirmations({ alternatives: false, risk: false, review: false });
     setLoadingCommitDetails(true);
@@ -218,6 +282,7 @@ const DecisionEditModal = ({
     setCommitting(true);
     setErrorMessage(null);
     setErrors({});
+    setFocusMode(false);
     try {
       if (dirty) {
         setSaving(true);
@@ -238,6 +303,9 @@ const DecisionEditModal = ({
             setErrorMessage(
               "Draft is incomplete. Please address the highlighted fields.",
             );
+            setCommitModalOpen(false);
+            setFocusMode(true);
+            scrollToFirstError(mapped);
           } else if (response?.status === 403) {
             setErrorMessage("You do not have permission to edit this draft.");
           } else {
@@ -267,6 +335,9 @@ const DecisionEditModal = ({
         setErrorMessage(
           "Draft is incomplete. Please address the highlighted fields.",
         );
+        setCommitModalOpen(false);
+        setFocusMode(true);
+        scrollToFirstError(mapped);
       } else if (response?.status === 403) {
         setErrorMessage("You do not have permission to commit this decision.");
       } else {
@@ -282,7 +353,10 @@ const DecisionEditModal = ({
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose}>
-        <div className="w-full max-w-6xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+        <div className="relative w-full max-w-6xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+          {focusMode && (
+            <div className="absolute inset-0 bg-black/50 z-[10] pointer-events-none rounded-2xl" aria-hidden="true" />
+          )}
           <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
             <div>
               <div className="text-sm font-semibold text-gray-900">
@@ -309,10 +383,22 @@ const DecisionEditModal = ({
               </div>
             ) : null}
 
-            <div className="px-6 pt-5">
-              <label className="text-xs font-semibold text-gray-700">
-                Title
-              </label>
+            <div
+              id="decision-field-title"
+              className={`px-6 pt-5 transition-all ${
+                focusMode && errors.title
+                  ? 'relative z-[20] rounded-lg bg-white p-3 ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.45)]'
+                  : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-gray-700">
+                  Title
+                </label>
+                {errors.title ? (
+                  <span className="text-xs font-medium text-red-500">{errors.title}</span>
+                ) : null}
+              </div>
               <input
                 type="text"
                 value={title}
@@ -327,15 +413,24 @@ const DecisionEditModal = ({
 
             <div className="mt-5 flex min-h-[520px] flex-col gap-4 px-4 pb-6 lg:flex-row">
               <div className="h-full w-full max-w-full lg:w-[32%] lg:min-w-[240px] lg:max-w-[320px]">
-                {decisionId ? (
-                  <SignalsPanel
-                    decisionId={decisionId}
-                    projectId={projectId}
-                    mode="edit"
-                  />
-                ) : null}
+                <div
+                  id="decision-field-signals"
+                  className={`transition-all ${
+                    focusMode && errors.signals
+                      ? 'relative z-[20] rounded-lg bg-white ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.45)]'
+                      : ''
+                  }`}
+                >
+                  {decisionId ? (
+                    <SignalsPanel
+                      decisionId={decisionId}
+                      projectId={projectId}
+                      mode="edit"
+                    />
+                  ) : null}
+                </div>
               </div>
-              <div className="h-full w-full flex-1 min-w-0 bg-gray-50">
+              <div className={`h-full w-full flex-1 min-w-0 bg-gray-50 ${focusMode ? 'relative z-[20]' : ''}`}>
                 <DecisionWorkspaceEditor
                   contextSummary={contextSummary}
                   reasoning={reasoning}
@@ -345,6 +440,7 @@ const DecisionEditModal = ({
                   errors={errors}
                   onChange={updateField}
                   onOptionsChange={handleOptionsChange}
+                  focusMode={focusMode}
                 />
               </div>
             </div>

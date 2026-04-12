@@ -298,6 +298,9 @@ const SignalBuilderModal = ({
                 {(movementGroup === 'INCREASE' || movementGroup === 'DECREASE') ? (
                   <>
                     <div className="h-px w-full bg-blue-200" />
+                    {!movementDetail && (
+                      <p className="text-[11px] text-amber-600 font-medium">Select intensity to continue →</p>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                       {['SLIGHT', 'MODERATE', 'SHARP'].map((detail) => (
                         <button
@@ -318,6 +321,9 @@ const SignalBuilderModal = ({
                 ) : null}
                 {movementGroup === 'UNEXPECTED' ? (
                   <div className="h-px w-full bg-blue-200" />
+                ) : null}
+                {movementGroup === 'UNEXPECTED' && !movementDetail ? (
+                  <p className="text-[11px] text-amber-600 font-medium">Select type to continue →</p>
                 ) : null}
                 {movementGroup === 'UNEXPECTED' ? (
                   <div className="flex flex-wrap items-center gap-2">

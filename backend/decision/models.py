@@ -41,6 +41,7 @@ class Decision(TimeStampedModel):
     )
 
     requires_approval = models.BooleanField(default=False)
+    planned_decision_date = models.DateTimeField(null=True, blank=True, help_text="The planned date for making this decision")
     committed_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     is_reference_case = models.BooleanField(default=False)

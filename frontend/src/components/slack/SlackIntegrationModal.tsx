@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -16,28 +16,26 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { SlackPreferenceRow } from './SlackPreferenceRow';
-import { slackApi, SlackConnectionStatus, NotificationPreference, SlackChannel, SLACK_OAUTH_STATE_STORAGE_KEY } from '@/lib/api/slackApi';
-import { ProjectAPI, ProjectData } from '@/lib/api/projectApi';
+import {
+    slackApi,
+    SlackConnectionStatus,
+    NotificationPreference,
+    SlackChannel,
+    SLACK_OAUTH_STATE_STORAGE_KEY,
+    SlackRequestContext,
+} from '@/lib/api/slackApi';
+import {
+    buildPreferenceSummary,
+    EventType,
+    getScopedPreferences,
+} from './slackPreferenceSummary';
+import { useProjectStore } from '@/lib/projectStore';
 import toast from 'react-hot-toast';
 import { CheckCircle2, Slack, Loader2, Filter } from 'lucide-react';
 
 interface SlackIntegrationModalProps {
     isOpen: boolean;
     onClose: () => void;
-}
-
-type ToggleState = 'on' | 'off' | 'mixed';
-type ChannelState = 'default' | 'single' | 'mixed';
-type EventType = NotificationPreference['event_type'];
-
-interface PreferenceSummary {
-    toggleState: ToggleState;
-    enabledCount: number;
-    totalCount: number;
-    channelState: ChannelState;
-    channelValue: string;
-    summaryText?: string;
-    showChannelSelect: boolean;
 }
 
 const PREFERENCE_ROWS: Array<{
@@ -73,37 +71,72 @@ const PREFERENCE_ROWS: Array<{
 ];
 
 export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrationModalProps) {
+    const activeProject = useProjectStore((state) => state.activeProject);
+    const activeProjectId = activeProject?.id ?? null;
     const [loading, setLoading] = useState(true);
     const [connection, setConnection] = useState<SlackConnectionStatus | null>(null);
     const [preferences, setPreferences] = useState<NotificationPreference[]>([]);
     const [channels, setChannels] = useState<SlackChannel[]>([]);
-    const [projects, setProjects] = useState<ProjectData[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<number | 'ALL'>('ALL');
     const [loadingChannels, setLoadingChannels] = useState(false);
+    const slackContext: SlackRequestContext | undefined = activeProjectId
+        ? { projectId: activeProjectId }
+        : undefined;
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
+        const requestContext = activeProjectId
+            ? { projectId: activeProjectId }
+            : undefined;
+
         try {
             setLoading(true);
-            const [connStatus, prefsList, projList] = await Promise.all([
-                slackApi.getStatus(),
-                slackApi.getPreferences(),
-                ProjectAPI.getProjects()
-            ]);
-
+            const connStatus = await slackApi.getStatus(requestContext);
             setConnection(connStatus);
-            setPreferences(prefsList || []);
-            setProjects(projList || []);
+
+            if (!connStatus.can_manage_slack) {
+                setPreferences([]);
+                setChannels([]);
+                setSelectedProjectId('ALL');
+                return;
+            }
+
+            setSelectedProjectId((previousSelection) => {
+                if (
+                    activeProjectId &&
+                    connStatus.manageable_projects.some(
+                        (project) => project.id === activeProjectId
+                    )
+                ) {
+                    return activeProjectId;
+                }
+
+                if (
+                    previousSelection !== 'ALL' &&
+                    !connStatus.manageable_projects.some(
+                        (project) => project.id === previousSelection
+                    )
+                ) {
+                    return 'ALL';
+                }
+
+                return previousSelection;
+            });
+
+            const prefsList = await slackApi.getPreferences(requestContext);
+            setPreferences(prefsList);
 
             if (connStatus.is_active) {
                 setLoadingChannels(true);
                 try {
-                    const chList = await slackApi.getChannels();
+                    const chList = await slackApi.getChannels(requestContext);
                     setChannels(chList);
                 } catch (e) {
                     console.error("Failed to load channels", e);
                 } finally {
                     setLoadingChannels(false);
                 }
+            } else {
+                setChannels([]);
             }
 
         } catch (error) {
@@ -112,17 +145,35 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
         } finally {
             setLoading(false);
         }
-    };
+    }, [activeProjectId]);
+
+    useEffect(() => {
+        const activeProjectId = activeProject?.id;
+        const manageableProjects = connection?.manageable_projects ?? [];
+        if (
+            selectedProjectId !== 'ALL' &&
+            !manageableProjects.some((project) => project.id === selectedProjectId)
+        ) {
+            if (
+                activeProjectId &&
+                manageableProjects.some((project) => project.id === activeProjectId)
+            ) {
+                setSelectedProjectId(activeProjectId);
+            } else {
+                setSelectedProjectId('ALL');
+            }
+        }
+    }, [activeProject?.id, connection, selectedProjectId]);
 
     useEffect(() => {
         if (isOpen) {
-            fetchData();
+            void fetchData();
         }
-    }, [isOpen]);
+    }, [fetchData, isOpen]);
 
     const handleConnect = async () => {
         try {
-            const { url, state } = await slackApi.initOAuth();
+            const { url, state } = await slackApi.initOAuth(slackContext);
             window.localStorage.setItem(SLACK_OAUTH_STATE_STORAGE_KEY, state);
             window.location.href = url;
         } catch (error) {
@@ -133,7 +184,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
 
     const handleDisconnect = async () => {
         try {
-            await slackApi.disconnect();
+            await slackApi.disconnect(slackContext);
             toast.success('Slack workspace disconnected.');
             await fetchData();
         } catch (error) {
@@ -142,97 +193,22 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
         }
     };
 
-    // Filter preferences based on selected project
-    const getFilteredPreferences = () => {
-        if (selectedProjectId === 'ALL') return preferences;
-        return preferences.filter(p => p.project === selectedProjectId);
-    };
-
-    const filteredPreferences = getFilteredPreferences();
-
-    const normalizeChannelValue = (preference: NotificationPreference) => {
-        if (!preference.slack_channel_id) return "default";
-        if (connection && preference.slack_channel_id === connection.default_channel_id) {
-            return "default";
-        }
-        return preference.slack_channel_id;
-    };
-
-    const getPreferenceSummary = (eventType: EventType): PreferenceSummary => {
-        const eventPreferences = filteredPreferences.filter((preference) => preference.event_type === eventType);
-        const totalCount = eventPreferences.length;
-
-        if (totalCount === 0) {
-            return {
-                toggleState: 'off',
-                enabledCount: 0,
-                totalCount: 0,
-                channelState: 'default',
-                channelValue: 'default',
-                showChannelSelect: false,
-            };
-        }
-
-        const enabledPreferences = eventPreferences.filter((preference) => preference.is_active);
-        const enabledCount = enabledPreferences.length;
-
-        let toggleState: ToggleState = 'off';
-        if (enabledCount === totalCount) {
-            toggleState = 'on';
-        } else if (enabledCount > 0) {
-            toggleState = 'mixed';
-        }
-
-        const channelValues = Array.from(
-            new Set(enabledPreferences.map((preference) => normalizeChannelValue(preference)))
-        );
-
-        let channelState: ChannelState = 'default';
-        let channelValue = 'default';
-
-        if (enabledPreferences.length > 0) {
-            if (channelValues.length === 1) {
-                channelValue = channelValues[0];
-                channelState = channelValue === 'default' ? 'default' : 'single';
-            } else {
-                channelState = 'mixed';
-                channelValue = 'mixed';
-            }
-        }
-
-        let summaryText: string | undefined;
-        if (selectedProjectId === 'ALL') {
-            if (toggleState === 'on') {
-                summaryText = `Enabled for all ${totalCount} projects.`;
-            } else if (toggleState === 'off') {
-                summaryText = `Disabled for all ${totalCount} projects.`;
-            } else {
-                summaryText = `Enabled for ${enabledCount}/${totalCount} projects.`;
-            }
-
-            if (enabledCount > 0 && channelState === 'mixed') {
-                summaryText += ' Channels vary by project.';
-            }
-        }
-
-        return {
-            toggleState,
-            enabledCount,
-            totalCount,
-            channelState,
-            channelValue,
-            summaryText,
-            showChannelSelect: toggleState !== 'off',
-        };
-    };
+    const manageableProjects = connection?.manageable_projects ?? [];
+    const scopedPreferences = getScopedPreferences(
+        preferences,
+        manageableProjects,
+        selectedProjectId
+    );
+    const selectedProjectHasMissingPreferences = (
+        selectedProjectId !== 'ALL' &&
+        manageableProjects.some((project) => project.id === selectedProjectId) &&
+        scopedPreferences.length === 0
+    );
 
     const updatePreference = async (eventType: EventType, updates: Partial<NotificationPreference>) => {
         // Find all preferences matching this event type AND within the current scope
-        const targets = preferences.filter(p => {
-            const typeMatch = p.event_type === eventType;
-            const projectMatch = selectedProjectId === 'ALL' || p.project === selectedProjectId;
-            return typeMatch && projectMatch;
-        });
+        const targets = scopedPreferences.filter((preference) => preference.event_type === eventType);
+        const targetIds = new Set(targets.map((preference) => preference.id));
 
         if (targets.length === 0) {
             console.warn(`No preference found for ${eventType} in current scope`);
@@ -242,10 +218,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
         // Optimistic update local state
         const oldPreferences = [...preferences];
         setPreferences(preferences.map(p => {
-            const typeMatch = p.event_type === eventType;
-            const projectMatch = selectedProjectId === 'ALL' || p.project === selectedProjectId;
-
-            if (typeMatch && projectMatch) {
+            if (targetIds.has(p.id)) {
                 return { ...p, ...updates };
             }
             return p;
@@ -254,7 +227,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
         try {
             // Update all matching records
             await Promise.all(targets.map(p =>
-                slackApi.updatePreference(p.id, updates)
+                slackApi.updatePreference(p.id, updates, slackContext)
             ));
             toast.success(selectedProjectId === 'ALL' ? 'Settings updated for all projects.' : 'Project settings updated.');
         } catch (error) {
@@ -265,7 +238,13 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
     };
 
     const togglePreference = (eventType: EventType) => {
-        const currentSummary = getPreferenceSummary(eventType);
+        const currentSummary = buildPreferenceSummary({
+            eventType,
+            preferences,
+            manageableProjects,
+            connection,
+            selectedProjectId,
+        });
         updatePreference(eventType, { is_active: currentSummary.toggleState !== 'on' });
     };
 
@@ -301,6 +280,18 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
                         <div className="flex flex-col items-center justify-center py-10 space-y-3">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                             <p className="text-sm text-gray-500">Loading details...</p>
+                        </div>
+                    ) : !connection?.can_manage_slack ? (
+                        <div className="py-6 flex flex-col items-center space-y-6">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                                <Slack className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <div className="text-center space-y-2 max-w-sm">
+                                <h3 className="text-lg font-medium text-gray-900">Slack access is limited</h3>
+                                <p className="text-sm text-gray-500">
+                                    Slack can only be managed by project owners, Super Administrators, Organization Admins, Team Leaders, and Campaign Managers for projects they oversee.
+                                </p>
+                            </div>
                         </div>
                     ) : !connection?.is_connected ? (
                         // Not Connected State
@@ -352,8 +343,8 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
                                                 <SelectValue placeholder="Select Project" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="ALL">All Projects ({projects.length})</SelectItem>
-                                                {projects.map(p => (
+                                                <SelectItem value="ALL">All Projects ({manageableProjects.length})</SelectItem>
+                                                {manageableProjects.map(p => (
                                                     <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -363,17 +354,27 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
 
                                 {selectedProjectId === 'ALL' && (
                                     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                        Changes made in All Projects mode will be applied to every project in this workspace.
+                                        Changes made in All Projects mode will be applied to every project you can manage.
                                     </div>
                                 )}
                             </div>
 
                             {/* Preferences List */}
                             <div className="min-h-0 flex-1 overflow-y-auto border-t pt-2 pr-1">
-                                {preferences.length > 0 ? (
+                                {selectedProjectHasMissingPreferences ? (
+                                    <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded">
+                                        Slack preferences could not be loaded for the selected project context.
+                                    </div>
+                                ) : scopedPreferences.length > 0 ? (
                                     <div className="divide-y divide-gray-100">
                                         {PREFERENCE_ROWS.map((row) => {
-                                            const summary = getPreferenceSummary(row.eventType);
+                                            const summary = buildPreferenceSummary({
+                                                eventType: row.eventType,
+                                                preferences,
+                                                manageableProjects,
+                                                connection,
+                                                selectedProjectId,
+                                            });
 
                                             return (
                                                 <SlackPreferenceRow
@@ -397,7 +398,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
                                     </div>
                                 ) : (
                                     <div className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded">
-                                        Settings not available. No configurable projects found.
+                                        Settings are only available for projects you can manage.
                                     </div>
                                 )}
                             </div>

@@ -329,6 +329,9 @@ class DecisionDraftSerializer(serializers.ModelSerializer):
     agentSessionId = serializers.UUIDField(
         source="agent_session_id", required=False, allow_null=True
     )
+    plannedDecisionDate = serializers.DateTimeField(
+        source="planned_decision_date", required=False, allow_null=True
+    )
     origin_meeting = serializers.SerializerMethodField()
     origin_meeting_id = serializers.IntegerField(
         write_only=True,
@@ -451,6 +454,7 @@ class DecisionDraftSerializer(serializers.ModelSerializer):
             "parentDecisionIds",
             "createdByAgent",
             "agentSessionId",
+            "plannedDecisionDate",
             "origin_meeting",
             "origin_meeting_id",
         ]
