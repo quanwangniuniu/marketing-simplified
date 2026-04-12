@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Filter, Loader2, Search, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 import {
   MeetingFiltersPanel,
@@ -84,7 +89,8 @@ function MeetingToolbarSearch({
         aria-hidden
       />
       <input
-        type="search"
+        type="text"
+        inputMode="search"
         autoComplete="off"
         placeholder="Search meetings…"
         value={local}
@@ -128,71 +134,29 @@ export function MeetingDiscoveryToolbar({
 }: MeetingDiscoveryToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const justAppliedRef = useRef(false);
-  const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const filterPanelRef = useRef<HTMLDivElement>(null);
 
-  const closePanel = () => {
+  const handleFilterOpenChange = (open: boolean) => {
+    if (open) {
+      justAppliedRef.current = false;
+      setFilterOpen(true);
+      return;
+    }
+    if (!justAppliedRef.current) {
+      onPopoverCancel();
+    }
+    justAppliedRef.current = false;
     setFilterOpen(false);
   };
 
   const handleApplyAndClose = () => {
     justAppliedRef.current = true;
-    closePanel();
+    setFilterOpen(false);
   };
 
   const handleCancel = () => {
     onPopoverCancel();
-    closePanel();
+    setFilterOpen(false);
   };
-
-  useEffect(() => {
-    if (filterOpen) {
-      justAppliedRef.current = false;
-    }
-  }, [filterOpen]);
-
-  useEffect(() => {
-    if (!filterOpen) return;
-
-    const onDocMouseDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (
-        filterPanelRef.current?.contains(t) ||
-        filterTriggerRef.current?.contains(t)
-      ) {
-        return;
-      }
-      // Radix dropdowns / popovers render in a portal (outside this panel).
-      if (
-        t.closest('[data-radix-popper-content-wrapper]') ||
-        t.closest('[data-radix-portal]')
-      ) {
-        return;
-      }
-      if (!justAppliedRef.current) {
-        onPopoverCancel();
-      }
-      justAppliedRef.current = false;
-      setFilterOpen(false);
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (!justAppliedRef.current) {
-          onPopoverCancel();
-        }
-        justAppliedRef.current = false;
-        setFilterOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', onDocMouseDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [filterOpen, onPopoverCancel]);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -209,38 +173,47 @@ export function MeetingDiscoveryToolbar({
         disabled={panelProps.disabled}
       />
 
-      <div className="relative inline-block">
-        <button
-          ref={filterTriggerRef}
-          type="button"
-          data-testid="meetings-filter-trigger"
-          disabled={panelProps.disabled}
-          onClick={() => {
-            setFilterOpen((v) => !v);
-          }}
-          className={cn(
-            'inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50',
-          )}
-          aria-expanded={filterOpen}
-          aria-haspopup="true"
-          aria-label="Filter meetings"
-        >
-          <Filter className="h-4 w-4 text-slate-500" aria-hidden />
-          <span>Filter</span>
-          {filterBadgeCount > 0 ? (
-            <span className="min-w-[1.25rem] rounded-full bg-blue-600 px-1.5 py-0.5 text-center text-xs font-semibold text-white">
-              {filterBadgeCount}
-            </span>
-          ) : null}
-        </button>
-
-        {filterOpen ? (
-          <div
-            ref={filterPanelRef}
-            role="region"
-            aria-label="Meeting filters"
-            className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,720px)] max-h-[min(85vh,680px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+      <Popover open={filterOpen} onOpenChange={handleFilterOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-testid="meetings-filter-trigger"
+            disabled={panelProps.disabled}
+            className={cn(
+              'inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50',
+            )}
+            aria-expanded={filterOpen}
+            aria-haspopup="true"
+            aria-label="Filter meetings"
           >
+            <Filter className="h-4 w-4 text-slate-500" aria-hidden />
+            <span>Filter</span>
+            {filterBadgeCount > 0 ? (
+              <span className="min-w-[1.25rem] rounded-full bg-blue-600 px-1.5 py-0.5 text-center text-xs font-semibold text-white">
+                {filterBadgeCount}
+              </span>
+            ) : null}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="bottom"
+          align="start"
+          sideOffset={8}
+          collisionPadding={16}
+          className={cn(
+            'w-[min(100vw-2rem,720px)] max-h-[min(85vh,680px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl',
+          )}
+          onInteractOutside={(e) => {
+            const el = e.target as HTMLElement;
+            if (
+              el.closest('[data-radix-popper-content-wrapper]') ||
+              el.closest('[data-radix-portal]')
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <div role="region" aria-label="Meeting filters">
             <div className="mb-4 flex flex-row items-start justify-between gap-4 border-b border-slate-100 pb-4">
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold text-slate-900">
@@ -266,8 +239,8 @@ export function MeetingDiscoveryToolbar({
               onClosePanel={handleCancel}
             />
           </div>
-        ) : null}
-      </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

@@ -5,10 +5,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.contrib.auth import get_user_model
 from django.core.files import File
 from django.db import transaction
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Max
 from django.core.cache import cache
 from django.utils import timezone
-from .models import Chat, ChatParticipant, Message, MessageAttachment, MessageStatus, ChatType
+from .models import Chat, ChatParticipant, ChatStar, Message, MessageAttachment, MessageStatus, ChatType
 from core.models import ProjectMember
 
 User = get_user_model()
@@ -271,6 +271,82 @@ class ChatService:
         participant.save()
         
         logger.info(f"Removed participant {user.id} from chat {chat.id} by user {removed_by.id}")
+
+
+class ChatStarService:
+    """Starred chats per user (project-scoped ordering)."""
+
+    @staticmethod
+    def _ensure_participant(user: User, chat: Chat) -> None:
+        if not ChatParticipant.objects.filter(chat=chat, user=user, is_active=True).exists():
+            raise ValueError('You are not a participant of this chat')
+
+    @staticmethod
+    def list_starred_for_project(user: User, project_id: int):
+        """Return ChatStar queryset for user in project, ordered by position."""
+        return (
+            ChatStar.objects.filter(user=user, chat__project_id=project_id)
+            .select_related('chat', 'chat__project')
+            .order_by('position', 'id')
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def star_chat(user: User, chat_id: int) -> Tuple[ChatStar, bool]:
+        chat = Chat.objects.filter(id=chat_id).select_related('project').first()
+        if not chat:
+            raise ValueError('Chat not found')
+        ChatStarService._ensure_participant(user, chat)
+        existing = ChatStar.objects.filter(user=user, chat=chat).first()
+        if existing:
+            return existing, False
+        max_pos = ChatStar.objects.filter(
+            user=user, chat__project_id=chat.project_id
+        ).aggregate(m=Max('position'))['m']
+        next_pos = (max_pos + 1) if max_pos is not None else 0
+        star = ChatStar.objects.create(user=user, chat=chat, position=next_pos)
+        return star, True
+
+    @staticmethod
+    @transaction.atomic
+    def unstar_chat(user: User, chat_id: int) -> None:
+        deleted, _ = ChatStar.objects.filter(user=user, chat_id=chat_id).delete()
+        if not deleted:
+            raise ValueError('Star not found')
+
+    @staticmethod
+    @transaction.atomic
+    def reorder_starred(user: User, project_id: int, ordered_chat_ids: List[int]) -> None:
+        """Set positions 0..n-1 for the given chat ids (must all be starred in project)."""
+        if not isinstance(ordered_chat_ids, list):
+            raise ValueError('chat_ids must be a list')
+        unique_ids = list(dict.fromkeys(ordered_chat_ids))
+        if len(unique_ids) != len(ordered_chat_ids):
+            raise ValueError('Duplicate chat_ids are not allowed')
+
+        total_starred = ChatStar.objects.filter(
+            user=user,
+            chat__project_id=project_id,
+        ).count()
+        if len(unique_ids) != total_starred:
+            raise ValueError('chat_ids must include all starred chats in this project')
+
+        stars = list(
+            ChatStar.objects.filter(
+                user=user,
+                chat__project_id=project_id,
+                chat_id__in=unique_ids,
+            ).select_related('chat')
+        )
+        if len(stars) != len(unique_ids):
+            raise ValueError('All chat_ids must be starred chats in this project')
+
+        star_by_chat = {s.chat_id: s for s in stars}
+        for idx, cid in enumerate(unique_ids):
+            s = star_by_chat[cid]
+            if s.position != idx:
+                s.position = idx
+                s.save(update_fields=['position', 'updated_at'])
 
 
 class MessageService:

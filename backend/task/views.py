@@ -626,6 +626,20 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response({
             'history': history
         }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='origins')
+    def meeting_origins(self, request, pk=None):
+        """Return immutable meeting/action-item lineage snapshots (SMP-489)."""
+        task = self.get_object()
+        return Response(
+            {
+                'origin_meeting_id': task.origin_meeting_id,
+                'origin_meeting_title': task.origin_meeting_title,
+                'origin_action_item_id': task.origin_action_item_id,
+                'origin_action_item_title': task.origin_action_item_title,
+            },
+            status=status.HTTP_200_OK,
+        )
     
     @action(detail=True, methods=['post'])
     def revise(self, request, pk=None):
@@ -1172,10 +1186,10 @@ def get_task_types(request):
     task_type_choices = Task._meta.get_field('type').choices
     
     # Format as a list of objects with value and label
+    # Include all model types so meeting → task conversion and task board stay in sync.
     task_types = [
         {'value': choice[0], 'label': choice[1]}
         for choice in task_type_choices
-        if choice[0] not in ['execution']  # Exclude types not used in UI
     ]
     
     return Response({'task_types': task_types}, status=status.HTTP_200_OK)

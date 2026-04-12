@@ -3,7 +3,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
-from rest_framework import viewsets, status
+from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +17,9 @@ from .models import Chat, ChatParticipant, Message, MessageStatus, ChatType, Mes
 from .serializers import (
     ChatSerializer,
     ChatListSerializer,
+    ChatStarSerializer,
+    ChatStarCreateSerializer,
+    ChatStarReorderSerializer,
     ChatCreateSerializer,
     MessageSerializer,
     MessageCreateSerializer,
@@ -27,11 +30,92 @@ from .serializers import (
     ForwardBatchSerializer,
     MessageAttachmentSerializer,
     AttachmentUploadSerializer,
+    AttachmentFileListRowSerializer,
 )
-from .services import ChatService, MessageService, OnlineStatusService
+from .services import ChatService, ChatStarService, MessageService, OnlineStatusService
 from .tasks import notify_new_message
 
 logger = logging.getLogger(__name__)
+
+
+class StarredChatViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    Starred chats for the current user.
+
+    - GET /starred/?project_id= - list starred chats in project (ordered)
+    - POST /starred/ body { chat_id } - star a chat
+    - DELETE /starred/{chat_id}/ - unstar (pk is chat id, not ChatStar row id)
+    - POST /starred/reorder/ body { project_id, chat_ids } - reorder
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChatStarSerializer
+
+    def get_queryset(self):
+        return self.request.user.chat_stars.none()
+
+    def list(self, request, *args, **kwargs):
+        project_id = request.query_params.get('project_id')
+        if not project_id:
+            return Response(
+                {'error': 'project_id is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            pid = int(project_id)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'Invalid project_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        stars = ChatStarService.list_starred_for_project(request.user, pid)
+        serializer = ChatStarSerializer(stars, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = ChatStarCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            star, created = ChatStarService.star_chat(
+                request.user, serializer.validated_data['chat_id']
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        out = ChatStarSerializer(star, context={'request': request})
+        return Response(
+            out.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            chat_id = int(kwargs.get('pk'))
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid chat id'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ChatStarService.unstar_chat(request.user, chat_id)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='reorder')
+    def reorder(self, request):
+        serializer = ChatStarReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            ChatStarService.reorder_starred(
+                request.user,
+                serializer.validated_data['project_id'],
+                serializer.validated_data['chat_ids'],
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'status': 'ok'})
 
 
 class ChatViewSet(viewsets.ModelViewSet):
@@ -598,6 +682,8 @@ class AttachmentViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     serializer_class = MessageAttachmentSerializer
+    # Prevent `/attachments/<pk>/` from matching non-numeric paths like `/attachments/files/`.
+    lookup_value_regex = r'\d+'
     
     def get_queryset(self):
         """Get attachments uploaded by current user"""
@@ -692,6 +778,64 @@ class AttachmentViewSet(viewsets.GenericViewSet):
                 {'error': 'Attachment not found or already linked to a message'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    @action(detail=False, methods=['get'], url_path='files')
+    def files(self, request):
+        """
+        List message attachments accessible to the current user for a project.
+
+        Query params:
+        - project_id: required
+        - page: default 1
+        - page_size: default 25
+        """
+        project_id = request.query_params.get('project_id')
+        if not project_id:
+            return Response(
+                {'error': 'project_id is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            pid = int(project_id)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'Invalid project_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 25))
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 100))
+
+        chat_ids = ChatParticipant.objects.filter(
+            user=request.user,
+            is_active=True,
+            chat__project_id=pid,
+        ).values_list('chat_id', flat=True)
+
+        queryset = (
+            MessageAttachment.objects.filter(
+                message__isnull=False,
+                message__chat_id__in=chat_ids,
+            )
+            .select_related('uploader', 'message__chat')
+            .order_by('-created_at')
+        )
+
+        total = queryset.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        rows = queryset[start:end]
+        serializer = AttachmentFileListRowSerializer(rows, many=True, context={'request': request})
+        return Response(
+            {
+                'results': serializer.data,
+                'page': page,
+                'page_size': page_size,
+                'total': total,
+            }
+        )
 
 
 @api_view(['POST'])

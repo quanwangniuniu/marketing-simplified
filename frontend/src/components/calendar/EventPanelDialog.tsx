@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { CalendarAPI } from "@/lib/api/calendarApi";
+import { CalendarAPI, extractUserDescription } from "@/lib/api/calendarApi";
 import type { CalendarDTO, EventDTO } from "@/lib/api/calendarApi";
 import type { CalendarDialogMode, EventPanelPosition } from "@/components/calendar/types";
 
@@ -189,12 +189,15 @@ export function EventPanelDialog({
                 </div>
               </div>
             </div>
-            {event.description && (
-              <div className="mb-2 flex items-start gap-3 text-gray-700">
-                <AlignLeft className="mt-0.5 h-4 w-4 text-gray-500" />
-                <p className="whitespace-pre-line text-sm">{event.description}</p>
-              </div>
-            )}
+            {(() => {
+              const userDescription = extractUserDescription(event.description || "");
+              return userDescription && (
+                <div className="mb-2 flex items-start gap-3 text-gray-700">
+                  <AlignLeft className="mt-0.5 h-4 w-4 text-gray-500" />
+                  <p className="whitespace-pre-line text-sm">{userDescription}</p>
+                </div>
+              );
+            })()}
             <div className="flex items-start gap-3 text-gray-700">
               <CalendarIcon className="mt-0.5 h-4 w-4 text-gray-500" />
               <span className="text-sm">{calendarName}</span>

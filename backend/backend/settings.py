@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'slack_integration.apps.SlackIntegrationConfig',
     'agent.apps.AgentConfig',
     'meetings.apps.MeetingsConfig',
+    'zoom_integration.apps.ZoomIntegrationConfig',
 ]
 
 MIDDLEWARE = [
@@ -623,3 +624,7 @@ MEETINGS_REQUIRE_PARTICIPANTS_AT_CREATE = config(
     default=False,
     cast=bool,
 )
+
+ZOOM_CLIENT_ID     = os.environ.get("ZOOM_CLIENT_ID", "")
+ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET", "")
+ZOOM_REDIRECT_URI  = os.environ.get("ZOOM_REDIRECT_URI", "http://localhost/api/v1/zoom/callback/")

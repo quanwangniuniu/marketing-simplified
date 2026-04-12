@@ -79,6 +79,24 @@ def serialize_linked_task(task: Any, project_id: int) -> dict[str, Any]:
     }
 
 
+def serialize_origin_action_item(action_item: Any) -> dict[str, Any]:
+    """
+    Task detail: immutable lineage back to the meeting action item (if converted from one).
+    """
+    mid = action_item.meeting_id
+    pid = action_item.meeting.project_id
+    title = (getattr(action_item, "title", None) or "").strip() or f"Action item {action_item.id}"
+    detail_url = project_meeting_url(pid, mid)
+    return {
+        "id": action_item.id,
+        "title": title,
+        "meeting_id": mid,
+        "project_id": pid,
+        "detail_url": detail_url,
+        "url": detail_url,
+    }
+
+
 def serialize_origin_meeting(meeting: Any) -> dict[str, Any]:
     """
     Task / decision detail: origin meeting for bidirectional navigation.
@@ -108,7 +126,7 @@ def generated_decisions_payload(meeting: Any) -> list[dict[str, Any]]:
 
     project_id = meeting.project_id
     origins = meeting.decision_origins.all()
-    decisions = [o.decision for o in origins]
+    decisions = [o.decision for o in origins if not o.decision.is_deleted]
     decisions.sort(key=lambda d: d.id)
     return [serialize_linked_decision(d, project_id) for d in decisions]
 
@@ -129,7 +147,9 @@ def related_decisions_payload(meeting: Any) -> list[dict[str, Any]]:
     """
 
     project_id = meeting.project_id
-    generated_ids = {o.decision_id for o in meeting.decision_origins.all()}
+    generated_ids = {
+        o.decision_id for o in meeting.decision_origins.all() if not o.decision.is_deleted
+    }
     artifact_ids: list[int] = []
     for link in meeting.artifact_links.all():
         if _normalize_artifact_type(link.artifact_type) == "decision" and link.artifact_id:
@@ -142,7 +162,9 @@ def related_decisions_payload(meeting: Any) -> list[dict[str, Any]]:
     from decision.models import Decision
 
     out: list[dict[str, Any]] = []
-    for d in Decision.objects.filter(id__in=artifact_ids, project_id=project_id).order_by("id"):
+    for d in Decision.objects.filter(
+        id__in=artifact_ids, project_id=project_id, is_deleted=False
+    ).order_by("id"):
         out.append(serialize_linked_decision(d, project_id))
     return out
 

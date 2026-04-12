@@ -77,6 +77,28 @@ class TestKnowledgeNavigationAPIContract(TestCase):
         )
         self.assertEqual(len(response.data.get("related_decisions", [])), 0)
 
+    def test_meeting_detail_excludes_soft_deleted_generated_decision(self):
+        m = Meeting.objects.create(
+            project=self.project,
+            title="M",
+            type_definition=self.planning,
+            objective="o",
+        )
+        d = Decision.objects.create(
+            project=self.project,
+            author=self.user,
+            title="Will delete",
+        )
+        MeetingDecisionOrigin.objects.create(meeting=m, decision=d)
+        d.is_deleted = True
+        d.save(update_fields=["is_deleted", "updated_at"])
+
+        url = f"/api/projects/{self.project.id}/meetings/{m.id}/"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["generated_decisions"], [])
+        self.assertEqual(response.data["generated_decisions_count"], 0)
+
     def test_origin_decision_not_duplicated_in_related_when_also_artifact(self):
         m = Meeting.objects.create(
             project=self.project,

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -16,11 +17,26 @@ function parsePositiveProjectId(value: unknown): number | null {
   return Math.trunc(n);
 }
 
-export default function MeetingsHubPage() {
+function MeetingsHubContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const zoomToastShownRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasProjects, setHasProjects] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (searchParams.get('zoom_connected') === 'true' && !zoomToastShownRef.current) {
+      zoomToastShownRef.current = true;
+      toast.success('Zoom account connected successfully!');
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete('zoom_connected');
+      const newUrl = newParams.toString()
+        ? `${window.location.pathname}?${newParams.toString()}`
+        : window.location.pathname;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,5 +153,21 @@ export default function MeetingsHubPage() {
         </div>
       </Layout>
     </ProtectedRoute>
+  );
+}
+
+export default function MeetingsHubPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <p className="mt-3 font-medium text-gray-900">Loading Meetings…</p>
+          <p className="text-sm text-gray-600">Preparing your meetings workspace.</p>
+        </div>
+      }
+    >
+      <MeetingsHubContent />
+    </Suspense>
   );
 }

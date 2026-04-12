@@ -116,6 +116,38 @@ class Chat(TimeStampedModel):
             return False
 
 
+class ChatStar(TimeStampedModel):
+    """
+    User-starred chat for sidebar ordering (Slack-style).
+    Scoped per user; position orders stars within a project (via chat.project).
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_stars',
+    )
+    chat = models.ForeignKey(
+        Chat,
+        on_delete=models.CASCADE,
+        related_name='stars',
+    )
+    position = models.PositiveIntegerField(
+        default=0,
+        help_text='Order within starred list for this user in the chat project',
+    )
+
+    class Meta:
+        unique_together = [('user', 'chat')]
+        ordering = ['position', 'id']
+        indexes = [
+            models.Index(fields=['user', 'position']),
+            models.Index(fields=['user', 'chat']),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} * {self.chat_id} @ {self.position}'
+
+
 class ChatParticipant(TimeStampedModel):
     """
     Model representing a user's participation in a chat.

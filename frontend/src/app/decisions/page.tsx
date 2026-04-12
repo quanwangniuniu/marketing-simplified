@@ -19,11 +19,27 @@ import { useAuthStore } from '@/lib/authStore';
 import DecisionEditModal from '@/components/decisions/DecisionEditModal';
 import DecisionLinkEditor from '@/components/decisions/DecisionLinkEditor';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { OriginMeetingBlock } from '@/components/meetings/OriginMeetingBlock';
 import type { DecisionGraphResponse, DecisionListItem } from '@/types/decision';
 
 type PendingDelete =
   | { type: 'tree'; node: DecisionGraphResponse['nodes'][number]; projectId: number }
   | { type: 'list'; decision: DecisionListItem; projectId: number };
+
+/**
+ * Merging `listDecisions` per project can duplicate the same row if the API returns
+ * overlapping results for each project scope (e.g. same global list per call).
+ * Decision ids are unique — keep a single row per id.
+ */
+function dedupeDecisionListItems(items: DecisionListItem[]): DecisionListItem[] {
+  const byId = new Map<number, DecisionListItem>();
+  for (const item of items) {
+    if (!byId.has(item.id)) {
+      byId.set(item.id, item);
+    }
+  }
+  return Array.from(byId.values());
+}
 
 const statusColor = (status: string) => {
   switch (status) {
@@ -106,10 +122,23 @@ const DecisionsPage = () => {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [selectedDecisionId, setSelectedDecisionId] = useState<number | null>(null);
+  /** Project scope for detail API calls — must match the project of `selectedDecisionId`. */
+  const [selectedDecisionProjectId, setSelectedDecisionProjectId] = useState<number | null>(
+    null
+  );
   const [selectedDecision, setSelectedDecision] = useState<any>(null);
   const [selectedSignals, setSelectedSignals] = useState<any[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const fallbackProjectId = useMemo(() => projects[0]?.id ?? null, [projects]);
+
+  const clearDecisionSelection = () => {
+    setSelectedDecisionId(null);
+    setSelectedDecisionProjectId(null);
+  };
+
+  const selectDecisionInProject = (decisionId: number, projectId: number) => {
+    setSelectedDecisionId(decisionId);
+    setSelectedDecisionProjectId(projectId);
+  };
 
   const handleCreateDecision = async (project: ProjectData) => {
     setCreatingProjectId(project.id);
@@ -166,6 +195,9 @@ const DecisionsPage = () => {
     setDeleting(true);
     try {
       await DecisionAPI.deleteDecision(id, projectId);
+      if (selectedDecisionId === id) {
+        clearDecisionSelection();
+      }
       await fetchProjectsAndDecisions();
       toast.success('Decision deleted.');
     } catch (error: any) {
@@ -190,8 +222,12 @@ const DecisionsPage = () => {
         setLoading(false);
         return;
       }
-      const response = await DecisionAPI.listDecisions(projectList[0].id);
-      const items = response.items || [];
+      const listResponses = await Promise.all(
+        projectList.map((project) => DecisionAPI.listDecisions(project.id))
+      );
+      const items = dedupeDecisionListItems(
+        listResponses.flatMap((response) => response.items || [])
+      );
       setDecisions(items);
       const graphEntries = await Promise.all(
         projectList.map(async (project): Promise<[number, DecisionGraphResponse]> => {
@@ -309,8 +345,18 @@ const DecisionsPage = () => {
       setSelectedSignals([]);
       return;
     }
+    const projectId =
+      selectedDecisionProjectId ??
+      decisions.find((d) => d.id === selectedDecisionId)?.projectId ??
+      null;
+    if (projectId == null) {
+      setSelectedDecision(null);
+      setSelectedSignals([]);
+      setLoadingDetail(false);
+      toast.error('Could not determine project for this decision.');
+      return;
+    }
     let cancelled = false;
-    const projectId = projects[0]?.id ?? null;
     setLoadingDetail(true);
     const fetchDetail = async () => {
       try {
@@ -340,7 +386,7 @@ const DecisionsPage = () => {
     };
     fetchDetail();
     return () => { cancelled = true; };
-  }, [selectedDecisionId, projects]);
+  }, [selectedDecisionId, selectedDecisionProjectId, decisions]);
 
   const seqByDecisionId = useMemo(() => {
     const map = new Map<number, number>();
@@ -445,7 +491,7 @@ const DecisionsPage = () => {
                   onEditDecision={(node) => handleOpenEditModal(node.id, project.id)}
                   onCreateDecision={() => handleCreateDecisionModal(project)}
                   selectedNodeId={selectedDecisionId}
-                  onSelectNode={(id) => setSelectedDecisionId(id)}
+                  onSelectNode={(id) => selectDecisionInProject(id, project.id)}
                   onDelete={(node) => handleDeleteFromTree(node, project.id)}
                   canReview={canReview}
                   canDelete={canDelete}
@@ -520,7 +566,7 @@ const DecisionsPage = () => {
                   <div className="space-y-4">
                     <button
                       type="button"
-                      onClick={() => setSelectedDecisionId(null)}
+                      onClick={() => clearDecisionSelection()}
                       className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900"
                     >
                       <ArrowLeft className="h-4 w-4" />
@@ -549,6 +595,12 @@ const DecisionsPage = () => {
                             </span>
                           </div>
                         </div>
+
+                        {selectedDecision.origin_meeting ? (
+                          <div data-testid="decisions-list-preview-origin-meeting">
+                            <OriginMeetingBlock origin={selectedDecision.origin_meeting} />
+                          </div>
+                        ) : null}
 
                         {selectedSignals.length > 0 ? (
                           <div>
@@ -741,7 +793,7 @@ const DecisionsPage = () => {
                               return (
                               <div
                                 key={decision.id}
-                                onClick={() => setSelectedDecisionId(decision.id)}
+                                onClick={() => selectDecisionInProject(decision.id, project.id)}
                                 className={`grid cursor-pointer grid-cols-[70px_minmax(220px,1fr)_105px_105px] items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 ${
                                   selectedDecisionId === decision.id ? 'border-l-2 border-blue-500 bg-blue-50' : ''
                                 }`}
@@ -854,7 +906,6 @@ const DecisionsPage = () => {
     projectRoles,
     collapsedTrees,
     collapsedLists,
-    fallbackProjectId,
     currentUserId,
     projects,
     graphsByProject,

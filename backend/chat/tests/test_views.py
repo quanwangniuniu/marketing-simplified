@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import Project, Organization, Team, TeamMember, ProjectMember
-from chat.models import Chat, ChatParticipant, Message, MessageAttachment, MessageStatus, ChatType
+from chat.models import Chat, ChatParticipant, ChatStar, Message, MessageAttachment, MessageStatus, ChatType
 from chat.services import MessageService
 from chat.serializers import MessageSerializer
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -984,3 +984,201 @@ class AttachmentAPITest(TestCase):
         attachment.refresh_from_db()
         self.assertEqual(attachment.message.id, response.data['id'])
         self.assertEqual(len(response.data['attachments']), 1)
+
+    def test_list_accessible_files_requires_project_id(self):
+        url = reverse('attachment-files')
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_accessible_files_scopes_to_project_and_participation(self):
+        """
+        User should see linked attachments from chats they participate in within the project,
+        and should not see attachments from other projects or chats they are not in.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # Chat user1 participates in (same project) with an attachment from user2.
+        msg_allowed = Message.objects.create(chat=self.chat, sender=self.user2, content='Has file')
+        allowed_attachment = MessageAttachment.objects.create(
+            uploader=self.user2,
+            message=msg_allowed,
+            file=SimpleUploadedFile('allowed.txt', b'allowed'),
+            file_type='document',
+            file_size=7,
+            original_filename='allowed.txt',
+            mime_type='text/plain',
+        )
+
+        # Chat in same project but user1 is NOT a participant.
+        outsider = User.objects.create_user(
+            email='outsider@example.com',
+            username='outsider',
+            password='testpass123',
+        )
+        ProjectMember.objects.create(user=outsider, project=self.project, role='member', is_active=True)
+        chat_forbidden = Chat.objects.create(project=self.project, type=ChatType.PRIVATE)
+        ChatParticipant.objects.create(chat=chat_forbidden, user=self.user2, is_active=True)
+        ChatParticipant.objects.create(chat=chat_forbidden, user=outsider, is_active=True)
+        msg_forbidden = Message.objects.create(chat=chat_forbidden, sender=self.user2, content='Forbidden file')
+        MessageAttachment.objects.create(
+            uploader=self.user2,
+            message=msg_forbidden,
+            file=SimpleUploadedFile('forbidden.txt', b'forbidden'),
+            file_type='document',
+            file_size=9,
+            original_filename='forbidden.txt',
+            mime_type='text/plain',
+        )
+
+        # Another project where user1 participates; should be excluded when querying self.project.id.
+        other_project = Project.objects.create(name='Other Project', organization=self.organization)
+        ProjectMember.objects.create(user=self.user1, project=other_project, role='owner', is_active=True)
+        ProjectMember.objects.create(user=self.user2, project=other_project, role='member', is_active=True)
+        other_chat = Chat.objects.create(project=other_project, type=ChatType.PRIVATE)
+        ChatParticipant.objects.create(chat=other_chat, user=self.user1, is_active=True)
+        ChatParticipant.objects.create(chat=other_chat, user=self.user2, is_active=True)
+        other_msg = Message.objects.create(chat=other_chat, sender=self.user2, content='Other project file')
+        MessageAttachment.objects.create(
+            uploader=self.user2,
+            message=other_msg,
+            file=SimpleUploadedFile('other.txt', b'other'),
+            file_type='document',
+            file_size=5,
+            original_filename='other.txt',
+            mime_type='text/plain',
+        )
+
+        url = reverse('attachment-files')
+        r = self.client.get(url, {'project_id': self.project.id, 'page': 1, 'page_size': 25})
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn('results', r.data)
+        ids = {row['id'] for row in r.data['results']}
+        self.assertIn(allowed_attachment.id, ids)
+        self.assertEqual(ids, {allowed_attachment.id})
+
+        row = r.data['results'][0]
+        self.assertIn('uploader', row)
+        self.assertEqual(row['uploader']['id'], self.user2.id)
+        self.assertIn('chat', row)
+        self.assertEqual(row['chat']['id'], self.chat.id)
+        self.assertEqual(row['message_id'], msg_allowed.id)
+
+
+class StarredChatAPITest(TestCase):
+    """Test starred chat API."""
+
+    def setUp(self):
+        self.user1 = User.objects.create_user(
+            email='star1@example.com',
+            username='star1',
+            password='testpass123',
+        )
+        self.user2 = User.objects.create_user(
+            email='star2@example.com',
+            username='star2',
+            password='testpass123',
+        )
+        self.user3 = User.objects.create_user(
+            email='star3@example.com',
+            username='star3',
+            password='testpass123',
+        )
+        self.organization = Organization.objects.create(name='Star Org')
+        self.team = Team.objects.create(organization=self.organization, name='Star Team')
+        self.project = Project.objects.create(name='Star Project', organization=self.organization)
+        TeamMember.objects.create(user=self.user1, team=self.team)
+        TeamMember.objects.create(user=self.user2, team=self.team)
+        ProjectMember.objects.create(
+            user=self.user1, project=self.project, role='Team Leader', is_active=True
+        )
+        ProjectMember.objects.create(
+            user=self.user2, project=self.project, role='member', is_active=True
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user1)
+
+    def _private_chat(self):
+        chat = Chat.objects.create(project=self.project, type=ChatType.PRIVATE)
+        ChatParticipant.objects.create(chat=chat, user=self.user1, is_active=True)
+        ChatParticipant.objects.create(chat=chat, user=self.user2, is_active=True)
+        return chat
+
+    def _group_chat(self):
+        chat = Chat.objects.create(
+            project=self.project, type=ChatType.GROUP, name='Starred Group'
+        )
+        ChatParticipant.objects.create(chat=chat, user=self.user1, is_active=True)
+        ChatParticipant.objects.create(chat=chat, user=self.user2, is_active=True)
+        return chat
+
+    def test_list_starred_requires_project_id(self):
+        url = reverse('chat-starred-list')
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_star_list_unstar_reorder(self):
+        c1 = self._private_chat()
+        c2 = self._group_chat()
+        list_url = reverse('chat-starred-list')
+
+        r = self.client.get(list_url, {'project_id': self.project.id})
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data, [])
+
+        r = self.client.post(reverse('chat-starred-list'), {'chat_id': c1.id}, format='json')
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(r.data['chat']['id'], c1.id)
+
+        r = self.client.post(reverse('chat-starred-list'), {'chat_id': c2.id}, format='json')
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+
+        r = self.client.get(list_url, {'project_id': self.project.id})
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(r.data), 2)
+        self.assertEqual(r.data[0]['chat']['id'], c1.id)
+        self.assertEqual(r.data[1]['chat']['id'], c2.id)
+
+        reorder_url = reverse('chat-starred-reorder')
+        r = self.client.post(
+            reorder_url,
+            {'project_id': self.project.id, 'chat_ids': [c2.id, c1.id]},
+            format='json',
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+        r = self.client.get(list_url, {'project_id': self.project.id})
+        self.assertEqual(r.data[0]['chat']['id'], c2.id)
+        self.assertEqual(r.data[1]['chat']['id'], c1.id)
+
+        r = self.client.delete(reverse('chat-starred-detail', kwargs={'pk': c1.id}))
+        self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
+        r = self.client.get(list_url, {'project_id': self.project.id})
+        self.assertEqual(len(r.data), 1)
+        self.assertEqual(r.data[0]['chat']['id'], c2.id)
+
+    def test_star_idempotent(self):
+        c = self._private_chat()
+        r1 = self.client.post(reverse('chat-starred-list'), {'chat_id': c.id}, format='json')
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        r2 = self.client.post(reverse('chat-starred-list'), {'chat_id': c.id}, format='json')
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertEqual(ChatStar.objects.filter(user=self.user1, chat=c).count(), 1)
+
+    def test_star_not_participant_forbidden(self):
+        c = self._private_chat()
+        client3 = APIClient()
+        client3.force_authenticate(user=self.user3)
+        r = client3.post(reverse('chat-starred-list'), {'chat_id': c.id}, format='json')
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reorder_rejects_incomplete_list(self):
+        c1 = self._private_chat()
+        c2 = self._private_chat()
+        self.client.post(reverse('chat-starred-list'), {'chat_id': c1.id}, format='json')
+        self.client.post(reverse('chat-starred-list'), {'chat_id': c2.id}, format='json')
+        r = self.client.post(
+            reverse('chat-starred-reorder'),
+            {'project_id': self.project.id, 'chat_ids': [c1.id]},
+            format='json',
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)

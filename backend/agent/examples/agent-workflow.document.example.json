@@ -1,0 +1,155 @@
+{
+  "format_version": 1,
+  "workflow_definition": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Example analysis → decision → tasks",
+    "description": "Sample workflow showing each supported step_type and a matching run snapshot.",
+    "is_default": false,
+    "is_system": false,
+    "status": "active",
+    "created_at": "2026-04-03T10:00:00Z",
+    "updated_at": "2026-04-03T10:05:00Z",
+    "steps": [
+      {
+        "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "name": "Analyze data",
+        "step_type": "analyze_data",
+        "order": 1,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+        "name": "Confirm before decision",
+        "step_type": "await_confirmation",
+        "order": 2,
+        "config": {
+          "message": "Analysis complete. Create a decision from these findings?"
+        },
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+        "name": "Create decision",
+        "step_type": "create_decision",
+        "order": 3,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+        "name": "Optional Dify step",
+        "step_type": "call_dify",
+        "order": 4,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+        "name": "Optional direct LLM step",
+        "step_type": "call_llm",
+        "order": 5,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "a7b8c9d0-e1f2-3456-0123-567890123456",
+        "name": "Create tasks",
+        "step_type": "create_tasks",
+        "order": 6,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "b8c9d0e1-f2a3-4567-1234-678901234567",
+        "name": "Miro snapshot",
+        "step_type": "generate_miro_snapshot",
+        "order": 7,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "c9d0e1f2-a3b4-5678-2345-789012345678",
+        "name": "Miro board",
+        "step_type": "create_miro_board",
+        "order": 8,
+        "config": {},
+        "description": "",
+        "created_at": "2026-04-03T10:00:00Z"
+      },
+      {
+        "id": "d0e1f2a3-b4c5-6789-3456-890123456789",
+        "name": "Custom HTTP",
+        "step_type": "custom_api",
+        "order": 9,
+        "config": {
+          "method": "POST",
+          "url": "https://example.com/hooks/agent-step",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body_template": "{\"run_id\": \"{{ run_id }}\"}",
+          "timeout": 30
+        },
+        "description": "Executor reads method, url, headers, body_template, timeout from config.",
+        "created_at": "2026-04-03T10:00:00Z"
+      }
+    ]
+  },
+  "workflow_run": {
+    "id": "e1f2a3b4-c5d6-7890-abcd-ef0123456789",
+    "session": "f2a3b4c5-d6e7-8901-bcde-f01234567890",
+    "spreadsheet": 42,
+    "decision": 100,
+    "workflow_definition": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "current_step_order": 2,
+    "status": "awaiting_confirmation",
+    "analysis_result": {
+      "summary": "Example analysis payload stored on AgentWorkflowRun.analysis_result.",
+      "anomalies": []
+    },
+    "created_tasks": [],
+    "error_message": null,
+    "created_at": "2026-04-03T11:00:00Z",
+    "updated_at": "2026-04-03T11:02:00Z",
+    "step_executions": [
+      {
+        "id": "a3b4c5d6-e7f8-9012-abcd-ef123456789a",
+        "step_order": 1,
+        "step_name": "Analyze data",
+        "status": "completed",
+        "input_data": {
+          "spreadsheet_data": {
+            "headers": ["col_a"],
+            "rows": [[1]]
+          }
+        },
+        "output_data": {
+          "analysis_result": {},
+          "spreadsheet_data": {}
+        },
+        "error_message": null,
+        "started_at": "2026-04-03T11:00:01Z",
+        "completed_at": "2026-04-03T11:00:05Z"
+      },
+      {
+        "id": "b4c5d6e7-f8a9-0123-bcde-f123456789ab",
+        "step_order": 2,
+        "step_name": "Confirm before decision",
+        "status": "awaiting",
+        "input_data": null,
+        "output_data": null,
+        "error_message": null,
+        "started_at": "2026-04-03T11:00:06Z",
+        "completed_at": null
+      }
+    ]
+  }
+}

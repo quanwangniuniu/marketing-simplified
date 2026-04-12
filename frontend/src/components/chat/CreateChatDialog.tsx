@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatData } from '@/hooks/useChatData';
@@ -14,28 +14,39 @@ export default function CreateChatDialog({
   onClose,
   projectId,
   onChatCreated,
+  variant = 'default',
 }: CreateChatDialogProps) {
   // Use selectors for stable references
   const user = useAuthStore(state => state.user);
   const { createNewChat } = useChatData({ projectId });
   
-  const [chatType, setChatType] = useState<ChatType>('private');
+  const [chatType, setChatType] = useState<ChatType>(
+    variant === 'channel' ? 'group' : 'private'
+  );
   const [groupName, setGroupName] = useState('');
   const [selectedParticipants, setSelectedParticipants] = useState<number[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && variant === 'channel') {
+      setChatType('group');
+    }
+  }, [isOpen, variant]);
 
   // Validation
   const isValid = () => {
     if (chatType === 'private') {
       return selectedParticipants.length === 1;
-    } else {
-      return selectedParticipants.length >= 2 && groupName.trim() !== '';
     }
+    if (variant === 'channel') {
+      return selectedParticipants.length >= 1 && groupName.trim() !== '';
+    }
+    return selectedParticipants.length >= 2 && groupName.trim() !== '';
   };
 
   // Reset form
   const resetForm = () => {
-    setChatType('private');
+    setChatType(variant === 'channel' ? 'group' : 'private');
     setGroupName('');
     setSelectedParticipants([]);
   };
@@ -139,52 +150,57 @@ export default function CreateChatDialog({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>Create New Chat</DialogTitle>
+          <DialogTitle>
+            {variant === 'channel' ? 'Create channel' : 'Create New Chat'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Chat Type Toggle */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              Chat Type
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleChatTypeChange('private')}
-                disabled={isCreating}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                  chatType === 'private'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                👤 Private
-              </button>
-              <button
-                onClick={() => handleChatTypeChange('group')}
-                disabled={isCreating}
-                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                  chatType === 'group'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                👥 Group
-              </button>
+          {variant !== 'channel' && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Chat Type
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleChatTypeChange('private')}
+                  disabled={isCreating}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                    chatType === 'private'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  👤 Private
+                </button>
+                <button
+                  onClick={() => handleChatTypeChange('group')}
+                  disabled={isCreating}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                    chatType === 'group'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  👥 Group
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Group Name Input (only for group chats) */}
           {chatType === 'group' && (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Group Name <span className="text-red-500">*</span>
+                {variant === 'channel' ? 'Channel name' : 'Group Name'}{' '}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                placeholder="e.g., Design Team"
+                placeholder={variant === 'channel' ? 'e.g., general' : 'e.g., Design Team'}
                 disabled={isCreating}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
@@ -200,7 +216,9 @@ export default function CreateChatDialog({
             <p className="text-xs text-gray-500 mb-2">
               {chatType === 'private'
                 ? 'Select 1 team member for private chat'
-                : 'Select at least 2 team members for group chat'}
+                : variant === 'channel'
+                  ? 'Select at least one team member for the channel'
+                  : 'Select at least 2 team members for group chat'}
             </p>
             <ParticipantSelector
               projectId={projectId}
@@ -239,6 +257,8 @@ export default function CreateChatDialog({
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 Creating...
               </>
+            ) : variant === 'channel' ? (
+              'Create channel'
             ) : (
               'Create Chat'
             )}

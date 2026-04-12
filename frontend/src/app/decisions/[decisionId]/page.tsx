@@ -12,11 +12,15 @@ import DecisionDetailView from '@/components/decisions/DecisionDetailView';
 import DecisionCommitConfirmationModal from '@/components/decisions/DecisionCommitConfirmationModal';
 import DecisionApproveConfirmationModal from '@/components/decisions/DecisionApproveConfirmationModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { OriginMeetingBlock } from '@/components/meetings/OriginMeetingBlock';
 import { DecisionAPI } from '@/lib/api/decisionApi';
 import { ProjectAPI } from '@/lib/api/projectApi';
+import { scrollToFirstError, validateDecisionDraft } from '@/components/decisions/decisionValidation';
+import type { OriginMeetingPayload } from '@/types/meeting';
 import type {
   DecisionDraftResponse,
   DecisionOptionDraft,
+  DecisionRiskLevel,
   DecisionSignal,
   DecisionStatus,
   DecisionValidationErrorResponse,
@@ -67,7 +71,7 @@ const DecisionPage = () => {
   const [title, setTitle] = useState('');
   const [contextSummary, setContextSummary] = useState('');
   const [reasoning, setReasoning] = useState('');
-  const [riskLevel, setRiskLevel] = useState('');
+  const [riskLevel, setRiskLevel] = useState<DecisionRiskLevel | ''>('');
   const [confidenceScore, setConfidenceScore] = useState<number>(3);
   const [options, setOptions] = useState<DecisionOptionDraft[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -92,11 +96,14 @@ const DecisionPage = () => {
   const [commitSignals, setCommitSignals] = useState<DecisionSignal[]>([]);
   const [loadingCommitDetails, setLoadingCommitDetails] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [focusMode, setFocusMode] = useState(false);
   const [committedSnapshot, setCommittedSnapshot] = useState<any>(null);
   const [projectName, setProjectName] = useState<string | null>(null);
   const [projectSeq, setProjectSeq] = useState<number | null>(null);
+  const [originMeeting, setOriginMeeting] = useState<OriginMeetingPayload | null>(null);
 
   const isDraft = status === 'DRAFT';
+  const incompleteToastId = 'decision-draft-incomplete';
 
   const projectLabel = useMemo(() => {
     if (projectName) return projectName;
@@ -115,6 +122,7 @@ const DecisionPage = () => {
     setProjectSeq(typeof draft.projectSeq === 'number' ? draft.projectSeq : null);
     setOptions(ensureOptions(draft.options));
     setLastSavedAt(draft.lastEditedAt || draft.createdAt || null);
+    setOriginMeeting(draft.origin_meeting ?? null);
     setDirty(false);
   }, []);
 
@@ -131,6 +139,7 @@ const DecisionPage = () => {
         setStatus(committed.status);
         setCommittedSnapshot(committed);
         setProjectSeq(typeof committed.projectSeq === 'number' ? committed.projectSeq : null);
+        setOriginMeeting(null);
         setLoading(false);
         return;
       } catch (error: any) {
@@ -157,6 +166,7 @@ const DecisionPage = () => {
               setProjectSeq(
                 typeof draft.projectSeq === 'number' ? draft.projectSeq : null
               );
+              setOriginMeeting(draft.origin_meeting ?? null);
               setLoading(false);
               return;
             }
@@ -233,10 +243,66 @@ const DecisionPage = () => {
     [title, contextSummary, reasoning, riskLevel, confidenceScore, options]
   );
 
+  const validateLocal = useCallback(
+    (signalCount: number) => validateDecisionDraft(
+      { title, contextSummary, reasoning, riskLevel: riskLevel || null, confidenceScore, options },
+      signalCount,
+    ),
+    [confidenceScore, contextSummary, options, reasoning, riskLevel, title]
+  );
+
+  const validateBeforeCommit = useCallback(async () => {
+    if (!decisionId) return false;
+    try {
+      setErrors({});
+      setFocusMode(false);
+
+      // Pull signals first so we can validate them before opening the confirm modal.
+      const signalsResponse = await DecisionAPI.listSignals(decisionId, projectIdValue);
+      const nextCommitSignals = signalsResponse.items || [];
+      setCommitSignals(nextCommitSignals);
+
+      const localErrors = validateLocal(nextCommitSignals.length);
+      if (Object.keys(localErrors).length > 0) {
+        setErrors(localErrors);
+        setFocusMode(true);
+        scrollToFirstError(localErrors);
+        toast.error('Draft is incomplete. Please address the highlighted fields.', {
+          id: incompleteToastId,
+        });
+        return false;
+      }
+
+      // Sync latest edits (best-effort) so the confirm modal reflects what will be committed.
+      setSaving(true);
+      const syncedDraft = await DecisionAPI.patchDraft(decisionId, buildDraftPayload(), projectIdValue);
+      syncDraftState(syncedDraft);
+      return true;
+    } catch (error: any) {
+      const response = error?.response;
+      if (response?.status === 400 && response?.data?.error) {
+        const mapped = mapFieldErrors(response.data as DecisionValidationErrorResponse);
+        setErrors(mapped);
+        setFocusMode(true);
+        scrollToFirstError(mapped);
+        toast.error('Draft is incomplete. Please address the highlighted fields.', { id: incompleteToastId });
+      } else if (response?.status === 403) {
+        toast.error('You do not have permission to commit this decision.', { id: incompleteToastId });
+      } else {
+        console.error('Failed to validate draft before commit:', error);
+        toast.error('Failed to validate draft before commit.', { id: incompleteToastId });
+      }
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [buildDraftPayload, decisionId, incompleteToastId, projectIdValue, syncDraftState, validateLocal]);
+
   const handleSaveDraft = async () => {
     if (!decisionId) return;
     setSaving(true);
     setErrors({});
+    setFocusMode(false);
     try {
       const draft = await DecisionAPI.patchDraft(decisionId, buildDraftPayload(), projectIdValue);
       syncDraftState(draft);
@@ -260,6 +326,7 @@ const DecisionPage = () => {
       );
       setTitle(draft.title || '');
       setLastSavedAt(draft.lastEditedAt || draft.createdAt || null);
+      setOriginMeeting(draft.origin_meeting ?? null);
       setDirty((prev) => prev || false);
     } catch (error) {
       console.error('Failed to save title:', error);
@@ -273,6 +340,7 @@ const DecisionPage = () => {
     if (!decisionId) return false;
     setCommitting(true);
     setErrors({});
+    setFocusMode(false);
     try {
       if (dirty) {
         setSaving(true);
@@ -295,6 +363,7 @@ const DecisionPage = () => {
       const response = await DecisionAPI.commit(decisionId, projectIdValue);
       setStatus(response.status);
       setCommittedSnapshot(response.decision);
+      setOriginMeeting(null);
       setDirty(false);
       toast.success(response.detail || 'Decision committed.');
       return true;
@@ -303,12 +372,17 @@ const DecisionPage = () => {
       if (response?.status === 400 && response?.data?.error) {
         const mapped = mapFieldErrors(response.data as DecisionValidationErrorResponse);
         setErrors(mapped);
-        toast.error('Draft is incomplete. Please address the highlighted fields.');
+        setCommitModalOpen(false);
+        setFocusMode(true);
+        scrollToFirstError(mapped);
+        toast.error('Draft is incomplete. Please address the highlighted fields.', {
+          id: incompleteToastId,
+        });
       } else if (response?.status === 403) {
-        toast.error('You do not have permission to commit this decision.');
+        toast.error('You do not have permission to commit this decision.', { id: incompleteToastId });
       } else {
         console.error('Commit failed:', error);
-        toast.error('Commit failed.');
+        toast.error('Commit failed.', { id: incompleteToastId });
       }
       return false;
     } finally {
@@ -318,18 +392,12 @@ const DecisionPage = () => {
 
   const handleOpenCommitModal = async () => {
     if (!decisionId) return;
+    const ok = await validateBeforeCommit();
+    if (!ok) return;
     setCommitModalOpen(true);
     setCommitConfirmations({ alternatives: false, risk: false, review: false });
-    setLoadingCommitDetails(true);
-    try {
-      const response = await DecisionAPI.listSignals(decisionId, projectIdValue);
-      setCommitSignals(response.items || []);
-    } catch (error) {
-      console.warn('Failed to load signals for commit modal:', error);
-      setCommitSignals([]);
-    } finally {
-      setLoadingCommitDetails(false);
-    }
+    // commitSignals already populated during validateBeforeCommit.
+    setLoadingCommitDetails(false);
   };
 
   const handleConfirmCommit = async () => {
@@ -346,6 +414,7 @@ const DecisionPage = () => {
       const response = await DecisionAPI.approve(decisionId, projectIdValue);
       setStatus(response.status);
       setCommittedSnapshot(response.decision);
+      setOriginMeeting(null);
       toast.success(response.detail || 'Decision approved.');
     } catch (error: any) {
       const response = error?.response;
@@ -387,7 +456,9 @@ const DecisionPage = () => {
       router.push('/decisions');
     } catch (error: any) {
       const response = error?.response;
-      if (response?.status === 403) {
+      if (response?.status === 401) {
+        toast.error('Authentication required. Please log in again.');
+      } else if (response?.status === 403) {
         toast.error('You do not have permission to delete this decision.');
       } else if (response?.status === 404) {
         toast.error('Decision not found.');
@@ -480,7 +551,7 @@ const DecisionPage = () => {
   return (
     <Layout>
       <ProtectedRoute>
-        <div className="flex h-full flex-col bg-gray-50">
+        <div className="flex h-full flex-col bg-gray-50 relative">
           <DecisionWorkbenchHeader
             projectLabel={projectLabel}
             status={status}
@@ -496,22 +567,47 @@ const DecisionPage = () => {
             onCommit={handleOpenCommitModal}
             onDelete={handleDelete}
             onBack={() => router.push('/decisions')}
+            titleError={errors.title}
+            focusMode={focusMode}
           />
-          <div className="flex flex-1 min-h-0">
-            <div className="h-full w-[24%] min-w-[240px] max-w-[340px]">
+          <div className="relative flex min-h-0 flex-1">
+            {focusMode && (
+              <div
+                className="pointer-events-none absolute inset-0 z-[10] bg-black/50"
+                aria-hidden="true"
+              />
+            )}
+            <div className="relative z-[11] flex min-h-0 flex-1">
+            <div
+              id="decision-field-signals"
+              className={`h-full w-[24%] min-w-[240px] max-w-[340px] transition-all ${
+                focusMode && errors.signals
+                  ? 'relative z-[20] rounded-lg bg-white ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.45)]'
+                  : ''
+              }`}
+            >
               <SignalsPanel decisionId={decisionId} projectId={projectIdValue} mode="edit" />
             </div>
-            <div className="h-full flex-1 min-w-0 bg-gray-50">
-              <DecisionWorkspaceEditor
-                contextSummary={contextSummary}
-                reasoning={reasoning}
-                riskLevel={riskLevel as any}
-                confidenceScore={confidenceScore}
-                options={options}
-                errors={errors}
-                onChange={updateField}
-                onOptionsChange={handleOptionsChange}
-              />
+            <div className={`h-full flex-1 min-w-0 bg-gray-50 ${focusMode ? 'relative z-[20]' : ''}`}>
+              <div className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto px-6 py-6">
+                <div data-testid="decision-draft-origin-meeting">
+                  <OriginMeetingBlock origin={originMeeting} />
+                </div>
+                <div className="min-h-0 flex-1">
+                  <DecisionWorkspaceEditor
+                    contextSummary={contextSummary}
+                    reasoning={reasoning}
+                    riskLevel={riskLevel as any}
+                    confidenceScore={confidenceScore}
+                    options={options}
+                    errors={errors}
+                    onChange={updateField}
+                    onOptionsChange={handleOptionsChange}
+                    focusMode={focusMode}
+                  />
+                </div>
+              </div>
+            </div>
             </div>
           </div>
         </div>

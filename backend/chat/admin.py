@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Chat, ChatParticipant, Message, MessageStatus
+from .models import Chat, ChatParticipant, ChatStar, Message, MessageStatus
 
 
 @admin.register(Chat)
@@ -23,6 +23,14 @@ class ChatAdmin(admin.ModelAdmin):
         """Show number of active participants"""
         return obj.participants.filter(is_active=True).count()
     participant_count.short_description = 'Participants'
+
+
+@admin.register(ChatStar)
+class ChatStarAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'chat', 'position', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__email', 'chat__name']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(ChatParticipant)

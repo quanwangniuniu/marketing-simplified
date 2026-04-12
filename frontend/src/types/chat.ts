@@ -1,6 +1,8 @@
 // Chat feature TypeScript types
 // Based on OpenAPI spec: /openapi/openapi_spec/chat.yaml
 
+import type { DragEvent, MouseEvent } from 'react';
+
 // ==================== User Types ====================
 
 export interface User {
@@ -8,6 +10,11 @@ export interface User {
   email: string;
   username: string;
   is_online?: boolean;
+}
+
+export interface UserWithName extends User {
+  first_name?: string;
+  last_name?: string;
 }
 
 // ==================== Chat Types ====================
@@ -59,6 +66,18 @@ export interface MessageAttachment {
   original_filename: string;
   mime_type: string;
   created_at: string;
+}
+
+export interface ChatContext {
+  id: number;
+  type: ChatType;
+  name?: string | null;
+}
+
+export interface ChatFileListItem extends MessageAttachment {
+  uploader: UserWithName;
+  chat: ChatContext | null;
+  message_id: number | null;
 }
 
 export interface Message {
@@ -269,6 +288,15 @@ export interface ChatListItemProps {
   isActive: boolean;
   onClick: () => void;
   roleByUserId?: Record<number, string>;
+  /** Show star / unstar control (Messages sidebar). */
+  showStarToggle?: boolean;
+  isStarred?: boolean;
+  onStarToggle?: (e: MouseEvent<HTMLElement>) => void;
+  /** HTML5 drag — starred section reordering. */
+  draggable?: boolean;
+  onDragStart?: (e: DragEvent<HTMLElement>) => void;
+  onDragOver?: (e: DragEvent<HTMLElement>) => void;
+  onDrop?: (e: DragEvent<HTMLElement>) => void;
 }
 
 export interface ChatWindowProps {
@@ -302,6 +330,8 @@ export interface MessageItemProps {
   isSelectMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: number) => void;
+  /** When true, visually emphasize this message (e.g. jump target). */
+  isHighlighted?: boolean;
 }
 
 export interface MessageInputProps {
@@ -314,6 +344,17 @@ export interface CreateChatDialogProps {
   onClose: () => void;
   projectId: string;
   onChatCreated: (chatId: number) => void;
+  /** When set, only group (channel) creation is shown — for Slack-style “Add channel”. */
+  variant?: 'default' | 'channel';
+}
+
+/** Row from GET /api/chat/starred/?project_id= */
+export interface ChatStarRow {
+  id: number;
+  position: number;
+  chat: Chat;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ParticipantSelectorProps {

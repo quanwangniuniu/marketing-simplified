@@ -1,6 +1,6 @@
 // Attachment API client
 import api from '../api';
-import type { MessageAttachment } from '@/types/chat';
+import type { ChatFileListItem, MessageAttachment } from '@/types/chat';
 
 // Re-export MessageAttachment for convenience (single source of truth is types/chat.ts)
 export type { MessageAttachment };
@@ -111,6 +111,26 @@ export async function deleteAttachment(attachmentId: number): Promise<void> {
   await api.delete(`/api/chat/attachments/${attachmentId}/`);
 }
 
+export async function listAccessibleChatFiles(params: {
+  projectId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  results: ChatFileListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+}> {
+  const response = await api.get('/api/chat/attachments/files/', {
+    params: {
+      project_id: params.projectId,
+      page: params.page ?? 1,
+      page_size: params.pageSize ?? 25,
+    },
+  });
+  return response.data;
+}
+
 /**
  * Format file size for display
  */
@@ -144,6 +164,7 @@ export default {
   uploadAttachment,
   getAttachment,
   deleteAttachment,
+  listAccessibleChatFiles,
   validateFile,
   getFileTypeFromMime,
   formatFileSize,

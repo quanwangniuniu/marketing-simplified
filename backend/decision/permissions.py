@@ -2,6 +2,7 @@ from rest_framework import permissions
 
 from core.models import ProjectMember
 
+from .models import Decision
 from .constants import (
     APPROVAL_REVIEW_MAX_LEVEL,
     EDIT_MAX_LEVEL,
@@ -72,15 +73,23 @@ class DecisionPermission(permissions.BasePermission):
         if user is None or not user.is_authenticated:
             return False
 
-        if user.is_superuser:
-            return True
-
         raw_project_id = request.headers.get("x-project-id") or request.query_params.get(
             "project_id"
         )
         try:
             project_id = int(raw_project_id)
         except (TypeError, ValueError):
+            project_id = None
+
+        if isinstance(obj, Decision):
+            obj_pid = getattr(obj, "project_id", None)
+            if obj_pid is not None and project_id is not None and int(obj_pid) != project_id:
+                return False
+
+        if user.is_superuser:
+            return True
+
+        if project_id is None:
             return False
 
         membership = ProjectMember.objects.filter(

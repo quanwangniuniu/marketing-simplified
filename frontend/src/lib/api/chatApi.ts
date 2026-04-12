@@ -2,6 +2,7 @@
 import api from '../api';
 import type {
   Chat,
+  ChatStarRow,
   Message,
   CreateChatRequest,
   CreateChatResponse,
@@ -53,6 +54,32 @@ export const createChat = async (data: CreateChatRequest): Promise<CreateChatRes
  */
 export const deleteChat = async (chatId: number): Promise<void> => {
   await api.delete(`/api/chat/chats/${chatId}/`);
+};
+
+// ==================== Starred chats ====================
+
+export const listStarredChats = async (projectId: number): Promise<ChatStarRow[]> => {
+  const response = await api.get('/api/chat/starred/', { params: { project_id: projectId } });
+  return response.data;
+};
+
+export const starChat = async (chatId: number): Promise<ChatStarRow> => {
+  const response = await api.post('/api/chat/starred/', { chat_id: chatId });
+  return response.data;
+};
+
+export const unstarChat = async (chatId: number): Promise<void> => {
+  await api.delete(`/api/chat/starred/${chatId}/`);
+};
+
+export const reorderStarredChats = async (
+  projectId: number,
+  chatIds: number[]
+): Promise<void> => {
+  await api.post('/api/chat/starred/reorder/', {
+    project_id: projectId,
+    chat_ids: chatIds,
+  });
 };
 
 /**
@@ -214,6 +241,10 @@ const chatApi = {
   getChat,
   createChat,
   deleteChat,
+  listStarredChats,
+  starChat,
+  unstarChat,
+  reorderStarredChats,
   addParticipant,
   removeParticipant,
   getMessages,

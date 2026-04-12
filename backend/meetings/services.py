@@ -72,7 +72,11 @@ def meetings_base_queryset_for_project(project: Project):
         Meeting.objects.for_knowledge_discovery()
         .filter(project=project, is_deleted=False)
         .annotate(
-            decision_count=Count("decision_origins", distinct=True),
+            decision_count=Count(
+                "decision_origins",
+                filter=Q(decision_origins__decision__is_deleted=False),
+                distinct=True,
+            ),
             task_count=Count("task_origins", distinct=True),
         )
     )
@@ -128,7 +132,7 @@ def apply_meeting_knowledge_filters(qs, filters: dict):
     if "is_archived" in filters:
         qs = qs.filter(is_archived=filters["is_archived"])
 
-    # Origin-only: annotated decision_count / task_count count MeetingDecisionOrigin / MeetingTaskOrigin.
+    # Origin-only: decision_count / task_count count origins (decisions exclude soft-deleted).
     hgd = filters.get("has_generated_decisions")
     if hgd is True:
         qs = qs.filter(decision_count__gt=0)

@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from .models import Chat, ChatParticipant, Message, MessageStatus, ChatType, MessageAttachment
+from .models import Chat, ChatParticipant, ChatStar, Message, MessageStatus, ChatType, MessageAttachment
 from core.models import ProjectMember
 
 User = get_user_model()
@@ -314,6 +314,29 @@ class ChatListSerializer(ChatUnreadCountMixin, serializers.ModelSerializer):
         return last_msg.created_at if last_msg else obj.updated_at
 
 
+class ChatStarSerializer(serializers.ModelSerializer):
+    """Starred chat row with nested chat list payload."""
+
+    chat = ChatListSerializer(read_only=True)
+
+    class Meta:
+        model = ChatStar
+        fields = ['id', 'chat', 'position', 'created_at', 'updated_at']
+        read_only_fields = fields
+
+
+class ChatStarCreateSerializer(serializers.Serializer):
+    chat_id = serializers.IntegerField(min_value=1)
+
+
+class ChatStarReorderSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(min_value=1)
+    chat_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+
+
 class ChatCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating chats"""
     participant_ids = serializers.ListField(
@@ -546,6 +569,36 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
             return f"{size / (1024 * 1024):.1f} MB"
         else:
             return f"{size / (1024 * 1024 * 1024):.1f} GB"
+
+
+class ChatContextSerializer(serializers.ModelSerializer):
+    """Minimal chat context for Files view."""
+
+    class Meta:
+        model = Chat
+        fields = ['id', 'type', 'name']
+        read_only_fields = fields
+
+
+class AttachmentFileListRowSerializer(MessageAttachmentSerializer):
+    """
+    List-row serializer for Messages → Files view.
+
+    Includes uploader + chat context for display. Intended for linked attachments only.
+    """
+
+    uploader = UserSimpleSerializer(read_only=True)
+    chat = serializers.SerializerMethodField()
+    message_id = serializers.IntegerField(read_only=True)
+
+    class Meta(MessageAttachmentSerializer.Meta):
+        fields = MessageAttachmentSerializer.Meta.fields + ['uploader', 'chat', 'message_id']
+
+    def get_chat(self, obj):
+        chat = getattr(getattr(obj, 'message', None), 'chat', None)
+        if not chat:
+            return None
+        return ChatContextSerializer(chat).data
 
 
 class AttachmentUploadSerializer(serializers.ModelSerializer):

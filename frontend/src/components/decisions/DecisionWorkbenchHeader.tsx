@@ -19,6 +19,8 @@ interface DecisionWorkbenchHeaderProps {
   mode?: 'edit' | 'readOnly';
   onBack?: () => void;
   onTitleSave?: (nextTitle: string) => void;
+  titleError?: string;
+  focusMode?: boolean;
 }
 
 const formatTime = (value?: string | null) => {
@@ -61,6 +63,8 @@ const DecisionWorkbenchHeader = ({
   mode = 'edit',
   onBack,
   onTitleSave,
+  titleError,
+  focusMode = false,
 }: DecisionWorkbenchHeaderProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
@@ -106,7 +110,14 @@ const DecisionWorkbenchHeader = ({
               <ArrowLeft className="h-4 w-4" />
             </button>
           ) : null}
-          <div className="flex flex-col">
+          <div
+            id="decision-field-title"
+            className={`flex flex-col rounded-md ${
+              focusMode && titleError
+                ? 'bg-white p-2 ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.45)]'
+                : ''
+            }`}
+          >
             <span className="text-xs uppercase tracking-wide text-gray-400">
               {projectLabel}
             </span>
@@ -152,6 +163,9 @@ const DecisionWorkbenchHeader = ({
                 </button>
               )}
             </div>
+            {titleError ? (
+              <span className="mt-1 text-xs font-medium text-red-500">{titleError}</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
             {!dirty && !saving ? (

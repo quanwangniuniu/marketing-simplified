@@ -9,6 +9,7 @@ import DecisionWorkbenchHeader from '@/components/decisions/DecisionWorkbenchHea
 import SignalsPanel from '@/components/decisions/SignalsPanel';
 import DecisionExecutionSummaryPanel from '@/components/decisions/DecisionExecutionSummaryPanel';
 import DecisionReviewPanel from '@/components/decisions/DecisionReviewPanel';
+import { OriginMeetingBlock } from '@/components/meetings/OriginMeetingBlock';
 import { DecisionAPI } from '@/lib/api/decisionApi';
 import { ProjectAPI } from '@/lib/api/projectApi';
 import type { DecisionCommittedResponse, DecisionOptionDraft, DecisionStatus } from '@/types/decision';
@@ -152,6 +153,10 @@ const DecisionReviewPage = () => {
                     {decision.title || 'Untitled decision'}
                   </h2>
                 </section>
+
+                <div data-testid="decision-origin-meeting">
+                  <OriginMeetingBlock origin={decision.origin_meeting ?? null} />
+                </div>
 
                 <section className="space-y-2">
                   <h3 className="text-sm font-semibold text-gray-900">Context Summary</h3>

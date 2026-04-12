@@ -9,7 +9,7 @@ interface DecisionCommitConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   loading?: boolean;
-  signals?: DecisionSignal[];
+  signals?: Array<Pick<DecisionSignal, 'id' | 'displayText'>>;
   contextSummary?: string;
   reasoning?: string;
   options?: DecisionOptionDraft[];

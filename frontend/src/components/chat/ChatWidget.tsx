@@ -53,30 +53,38 @@ export default function ChatWidget({ contextProjectId }: ChatWidgetProps = {}) {
     unreadRefreshAtRef.current = now;
     fetchGlobalUnreadCount();
   }, [user, isMounted, isRealtimeContextActive, fetchGlobalUnreadCount]);
-  
-  // Fetch global unread count on mount/login
+
+  // Keep a stable ref so event listeners and pathname effect always call the
+  // latest version without being listed as their own dependency.
+  const refreshGlobalUnreadCountRef = useRef(refreshGlobalUnreadCount);
+  useEffect(() => {
+    refreshGlobalUnreadCountRef.current = refreshGlobalUnreadCount;
+  }, [refreshGlobalUnreadCount]);
+
+  // Fetch global unread count on mount/login.
+  // `refreshGlobalUnreadCount` is intentionally omitted from deps: its identity
+  // changes whenever isRealtimeContextActive flips, which would re-trigger this
+  // effect on every widget open/close. Calling via ref avoids that.
   useEffect(() => {
     if (user && isMounted) {
-      refreshGlobalUnreadCount(true);
+      refreshGlobalUnreadCountRef.current(true);
     }
-  }, [user, isMounted, refreshGlobalUnreadCount]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isMounted]);
 
-  // Refresh unread count on route changes when chat realtime is not active
+  // Refresh on route changes — only re-runs when pathname actually changes.
   useEffect(() => {
     if (pathname) {
-      refreshGlobalUnreadCount();
+      refreshGlobalUnreadCountRef.current();
     }
-  }, [pathname, refreshGlobalUnreadCount]);
+  }, [pathname]);
 
-  // Refresh unread count when returning to the tab/window
+  // Refresh when returning to the tab/window — registered once, never re-registered.
   useEffect(() => {
-    const handleFocus = () => {
-      refreshGlobalUnreadCount();
-    };
-
+    const handleFocus = () => refreshGlobalUnreadCountRef.current();
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        refreshGlobalUnreadCount();
+        refreshGlobalUnreadCountRef.current();
       }
     };
 
@@ -87,7 +95,7 @@ export default function ChatWidget({ contextProjectId }: ChatWidgetProps = {}) {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refreshGlobalUnreadCount]);
+  }, []);
   
   // Auto-switch to context project (Option A: from URL)
   useEffect(() => {

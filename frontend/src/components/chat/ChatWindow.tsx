@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckSquare, Forward, X } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import { useMessageData } from '@/hooks/useMessageData';
 import { useForwardMessages } from '@/hooks/useForwardMessages';
@@ -18,6 +19,7 @@ interface ChatWindowProps {
 }
 
 export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowProps) {
+  const searchParams = useSearchParams();
   // Use selector for stable reference
   const user = useAuthStore(state => state.user);
   const chatsByProject = useChatStore(state => state.chatsByProject);
@@ -40,6 +42,7 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
   // Track last message count to detect new messages
   const lastMessageCountRef = useRef<number>(0);
   const markAsReadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const jumpInFlightRef = useRef(false);
 
   const chatProjectId = useMemo(() => {
     const rawProjectId = (chat as any).project_id ?? (chat as any).project;
@@ -57,6 +60,46 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
     setSelectedMessageIds([]);
     setIsForwardDialogOpen(false);
   }, [chat.id]);
+
+  useEffect(() => {
+    // If URL includes a messageId, try to load history until it exists, then scroll + highlight it.
+    const raw = searchParams.get('messageId');
+    const targetMessageId = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(targetMessageId) || targetMessageId <= 0) return;
+    if (jumpInFlightRef.current) return;
+
+    jumpInFlightRef.current = true;
+    const maxPages = 12; // safety cap: 12 * 50 = 600 messages
+    let cancelled = false;
+
+    (async () => {
+      try {
+        // Give initial fetch a moment to populate, then iteratively load older pages if needed.
+        for (let i = 0; i < maxPages && !cancelled; i++) {
+          const exists = useChatStore.getState().messages?.[chat.id]?.some((m) => m.id === targetMessageId);
+          if (exists) break;
+          if (!hasMore) break;
+          // eslint-disable-next-line no-await-in-loop
+          await loadMoreMessages();
+        }
+
+        if (cancelled) return;
+        const exists = useChatStore.getState().messages?.[chat.id]?.some((m) => m.id === targetMessageId);
+        if (!exists) return;
+
+        window.dispatchEvent(
+          new CustomEvent('mj:chat:jumpToMessage', { detail: { messageId: targetMessageId } })
+        );
+      } finally {
+        jumpInFlightRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      jumpInFlightRef.current = false;
+    };
+  }, [chat.id, searchParams, hasMore, loadMoreMessages]);
   
   // Mark messages as read when viewing - both on open AND when new messages arrive
   useEffect(() => {

@@ -24,6 +24,7 @@ export default function MessageItem({
   isSelectMode = false,
   isSelected = false,
   onToggleSelect,
+  isHighlighted = false,
 }: MessageItemProps) {
   const formatTime = (dateString: string) => {
     try {
@@ -77,7 +78,13 @@ export default function MessageItem({
   if (isOwnMessage) {
     // Own messages (right-aligned)
     return (
-      <div className={`${isSelectMode ? 'relative pl-8' : ''}`}>
+      <div
+        id={`message-${message.id}`}
+        className={[
+          isSelectMode ? 'relative pl-8' : '',
+          isHighlighted ? 'scroll-mt-24' : '',
+        ].join(' ')}
+      >
         {isSelectMode && (
           <input
             type="checkbox"
@@ -88,7 +95,13 @@ export default function MessageItem({
         )}
         <div className="flex justify-end">
           <div className="max-w-[75%]">
-            <div className={selectionClass} onClick={handleToggleSelect}>
+            <div
+              className={[
+                selectionClass,
+                isHighlighted ? 'ring-2 ring-amber-200 bg-amber-50/40 rounded-lg' : '',
+              ].join(' ')}
+              onClick={handleToggleSelect}
+            >
               <div className={ownMessageContentClass}>
                 {isForwarded && (
                   <div className={`${forwardedHeaderBaseClass} right-1`}>
@@ -136,7 +149,13 @@ export default function MessageItem({
 
   // Other users' messages (left-aligned)
   return (
-    <div className={`${isSelectMode ? 'relative pl-8' : ''}`}>
+    <div
+      id={`message-${message.id}`}
+      className={[
+        isSelectMode ? 'relative pl-8' : '',
+        isHighlighted ? 'scroll-mt-24' : '',
+      ].join(' ')}
+    >
       {isSelectMode && (
         <input
           type="checkbox"
@@ -147,7 +166,13 @@ export default function MessageItem({
       )}
       <div className="flex justify-start">
         <div className="max-w-[75%]">
-          <div className={selectionClass} onClick={handleToggleSelect}>
+          <div
+            className={[
+              selectionClass,
+              isHighlighted ? 'ring-2 ring-amber-200 bg-amber-50/40 rounded-lg' : '',
+            ].join(' ')}
+            onClick={handleToggleSelect}
+          >
             <div className={forwardedContainerClass}>
               {isForwarded && (
                 <div className={`${forwardedHeaderBaseClass} left-1`}>

@@ -19,10 +19,32 @@ export default function MessageList({
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [highlightMessageId, setHighlightMessageId] = useState<number | null>(null);
   const previousMessageCountRef = useRef(messages.length);
   const lastMessageIdRef = useRef<number | null>(null); // Track LAST message ID (newest) instead of first
   const isLoadingMoreRef = useRef(false); // Track if we're loading more (older) messages
   const scrollPositionBeforeLoadRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+
+  useEffect(() => {
+    // Listen for cross-component "jump to message" events.
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ messageId?: number }>;
+      const messageId = ce.detail?.messageId;
+      if (!messageId || !Number.isFinite(messageId)) return;
+      setHighlightMessageId(messageId);
+    };
+    window.addEventListener('mj:chat:jumpToMessage', handler as EventListener);
+    return () => window.removeEventListener('mj:chat:jumpToMessage', handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!highlightMessageId) return;
+    const el = document.getElementById(`message-${highlightMessageId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = window.setTimeout(() => setHighlightMessageId(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [highlightMessageId, messages]);
 
   // Auto-scroll to bottom when chat changes or on initial load
   useEffect(() => {
@@ -189,6 +211,7 @@ export default function MessageList({
                       isSelectMode={isSelectMode}
                       isSelected={selectedMessageIds.includes(message.id)}
                       onToggleSelect={onToggleSelectMessage}
+                      isHighlighted={highlightMessageId === message.id}
                     />
                   );
                 })}

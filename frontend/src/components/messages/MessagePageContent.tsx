@@ -2,22 +2,24 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare, Plus, Search } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
 import { useChatData } from '@/hooks/useChatData';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { useProjectMemberRoles } from '@/hooks/useProjectMemberRoles';
 import ProjectSelector from './ProjectSelector';
-import ChatList from '@/components/chat/ChatList';
 import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
+import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
 
 export default function MessagePageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore(state => state.user);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateChannelDialogOpen, setIsCreateChannelDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Ensure userId is a number for consistent comparison in addMessage
@@ -78,6 +80,31 @@ export default function MessagePageContent() {
       setCurrentChat(chatIdFromQuery);
     }
   }, [searchParams, selectedProjectId, currentChatId, setCurrentChat]);
+
+  const replaceMessagesQuery = useCallback(
+    (next: { projectId?: number | null; chatId?: number | null; messageId?: number | null }) => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (next.projectId === null) params.delete('projectId');
+      else if (typeof next.projectId === 'number' && Number.isFinite(next.projectId) && next.projectId > 0) {
+        params.set('projectId', String(next.projectId));
+      }
+
+      if (next.chatId === null) params.delete('chatId');
+      else if (typeof next.chatId === 'number' && Number.isFinite(next.chatId) && next.chatId > 0) {
+        params.set('chatId', String(next.chatId));
+      }
+
+      if (next.messageId === null) params.delete('messageId');
+      else if (typeof next.messageId === 'number' && Number.isFinite(next.messageId) && next.messageId > 0) {
+        params.set('messageId', String(next.messageId));
+      }
+
+      const query = params.toString();
+      router.replace(query ? `/messages?${query}` : '/messages');
+    },
+    [router, searchParams]
+  );
   
   useEffect(() => {
     if (selectedProjectId) {
@@ -120,31 +147,57 @@ export default function MessagePageContent() {
     setSelectedProjectId(projectId);
     // Clear current chat when switching projects
     setCurrentChat(null);
-  }, [setCurrentChat]);
+    replaceMessagesQuery({ projectId, chatId: null, messageId: null });
+  }, [replaceMessagesQuery, setCurrentChat]);
   
   const handleSelectChat = (chatId: number) => {
     setCurrentChat(chatId);
+    replaceMessagesQuery({
+      projectId: selectedProjectId,
+      chatId,
+      messageId: null,
+    });
   };
   
   const handleBackToList = () => {
     setCurrentChat(null);
+    replaceMessagesQuery({
+      projectId: selectedProjectId,
+      chatId: null,
+      messageId: null,
+    });
   };
   
   const handleCreateChat = () => {
     setIsCreateDialogOpen(true);
   };
+
+  const handleCreateChannel = () => {
+    setIsCreateChannelDialogOpen(true);
+  };
   
   const handleChatCreated = (chatId: number) => {
     setIsCreateDialogOpen(false);
     setCurrentChat(chatId);
+    replaceMessagesQuery({ projectId: selectedProjectId, chatId, messageId: null });
     // Refresh chats to include the new one
+    fetchChats();
+  };
+
+  const handleChannelCreated = (chatId: number) => {
+    setIsCreateChannelDialogOpen(false);
+    setCurrentChat(chatId);
+    replaceMessagesQuery({ projectId: selectedProjectId, chatId, messageId: null });
     fetchChats();
   };
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div
+        className="bg-white border-b border-gray-200 px-6 py-4"
+        data-testid="messages-header"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -169,39 +222,35 @@ export default function MessagePageContent() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            data-testid="messages-search"
           />
         </div>
       </div>
       
-      {/* Main Content - Split View */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat List - Left Panel */}
-        <div className="w-full max-w-sm border-r border-gray-200 bg-white flex flex-col">
-          {!selectedProjectId ? (
-            <div className="flex-1 flex items-center justify-center p-6 text-center">
+      <SlackMessagesLayout
+        selectedProjectId={selectedProjectId}
+        onSelectProject={handleSelectProject}
+        chats={filteredChats}
+        currentChatId={currentChatId}
+        onSelectChat={handleSelectChat}
+        onCreateChat={handleCreateChat}
+        onCreateChannel={handleCreateChannel}
+        roleByUserId={roleByUserId}
+        isLoadingChats={isLoading}
+        chatListEmptyState={
+          !selectedProjectId ? (
+            <div className="flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">Select a project to view chats</p>
               </div>
             </div>
-          ) : isLoading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
           ) : (
-            <ChatList
-              chats={filteredChats}
-              currentChatId={currentChatId}
-              onSelectChat={handleSelectChat}
-              onCreateChat={handleCreateChat}
-              roleByUserId={roleByUserId}
-            />
-          )}
-        </div>
-        
-        {/* Chat Window - Right Panel */}
-        <div className="flex-1 bg-white flex flex-col">
-          {!selectedProjectId ? (
+            <div className="p-6 text-sm text-gray-500">No chats yet</div>
+          )
+        }
+        chatPanel={
+          !selectedProjectId ? (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-16 h-16 text-gray-200 mx-auto mb-4" />
@@ -226,23 +275,34 @@ export default function MessagePageContent() {
               </div>
             </div>
           ) : (
-            <ChatWindow
-              chat={currentChat}
-              onBack={handleBackToList}
-              roleByUserId={roleByUserId}
-            />
-          )}
-        </div>
-      </div>
+            <div className="h-full" data-testid="messages-chat-window">
+              <ChatWindow
+                chat={currentChat}
+                onBack={handleBackToList}
+                roleByUserId={roleByUserId}
+              />
+            </div>
+          )
+        }
+      />
       
       {/* Create Chat Dialog */}
       {selectedProjectId && (
-        <CreateChatDialog
-          isOpen={isCreateDialogOpen}
-          onClose={() => setIsCreateDialogOpen(false)}
-          projectId={String(selectedProjectId)}
-          onChatCreated={handleChatCreated}
-        />
+        <>
+          <CreateChatDialog
+            isOpen={isCreateDialogOpen}
+            onClose={() => setIsCreateDialogOpen(false)}
+            projectId={String(selectedProjectId)}
+            onChatCreated={handleChatCreated}
+          />
+          <CreateChatDialog
+            isOpen={isCreateChannelDialogOpen}
+            onClose={() => setIsCreateChannelDialogOpen(false)}
+            projectId={String(selectedProjectId)}
+            onChatCreated={handleChannelCreated}
+            variant="channel"
+          />
+        </>
       )}
     </div>
   );

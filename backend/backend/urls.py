@@ -72,6 +72,7 @@ urlpatterns = [
     path('api/agent/', include('agent.urls')),
     path('api/', include('meetings.urls')),
     path("", include("django_prometheus.urls")),
+    path("api/v1/zoom/", include("zoom_integration.urls")),
 ]
 
 if settings.DEBUG:

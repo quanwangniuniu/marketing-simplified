@@ -1,7 +1,6 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Max, Q
 from django.core.exceptions import ValidationError
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -11,6 +10,7 @@ from django.utils import timezone
 from core.models import Project, ProjectMember
 from meetings.models import MeetingDecisionOrigin
 from .models import CommitRecord, Decision, DecisionEdge, Review, Signal
+from calendars.models import CalendarEvent
 from .permissions import DecisionPermission
 from decision.services import invalid_state_response, validate_decision_edge
 from .serializers import (
@@ -39,9 +39,18 @@ class DecisionDraftViewSet(
     serializer_class = DecisionDraftSerializer
 
     def get_queryset(self):
-        return Decision.objects.filter(is_deleted=False).select_related(
+        qs = Decision.objects.filter(is_deleted=False).select_related(
             "meeting_origin__meeting__type_definition",
         )
+        raw = self.request.headers.get("x-project-id") or self.request.query_params.get(
+            "project_id"
+        )
+        try:
+            pid = int(raw)
+            qs = qs.filter(project_id=pid)
+        except (TypeError, ValueError):
+            pass
+        return qs
 
     def _apply_parent_edges(self, decision, parent_ids):
         if parent_ids is None:
@@ -202,10 +211,16 @@ class DecisionViewSet(
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        base = Decision.objects.filter(is_deleted=False, is_pre_draft=False).order_by("-updated_at")
+        base = (
+            Decision.objects.filter(is_deleted=False, is_pre_draft=False)
+            .select_related(
+                "project",
+                "meeting_origin__meeting__type_definition",
+            )
+            .order_by("-updated_at")
+        )
 
         if self.action == "list":
-            base = base.select_related("project")
             if not self.request.user.is_superuser:
                 project_ids = ProjectMember.objects.filter(
                     user=self.request.user, is_active=True
@@ -221,14 +236,20 @@ class DecisionViewSet(
             ) | Q(status=Decision.Status.DRAFT, author=self.request.user)
             base = base.filter(visibility)
 
-        if self.action == "retrieve":
-            base = base.filter(
-                status__in=[
-                    Decision.Status.COMMITTED,
-                    Decision.Status.REVIEWED,
-                    Decision.Status.ARCHIVED,
-                ]
-            )
+            status_q = self.request.query_params.get("status")
+            if status_q in Decision.Status.values:
+                base = base.filter(status=status_q)
+
+            return base
+
+        raw = self.request.headers.get("x-project-id") or self.request.query_params.get(
+            "project_id"
+        )
+        try:
+            pid = int(raw)
+            base = base.filter(project_id=pid)
+        except (TypeError, ValueError):
+            pass
 
         status_q = self.request.query_params.get("status")
         if status_q in Decision.Status.values:
@@ -237,28 +258,10 @@ class DecisionViewSet(
         return base
 
     def retrieve(self, request, *args, **kwargs):
-        decision_id = kwargs.get("pk")
-        decision = get_object_or_404(
-            Decision.objects.filter(is_deleted=False).select_related(
-                "meeting_origin__meeting__type_definition",
-            ),
-            pk=decision_id,
-        )
-
-        if decision.status in (
-            Decision.Status.DRAFT,
-            Decision.Status.AWAITING_APPROVAL,
-        ):
-            return invalid_state_response(
-                current_status=decision.status,
-                allowed_statuses=[
-                    Decision.Status.COMMITTED,
-                    Decision.Status.REVIEWED,
-                    Decision.Status.ARCHIVED,
-                ],
-                suggested_action="Use GET /decisions/drafts/{decisionId}",
-            )
-
+        decision = self.get_object()
+        # Allow viewing decisions in all statuses - the original logic was preventing 
+        # users from viewing and deleting draft decisions from the calendar interface
+        
         serializer = self.get_serializer(decision)
         return Response(serializer.data)
 
@@ -804,7 +807,12 @@ class DecisionViewSet(
         decision = self.get_object()
         if decision.is_deleted:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+        with transaction.atomic():
+        # Delete all CalendarEvents derived from this Decision before soft-deleting
+            CalendarEvent.objects.filter(decision=decision).delete()
         
-        decision.is_deleted = True
-        decision.save(update_fields=["is_deleted", "updated_at"])
+            decision.is_deleted = True
+            decision.save(update_fields=["is_deleted", "updated_at"])
+    
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -19,7 +19,9 @@ class MeetingQuerySet(models.QuerySet):
                 "artifact_links",
                 Prefetch(
                     "decision_origins",
-                    queryset=MeetingDecisionOrigin.objects.select_related("decision"),
+                    queryset=MeetingDecisionOrigin.objects.filter(
+                        decision__is_deleted=False,
+                    ).select_related("decision"),
                 ),
                 Prefetch(
                     "task_origins",

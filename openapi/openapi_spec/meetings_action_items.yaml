@@ -1,0 +1,234 @@
+openapi: 3.0.3
+info:
+  title: Meetings — action items → tasks (SMP-489)
+  version: 1.0.0
+  description: |
+    Project-scoped meeting **action items** and conversion to executable **tasks** with immutable lineage
+    (`MeetingTaskOrigin` + `Task.origin_action_item`).
+
+    Base path matches Django: **`/api/projects/{project_id}/meetings/{meeting_id}/...`**
+servers:
+  - url: http://localhost:8000/
+
+paths:
+  /api/projects/{project_id}/meetings/{meeting_id}/action-items/:
+    get:
+      summary: List action items for a meeting
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      responses:
+        "200":
+          description: Paginated list (DRF default) or array of action items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MeetingActionItem"
+    post:
+      summary: Create an action item
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetingActionItemCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingActionItem"
+
+  /api/projects/{project_id}/meetings/{meeting_id}/action-items/bulk-convert-to-task/:
+    post:
+      summary: Bulk convert action items to tasks (all-or-nothing transaction)
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: "#/components/schemas/BulkConvertItem"
+      responses:
+        "201":
+          description: Created tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      description: Task object (see task.yaml)
+
+  /api/projects/{project_id}/meetings/{meeting_id}/action-items/{id}/:
+    patch:
+      summary: Update an action item
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetingActionItemPatch"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete an action item (blocked at DB level if a derived task exists)
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /api/projects/{project_id}/meetings/{meeting_id}/action-items/{id}/convert-to-task/:
+    post:
+      summary: Convert one action item to a task
+      description: |
+        Creates a task with summary/description from the action item, optional owner/due/priority/type,
+        establishes `MeetingTaskOrigin` and `Task.origin_action_item`. Rejects if already converted.
+      tags: [meetings, action-items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertToTaskRequest"
+      responses:
+        "201":
+          description: Task created
+        "400":
+          description: Already converted or validation error
+
+  /api/projects/{project_id}/meetings/{meeting_id}/tasks/:
+    get:
+      summary: List tasks generated from this meeting (MeetingTaskOrigin)
+      tags: [meetings, tasks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      responses:
+        "200":
+          description: Paginated task rows (TaskListSerializer)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: integer }
+    MeetingId:
+      name: meeting_id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  schemas:
+    MeetingActionItem:
+      type: object
+      properties:
+        id: { type: integer }
+        meeting: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        order_index: { type: integer }
+        converted_task_id: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    MeetingActionItemCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        order_index: { type: integer }
+
+    MeetingActionItemPatch:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        order_index: { type: integer }
+
+    ConvertToTaskRequest:
+      type: object
+      properties:
+        owner_id: { type: integer, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        priority: { type: string, nullable: true }
+        type: { type: string, default: execution }
+        current_approver_id: { type: integer, nullable: true }
+        create_as_draft: { type: boolean, default: false }
+
+    BulkConvertItem:
+      allOf:
+        - type: object
+          required: [action_item_id]
+          properties:
+            action_item_id: { type: integer }
+        - $ref: "#/components/schemas/ConvertToTaskRequest"

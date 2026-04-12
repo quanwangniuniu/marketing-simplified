@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, User, Bot, ChevronDown, Trash2 } from 'lucide-react';
+import { Users, User, Bot, ChevronDown, Trash2, Star } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { ChatListItemProps } from '@/types/chat';
 import { useAuthStore } from '@/lib/authStore';
@@ -10,7 +10,19 @@ import { deleteChat } from '@/lib/api/chatApi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import toast from 'react-hot-toast';
 
-export default function ChatListItem({ chat, isActive, onClick, roleByUserId }: ChatListItemProps) {
+export default function ChatListItem({
+  chat,
+  isActive,
+  onClick,
+  roleByUserId,
+  showStarToggle,
+  isStarred,
+  onStarToggle,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDrop,
+}: ChatListItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLeavingChat, setIsLeavingChat] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -154,9 +166,13 @@ export default function ChatListItem({ chat, isActive, onClick, roleByUserId }: 
   return (
     <>
       <div
+        draggable={Boolean(draggable)}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         className={`transition-all duration-200 ${
           isActive ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'
-        }`}
+        } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
         {/* Main Row - use div instead of button to avoid nested buttons */}
         <div
@@ -210,6 +226,24 @@ export default function ChatListItem({ chat, isActive, onClick, roleByUserId }: 
                   )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  {showStarToggle && onStarToggle && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStarToggle(e);
+                      }}
+                      className={`p-1 rounded transition-colors ${
+                        isStarred
+                          ? 'text-amber-500 hover:bg-amber-50'
+                          : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                      }`}
+                      aria-label={isStarred ? 'Remove from starred' : 'Add to starred'}
+                      title={isStarred ? 'Remove from starred' : 'Add to starred'}
+                    >
+                      <Star className={`w-4 h-4 ${isStarred ? 'fill-current' : ''}`} />
+                    </button>
+                  )}
                   {chat.last_message && (
                     <span className="text-xs text-gray-500">
                       {getTimestamp()}
