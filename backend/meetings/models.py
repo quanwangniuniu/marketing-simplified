@@ -334,6 +334,38 @@ class MeetingTaskOrigin(models.Model):
         return f"Task {self.task_id} from meeting {self.meeting_id}"
 
 
+class MeetingActionItem(models.Model):
+    """
+    Captures a follow-up action from a meeting before it becomes an executable Task.
+
+    Conversion to ``task.Task`` is one-to-one: each action item may produce at most one task
+    (see ``Task.origin_action_item``).
+    """
+
+    meeting = models.ForeignKey(
+        Meeting,
+        on_delete=models.CASCADE,
+        related_name="action_items",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    order_index = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order_index", "id"]
+        indexes = [
+            models.Index(
+                fields=["meeting", "order_index"],
+                name="mtgs_actitem_meet_ord",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"ActionItem {self.pk} ({self.meeting_id}): {self.title[:40]}"
+
+
 class ArtifactLink(models.Model):
     """
     ArtifactLink model represents a link between a meeting and an external artifact.
@@ -361,7 +393,6 @@ class ArtifactLink(models.Model):
             f"ArtifactLink type={self.artifact_type} "
             f"id={self.artifact_id} meeting={self.meeting_id}"
         )
-
 
 def _meeting_template_id() -> str:
     # Use hex string UUIDs to keep URL-safe IDs.
@@ -419,4 +450,3 @@ class MeetingDocument(models.Model):
 
     def __str__(self) -> str:
         return f"MeetingDocument meeting={self.meeting_id}"
-

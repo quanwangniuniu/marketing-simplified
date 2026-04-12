@@ -79,6 +79,24 @@ def serialize_linked_task(task: Any, project_id: int) -> dict[str, Any]:
     }
 
 
+def serialize_origin_action_item(action_item: Any) -> dict[str, Any]:
+    """
+    Task detail: immutable lineage back to the meeting action item (if converted from one).
+    """
+    mid = action_item.meeting_id
+    pid = action_item.meeting.project_id
+    title = (getattr(action_item, "title", None) or "").strip() or f"Action item {action_item.id}"
+    detail_url = project_meeting_url(pid, mid)
+    return {
+        "id": action_item.id,
+        "title": title,
+        "meeting_id": mid,
+        "project_id": pid,
+        "detail_url": detail_url,
+        "url": detail_url,
+    }
+
+
 def serialize_origin_meeting(meeting: Any) -> dict[str, Any]:
     """
     Task / decision detail: origin meeting for bidirectional navigation.

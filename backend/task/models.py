@@ -65,7 +65,11 @@ class Task(models.Model):
       help_text="The project that the task belongs to"
     )
     due_date = models.DateField(null=True, blank=True, help_text="The due date of the task") # TODO: Modify according to escalation requirements
-    planned_start_date = models.DateField(null=True, blank=True, help_text="The planned start date of the task")
+    planned_start_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="The planned start date of the task",
+    )
     type = models.CharField(
       max_length=50,
       choices=[
@@ -159,6 +163,16 @@ class Task(models.Model):
         null=True,
         blank=True,
         help_text="Draft form state captured from task create panel",
+    )
+
+    # Lineage: optional one-to-one link when this task was converted from a meeting action item.
+    origin_action_item = models.OneToOneField(
+        "meetings.MeetingActionItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="derived_task",
+        help_text="Immutable lineage: meeting action item this task was converted from.",
     )
 
     def __str__(self):

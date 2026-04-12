@@ -16,7 +16,8 @@ export const TaskAPI = {
   // Get available task types
   getTaskTypes: async (): Promise<{ value: string; label: string }[]> => {
     const response = await api.get('/api/task-types/');
-    return response.data.task_types;
+    const list = response.data?.task_types;
+    return Array.isArray(list) ? list : [];
   },
 
   // Force create a new task

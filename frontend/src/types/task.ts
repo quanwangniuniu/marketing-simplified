@@ -1,5 +1,15 @@
 import type { OriginMeetingPayload } from '@/types/meeting';
 
+/** Task provenance when created from a meeting action item (SMP-489). */
+export interface OriginActionItemPayload {
+  id: number;
+  title: string;
+  meeting_id: number;
+  project_id?: number;
+  detail_url?: string;
+  url?: string;
+}
+
 export interface ApprovalChainStepRecord {
   approved_by: UserSummary;
   is_approved: boolean;
@@ -64,6 +74,8 @@ export interface TaskData {
   draft_payload?: unknown | null;
   /** Provenance: meeting this task is anchored to, if any (task detail only). */
   origin_meeting?: OriginMeetingPayload | null;
+  /** Provenance: action item this task was converted from, if any (task detail only). */
+  origin_action_item?: OriginActionItemPayload | null;
 }
 
 // Type for creating a new task (current_approver_id is user ID)
