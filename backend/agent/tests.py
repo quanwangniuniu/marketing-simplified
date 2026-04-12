@@ -1262,14 +1262,15 @@ class ColumnDetectionTests(TestCase):
     # ------------------------------------------------------------------ #
 
     def test_detect_known_meta_ads_columns(self):
-        """Standard Meta Ads headers are matched by rule without calling LLM."""
+        """Standard Meta Ads headers are matched by DB template or rule without calling LLM."""
         from .column_registry import detect_columns
 
         headers = ['Campaign name', 'Amount spent', 'Impressions', 'Clicks', 'CTR']
         result = detect_columns(headers)
 
-        self.assertEqual(result.schema_key, 'meta_ads')
-        self.assertEqual(result.source, 'rule')
+        # schema_key is either 'meta_ads' (rule) or a UUID string (db_template)
+        self.assertIsNotNone(result.schema_key)
+        self.assertIn(result.source, ('rule', 'db_template'))
         self.assertGreaterEqual(result.confidence, 0.8)
         self.assertEqual(result.mappings['Campaign name'], 'campaign_name')
         self.assertEqual(result.mappings['Amount spent'], 'amount_spent')
@@ -1284,7 +1285,7 @@ class ColumnDetectionTests(TestCase):
         headers = ['IMPRESSIONS', 'AMOUNT SPENT', 'cpc', 'campaign_name']
         result = detect_columns(headers)
 
-        self.assertEqual(result.source, 'rule')
+        self.assertIn(result.source, ('rule', 'db_template'))
         self.assertEqual(result.mappings['IMPRESSIONS'], 'impressions')
         self.assertEqual(result.mappings['AMOUNT SPENT'], 'amount_spent')
         self.assertEqual(result.mappings['cpc'], 'cpc')

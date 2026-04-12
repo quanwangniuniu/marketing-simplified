@@ -2,13 +2,19 @@
 Column schema registry for uploaded spreadsheets.
 
 Detection pipeline:
-  1. Rule-based match against known schema definitions (instant, no LLM cost).
-  2. LLM fallback (Claude Haiku) for files that do not match any known schema.
-     Unknown columns are labeled "unknown" — never guessed.
+  1. DB-template match against DataSchemaTemplate records (instant, no LLM cost).
+     Falls back to the hard-coded SCHEMA_REGISTRY if the DB is unavailable.
+  2. Rule-based match against the hard-coded SCHEMA_REGISTRY (instant fallback).
+  3. LLM fallback (Dify / Gemini) for files that do not match any known schema.
+     On success the result is optionally saved as a new learned DataSchemaTemplate.
+  4. Keyword-based auto-categorisation for columns that remain 'unknown' after
+     all detection paths, so results are never silently lost.
 
 Public API:
-  detect_columns(headers)  -> ColumnDetectionResult
+  detect_columns(headers)         -> ColumnDetectionResult
   normalize_spreadsheet(data, column_mapping) -> normalized data dict
+  auto_categorize_by_name(canonical_name)     -> category string
+  save_learned_template(schema_name, source_platform, columns, project) -> DataSchemaTemplate | None
 """
 
 import json
@@ -26,7 +32,186 @@ CAT_FINANCIAL = "financial"
 CAT_ENGAGEMENT = "engagement"
 CAT_CONVERSION = "conversion"
 CAT_PERFORMANCE_RATIO = "performance_ratio"
+CAT_TEMPORAL = "temporal"
 CAT_UNKNOWN = "unknown"
+
+# ---------------------------------------------------------------------------
+# Keyword-based auto-categorisation
+# When AI detection returns 'unknown', we apply these rules as a last-resort
+# fallback so the user sees a best-guess category rather than a blank.
+# Rules are checked in order; the first match wins.
+# ---------------------------------------------------------------------------
+_AUTO_CATEGORY_RULES = [
+    (CAT_TEMPORAL, [
+        'date', 'week', 'month', 'year', 'quarter', 'period', 'time', 'day',
+        'start', 'end', 'reporting',
+    ]),
+    (CAT_FINANCIAL, [
+        'spend', 'cost', 'budget', 'revenue', 'roas', 'cpm', 'cpc', 'cpp',
+        'cpa', 'amount', 'price', 'fee', 'profit', 'margin', 'value',
+    ]),
+    (CAT_CONVERSION, [
+        'purchase', 'conversion', 'lead', 'signup', 'sign_up', 'checkout',
+        'add_to_cart', 'cart', 'install', 'registration', 'subscribe',
+    ]),
+    (CAT_ENGAGEMENT, [
+        'impression', 'click', 'reach', 'view', 'watch', 'engagement',
+        'like', 'share', 'comment', 'video', 'thruplay', 'frequency',
+        'interaction',
+    ]),
+    (CAT_PERFORMANCE_RATIO, [
+        'ctr', 'cvr', 'rate', 'ratio', 'score', 'index', 'efficiency',
+        'percentage', 'pct', 'percent',
+    ]),
+    (CAT_IDENTIFIER, [
+        'name', 'id', 'campaign', 'ad_set', 'adset', 'ad', 'creative',
+        'label', 'tag', 'group', 'account', 'brand', 'product', 'sku',
+        'category', 'channel', 'platform', 'source', 'medium',
+    ]),
+]
+
+
+def auto_categorize_by_name(canonical_name: str) -> str:
+    """
+    Infer a semantic category from a canonical column name using keyword rules.
+
+    This is a best-effort fallback called when AI detection returns 'unknown'.
+    Returns the inferred category string, or CAT_UNKNOWN if no rule matches.
+
+    Args:
+        canonical_name: snake_case column name, e.g. 'total_ad_spend'
+
+    Returns:
+        One of the CAT_* constants.
+    """
+    if not canonical_name or canonical_name == CAT_UNKNOWN:
+        return CAT_UNKNOWN
+
+    tokens = set(re.split(r'[\s_\-]+', canonical_name.lower()))
+
+    for category, keywords in _AUTO_CATEGORY_RULES:
+        for kw in keywords:
+            # Check if any keyword is a substring of the canonical_name or a token
+            if kw in tokens or kw in canonical_name.lower():
+                return category
+
+    return CAT_UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# DB-template detection
+# ---------------------------------------------------------------------------
+
+def _try_db_template_match(headers: list) -> "ColumnDetectionResult | None":
+    """
+    Attempt to match headers against DataSchemaTemplate records in the DB.
+
+    Returns the best-matching result if confidence >= template.match_threshold,
+    else None.  Silently skips if the DB or model is unavailable (e.g. during
+    tests or first-run before migrations).
+    """
+    try:
+        from .models import DataSchemaTemplate
+        templates = DataSchemaTemplate.objects.filter(
+            is_deleted=False,
+        ).order_by('-usage_count', '-is_system')
+    except Exception:
+        return None
+
+    normalised = [_normalise(h) for h in headers]
+    best_result = None
+    best_confidence = 0.0
+
+    for template in templates:
+        col_defs = template.column_definitions or []
+        if not col_defs:
+            continue
+
+        # Build alias index for this template
+        alias_index = {}
+        cat_map = {}
+        for col in col_defs:
+            canonical = col.get('canonical_name', '')
+            category = col.get('category', CAT_UNKNOWN)
+            for alias in col.get('aliases', []):
+                alias_index[_normalise(alias)] = canonical
+            alias_index[_normalise(canonical)] = canonical
+            cat_map[canonical] = category
+
+        mappings = {}
+        categories = {}
+        unrecognized = []
+        matched = 0
+
+        for original, norm in zip(headers, normalised):
+            canonical = alias_index.get(norm)
+            if canonical:
+                mappings[original] = canonical
+                categories[canonical] = cat_map.get(canonical, CAT_UNKNOWN)
+                matched += 1
+            else:
+                mappings[original] = CAT_UNKNOWN
+                unrecognized.append(original)
+
+        total = len(headers)
+        confidence = matched / total if total else 0.0
+
+        if confidence >= template.match_threshold and confidence > best_confidence:
+            best_confidence = confidence
+            best_result = ColumnDetectionResult(
+                schema_key=str(template.id),
+                schema_name=template.name,
+                source="db_template",
+                confidence=round(confidence, 3),
+                mappings=mappings,
+                categories=categories,
+                unrecognized=unrecognized,
+            )
+            best_result._matched_template_id = str(template.id)
+
+    return best_result
+
+
+# ---------------------------------------------------------------------------
+# Save a learned template back to the DB
+# ---------------------------------------------------------------------------
+
+def save_learned_template(schema_name: str, source_platform: str,
+                          columns: list, project=None) -> "DataSchemaTemplate | None":
+    """
+    Persist a new DataSchemaTemplate discovered by the LLM.
+
+    Args:
+        schema_name:     Human-readable name returned by the LLM.
+        source_platform: Platform hint (defaults to 'custom').
+        columns:         List of {canonical_name, aliases, category, value_type, description}.
+        project:         Optional Project instance to scope the template.
+
+    Returns:
+        The created DataSchemaTemplate, or None if saving failed.
+    """
+    if not columns:
+        return None
+    try:
+        from .models import DataSchemaTemplate
+        template, created = DataSchemaTemplate.objects.get_or_create(
+            name=schema_name,
+            project=project,
+            defaults={
+                'source_platform': source_platform or 'custom',
+                'is_system': False,
+                'is_learned': True,
+                'column_definitions': columns,
+            },
+        )
+        if not created:
+            # Update column definitions if the template already exists
+            template.column_definitions = columns
+            template.save(update_fields=['column_definitions', 'updated_at'])
+        return template
+    except Exception:
+        logger.exception("Failed to save learned DataSchemaTemplate '%s'", schema_name)
+        return None
 
 # ---------------------------------------------------------------------------
 # Schema registry
@@ -469,26 +654,45 @@ def _unknown_result(headers: list) -> ColumnDetectionResult:
 # Public API
 # ---------------------------------------------------------------------------
 
-def detect_columns(headers: list, sample_rows: list = None) -> ColumnDetectionResult:
+def detect_columns(headers: list, sample_rows: list = None,
+                   project=None) -> ColumnDetectionResult:
     """
     Detect what each column header represents.
 
-    Tries rule-based matching first (instant, no LLM cost).  If confidence
-    falls below 0.5 the LLM fallback is used instead, optionally enriched
-    with sample row values to improve classification accuracy.
+    Detection pipeline (stops at the first successful match):
+      1. DB-template match against DataSchemaTemplate records.
+      2. Rule-based match against the hard-coded SCHEMA_REGISTRY.
+      3. LLM fallback (Dify / Gemini) for unrecognised formats.
+         On success with confidence >= 0.6 the result is saved as a learned
+         DataSchemaTemplate so future uploads of the same format skip the LLM.
+      4. Keyword-based auto-categorisation applied to any remaining 'unknown'
+         columns in the final result.
 
     Args:
         headers:     list of column header strings from the uploaded file.
-        sample_rows: optional list of row dicts sent to the LLM fallback so it
-                     can infer column types from actual data values.
+        sample_rows: optional list of row dicts sent to the LLM fallback.
+        project:     optional Project instance used when saving learned templates.
 
     Returns:
-        ColumnDetectionResult with mappings, categories, confidence score,
-        and per-column confidence scores.
+        ColumnDetectionResult — mappings, categories, confidence, and per-column
+        confidence scores.  Columns the AI could not classify receive the category
+        inferred by auto_categorize_by_name(), or 'unknown' if inference also fails.
     """
     if not headers:
         return _unknown_result([])
 
+    # 1. DB template match
+    result = _try_db_template_match(headers)
+    if result is not None:
+        logger.info(
+            "Column detection: DB template match schema='%s' confidence=%.2f",
+            result.schema_name,
+            result.confidence,
+        )
+        result = _apply_auto_categorization(result)
+        return result
+
+    # 2. Hard-coded rule match
     result = _try_rule_match(headers)
     if result is not None:
         logger.info(
@@ -496,10 +700,74 @@ def detect_columns(headers: list, sample_rows: list = None) -> ColumnDetectionRe
             result.schema_key,
             result.confidence,
         )
+        result = _apply_auto_categorization(result)
         return result
 
+    # 3. LLM fallback
     logger.info("Column detection: no rule match; falling back to LLM")
-    return _try_llm_fallback(headers, sample_rows=sample_rows)
+    result = _try_llm_fallback(headers, sample_rows=sample_rows)
+
+    # Persist as a learned template if the LLM was confident enough
+    if result.source == "llm" and result.confidence >= 0.6 and result.schema_name != "Unknown format":
+        learned_cols = [
+            {
+                "canonical_name": canonical,
+                "aliases": [original],
+                "category": result.categories.get(canonical, CAT_UNKNOWN),
+                "value_type": "string",
+                "description": "",
+            }
+            for original, canonical in result.mappings.items()
+            if canonical != CAT_UNKNOWN
+        ]
+        if learned_cols:
+            save_learned_template(
+                schema_name=result.schema_name,
+                source_platform="custom",
+                columns=learned_cols,
+                project=project,
+            )
+            logger.info(
+                "Column detection: saved learned template '%s' (%d columns)",
+                result.schema_name,
+                len(learned_cols),
+            )
+
+    # 4. Auto-categorise remaining unknowns
+    result = _apply_auto_categorization(result)
+    return result
+
+
+def _apply_auto_categorization(result: ColumnDetectionResult) -> ColumnDetectionResult:
+    """
+    For any column mapped to 'unknown', attempt keyword-based category inference.
+
+    Updates the result in-place and returns it.  Columns where inference also
+    fails remain 'unknown' so the user can assign them manually.
+    """
+    updated_mappings = dict(result.mappings)
+    updated_categories = dict(result.categories)
+    still_unrecognized = []
+
+    for original in result.unrecognized:
+        canonical = updated_mappings.get(original, CAT_UNKNOWN)
+        # Use the original header for inference if the canonical name is 'unknown'
+        name_for_inference = original if canonical == CAT_UNKNOWN else canonical
+        inferred = auto_categorize_by_name(name_for_inference)
+
+        if inferred != CAT_UNKNOWN:
+            # Keep the canonical name as 'unknown' (user must confirm the name),
+            # but update the category so the UI can show a useful badge.
+            updated_categories[original] = inferred
+            logger.debug(
+                "Auto-categorised '%s' as '%s' via keyword rules", original, inferred
+            )
+        else:
+            still_unrecognized.append(original)
+
+    result.categories = updated_categories
+    result.unrecognized = still_unrecognized
+    return result
 
 
 def normalize_spreadsheet(data: dict, column_mapping: dict) -> dict:

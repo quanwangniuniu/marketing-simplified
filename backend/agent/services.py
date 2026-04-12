@@ -1302,7 +1302,12 @@ class AgentOrchestrator:
         ).first()
 
     def _prepare_input_data(self, file_id=None, spreadsheet_id=None, csv_filename=None):
-        """Build spreadsheet_data dict by reusing existing file/csv/spreadsheet parsing."""
+        """Build the initial input_data dict for the workflow engine.
+
+        file_id is included in the returned dict so NormalizeDataExecutor can
+        persist confirmed column mappings and row data to ImportedDataField /
+        ImportedDataRecord without needing a separate DB lookup.
+        """
         import os as _os
 
         if file_id:
@@ -1313,6 +1318,7 @@ class AgentOrchestrator:
             filepath = _os.path.join(csv_dir, _os.path.basename(record.filename))
             return {
                 'spreadsheet_data': file_parser.parse_file_to_json(filepath, record.filename),
+                'file_id': str(file_id),
             }
 
         if spreadsheet_id:
@@ -1336,6 +1342,7 @@ class AgentOrchestrator:
                     'name': record.original_filename,
                     'sheets': [{'name': 'Sheet1', 'columns': columns, 'rows': rows}],
                 },
+                'file_id': str(record.id),
             }
 
         return {}

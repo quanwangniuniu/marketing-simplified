@@ -456,6 +456,10 @@ class NormalizeDataExecutor(BaseStepExecutor):
 
     Reads column_mapping from input_data (set by DetectColumnsExecutor or
     overridden by the user during the confirm_columns step).
+
+    After normalisation, persists the confirmed schema to ImportedDataField and
+    all row values to ImportedDataRecord so downstream queries never need to
+    re-parse the source file or rely on hard-coded column names.
     """
 
     def execute(self, input_data):
@@ -480,6 +484,26 @@ class NormalizeDataExecutor(BaseStepExecutor):
 
         try:
             normalized = normalize_spreadsheet(spreadsheet_data, column_mapping)
+
+            # Persist schema + row data to the metadata tables when a file_id is
+            # available. Failures here are non-fatal: analysis can still proceed
+            # using the in-memory normalized data.
+            file_id = input_data.get('file_id')
+            if file_id:
+                try:
+                    self._persist_metadata(
+                        file_id=file_id,
+                        column_mapping=column_mapping,
+                        column_detection=input_data.get('column_detection', {}),
+                        spreadsheet_data=spreadsheet_data,
+                    )
+                except Exception:
+                    logger.exception(
+                        "NormalizeDataExecutor: metadata persistence failed for file_id=%s "
+                        "(non-fatal, analysis continues)",
+                        file_id,
+                    )
+
             return StepResult(
                 success=True,
                 output_data={
@@ -494,6 +518,183 @@ class NormalizeDataExecutor(BaseStepExecutor):
         except Exception as e:
             logger.exception("NormalizeDataExecutor failed")
             return StepResult(success=False, error=str(e))
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _persist_metadata(self, file_id, column_mapping, column_detection, spreadsheet_data):
+        """
+        Save ImportedDataField and ImportedDataRecord rows for the confirmed mapping.
+
+        Clears any existing rows for the file first so re-uploads always reflect
+        the latest confirmation.
+        """
+        from .models import ImportedCSVFile, ImportedDataField, ImportedDataRecord, FieldCategory
+        from .column_registry import auto_categorize_by_name, CAT_UNKNOWN
+
+        try:
+            csv_file = ImportedCSVFile.objects.get(id=file_id, is_deleted=False)
+        except ImportedCSVFile.DoesNotExist:
+            logger.warning("NormalizeDataExecutor: ImportedCSVFile %s not found", file_id)
+            return
+
+        # Clear existing metadata for this file (re-upload scenario)
+        ImportedDataField.objects.filter(file=csv_file).delete()
+        ImportedDataRecord.objects.filter(file=csv_file).delete()
+
+        categories = column_detection.get('categories', {})
+        confidences = column_detection.get('column_confidences', {})
+
+        # Infer value types from the first sheet's rows
+        sheets = spreadsheet_data.get('sheets', [])
+        first_rows = sheets[0].get('rows', [])[:50] if sheets else []
+
+        # Build ImportedDataField rows
+        fields_to_create = []
+        field_by_original = {}  # original_name -> ImportedDataField (to be created)
+
+        for position, (original_name, canonical_name) in enumerate(column_mapping.items()):
+            raw_category = categories.get(canonical_name, CAT_UNKNOWN)
+
+            # Auto-categorise unknowns via keyword rules
+            if raw_category == CAT_UNKNOWN:
+                raw_category = auto_categorize_by_name(
+                    original_name if canonical_name == CAT_UNKNOWN else canonical_name
+                )
+
+            # Ensure the category exists in FieldCategory (creates if new)
+            FieldCategory.get_or_create_by_name(
+                raw_category, project=csv_file.project
+            )
+
+            col_values = [
+                row.get(original_name)
+                for row in first_rows
+                if row.get(original_name) not in (None, '', '-')
+            ]
+            value_type = _infer_value_type(col_values)
+            stats = _compute_column_stats(
+                [row.get(original_name) for row in first_rows],
+                value_type,
+            )
+
+            field = ImportedDataField(
+                file=csv_file,
+                original_name=original_name,
+                canonical_name=canonical_name,
+                value_type=value_type,
+                category=raw_category,
+                confidence=round(confidences.get(original_name, 0.0), 3),
+                position=position,
+                null_count=stats['null_count'],
+                unique_count=stats['unique_count'],
+                min_value=stats['min_value'],
+                max_value=stats['max_value'],
+                sample_values=stats['sample_values'],
+            )
+            fields_to_create.append(field)
+            field_by_original[original_name] = field
+
+        created_fields = ImportedDataField.objects.bulk_create(fields_to_create)
+
+        # Rebuild lookup after bulk_create assigns PKs
+        field_pk_by_original = {f.original_name: f for f in created_fields}
+
+        # Build ImportedDataRecord rows
+        total_confirmed = len([
+            f for f in created_fields if f.canonical_name != CAT_UNKNOWN
+        ])
+
+        records_to_create = []
+        for row_index, row in enumerate(first_rows if not sheets else sheets[0].get('rows', [])):
+            data_dict = {}
+            non_null_confirmed = 0
+
+            for original_name, canonical_name in column_mapping.items():
+                key = canonical_name if canonical_name != CAT_UNKNOWN else original_name
+                value = row.get(original_name)
+                data_dict[key] = value
+                if canonical_name != CAT_UNKNOWN and value not in (None, '', '-'):
+                    non_null_confirmed += 1
+
+            quality = non_null_confirmed / total_confirmed if total_confirmed else 1.0
+
+            records_to_create.append(ImportedDataRecord(
+                file=csv_file,
+                row_index=row_index,
+                data=data_dict,
+                quality_score=round(quality, 3),
+            ))
+
+        # Bulk-insert in batches to avoid very large INSERT statements
+        batch_size = 500
+        for i in range(0, len(records_to_create), batch_size):
+            ImportedDataRecord.objects.bulk_create(records_to_create[i:i + batch_size])
+
+        logger.info(
+            "NormalizeDataExecutor: persisted %d fields and %d records for file_id=%s",
+            len(fields_to_create),
+            len(records_to_create),
+            file_id,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Column metadata helpers used by NormalizeDataExecutor
+# ---------------------------------------------------------------------------
+
+def _infer_value_type(values: list) -> str:
+    """Infer the value_type ('number', 'boolean', 'string') from a sample of values."""
+    non_null = [v for v in values if v not in (None, '', '-')]
+    if not non_null:
+        return 'string'
+
+    num_count = 0
+    bool_count = 0
+    for v in non_null[:20]:
+        sv = str(v).strip().lower()
+        if sv in ('true', 'false', '1', '0', 'yes', 'no'):
+            bool_count += 1
+        else:
+            try:
+                float(str(v).replace(',', ''))
+                num_count += 1
+            except (ValueError, TypeError):
+                pass
+
+    sample_size = min(len(non_null), 20)
+    if num_count / sample_size >= 0.8:
+        return 'number'
+    if bool_count / sample_size >= 0.8:
+        return 'boolean'
+    return 'string'
+
+
+def _compute_column_stats(values: list, value_type: str) -> dict:
+    """Compute null_count, unique_count, min/max, and sample_values for one column."""
+    null_count = sum(1 for v in values if v in (None, '', '-'))
+    non_null = [v for v in values if v not in (None, '', '-')]
+    unique_count = len(set(str(v) for v in non_null))
+    sample_values = list({str(v) for v in non_null if v is not None})[:5]
+
+    min_value = None
+    max_value = None
+    if value_type == 'number' and non_null:
+        try:
+            nums = [float(str(v).replace(',', '')) for v in non_null]
+            min_value = str(min(nums))
+            max_value = str(max(nums))
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        'null_count': null_count,
+        'unique_count': unique_count,
+        'min_value': min_value,
+        'max_value': max_value,
+        'sample_values': sample_values,
+    }
 
 
 # Executor registry — maps step_type to executor class
