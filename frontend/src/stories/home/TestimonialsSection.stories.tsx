@@ -21,10 +21,5 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => {
-    const redirectToLogin = () => {};
-    const handleGetStartedClick = () => {};
-
-    return <TestimonialsSection onRedirectToLogin={redirectToLogin} onGetStartedClick={handleGetStartedClick} />;
-  },
+  render: () => <TestimonialsSection />,
 };
