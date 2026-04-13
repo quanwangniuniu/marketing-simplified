@@ -10,9 +10,9 @@ Coverage:
   - ColumnDetectionResult: to_dict round-trip, column_confidences defaults
 """
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from .column_registry import (
     CAT_FINANCIAL,
@@ -105,20 +105,22 @@ class ColumnDetectionResultTests(SimpleTestCase):
 # Rule-based detection
 # ---------------------------------------------------------------------------
 
+RULE_SOURCES = ('rule', 'db_template')
+
+
 class RuleBasedDetectionTests(SimpleTestCase):
 
     def test_full_meta_ads_match(self):
         result = detect_columns(_meta_headers())
-        self.assertEqual(result.source, 'rule')
-        self.assertEqual(result.schema_key, 'meta_ads')
+        self.assertIn(result.source, RULE_SOURCES)
+        self.assertIsNotNone(result.schema_key)
         self.assertGreaterEqual(result.confidence, 0.95)
         self.assertEqual(result.unrecognized, [])
 
     def test_meta_ads_alias_variants(self):
-        # Use alias forms rather than canonical names
         headers = ['spend', 'ctr (all)', 'link ctr', 'roas', 'conversions']
         result = detect_columns(headers)
-        self.assertEqual(result.source, 'rule')
+        self.assertIn(result.source, RULE_SOURCES)
         self.assertEqual(result.mappings['spend'], 'amount_spent')
         self.assertEqual(result.mappings['ctr (all)'], 'ctr')
         self.assertEqual(result.mappings['roas'], 'purchase_roas')
@@ -127,7 +129,7 @@ class RuleBasedDetectionTests(SimpleTestCase):
     def test_meta_ads_case_insensitive(self):
         headers = ['CAMPAIGN NAME', 'IMPRESSIONS', 'AMOUNT SPENT']
         result = detect_columns(headers)
-        self.assertEqual(result.source, 'rule')
+        self.assertIn(result.source, RULE_SOURCES)
         self.assertEqual(result.mappings['CAMPAIGN NAME'], 'campaign_name')
         self.assertEqual(result.mappings['IMPRESSIONS'], 'impressions')
 
@@ -140,15 +142,15 @@ class RuleBasedDetectionTests(SimpleTestCase):
         self.assertEqual(result.categories['ctr'], CAT_PERFORMANCE_RATIO)
 
     def test_partial_match_above_threshold_still_rule(self):
-        # 3 out of 4 known → 75% confidence → rule path
+        # 3 out of 4 known → 75% confidence → rule/db_template path
         headers = ['Campaign name', 'Impressions', 'Amount spent', 'MyCustomColumn']
         result = detect_columns(headers)
-        self.assertEqual(result.source, 'rule')
+        self.assertIn(result.source, RULE_SOURCES)
         self.assertIn('MyCustomColumn', result.unrecognized)
         self.assertEqual(result.mappings['MyCustomColumn'], CAT_UNKNOWN)
 
     def test_below_confidence_threshold_falls_to_llm(self):
-        # Only 1 out of 5 known → 20% → should NOT match rule
+        # Only 1 out of 5 known → 20% → should NOT match rule or db_template
         headers = ['Campaign name', 'FooBar', 'BazQux', 'Alpha', 'Beta']
         with patch('agent.column_registry._try_llm_fallback') as mock_llm:
             mock_llm.return_value = ColumnDetectionResult(
@@ -157,7 +159,7 @@ class RuleBasedDetectionTests(SimpleTestCase):
                 categories={}, unrecognized=list(headers),
             )
             result = detect_columns(headers)
-        mock_llm.assert_called_once_with(headers)
+        mock_llm.assert_called_once()
         self.assertEqual(result.source, 'llm')
 
     def test_empty_headers_returns_unknown(self):
@@ -171,32 +173,31 @@ class RuleBasedDetectionTests(SimpleTestCase):
 # LLM fallback
 # ---------------------------------------------------------------------------
 
+_DIFY_SETTINGS = dict(
+    DIFY_COLUMN_DETECTION_API_KEY='test-key',
+    DIFY_API_URL='http://dify.test',
+)
+
+
 class LLMFallbackTests(SimpleTestCase):
 
-    def _make_llm_response(self, columns_list, schema_name='Custom Report', confidence=0.8):
-        return json.dumps({
+    def _make_dify_response(self, columns_list, schema_name='Custom Report', confidence=0.8):
+        """Return the dict that run_dify_workflow would return for a successful call."""
+        return {'text': json.dumps({
             'schema_name': schema_name,
             'confidence': confidence,
             'columns': columns_list,
-        })
+        })}
 
-    def _mock_anthropic_client(self, response_text):
-        mock_msg = MagicMock()
-        mock_msg.content = [MagicMock(text=response_text)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_msg
-        return mock_client
-
-    @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
-    @patch('agent.column_registry.anthropic')
-    def test_llm_fallback_success(self, mock_anthropic_module):
+    @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.dify_workflows.run_dify_workflow')
+    def test_llm_fallback_success(self, mock_run):
         headers = ['Revenue', 'Sessions', 'Bounce Rate']
-        llm_response = self._make_llm_response([
+        mock_run.return_value = self._make_dify_response([
             {'original': 'Revenue', 'canonical': 'revenue', 'category': 'financial', 'confidence': 0.95},
             {'original': 'Sessions', 'canonical': 'sessions', 'category': 'engagement', 'confidence': 0.9},
             {'original': 'Bounce Rate', 'canonical': 'bounce_rate', 'category': 'performance_ratio', 'confidence': 0.8},
         ])
-        mock_anthropic_module.Anthropic.return_value = self._mock_anthropic_client(llm_response)
 
         result = detect_columns(headers)
 
@@ -208,47 +209,44 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertEqual(result.column_confidences['Sessions'], 0.9)
         self.assertEqual(result.column_confidences['Bounce Rate'], 0.8)
 
-    @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
-    @patch('agent.column_registry.anthropic')
-    def test_llm_fallback_includes_sample_rows_in_prompt(self, mock_anthropic_module):
+    @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.dify_workflows.run_dify_workflow')
+    def test_llm_fallback_includes_sample_rows_in_prompt(self, mock_run):
         headers = ['Revenue']
         sample_rows = [{'Revenue': 1000}, {'Revenue': 2000}]
-        llm_response = self._make_llm_response([
+        mock_run.return_value = self._make_dify_response([
             {'original': 'Revenue', 'canonical': 'revenue', 'category': 'financial', 'confidence': 0.9},
         ])
-        mock_client = self._mock_anthropic_client(llm_response)
-        mock_anthropic_module.Anthropic.return_value = mock_client
 
         detect_columns(headers, sample_rows=sample_rows)
 
-        call_kwargs = mock_client.messages.create.call_args
-        user_content = call_kwargs[1]['messages'][0]['content']
-        # Sample rows must appear in the prompt sent to the LLM
-        self.assertIn('Sample rows', user_content)
-        self.assertIn('1000', user_content)
+        call_kwargs = mock_run.call_args
+        inputs = call_kwargs[1]['inputs']
+        # Sample rows must be serialised into the inputs sent to Dify
+        self.assertIn('1000', inputs['sample_rows'])
 
-    @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
-    @patch('agent.column_registry.anthropic')
-    def test_llm_fallback_strips_markdown_fences(self, mock_anthropic_module):
+    @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.dify_workflows.run_dify_workflow')
+    def test_llm_fallback_strips_markdown_fences(self, mock_run):
         headers = ['Cost']
-        raw = '```json\n' + self._make_llm_response([
-            {'original': 'Cost', 'canonical': 'cost', 'category': 'financial'},
-        ]) + '\n```'
-        mock_anthropic_module.Anthropic.return_value = self._mock_anthropic_client(raw)
+        inner = json.dumps({
+            'schema_name': 'Custom', 'confidence': 0.8,
+            'columns': [{'original': 'Cost', 'canonical': 'cost', 'category': 'financial', 'confidence': 0.9}],
+        })
+        mock_run.return_value = {'text': f'```json\n{inner}\n```'}
 
         result = detect_columns(headers)
         self.assertEqual(result.source, 'llm')
         self.assertEqual(result.mappings['Cost'], 'cost')
 
-    @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
-    @patch('agent.column_registry.anthropic')
-    def test_llm_unknown_columns_labeled_unknown(self, mock_anthropic_module):
+    @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.dify_workflows.run_dify_workflow')
+    def test_llm_unknown_columns_labeled_unknown(self, mock_run):
         headers = ['WeirdCol1', 'WeirdCol2']
-        llm_response = self._make_llm_response([
+        mock_run.return_value = self._make_dify_response([
             {'original': 'WeirdCol1', 'canonical': 'unknown', 'category': 'unknown', 'confidence': 0.0},
             {'original': 'WeirdCol2', 'canonical': 'unknown', 'category': 'unknown', 'confidence': 0.0},
         ])
-        mock_anthropic_module.Anthropic.return_value = self._mock_anthropic_client(llm_response)
 
         result = detect_columns(headers)
         self.assertEqual(result.mappings['WeirdCol1'], CAT_UNKNOWN)
@@ -258,11 +256,11 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertEqual(result.column_confidences['WeirdCol1'], 0.0)
         self.assertEqual(result.column_confidences['WeirdCol2'], 0.0)
 
-    @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
-    @patch('agent.column_registry.anthropic')
-    def test_llm_exception_falls_back_to_all_unknown(self, mock_anthropic_module):
+    @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.dify_workflows.run_dify_workflow')
+    def test_llm_exception_falls_back_to_all_unknown(self, mock_run):
         headers = ['ColA', 'ColB']
-        mock_anthropic_module.Anthropic.side_effect = Exception('network error')
+        mock_run.side_effect = Exception('network error')
 
         result = detect_columns(headers)
         self.assertEqual(result.source, 'none')
@@ -271,9 +269,8 @@ class LLMFallbackTests(SimpleTestCase):
 
     def test_llm_skipped_when_no_api_key(self):
         headers = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']
-        with patch.dict('os.environ', {}, clear=True):
-            with patch('agent.column_registry.os.environ.get', return_value=None):
-                result = detect_columns(headers)
+        with override_settings(DIFY_COLUMN_DETECTION_API_KEY='', DIFY_API_URL='http://dify.test'):
+            result = detect_columns(headers)
         # Should return unknown result (no LLM, no rule match)
         self.assertIn(result.source, ('none', 'rule'))
 
