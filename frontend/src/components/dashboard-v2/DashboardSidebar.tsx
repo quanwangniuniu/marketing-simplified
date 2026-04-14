@@ -1,0 +1,133 @@
+'use client';
+
+import Link from 'next/link';
+import Image from 'next/image';
+import { useRouter, usePathname } from 'next/navigation';
+import {
+  LayoutDashboard, Megaphone, CheckSquare, GitBranch, Table2,
+  Calendar, Users, MessageSquare, Workflow, Clock, Settings,
+  ArrowLeft,
+} from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: 'OVERVIEW',
+    items: [
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'MANAGE',
+    items: [
+      { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
+      { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { label: 'Decisions', href: '/decisions', icon: GitBranch },
+      { label: 'Spreadsheets', href: '/spreadsheet', icon: Table2 },
+    ],
+  },
+  {
+    title: 'COLLABORATE',
+    items: [
+      { label: 'Meetings', href: '/meetings', icon: Users },
+      { label: 'Calendar', href: '/calendar', icon: Calendar },
+      { label: 'Messages', href: '/messages', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'TOOLS',
+    items: [
+      { label: 'Workflows', href: '/workflows', icon: Workflow },
+      { label: 'Timeline', href: '/timeline', icon: Clock },
+      { label: 'Settings', href: '/settings', icon: Settings },
+    ],
+  },
+];
+
+export default function DashboardSidebar() {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  return (
+    <aside className="w-[255px] h-screen flex flex-col border-r border-gray-200 bg-white shrink-0">
+      {/* Logo */}
+      <div className="px-4 py-4 border-b border-gray-100">
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/marketing_simplified_logo.png"
+            alt="Marketing Simplified Logo"
+            width={170}
+            height={80}
+            className="h-14 w-auto"
+          />
+        </Link>
+      </div>
+
+      {/* Project header */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center">
+            <span className="text-white text-xs font-bold">Q2</span>
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-gray-900 truncate">Q2 Product Launch</div>
+            <div className="text-xs text-gray-400">$45,000/mo</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto pt-4 pb-2 px-2">
+        {navGroups.map((group, gi) => (
+          <div key={group.title} className={gi > 0 ? 'mt-5' : ''}>
+            <div className="px-3 mb-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              {group.title}
+            </div>
+            {group.items.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => router.push(item.href)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-[#3CCED7]/8 text-[#3CCED7] relative'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[#3CCED7]" />
+                  )}
+                  <item.icon className="w-[18px] h-[18px] shrink-0" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* Back button */}
+      <div className="px-2 py-3 border-t border-gray-100">
+        <button
+          onClick={() => router.push('/select-project')}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+        >
+          <ArrowLeft className="w-[18px] h-[18px]" />
+          All Projects
+        </button>
+      </div>
+    </aside>
+  );
+}
