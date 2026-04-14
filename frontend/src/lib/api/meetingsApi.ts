@@ -26,6 +26,8 @@ import type {
   MeetingActionItemPartialUpdateRequest,
   ConvertActionItemToTaskRequest,
   BulkConvertActionItemsRequest,
+  ZoomPostMeeting,
+  ZoomPostMeetingUserFeedbackCode,
 } from '@/types/meeting';
 import type { TaskData } from '@/types/task';
 
@@ -112,6 +114,84 @@ function normalizeKnowledgeLinks(raw: unknown): KnowledgeNavigationLink[] {
     });
 }
 
+const ZOOM_FEEDBACK_CODES = new Set<string>([
+  'auth_expired',
+  'pending',
+  'not_applicable',
+  'unavailable',
+  'error',
+]);
+
+function normalizeZoomPostMeeting(raw: unknown): ZoomPostMeeting | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const codeRaw = o.user_feedback_code;
+  const user_feedback_code: ZoomPostMeetingUserFeedbackCode | null =
+    typeof codeRaw === 'string' && ZOOM_FEEDBACK_CODES.has(codeRaw)
+      ? (codeRaw as ZoomPostMeetingUserFeedbackCode)
+      : null;
+
+  const participantsIn = o.participants;
+  const participants = Array.isArray(participantsIn)
+    ? participantsIn.map((row) => {
+        const p = row as Record<string, unknown>;
+        return {
+          name: p.name === null || typeof p.name === 'string' ? (p.name as string | null) : null,
+          email:
+            p.email === null || typeof p.email === 'string' ? (p.email as string | null) : null,
+        };
+      })
+    : [];
+
+  const filesIn = o.recording_files;
+  const recording_files = Array.isArray(filesIn)
+    ? filesIn.map((row) => {
+        const f = row as Record<string, unknown>;
+        return {
+          file_type: f.file_type as string | null | undefined,
+          recording_type: f.recording_type as string | null | undefined,
+          play_url: f.play_url as string | null | undefined,
+          download_url: f.download_url as string | null | undefined,
+        };
+      })
+    : [];
+
+  return {
+    meeting_status: typeof o.meeting_status === 'string' ? o.meeting_status : '',
+    start_time:
+      o.start_time === null || typeof o.start_time === 'string' ? (o.start_time as string | null) : null,
+    end_time:
+      o.end_time === null || typeof o.end_time === 'string' ? (o.end_time as string | null) : null,
+    duration_minutes:
+      o.duration_minutes === null || typeof o.duration_minutes === 'number'
+        ? (o.duration_minutes as number | null)
+        : null,
+    actual_participants_count:
+      o.actual_participants_count === null || typeof o.actual_participants_count === 'number'
+        ? (o.actual_participants_count as number | null)
+        : null,
+    recording_status: typeof o.recording_status === 'string' ? o.recording_status : '',
+    summary_status: typeof o.summary_status === 'string' ? o.summary_status : '',
+    sync_state: typeof o.sync_state === 'string' ? o.sync_state : '',
+    sync_error: typeof o.sync_error === 'string' ? o.sync_error : '',
+    last_sync_at:
+      o.last_sync_at === null || typeof o.last_sync_at === 'string'
+        ? (o.last_sync_at as string | null)
+        : null,
+    has_participant_breakdown: Boolean(o.has_participant_breakdown),
+    participant_breakdown_count:
+      typeof o.participant_breakdown_count === 'number' ? o.participant_breakdown_count : 0,
+    has_transcript_asset: Boolean(o.has_transcript_asset),
+    recording_file_count:
+      typeof o.recording_file_count === 'number' ? o.recording_file_count : 0,
+    summary_text: typeof o.summary_text === 'string' ? o.summary_text : '',
+    participants,
+    recording_files,
+    user_feedback_code,
+  };
+}
+
 /** Detail/create/update payloads: stable generated + related navigation arrays. */
 function withMeetingKnowledgeFields(meeting: Meeting): Meeting {
   const raw = meeting as unknown as Record<string, unknown>;
@@ -119,12 +199,15 @@ function withMeetingKnowledgeFields(meeting: Meeting): Meeting {
   const genTasks = raw.generated_tasks ?? raw.generatedTasks;
   const relDec = raw.related_decisions ?? raw.relatedDecisions;
   const relTasks = raw.related_tasks ?? raw.relatedTasks;
+  const zpm = raw.zoom_post_meeting ?? raw.zoomPostMeeting;
   return {
     ...meeting,
     generated_decisions: normalizeKnowledgeLinks(genDec),
     generated_tasks: normalizeKnowledgeLinks(genTasks),
     related_decisions: normalizeKnowledgeLinks(relDec),
     related_tasks: normalizeKnowledgeLinks(relTasks),
+    zoom_post_meeting:
+      zpm === undefined ? meeting.zoom_post_meeting : normalizeZoomPostMeeting(zpm),
   };
 }
 

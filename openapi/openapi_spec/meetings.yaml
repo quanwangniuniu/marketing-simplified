@@ -566,6 +566,107 @@ components:
         updated_at:
           type: string
           format: date-time
+        zoom_post_meeting:
+          nullable: true
+          description: |
+            Zoom post-meeting snapshot when a `ZoomMeetingData` row exists for this meeting; `null` if the
+            meeting is not linked to Zoom. Does not expose `zoom_meeting_id` / `zoom_uuid`. Includes
+            `user_feedback_code` for stable product copy (see schema).
+          $ref: "#/components/schemas/ZoomPostMeeting"
+
+    ZoomPostMeetingParticipant:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+
+    ZoomPostMeetingRecordingFile:
+      type: object
+      properties:
+        file_type:
+          type: string
+          nullable: true
+        recording_type:
+          type: string
+          nullable: true
+        play_url:
+          type: string
+          nullable: true
+        download_url:
+          type: string
+          nullable: true
+
+    ZoomPostMeetingUserFeedbackCode:
+      type: string
+      description: Stable code for user-visible messaging (map client-side / i18n).
+      enum:
+        - auth_expired
+        - pending
+        - not_applicable
+        - unavailable
+        - error
+      nullable: true
+
+    ZoomPostMeeting:
+      type: object
+      description: |
+        Read-only payload from persisted `ZoomMeetingData` (no raw Zoom API payloads). Arrays are product-trimmed.
+      properties:
+        meeting_status:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+        actual_participants_count:
+          type: integer
+          nullable: true
+        recording_status:
+          type: string
+        summary_status:
+          type: string
+        sync_state:
+          type: string
+        sync_error:
+          type: string
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+        has_participant_breakdown:
+          type: boolean
+        participant_breakdown_count:
+          type: integer
+          minimum: 0
+        has_transcript_asset:
+          type: boolean
+        recording_file_count:
+          type: integer
+          minimum: 0
+        summary_text:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoomPostMeetingParticipant"
+        recording_files:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoomPostMeetingRecordingFile"
+        user_feedback_code:
+          $ref: "#/components/schemas/ZoomPostMeetingUserFeedbackCode"
 
     PaginatedMeetingList:
       type: object

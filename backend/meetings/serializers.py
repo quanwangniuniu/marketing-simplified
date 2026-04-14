@@ -26,6 +26,7 @@ from meetings.services import (
     ensure_meeting_type_definition,
     MEETING_LIST_ORDERING_MAP,
 )
+from zoom_integration.post_meeting_payload import build_zoom_post_meeting_payload
 
 
 def meeting_participants_for_api(meeting: Meeting) -> list[dict]:
@@ -70,6 +71,7 @@ class MeetingSerializer(serializers.ModelSerializer):
     generated_tasks_count = serializers.IntegerField(read_only=True, source="task_count")
     related_decisions = serializers.SerializerMethodField()
     related_tasks = serializers.SerializerMethodField()
+    zoom_post_meeting = serializers.SerializerMethodField()
 
     class Meta:
         model = Meeting
@@ -99,6 +101,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "participant_user_ids",
+            "zoom_post_meeting",
         ]
         read_only_fields = [
             "id",
@@ -113,12 +116,8 @@ class MeetingSerializer(serializers.ModelSerializer):
             "generated_tasks_count",
             "related_decisions",
             "related_tasks",
+            "zoom_post_meeting",
         ]
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data["meeting_type"] = instance.type_definition.label
-        return data
 
     def get_participants(self, obj):
         return meeting_participants_for_api(obj)
@@ -138,6 +137,13 @@ class MeetingSerializer(serializers.ModelSerializer):
     def get_related_tasks(self, obj):
         return related_tasks_payload(obj)
 
+    def get_zoom_post_meeting(self, obj: Meeting):
+        try:
+            zd = obj.zoom_meeting_data
+        except ObjectDoesNotExist:
+            return None
+        return build_zoom_post_meeting_payload(zd)
+
     def validate(self, attrs):
         request = self.context.get("request")
         if self.instance is None and request and request.method == "POST":
@@ -156,6 +162,7 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        data["meeting_type"] = instance.type_definition.label
         lc = data.get("layout_config")
         if lc is None:
             data["layout_config"] = []
