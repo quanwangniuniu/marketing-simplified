@@ -12,7 +12,6 @@ from meetings.models import (
     AgendaItem,
     ParticipantLink,
     ArtifactLink,
-    ActionItem,
     MeetingDocument,
     MeetingActionItem,
 )
@@ -459,12 +458,6 @@ class ArtifactLinkSerializer(serializers.ModelSerializer):
         fields = ["id", "meeting", "artifact_type", "artifact_id"]
         read_only_fields = ["id", "meeting"]
 
-
-class ActionItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ActionItem
-        fields = ["id", "meeting", "description", "assigned_to", "is_resolved"]
-        read_only_fields = ["id", "meeting"]
 
 
 class MeetingLifecycleSerializer(serializers.Serializer):

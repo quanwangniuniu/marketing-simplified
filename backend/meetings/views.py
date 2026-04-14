@@ -13,7 +13,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.models import Project, ProjectMember
-from meetings.models import Meeting, AgendaItem, ParticipantLink, ArtifactLink, ActionItem
 from meetings.lifecycle import execute_transition, get_available_transitions
 from meetings.models import (
     Meeting,
@@ -31,7 +30,6 @@ from meetings.serializers import (
     AgendaItemSerializer,
     ParticipantLinkSerializer,
     ArtifactLinkSerializer,
-    ActionItemSerializer,
     MeetingLifecycleSerializer,
     TransitionRequestSerializer,
     MeetingDocumentSerializer,
@@ -386,7 +384,7 @@ class ParticipantLinkViewSet(viewsets.ModelViewSet):
 
 
 class ActionItemViewSet(viewsets.ModelViewSet):
-    serializer_class = ActionItemSerializer
+    serializer_class = MeetingActionItemSerializer 
     permission_classes = [IsAuthenticated]
 
     def get_meeting(self) -> Meeting:
