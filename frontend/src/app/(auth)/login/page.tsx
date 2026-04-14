@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import AuthFormWrapper from '../../components/auth/AuthFormWrapper';
-import AuthFeedback from '../../components/auth/AuthFeedback';
-import AuthFields from '../../components/auth/AuthFields';
-import AuthSubmit from '../../components/auth/AuthSubmit';
-import useAuth from '../../hooks/useAuth';
-import { useAuthStore } from '../../lib/authStore';
-import { validateLoginForm, hasValidationErrors } from '../../utils/validation';
-import { LoginRequest, FormValidation } from '../../types/auth';
-import { LOGIN_ERROR_MESSAGES, isNetworkError } from '../../lib/authMessages';
+import AuthFormWrapper from '@/components/auth/AuthFormWrapper';
+import AuthFeedback from '@/components/auth/AuthFeedback';
+import AuthFields from '@/components/auth/AuthFields';
+import AuthSubmit from '@/components/auth/AuthSubmit';
+import useAuth from '@/hooks/useAuth';
+import { useAuthStore } from '@/lib/authStore';
+import { validateLoginForm, hasValidationErrors } from '@/utils/validation';
+import { LoginRequest, FormValidation } from '@/types/auth';
+import { LOGIN_ERROR_MESSAGES, isNetworkError } from '@/lib/authMessages';
 import toast, { Toaster } from 'react-hot-toast';
 
 const SAVED_LOGIN_EMAIL_KEY = 'saved-login-email';

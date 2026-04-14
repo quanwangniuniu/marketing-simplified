@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import AuthFormWrapper from '../../components/auth/AuthFormWrapper';
-import AuthFeedback from '../../components/auth/AuthFeedback';
-import AuthFields from '../../components/auth/AuthFields';
-import AuthSubmit from '../../components/auth/AuthSubmit';
-import RegisterSuccessMessage from '../../components/auth/RegisterSuccessMessage';
-import useAuth from '../../hooks/useAuth';
-import { useAuthStore } from '../../lib/authStore';
-import { validateRegistrationForm, hasValidationErrors } from '../../utils/validation';
-import { RegisterRequest, FormValidation } from '../../types/auth';
+import AuthFormWrapper from '@/components/auth/AuthFormWrapper';
+import AuthFeedback from '@/components/auth/AuthFeedback';
+import AuthFields from '@/components/auth/AuthFields';
+import AuthSubmit from '@/components/auth/AuthSubmit';
+import RegisterSuccessMessage from '@/components/auth/RegisterSuccessMessage';
+import useAuth from '@/hooks/useAuth';
+import { useAuthStore } from '@/lib/authStore';
+import { validateRegistrationForm, hasValidationErrors } from '@/utils/validation';
+import { RegisterRequest, FormValidation } from '@/types/auth';
 import toast from 'react-hot-toast';
 
 export default function RegisterPage() {

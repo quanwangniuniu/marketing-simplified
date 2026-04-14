@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import { usePreferences } from '../../../hooks/usePreferences';
-import { PreferencesFormData, LanguageOption, TimezoneOption } from '../../../types/preferences';
-import Toggle from '../../../components/ui/Toggle';
-import LoadingSpinner from '../../../components/ui/LoadingSpinner';
-import SlackWebhookModal from '../../../components/ui/SlackWebhookModal';
-import SlackRemoveModal from '../../../components/ui/SlackRemoveModal';
-import { ProtectedRoute } from '../../../components/auth/ProtectedRoute';
+import { usePreferences } from '@/hooks/usePreferences';
+import { PreferencesFormData, LanguageOption, TimezoneOption } from '@/types/preferences';
+import Toggle from '@/components/ui/Toggle';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SlackWebhookModal from '@/components/ui/SlackWebhookModal';
+import SlackRemoveModal from '@/components/ui/SlackRemoveModal';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 // Language options
 const LANGUAGE_OPTIONS: LanguageOption[] = [

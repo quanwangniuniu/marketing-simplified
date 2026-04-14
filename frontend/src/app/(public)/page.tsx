@@ -1,19 +1,19 @@
 'use client'
 
 import React from 'react';
-import { useAuthStore } from '../lib/authStore';
-import HeaderSection from '../components/home/HeaderSection';
-import HeroSection from '../components/home/HeroSection';
-import WhyMarketingSimplifiedSection from '../components/home/WhyMarketingSimplifiedSection';
-import SmartWorkflowSection from '../components/home/SmartWorkflowSection';
-import FeatureCarousel from '../components/home/FeatureCarousel';
-import HowItWorksSection from '../components/home/HowItWorksSection';
-import TestimonialsSection from '../components/home/TestimonialsSection';
-import IntegrationsSection from '../components/home/IntegrationsSection';
-import CtaSection from '../components/home/CtaSection';
-import FooterSection from '../components/home/FooterSection';
-import AiWorkflowsSection from '../components/home/AiWorkflowsSection';
-import FeatureShowcaseSection from '../components/home/FeatureShowcaseSection';
+import { useAuthStore } from '@/lib/authStore';
+import HeaderSection from '@/components/home/HeaderSection';
+import HeroSection from '@/components/home/HeroSection';
+import WhyMarketingSimplifiedSection from '@/components/home/WhyMarketingSimplifiedSection';
+import SmartWorkflowSection from '@/components/home/SmartWorkflowSection';
+import FeatureCarousel from '@/components/home/FeatureCarousel';
+import HowItWorksSection from '@/components/home/HowItWorksSection';
+import TestimonialsSection from '@/components/home/TestimonialsSection';
+import IntegrationsSection from '@/components/home/IntegrationsSection';
+import CtaSection from '@/components/home/CtaSection';
+import FooterSection from '@/components/home/FooterSection';
+import AiWorkflowsSection from '@/components/home/AiWorkflowsSection';
+import FeatureShowcaseSection from '@/components/home/FeatureShowcaseSection';
 
 export default function Page() {
   const { initialized, isAuthenticated, user } = useAuthStore();

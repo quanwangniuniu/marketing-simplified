@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import api from '../../../../lib/api';
-import { useAuthStore } from '../../../../lib/authStore';
+import api from '@/lib/api';
+import { useAuthStore } from '@/lib/authStore';
 
 function GoogleCallbackPage() {
   const router = useRouter();

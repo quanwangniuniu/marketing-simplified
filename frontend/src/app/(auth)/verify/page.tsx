@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import useAuth from '../../hooks/useAuth';
-import { FormContainer } from '../../components/form';
+import useAuth from '@/hooks/useAuth';
+import { FormContainer } from '@/components/form';
 import toast from 'react-hot-toast';
 
 export default function VerifyEmailPage() {

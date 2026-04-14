@@ -8,9 +8,9 @@ import {
   FormInput, 
   FormButton, 
   ErrorMessage
-} from '../../components/form';
+} from '@/components/form';
 import toast from 'react-hot-toast';
-import api from '../../lib/api';
+import api from '@/lib/api';
 import { useAuthStore } from '@/lib/authStore';
 
 interface SetPasswordFormData {
