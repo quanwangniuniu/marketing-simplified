@@ -40,8 +40,7 @@ import { replaceAgendaAndLayoutFromNested } from '@/lib/meetings/replaceMeetingA
 import { MeetingLifecyclePanel } from '@/components/meetings/MeetingLifecyclePanel';
 import { hasVisibleText, sanitizeDocumentPreviewHtml } from '@/lib/meetings/documentPreview';
 
-import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink } from '@/types/meeting';
-
+import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink, MeetingStatus } from '@/types/meeting';
 function PanelSection({
   title,
   description,
