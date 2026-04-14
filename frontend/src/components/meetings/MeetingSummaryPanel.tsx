@@ -528,8 +528,8 @@ export function MeetingSummaryPanel({
     projectId={projectId}
     meetingId={meetingId}
     onStatusChanged={(newStatus) => {
-      if (meeting) setMeeting({ ...meeting, status: newStatus });
-      onMeetingUpdated?.({ ...meeting!, status: newStatus });
+      if (meeting) setMeeting({ ...meeting, status: newStatus as MeetingStatus });
+      onMeetingUpdated?.({ ...meeting!, status: newStatus as MeetingStatus });
     }}
   />
 </section>
