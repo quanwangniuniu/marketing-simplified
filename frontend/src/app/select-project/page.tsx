@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import ProjectHeader from '@/components/select-project/ProjectHeader';
 import ProjectCard from '@/components/select-project/ProjectCard';
 import CreateProjectCard from '@/components/select-project/CreateProjectCard';
+import ChatFAB from '@/components/global-chat/ChatFAB';
 import { mockProjects, type HealthStatus } from '@/lib/mock/projectsMock';
 
 type FilterStatus = 'all' | 'active' | 'completed' | 'paused';
@@ -94,6 +95,8 @@ export default function SelectProjectPage() {
           </div>
         )}
       </main>
+
+      <ChatFAB />
     </div>
   );
 }

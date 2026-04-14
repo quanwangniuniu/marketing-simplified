@@ -1,5 +1,6 @@
 'use client';
 
+import ChatFAB from '@/components/global-chat/ChatFAB';
 import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
 import KPICardRow from '@/components/dashboard-v2/KPICardRow';
 import BudgetPacingChart from '@/components/dashboard-v2/BudgetPacingChart';
@@ -23,6 +24,8 @@ export default function DashboardPage() {
       </div>
 
       <CampaignTable campaigns={mockCampaigns} />
+
+      <ChatFAB />
     </DashboardLayout>
   );
 }
