@@ -110,7 +110,7 @@ export const TaskAPI = {
 
   createComment: async (
     taskId: number,
-    data: { body: string }
+    data: { content: import("@/types/task").SlateNode[] }
   ): Promise<TaskComment> => {
     const response = await api.post(`/api/tasks/${taskId}/comments/`, data);
     return response.data as TaskComment;

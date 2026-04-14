@@ -1,5 +1,10 @@
 from django.urls import path
-from task.views import TaskViewSet, TaskCommentListView, TaskAttachmentListView, TaskAttachmentDetailView, TaskAttachmentDownloadView, get_task_types
+from task.views import (
+    TaskViewSet, TaskCommentListView, TaskCommentDetailView,
+    TaskCommentAttachmentListView, TaskCommentAttachmentDetailView,
+    TaskAttachmentListView, TaskAttachmentDetailView, TaskAttachmentDownloadView,
+    get_task_types,
+)
 
 urlpatterns = [
     # Task types endpoint
@@ -34,9 +39,15 @@ urlpatterns = [
 
     # Task comments (task-level, all types)
     path('tasks/<int:task_id>/comments/', TaskCommentListView.as_view(), name='task-comment-list'),
-    
+    path('tasks/<int:task_id>/comments/<int:comment_id>/', TaskCommentDetailView.as_view(), name='task-comment-detail'),
+
+    # Comment attachments
+    path('tasks/<int:task_id>/comments/<int:comment_id>/attachments/', TaskCommentAttachmentListView.as_view(), name='task-comment-attachment-list'),
+    path('tasks/<int:task_id>/comments/<int:comment_id>/attachments/<int:attachment_id>/', TaskCommentAttachmentDetailView.as_view(), name='task-comment-attachment-detail'),
+
     # Task attachments (task-level, all types)
     path('tasks/<int:task_id>/attachments/', TaskAttachmentListView.as_view(), name='task-attachment-list'),
     path('tasks/<int:task_id>/attachments/<int:pk>/', TaskAttachmentDetailView.as_view(), name='task-attachment-detail'),
     path('tasks/<int:task_id>/attachments/<int:pk>/download/', TaskAttachmentDownloadView.as_view(), name='task-attachment-download'),
 ]
+

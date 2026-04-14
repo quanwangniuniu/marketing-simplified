@@ -576,7 +576,21 @@ class TaskComment(models.Model):
         help_text="User who made the comment"
     )
     body = models.TextField()
+    content = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="Structured JSON content for rich text comment rendering",
+    )
+    parent = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='children',
+        help_text="Parent comment for threaded replies",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'task_comments'
@@ -639,6 +653,14 @@ class TaskAttachment(models.Model):
         default=PENDING,
         protected=False,
         help_text="Virus scan status"
+    )
+    comment = models.ForeignKey(
+        TaskComment,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='comment_attachments',
+        help_text="Associated comment (if this is a comment attachment)",
     )
     uploaded_by = models.ForeignKey(
         User,

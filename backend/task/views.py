@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskHierarchy, TaskRelation, ApprovalChain
-from task.serializers import TaskSerializer, TaskListSerializer, TaskLinkSerializer, ApprovalRecordSerializer, TaskApprovalSerializer, TaskForwardSerializer, TaskCommentSerializer, TaskAttachmentSerializer, SubtaskAddSerializer, TaskRelationAddSerializer
+from task.serializers import TaskSerializer, TaskListSerializer, TaskLinkSerializer, ApprovalRecordSerializer, TaskApprovalSerializer, TaskForwardSerializer, TaskCommentSerializer, TaskAttachmentSerializer, TaskCommentAttachmentSerializer, SubtaskAddSerializer, TaskRelationAddSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from core.models import ProjectMember, Project
@@ -1060,7 +1060,7 @@ def _user_can_access_task(user, task):
 class TaskCommentListView(generics.ListCreateAPIView):
     """
     List comments for a task or create a new task-level comment.
-    Comments are attached directly to the Task, regardless of type.
+    GET returns a two-level tree: root comments with nested replies.
     """
     serializer_class = TaskCommentSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -1072,7 +1072,16 @@ class TaskCommentListView(generics.ListCreateAPIView):
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to this task.')
 
-        return TaskComment.objects.filter(task_id=task_id)
+        return (
+            TaskComment.objects
+            .filter(task_id=task_id, parent=None)
+            .select_related('user')
+            .prefetch_related(
+                'children__user',
+                'children__children__user',
+            )
+            .order_by('created_at')
+        )
 
     def perform_create(self, serializer):
         task_id = self.kwargs.get('task_id')
@@ -1082,6 +1091,84 @@ class TaskCommentListView(generics.ListCreateAPIView):
             raise PermissionDenied('You do not have access to comment on this task.')
 
         serializer.save(task=task, user=self.request.user)
+
+
+class TaskCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update (PATCH), or delete a specific task comment.
+    PATCH requires the comment author. DELETE requires the author or staff.
+    """
+    serializer_class = TaskCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'patch', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        task_id = self.kwargs.get('task_id')
+        task = get_object_or_404(Task, pk=task_id)
+        if not _user_can_access_task(self.request.user, task):
+            raise PermissionDenied('You do not have access to this task.')
+        return TaskComment.objects.filter(task_id=task_id).select_related('user')
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        comment_id = self.kwargs.get('comment_id')
+        obj = get_object_or_404(queryset, pk=comment_id)
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        if request.method in ('PATCH', 'PUT'):
+            if obj.user_id != request.user.id:
+                raise PermissionDenied('Only the comment author can edit this comment.')
+        if request.method == 'DELETE':
+            if obj.user_id != request.user.id and not request.user.is_staff:
+                raise PermissionDenied('Only the comment author or staff can delete this comment.')
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+
+class TaskCommentAttachmentListView(generics.ListCreateAPIView):
+    """List or upload attachments for a specific task comment."""
+    serializer_class = TaskCommentAttachmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def _get_comment(self):
+        task_id = self.kwargs.get('task_id')
+        comment_id = self.kwargs.get('comment_id')
+        task = get_object_or_404(Task, pk=task_id)
+        if not _user_can_access_task(self.request.user, task):
+            raise PermissionDenied('You do not have access to this task.')
+        return get_object_or_404(TaskComment, pk=comment_id, task_id=task_id)
+
+    def get_queryset(self):
+        comment = self._get_comment()
+        return TaskAttachment.objects.filter(comment=comment)
+
+    def perform_create(self, serializer):
+        comment = self._get_comment()
+        serializer.save(task=comment.task, comment=comment, uploaded_by=self.request.user)
+
+
+class TaskCommentAttachmentDetailView(generics.RetrieveDestroyAPIView):
+    """Retrieve or delete a specific comment attachment."""
+    serializer_class = TaskCommentAttachmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_comment(self):
+        task_id = self.kwargs.get('task_id')
+        comment_id = self.kwargs.get('comment_id')
+        task = get_object_or_404(Task, pk=task_id)
+        if not _user_can_access_task(self.request.user, task):
+            raise PermissionDenied('You do not have access to this task.')
+        return get_object_or_404(TaskComment, pk=comment_id, task_id=task_id)
+
+    def get_object(self):
+        comment = self._get_comment()
+        attachment_id = self.kwargs.get('attachment_id')
+        return get_object_or_404(TaskAttachment, pk=attachment_id, comment=comment)
 
 
 class TaskAttachmentListView(generics.ListCreateAPIView):

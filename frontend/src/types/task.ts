@@ -129,8 +129,31 @@ export interface TaskComment {
   task: number;
   user: UserSummary;
   body: string;
+  content: SlateNode[];
+  parent: number | null;
+  replies: TaskComment[];
+  is_edited: boolean;
   created_at: string;
 }
+
+export interface SlateText {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  code?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SlateElement {
+  type: string;
+  children: (SlateText | SlateElement)[];
+  url?: string;
+  [key: string]: unknown;
+}
+
+export type SlateNode = SlateText | SlateElement;
 
 // Task relation types
 export interface TaskRelationItem {

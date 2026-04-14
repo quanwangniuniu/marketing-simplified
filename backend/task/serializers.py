@@ -629,14 +629,147 @@ class ApprovalRecordSerializer(serializers.ModelSerializer):
             
 
 
-class TaskCommentSerializer(serializers.ModelSerializer):
-    """Serializer for TaskComment model."""
+_ALLOWED_COMMENT_NODE_TYPES = frozenset([
+    'paragraph', 'heading-one', 'heading-two', 'heading-three',
+    'bulleted-list', 'numbered-list', 'list-item',
+    'block-quote', 'code', 'link', 'mention', 'image',
+])
+
+_COMMENT_ATTACHMENT_MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+_COMMENT_ATTACHMENT_ALLOWED_TYPES = frozenset([
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/zip',
+])
+
+
+def _validate_comment_content(value):
+    if not isinstance(value, list):
+        raise serializers.ValidationError("content must be a list of block nodes.")
+    for node in value:
+        if not isinstance(node, dict):
+            raise serializers.ValidationError("Each content node must be an object.")
+        node_type = node.get('type')
+        if not node_type:
+            raise serializers.ValidationError("Each content node must have a 'type' field.")
+        if node_type not in _ALLOWED_COMMENT_NODE_TYPES:
+            raise serializers.ValidationError(
+                f"Unknown node type: '{node_type}'."
+            )
+        children = node.get('children')
+        if not isinstance(children, list):
+            raise serializers.ValidationError("Each content node must have a 'children' list.")
+        for child in children:
+            if isinstance(child, dict) and 'text' in child:
+                text = str(child['text'])
+                if '<' in text or '>' in text:
+                    raise serializers.ValidationError(
+                        "HTML tags are not allowed in comment content."
+                    )
+    return value
+
+
+def _extract_plain_text(content):
+    texts = []
+    for node in (content or []):
+        for child in node.get('children', []):
+            if isinstance(child, dict):
+                texts.append(str(child.get('text', '')))
+    return ' '.join(t for t in texts if t)
+
+
+def _content_with_body_fallback(obj):
+    if obj.content:
+        return obj.content
+    body = (obj.body or '').strip()
+    if body:
+        return [{'type': 'paragraph', 'children': [{'text': body}]}]
+    return []
+
+
+class _TaskCommentBaseSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
+    is_edited = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
+    parent = serializers.PrimaryKeyRelatedField(
+        queryset=TaskComment.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    def get_is_edited(self, obj):
+        if obj.updated_at and obj.created_at:
+            return obj.updated_at > obj.created_at
+        return False
+
+    def get_content(self, obj):
+        return _content_with_body_fallback(obj)
 
     class Meta:
         model = TaskComment
-        fields = ['id', 'task', 'user', 'body', 'created_at']
-        read_only_fields = ['id', 'task', 'user', 'created_at']
+        fields = ['id', 'task', 'parent', 'user', 'content', 'created_at', 'updated_at', 'is_edited']
+        read_only_fields = ['id', 'task', 'user', 'created_at', 'updated_at']
+
+
+class TaskCommentLeafSerializer(_TaskCommentBaseSerializer):
+    """Depth-2 reply serializer: displays replies as empty list (tree cap)."""
+    replies = serializers.SerializerMethodField()
+
+    def get_replies(self, obj):
+        return []
+
+    class Meta(_TaskCommentBaseSerializer.Meta):
+        fields = _TaskCommentBaseSerializer.Meta.fields + ['replies']
+
+
+class TaskCommentBranchSerializer(_TaskCommentBaseSerializer):
+    """Depth-1 reply serializer: replies are leaf-level nodes."""
+    replies = TaskCommentLeafSerializer(source='children', many=True, read_only=True)
+
+    class Meta(_TaskCommentBaseSerializer.Meta):
+        fields = _TaskCommentBaseSerializer.Meta.fields + ['replies']
+
+
+class TaskCommentSerializer(_TaskCommentBaseSerializer):
+    """Root-level comment serializer with full two-level reply tree."""
+    replies = TaskCommentBranchSerializer(source='children', many=True, read_only=True)
+    # Write field: accepts and validates structured JSON on POST/PATCH
+    content = serializers.JSONField()
+
+    def validate_content(self, value):
+        return _validate_comment_content(value)
+
+    def validate_parent(self, value):
+        if value is not None and value.parent_id is not None:
+            raise serializers.ValidationError(
+                "Reply depth cannot exceed 2 levels."
+            )
+        return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Apply backward-compat: derive content from body when stored content is empty
+        data['content'] = _content_with_body_fallback(instance)
+        return data
+
+    def create(self, validated_data):
+        content = validated_data.get('content', [])
+        validated_data.setdefault('body', _extract_plain_text(content) or '')
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'content' in validated_data:
+            validated_data['body'] = _extract_plain_text(validated_data['content'])
+        return super().update(instance, validated_data)
+
+    class Meta(_TaskCommentBaseSerializer.Meta):
+        fields = _TaskCommentBaseSerializer.Meta.fields + ['replies']
 
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):
@@ -669,6 +802,52 @@ class TaskAttachmentSerializer(serializers.ModelSerializer):
             validated_data['file_size'] = file_obj.size
             validated_data['content_type'] = file_obj.content_type or mimetypes.guess_type(file_obj.name)[0] or 'application/octet-stream'
         
+        return super().create(validated_data)
+
+
+class TaskCommentAttachmentSerializer(serializers.ModelSerializer):
+    """Serializer for attachments scoped to a task comment."""
+    uploaded_by = UserSummarySerializer(read_only=True)
+    original_filename = serializers.CharField(required=False)
+    file_size = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = TaskAttachment
+        fields = [
+            'id', 'task', 'comment', 'file', 'original_filename', 'file_size',
+            'content_type', 'checksum', 'scan_status', 'uploaded_by', 'created_at',
+        ]
+        read_only_fields = [
+            'id', 'task', 'comment', 'uploaded_by', 'created_at', 'checksum', 'scan_status',
+        ]
+
+    def validate_file(self, value):
+        if value.size > _COMMENT_ATTACHMENT_MAX_SIZE:
+            raise serializers.ValidationError(
+                f"File size must not exceed {_COMMENT_ATTACHMENT_MAX_SIZE // (1024 * 1024)} MB."
+            )
+        mime = value.content_type or mimetypes.guess_type(value.name)[0] or ''
+        if mime not in _COMMENT_ATTACHMENT_ALLOWED_TYPES:
+            raise serializers.ValidationError(
+                f"Unsupported file type: '{mime}'."
+            )
+        return value
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get('file'):
+            raise serializers.ValidationError("File is required.")
+        return attrs
+
+    def create(self, validated_data):
+        file_obj = validated_data.get('file')
+        if file_obj:
+            validated_data['original_filename'] = file_obj.name
+            validated_data['file_size'] = file_obj.size
+            validated_data['content_type'] = (
+                file_obj.content_type
+                or mimetypes.guess_type(file_obj.name)[0]
+                or 'application/octet-stream'
+            )
         return super().create(validated_data)
 
 
