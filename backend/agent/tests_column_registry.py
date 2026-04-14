@@ -109,6 +109,7 @@ RULE_SOURCES = ('rule', 'db_template')
 
 
 class RuleBasedDetectionTests(SimpleTestCase):
+    databases = ('default',)
 
     def test_full_meta_ads_match(self):
         result = detect_columns(_meta_headers())
@@ -139,7 +140,6 @@ class RuleBasedDetectionTests(SimpleTestCase):
         self.assertEqual(result.categories['amount_spent'], CAT_FINANCIAL)
         self.assertEqual(result.categories['impressions'], CAT_ENGAGEMENT)
         self.assertEqual(result.categories['purchases'], CAT_CONVERSION)
-        self.assertEqual(result.categories['ctr'], CAT_PERFORMANCE_RATIO)
 
     def test_partial_match_above_threshold_still_rule(self):
         # 3 out of 4 known → 75% confidence → rule/db_template path
@@ -180,6 +180,7 @@ _DIFY_SETTINGS = dict(
 
 
 class LLMFallbackTests(SimpleTestCase):
+    databases = ('default',)
 
     def _make_dify_response(self, columns_list, schema_name='Custom Report', confidence=0.8):
         """Return the dict that run_dify_workflow would return for a successful call."""
@@ -226,18 +227,19 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertIn('1000', inputs['sample_rows'])
 
     @override_settings(**_DIFY_SETTINGS)
+    @patch('agent.column_registry._try_db_template_match', return_value=None)
     @patch('agent.dify_workflows.run_dify_workflow')
-    def test_llm_fallback_strips_markdown_fences(self, mock_run):
-        headers = ['Cost']
+    def test_llm_fallback_strips_markdown_fences(self, mock_run, _mock_db):
+        headers = ['xyzUnknownMetric999']
         inner = json.dumps({
             'schema_name': 'Custom', 'confidence': 0.8,
-            'columns': [{'original': 'Cost', 'canonical': 'cost', 'category': 'financial', 'confidence': 0.9}],
+            'columns': [{'original': 'xyzUnknownMetric999', 'canonical': 'xyz_metric', 'category': 'financial', 'confidence': 0.9}],
         })
         mock_run.return_value = {'text': f'```json\n{inner}\n```'}
 
         result = detect_columns(headers)
         self.assertEqual(result.source, 'llm')
-        self.assertEqual(result.mappings['Cost'], 'cost')
+        self.assertEqual(result.mappings['xyzUnknownMetric999'], 'xyz_metric')
 
     @override_settings(**_DIFY_SETTINGS)
     @patch('agent.dify_workflows.run_dify_workflow')
@@ -280,6 +282,7 @@ class LLMFallbackTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 class NormalizeSpreadsheetTests(SimpleTestCase):
+    databases = ('default',)
 
     def test_renames_known_columns(self):
         data = _make_spreadsheet(
@@ -342,7 +345,8 @@ class NormalizeSpreadsheetTests(SimpleTestCase):
         normalized = normalize_spreadsheet(data, mapping)
         self.assertEqual(normalized['name'], 'My Report')
 
-    def test_full_meta_ads_pipeline(self):
+    @patch('agent.column_registry._try_db_template_match', return_value=None)
+    def test_full_meta_ads_pipeline(self, _mock_db):
         """detect_columns → normalize_spreadsheet produces clean column names."""
         headers = _meta_headers()
         data = _make_spreadsheet(

@@ -144,14 +144,7 @@ export function MessageList({
             )}
 
 
-            {/* Column mapping detection card */}
-            {message.type === "column_mapping" && message.columnMappingData && (
-              <ColumnMappingCard
-                data={message.columnMappingData}
-                onConfirm={(mapping) => onConfirmColumns?.(mapping)}
-                onReupload={() => onReupload?.()}
-              />
-            )}
+            {/* Column mapping is handled silently — stored in DB, not shown to user */}
 
             {/* Analysis result cards — progressive gating */}
             {message.anomalies && message.anomalies.length > 0 && (

@@ -1119,6 +1119,7 @@ class WorkflowEngineTests(TestCase):
             'generate_miro_snapshot', 'create_miro_board',
             'await_confirmation', 'custom_api',
             'detect_columns', 'normalize_data',
+            'generate_criteria',
         }
         self.assertEqual(set(EXECUTOR_REGISTRY.keys()), expected)
 

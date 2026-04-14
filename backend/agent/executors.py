@@ -5,6 +5,7 @@ Each step_type maps to an Executor subclass that encapsulates
 the logic for that particular action.
 """
 import logging
+import os
 import requests as http_requests
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,15 @@ class AnalyzeDataExecutor(BaseStepExecutor):
 
         try:
             user_id = str(self.orchestrator.user.id)
-            analysis = _run_analysis(spreadsheet_data, user_id=user_id)
+            success_criteria = (
+                input_data.get('success_criteria')
+                or (self.workflow_run.success_criteria if self.workflow_run.success_criteria else None)
+            )
+            analysis = _run_analysis(
+                spreadsheet_data,
+                user_id=user_id,
+                success_criteria=success_criteria,
+            )
 
             self.workflow_run.analysis_result = analysis
             self.workflow_run.save(update_fields=['analysis_result'])
@@ -697,6 +706,124 @@ def _compute_column_stats(values: list, value_type: str) -> dict:
     }
 
 
+class GenerateCriteriaExecutor(BaseStepExecutor):
+    """Call the Dify Column Criteria Generator workflow.
+
+    Sends the column names extracted from the uploaded file to Dify and
+    receives a structured success_criteria JSON that tells the downstream
+    analysis workflow what to look for and how to judge the data.
+
+    The criteria are stored on workflow_run.success_criteria so they persist
+    across step boundaries and are forwarded in output_data for the next step.
+    """
+
+    def execute(self, input_data):
+        import json
+        from django.conf import settings
+        from .dify_workflows import run_dify_workflow
+
+        api_url = getattr(settings, 'DIFY_API_URL', '') or os.environ.get('DIFY_API_URL', '')
+        api_key = (
+            getattr(settings, 'DIFY_CRITERIA_API_KEY', '')
+            or os.environ.get('DIFY_CRITERIA_API_KEY', '')
+        )
+
+        if not api_key:
+            logger.warning(
+                "GenerateCriteriaExecutor: DIFY_CRITERIA_API_KEY not set; skipping"
+            )
+            return StepResult(
+                success=True,
+                output_data=input_data,
+                sse_events=[{
+                    'type': 'text',
+                    'content': 'Success criteria generation skipped (no API key).',
+                }],
+            )
+
+        # Collect all column names from every sheet
+        spreadsheet_data = input_data.get('spreadsheet_data', {})
+        column_names = []
+        for sheet in spreadsheet_data.get('sheets', []):
+            column_names.extend(sheet.get('columns', []))
+        column_names = list(dict.fromkeys(column_names))  # deduplicate, preserve order
+
+        if not column_names:
+            logger.warning("GenerateCriteriaExecutor: no column names found; skipping")
+            return StepResult(
+                success=True,
+                output_data=input_data,
+                sse_events=[{
+                    'type': 'text',
+                    'content': 'Success criteria generation skipped (no columns).',
+                }],
+            )
+
+        try:
+            outputs = run_dify_workflow(
+                api_url=api_url,
+                api_key=api_key,
+                inputs={'column_names': json.dumps(column_names)},
+                user_id=str(self.orchestrator.user.id),
+                timeout=60,
+            )
+
+            raw = outputs.get('text') or outputs.get('result') or ''
+            raw = raw.strip()
+            if raw.startswith('```'):
+                import re
+                raw = re.sub(r'^```(?:json)?\n?', '', raw)
+                raw = re.sub(r'\n?```$', '', raw)
+
+            criteria = json.loads(raw) if raw else {}
+
+            # Persist on the workflow run so downstream steps can always access it
+            self.workflow_run.success_criteria = criteria
+            self.workflow_run.save(update_fields=['success_criteria'])
+
+            logger.info(
+                "GenerateCriteriaExecutor: criteria generated for %d columns (schema_type=%s)",
+                len(column_names),
+                criteria.get('schema_type', 'unknown'),
+            )
+
+            # Build a human-readable summary of the criteria for the chat UI
+            criteria_lines = [
+                f"Success criteria generated for **{criteria.get('schema_type', 'this dataset')}**:\n"
+            ]
+            for item in criteria.get('criteria', []):
+                col = item.get('column', '')
+                rule = item.get('anomaly_rule', '')
+                if col and rule:
+                    criteria_lines.append(f"- **{col}**: {rule}")
+            if criteria.get('analysis_goals'):
+                criteria_lines.append('\nAnalysis goals:')
+                for goal in criteria['analysis_goals']:
+                    criteria_lines.append(f'  • {goal}')
+            criteria_text = '\n'.join(criteria_lines) if len(criteria_lines) > 1 else criteria_lines[0]
+
+            return StepResult(
+                success=True,
+                output_data={**input_data, 'success_criteria': criteria},
+                sse_events=[{
+                    'type': 'text',
+                    'content': criteria_text,
+                }],
+            )
+
+        except Exception as e:
+            # Non-fatal: analysis can still run without criteria
+            logger.exception("GenerateCriteriaExecutor failed; continuing without criteria")
+            return StepResult(
+                success=True,
+                output_data=input_data,
+                sse_events=[{
+                    'type': 'text',
+                    'content': 'Success criteria generation failed; continuing with analysis.',
+                }],
+            )
+
+
 # Executor registry — maps step_type to executor class
 EXECUTOR_REGISTRY = {
     'analyze_data': AnalyzeDataExecutor,
@@ -710,6 +837,7 @@ EXECUTOR_REGISTRY = {
     'custom_api': CustomAPIExecutor,
     'detect_columns': DetectColumnsExecutor,
     'normalize_data': NormalizeDataExecutor,
+    'generate_criteria': GenerateCriteriaExecutor,
 }
 
 

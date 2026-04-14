@@ -168,6 +168,10 @@ export function AgentChatPage() {
 
   const sessionIdRef = useRef<string | null>(null)
   const stepProgressMsgIdRef = useRef<string | null>(null)
+  // Stores pending auto-confirm mapping when column_mapping event is received
+  const pendingAutoConfirmRef = useRef<Record<string, string> | null>(null)
+  // Always points to the latest handleConfirmColumns so it can be called from handleFileUpload
+  const handleConfirmColumnsRef = useRef<((m: Record<string, string>) => void) | null>(null)
 
   const setSessionId = useCallback((id: string | null) => {
     sessionIdRef.current = id
@@ -363,10 +367,11 @@ export function AgentChatPage() {
         } else if (event.type === "column_mapping" && event.data) {
           columnMappingReceived = true
           const detectionData = event.data as unknown as ColumnDetectionData
+          // Auto-confirm silently — store mapping to trigger after stream ends
+          pendingAutoConfirmRef.current = detectionData.mappings
           updateMessage(aiMsgId, {
-            content: event.content || "Column mapping detected.",
-            type: "column_mapping",
-            columnMappingData: detectionData,
+            content: event.content || "Column detection complete. Generating success criteria...",
+            type: "text",
           })
         } else if (event.type === "text") {
           if (!columnMappingReceived) {
@@ -425,6 +430,15 @@ export function AgentChatPage() {
             }
             return prev
           })
+          // Auto-confirm column mapping if pending (workflow paused at await_confirmation)
+          const pendingMapping = pendingAutoConfirmRef.current
+          if (pendingMapping) {
+            pendingAutoConfirmRef.current = null
+            setIsStreaming(false)
+            setTimeout(() => {
+              handleConfirmColumnsRef.current?.(pendingMapping)
+            }, 100)
+          }
         }
       },
       (error) => {
@@ -553,6 +567,9 @@ export function AgentChatPage() {
       }
     )
   }, [addMessage, updateMessage, refreshFollowUpState])
+
+  // Keep ref in sync so handleFileUpload's done handler can call the latest version
+  handleConfirmColumnsRef.current = handleConfirmColumns
 
   /** Re-upload: reset to welcome screen so the user can upload a different file */
   const handleReupload = useCallback(() => {

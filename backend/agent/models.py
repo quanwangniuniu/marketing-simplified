@@ -428,6 +428,7 @@ class AgentWorkflowStep(TimeStampedModel):
         ('await_confirmation', 'Await Confirmation'),
         ('detect_columns', 'Detect Columns'),
         ('normalize_data', 'Normalize Data'),
+        ('generate_criteria', 'Generate Criteria'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -499,6 +500,7 @@ class AgentWorkflowRun(TimeStampedModel):
         blank=True,
         related_name='agent_workflow_runs',
     )
+    success_criteria = models.JSONField(null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
     chat_follow_up_started = models.BooleanField(default=False)
     chat_followed_up = models.BooleanField(default=False)
