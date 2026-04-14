@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Search, Bell, User, Settings, LogOut, HelpCircle, Globe } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Image from 'next/image';
+import Link from 'next/link';
 
 interface HeaderProps {
   className?: string;
@@ -115,7 +116,7 @@ const Header: React.FC<HeaderProps> = ({
       case 'error': return 'text-red-600 bg-red-50';
       case 'warning': return 'text-yellow-600 bg-yellow-50';
       case 'success': return 'text-green-600 bg-green-50';
-      default: return 'text-blue-600 bg-blue-50';
+      default: return 'text-brand-teal bg-brand-teal/10';
     }
   };
 
@@ -124,20 +125,16 @@ const Header: React.FC<HeaderProps> = ({
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center">
+          <Link href="/" className="flex items-center">
               <Image
-                    src="/homepage_logo_square.jpeg"
-                    alt="Marketing Simplified Logo"
-                    width={278}
-                    height={69}
-                    className="h-16 w-auto"
-                    priority
-                  />
-              <h1 className="text-3xl font-bold">
-                <span className="text-blue-800">Marketing</span>
-                <span className="text-gray-900"> Simplified</span>
-              </h1>
-            </div>
+                src="/marketing_simplified_logo.png"
+                alt="Marketing Simplified Logo"
+                width={400}
+                height={100}
+                className="h-20 w-auto"
+                priority
+              />
+          </Link>
 
           {/* Search Bar */}
           <div className="flex-1 max-w-lg mx-8">
@@ -150,7 +147,7 @@ const Header: React.FC<HeaderProps> = ({
                 placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-brand-teal focus:border-brand-teal transition-colors duration-200"
               />
             </div>
           </div>
@@ -161,7 +158,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className="relative" ref={notificationRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full transition-colors duration-200"
+                className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-teal rounded-full transition-colors duration-200"
                 aria-label="Notifications"
               >
                 <Bell className="h-6 w-6" />
@@ -185,7 +182,7 @@ const Header: React.FC<HeaderProps> = ({
                       {notifications.items.map((item) => (
                         <div
                           key={item.id}
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${item.read ? 'bg-white border-gray-200' : 'bg-blue-50 border-blue-200'
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors duration-200 hover:bg-gray-50 ${item.read ? 'bg-white border-gray-200' : 'bg-brand-teal/5 border-brand-teal/20'
                             }`}
                           onClick={() => handleNotificationClick(item.id)}
                         >
@@ -218,7 +215,7 @@ const Header: React.FC<HeaderProps> = ({
             <div>
               <button
                 onClick={() => onUserMenuClick?.('profile')}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-teal transition-colors duration-200"
                 aria-label="Go to profile"
               >
                 <div className="text-right">
