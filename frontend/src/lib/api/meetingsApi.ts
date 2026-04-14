@@ -21,7 +21,13 @@ import type {
   KnowledgeNavigationLink,
   PaginatedMeetingsList,
   MeetingDocument,
+  MeetingActionItem,
+  MeetingActionItemCreateRequest,
+  MeetingActionItemPartialUpdateRequest,
+  ConvertActionItemToTaskRequest,
+  BulkConvertActionItemsRequest,
 } from '@/types/meeting';
+import type { TaskData } from '@/types/task';
 
 const basePath = (projectId: number) => `/api/projects/${projectId}/meetings`;
 
@@ -120,6 +126,22 @@ function withMeetingKnowledgeFields(meeting: Meeting): Meeting {
     related_decisions: normalizeKnowledgeLinks(relDec),
     related_tasks: normalizeKnowledgeLinks(relTasks),
   };
+}
+
+function normalizeMeetingActionItemsResponse(data: unknown): MeetingActionItem[] {
+  if (Array.isArray(data)) return data as MeetingActionItem[];
+  if (data && typeof data === 'object' && Array.isArray((data as Record<string, unknown>).results)) {
+    return (data as { results: MeetingActionItem[] }).results;
+  }
+  return [];
+}
+
+function normalizeMeetingTasksResponse(data: unknown): TaskData[] {
+  if (Array.isArray(data)) return data as TaskData[];
+  if (data && typeof data === 'object' && Array.isArray((data as Record<string, unknown>).results)) {
+    return (data as { results: TaskData[] }).results;
+  }
+  return [];
 }
 
 function normalizeMeetingListItem(raw: Record<string, unknown>): MeetingListItem {
@@ -511,4 +533,81 @@ async executeTransition(
   );
   return response.data as { status: string; available_transitions: string[] };
 },
+
+  /** SMP-489: meeting follow-up action items (before task conversion). */
+  async listMeetingActionItems(
+    projectId: number,
+    meetingId: number,
+  ): Promise<MeetingActionItem[]> {
+    const response = await api.get(
+      `${basePath(projectId)}/${meetingId}/action-items/`,
+    );
+    return normalizeMeetingActionItemsResponse(response.data);
+  },
+
+  async createMeetingActionItem(
+    projectId: number,
+    meetingId: number,
+    payload: MeetingActionItemCreateRequest,
+  ): Promise<MeetingActionItem> {
+    const response = await api.post<MeetingActionItem>(
+      `${basePath(projectId)}/${meetingId}/action-items/`,
+      payload,
+    );
+    return response.data;
+  },
+
+  async patchMeetingActionItem(
+    projectId: number,
+    meetingId: number,
+    actionItemId: number,
+    payload: MeetingActionItemPartialUpdateRequest,
+  ): Promise<MeetingActionItem> {
+    const response = await api.patch<MeetingActionItem>(
+      `${basePath(projectId)}/${meetingId}/action-items/${actionItemId}/`,
+      payload,
+    );
+    return response.data;
+  },
+
+  async deleteMeetingActionItem(
+    projectId: number,
+    meetingId: number,
+    actionItemId: number,
+  ): Promise<void> {
+    await api.delete(
+      `${basePath(projectId)}/${meetingId}/action-items/${actionItemId}/`,
+    );
+  },
+
+  async convertMeetingActionItemToTask(
+    projectId: number,
+    meetingId: number,
+    actionItemId: number,
+    payload: ConvertActionItemToTaskRequest,
+  ): Promise<TaskData> {
+    const response = await api.post<TaskData>(
+      `${basePath(projectId)}/${meetingId}/action-items/${actionItemId}/convert-to-task/`,
+      payload,
+    );
+    return response.data;
+  },
+
+  async bulkConvertMeetingActionItemsToTasks(
+    projectId: number,
+    meetingId: number,
+    payload: BulkConvertActionItemsRequest,
+  ): Promise<TaskData[]> {
+    const response = await api.post<{ tasks: TaskData[] }>(
+      `${basePath(projectId)}/${meetingId}/action-items/bulk-convert-to-task/`,
+      payload,
+    );
+    return response.data.tasks ?? [];
+  },
+
+  /** Tasks with ``MeetingTaskOrigin`` for this meeting (paginated on server). */
+  async listMeetingTasks(projectId: number, meetingId: number): Promise<TaskData[]> {
+    const response = await api.get(`${basePath(projectId)}/${meetingId}/tasks/`);
+    return normalizeMeetingTasksResponse(response.data);
+  },
 };

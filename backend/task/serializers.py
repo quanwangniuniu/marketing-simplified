@@ -2,7 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from rest_framework import serializers
 
-from meetings.knowledge_links import serialize_origin_meeting
+from meetings.knowledge_links import serialize_origin_meeting, serialize_origin_action_item
 from meetings.models import MeetingTaskOrigin
 from meetings.services import validate_meeting_for_origin_link
 from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskHierarchy, TaskRelation
@@ -60,6 +60,7 @@ class TaskSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    origin_action_item = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -76,6 +77,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'create_as_draft', 'draft_payload',
             'origin_meeting',
             'origin_meeting_id',
+            'origin_action_item',
         ]
         read_only_fields = [
             'id', 'status', 'owner', 'content_type', 'object_id',
@@ -83,6 +85,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'approval_chain_progress', 'can_lock', 'approvals_summary',
             'revision_round', 'revision_label', # SMP-501
             'origin_meeting',
+            'origin_action_item',
         ]
 
     def get_content_type(self, obj):
@@ -105,6 +108,19 @@ class TaskSerializer(serializers.ModelSerializer):
         if meeting is None:
             return None
         return serialize_origin_meeting(meeting)
+
+    def get_origin_action_item(self, obj):
+        if getattr(obj, "origin_action_item_id", None) is None:
+            return None
+        from meetings.models import MeetingActionItem
+
+        try:
+            ai = MeetingActionItem.objects.select_related("meeting").get(
+                pk=obj.origin_action_item_id,
+            )
+        except MeetingActionItem.DoesNotExist:
+            return None
+        return serialize_origin_action_item(ai)
 
     def get_approval_chain_progress(self, obj):
         """
@@ -470,7 +486,12 @@ class TaskListSerializer(TaskSerializer):
         fields = [
             f
             for f in TaskSerializer.Meta.fields
-            if f not in ('draft_payload', 'origin_meeting', 'origin_meeting_id')
+            if f not in (
+                'draft_payload',
+                'origin_meeting',
+                'origin_meeting_id',
+                'origin_action_item',
+            )
         ]
     
     def validate_type(self, value):

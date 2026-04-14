@@ -23,13 +23,7 @@ export default meta;
 export const Default = {
   render: () => {
     const handleGetStartedClick = () => {};
-    const redirectToLogin = () => {};
 
-    return (
-      <CtaSection
-        onGetStartedClick={handleGetStartedClick}
-        onRedirectToLogin={redirectToLogin}
-      />
-    );
+    return <CtaSection onGetStartedClick={handleGetStartedClick} />;
   },
 };

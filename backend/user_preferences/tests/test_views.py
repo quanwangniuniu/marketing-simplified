@@ -4,7 +4,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 from unittest.mock import patch
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone
 from user_preferences.models import UserPreferences, SlackIntegration, NotificationSettings
 from user_preferences.conf.permission_mappings import PERMISSION_MAPPINGS
 
@@ -439,10 +440,8 @@ class MockTaskAlertViewTest(TestCase):
     def test_mock_notification_respects_quiet_hours(self):
         """Business requirement: Check user's quiet hours status logic"""
         
-        # Get current time in HH:MM
-        now = datetime.now()
-        print(f"Current time: {now}")
-        now_str = now.strftime('%H:%M')
+        # Use Django timezone clock to match dispatcher logic (timezone.now()).
+        now = timezone.now()
 
         # Define quiet hours based on current time
         one_hour_ago = (now - timedelta(hours=1)).strftime('%H:%M')

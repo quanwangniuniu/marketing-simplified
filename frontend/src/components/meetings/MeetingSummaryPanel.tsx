@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { MeetingDateTimePicker } from '@/components/meetings/MeetingDateTimePicker';
 import { MeetingSummaryKnowledgeNav } from '@/components/meetings/MeetingSummaryKnowledgeNav';
 import { MeetingSummaryRelatedArtifacts } from '@/components/meetings/MeetingSummaryRelatedArtifacts';
+import { MeetingActionItemsSection } from '@/components/meetings/MeetingActionItemsSection';
 import { ProjectMemberPicker } from '@/components/meetings/ProjectMemberPicker';
 import { formatProjectMemberLabel } from '@/components/meetings/projectMemberLabel';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
@@ -193,13 +194,15 @@ export function MeetingSummaryPanel({
     }
     setSavingMeta(true);
     try {
-      const typeChanged = meetingTypeDraft.trim() !== meeting.meeting_type.trim();
-      const selectedOpt = unifiedTemplateOptions.find((o) => o.value === meetingTypeDraft.trim());
+      const prevType = (meeting.meeting_type ?? '').trim();
+      const nextType = meetingTypeDraft.trim();
+      const typeChanged = nextType !== prevType;
+      const selectedOpt = unifiedTemplateOptions.find((o) => o.value === nextType);
 
       const patchPayload: MeetingPartialUpdateRequest = {
         title: titleDraft.trim(),
         objective: objectiveDraft.trim(),
-        meeting_type: meetingTypeDraft.trim(),
+        meeting_type: nextType,
         scheduled_date: schedDateDraft.trim() || null,
         scheduled_time: schedTimeDraft.trim() ? normalizeTimeForApi(schedTimeDraft) : null,
         external_reference: extRefDraft.trim() || null,
@@ -569,6 +572,18 @@ export function MeetingSummaryPanel({
                   </div>
                 </>
               )}
+            </PanelSection>
+
+            <PanelSection
+              title="Action items"
+              description="Capture follow-ups from this meeting and convert them into project tasks in one step. Lineage is stored on the task."
+            >
+              <MeetingActionItemsSection
+                projectId={projectId}
+                meetingId={meetingId}
+                projectMembers={projectMembers}
+                onChanged={() => void loadMeeting()}
+              />
             </PanelSection>
 
             <PanelSection

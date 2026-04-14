@@ -7,7 +7,9 @@ from meetings.views import (
     ParticipantLinkViewSet,
     ArtifactLinkViewSet,
     ActionItemViewSet,
+    MeetingActionItemViewSet,
     MeetingDocumentAPIView,
+    MeetingActionItemViewSet,
 )
 
 
@@ -37,9 +39,24 @@ router.register(
     ActionItemViewSet,
     basename="project-meeting-action-items",
 )
+router.register(
+    r"projects/(?P<project_id>\d+)/meetings/(?P<meeting_id>\d+)/action-items",
+    MeetingActionItemViewSet,
+    basename="project-meeting-action-items",
+)
 
 
 urlpatterns = [
+    path(
+        "projects/<int:project_id>/meetings/<int:meeting_id>/action-items/<int:pk>/convert-to-task/",
+        MeetingActionItemViewSet.as_view({"post": "convert_to_task"}),
+        name="project-meeting-action-item-convert-to-task",
+    ),
+    path(
+        "projects/<int:project_id>/meetings/<int:meeting_id>/action-items/bulk-convert-to-tasks/",
+        MeetingActionItemViewSet.as_view({"post": "bulk_convert_to_tasks"}),
+        name="project-meeting-action-items-bulk-convert-to-tasks",
+    ),
     path(
         "projects/<int:project_id>/meetings/<int:meeting_id>/document/",
         MeetingDocumentAPIView.as_view(),

@@ -2,6 +2,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -14,6 +15,15 @@ from rest_framework.response import Response
 from core.models import Project, ProjectMember
 from meetings.models import Meeting, AgendaItem, ParticipantLink, ArtifactLink, ActionItem
 from meetings.lifecycle import execute_transition, get_available_transitions
+from meetings.models import (
+    Meeting,
+    AgendaItem,
+    ParticipantLink,
+    ArtifactLink,
+    MeetingTemplate,
+    MeetingDocument,
+    MeetingActionItem,
+)
 from meetings.serializers import (
     MeetingSerializer,
     MeetingListSerializer,
@@ -25,6 +35,9 @@ from meetings.serializers import (
     MeetingLifecycleSerializer,
     TransitionRequestSerializer,
     MeetingDocumentSerializer,
+    MeetingActionItemSerializer,
+    ActionItemConvertSerializer,
+    BulkActionItemConvertSerializer,
 )
 from meetings.services import (
     reorder_agenda_items,
@@ -137,7 +150,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
             participant_user_ids = list(dict.fromkeys(int(x) for x in raw_ids))
 
         # Strict mode used to require the client to send ids; create flow no longer asks
-        # for participants on the form â€?default to the creator so the meeting always has
+        # for participants on the form ï¿½?default to the creator so the meeting always has
         # at least one participant when the setting is enabled.
         if getattr(settings, "MEETINGS_REQUIRE_PARTICIPANTS_AT_CREATE", False):
             if len(participant_user_ids) < 1:
@@ -185,6 +198,71 @@ class MeetingViewSet(viewsets.ModelViewSet):
                         }
                     ) from exc
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Deleting a meeting is blocked when it has converted action items, because
+        tasks keep immutable lineage via Task.origin_action_item (PROTECT).
+        Return a clear API error instead of a 500.
+        """
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "This meeting cannot be deleted because it has action items that were converted into tasks. Delete or unlink those tasks first."
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+    @action(detail=True, methods=["get"], url_path="tasks")
+    def meeting_tasks(self, request, project_id=None, pk=None):
+        """Tasks anchored to this meeting via ``MeetingTaskOrigin`` (paginated)."""
+        meeting = self.get_object()
+        _ensure_project_membership(request.user, meeting.project)
+        from meetings.models import MeetingTaskOrigin
+        from task.models import Task
+        from task.serializers import TaskListSerializer
+
+        task_ids = MeetingTaskOrigin.objects.filter(meeting=meeting).values_list(
+            "task_id", flat=True
+        )
+        qs = (
+            Task.objects.filter(id__in=task_ids, project_id=meeting.project_id)
+            .select_related("owner", "project")
+            .order_by("-id")
+        )
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = TaskListSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(ser.data)
+        ser = TaskListSerializer(qs, many=True, context={"request": request})
+        return Response(ser.data)
+
+    @action(detail=True, methods=["get"], url_path="lifecycle")
+    def lifecycle(self, request, project_id=None, pk=None):
+        """Return current lifecycle state and available transitions."""
+        meeting = self.get_object()
+        data = {
+            "status": meeting.status,
+            "available_transitions": get_available_transitions(meeting),
+        }
+        serializer = MeetingLifecycleSerializer(data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="lifecycle/transition")
+    def transition(self, request, project_id=None, pk=None):
+        """Execute a lifecycle transition."""
+        meeting = self.get_object()
+        serializer = TransitionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = execute_transition(meeting, serializer.validated_data["to_state"])
+        return Response(
+            {
+                "status": updated.status,
+                "available_transitions": get_available_transitions(updated),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get"], url_path="lifecycle")
     def lifecycle(self, request, project_id=None, pk=None):
@@ -353,6 +431,87 @@ class ArtifactLinkViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         meeting = self.get_meeting()
         serializer.save(meeting=meeting)
+
+
+class MeetingActionItemViewSet(viewsets.ModelViewSet):
+    """
+    Meeting follow-up action items and conversion to executable tasks (SMP-489).
+    """
+
+    serializer_class = MeetingActionItemSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_meeting(self) -> Meeting:
+        project_id = self.kwargs.get("project_id")
+        meeting_id = self.kwargs.get("meeting_id")
+        meeting = get_object_or_404(
+            Meeting.objects.select_related("project"),
+            id=meeting_id,
+            project_id=project_id,
+        )
+        _ensure_project_membership(self.request.user, meeting.project)
+        return meeting
+
+    def get_queryset(self):
+        meeting = self.get_meeting()
+        return meeting.action_items.all().order_by("order_index", "id")
+
+    def perform_create(self, serializer):
+        meeting = self.get_meeting()
+        serializer.save(meeting=meeting)
+
+    @action(detail=True, methods=["post"], url_path="convert-to-task")
+    def convert_to_task(self, request, project_id=None, meeting_id=None, pk=None):
+        from meetings.action_item_tasks import convert_meeting_action_item_to_task
+        from task.serializers import TaskSerializer
+
+        meeting = self.get_meeting()
+        action_item = get_object_or_404(
+            MeetingActionItem,
+            pk=pk,
+            meeting_id=meeting.id,
+        )
+        sz = ActionItemConvertSerializer(data=request.data)
+        sz.is_valid(raise_exception=True)
+        vd = sz.validated_data
+        task = convert_meeting_action_item_to_task(
+            user=request.user,
+            meeting=meeting,
+            action_item=action_item,
+            owner_id=vd.get("owner_id"),
+            due_date=vd.get("due_date"),
+            priority=vd.get("priority"),
+            task_type=vd.get("type", "execution"),
+            current_approver_id=vd.get("current_approver_id"),
+            create_as_draft=vd.get("create_as_draft", False),
+        )
+        return Response(
+            TaskSerializer(task, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["post"], url_path="bulk-convert-to-task")
+    def bulk_convert_to_task(self, request, project_id=None, meeting_id=None):
+        from meetings.action_item_tasks import bulk_convert_meeting_action_items
+        from task.serializers import TaskSerializer
+
+        meeting = self.get_meeting()
+        sz = BulkActionItemConvertSerializer(data=request.data)
+        sz.is_valid(raise_exception=True)
+        items = [dict(x) for x in sz.validated_data["items"]]
+        tasks = bulk_convert_meeting_action_items(
+            user=request.user,
+            meeting=meeting,
+            items=items,
+        )
+        data = TaskSerializer(tasks, many=True, context={"request": request}).data
+        return Response({"tasks": data}, status=status.HTTP_201_CREATED)
+
+    # Backwards-compat / typo-tolerance: some clients hit ".../bulk-convert-to-tasks/" (plural).
+    @action(detail=False, methods=["post"], url_path="bulk-convert-to-tasks")
+    def bulk_convert_to_tasks(self, request, project_id=None, meeting_id=None):
+        return self.bulk_convert_to_task(request, project_id=project_id, meeting_id=meeting_id)
 
 
 class MeetingDocumentAPIView(APIView):
