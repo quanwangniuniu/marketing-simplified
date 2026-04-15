@@ -1165,6 +1165,9 @@ def brief_info_list(request):
             .filter(created_by=request.user)
             .order_by('-created_at')
         )
+        campaign_id = request.query_params.get('campaign_id')
+        if campaign_id:
+            drafts_qs = drafts_qs.filter(media_campaign_id=campaign_id)
         ad_groups_base_qs = AdGroup.objects.filter(created_by=request.user).order_by('-created_at')
 
         total_groups = ad_groups_base_qs.count()

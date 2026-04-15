@@ -38,9 +38,7 @@ class AdCreativesView(generics.ListCreateAPIView):
     
     def get_queryset(self):
         """Return ad creatives owned by the authenticated user"""
-        
-        # Get ad creatives owned by the authenticated user
-        return AdCreative.objects.select_related(
+        queryset = AdCreative.objects.select_related(
             'actor'
         ).prefetch_related(
             'ad_labels',
@@ -50,6 +48,10 @@ class AdCreativesView(generics.ListCreateAPIView):
             'object_story_spec_text_data',
             'object_story_spec_template_data'
         ).distinct().order_by('id')
+        campaign_id = self.request.query_params.get('campaign_id')
+        if campaign_id:
+            queryset = queryset.filter(media_campaign_id=campaign_id)
+        return queryset
     
     def list(self, request, *args, **kwargs):
         """Override list to apply field filtering"""
