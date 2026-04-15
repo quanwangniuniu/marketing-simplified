@@ -456,7 +456,9 @@ const DecisionPage = () => {
       router.push('/decisions');
     } catch (error: any) {
       const response = error?.response;
-      if (response?.status === 403) {
+      if (response?.status === 401) {
+        toast.error('Authentication required. Please log in again.');
+      } else if (response?.status === 403) {
         toast.error('You do not have permission to delete this decision.');
       } else if (response?.status === 404) {
         toast.error('Decision not found.');

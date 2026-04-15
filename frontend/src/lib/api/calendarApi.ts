@@ -148,6 +148,7 @@ export interface DerivedCalendarEventDTO {
   id: number;
   event_type: "decision" | "task" | "decision_review";
   title: string;
+  description: string;  // User-friendly description with source entity details
   start_time: string;
   end_time: string | null;
   decision_id: number | null;
@@ -158,23 +159,63 @@ export interface DerivedCalendarEventDTO {
 
 // Convert a DerivedCalendarEvent to EventDTO format for display in calendar
 export function derivedEventToEventDTO(event: DerivedCalendarEventDTO): EventDTO {
+  // Create a combined description that includes both user-friendly content and navigation metadata
+  const userDescription = event.description || "";
+  const navigationMetadata = JSON.stringify({
+    isDerived: true,
+    event_type: event.event_type,
+    decision_id: event.decision_id,
+    task_id: event.task_id,
+    review_id: event.review_id,
+    project_id: event.project_id,  // Used to build correct navigation URL with permission
+  });
+  
+  // Combine user description with metadata, separated by a delimiter
+  const combinedDescription = userDescription + "\n\n__METADATA__\n" + navigationMetadata;
+  
+  // Determine if this is an all-day event
+  // An event is all-day if:
+  // 1. It starts at 00:00:00 and ends at 23:59:59 (or similar end-of-day time)
+  // 2. Or it spans multiple days with start at 00:00:00
+  const startDate = new Date(event.start_time);
+  const endDate = event.end_time ? new Date(event.end_time) : startDate;
+  const isAllDay = startDate.getUTCHours() === 0 && startDate.getUTCMinutes() === 0 && startDate.getUTCSeconds() === 0 &&
+    ((endDate.getUTCHours() === 23 && endDate.getUTCMinutes() === 59) || 
+     (startDate.toDateString() !== endDate.toDateString())); // Multi-day event
+
+  // For all-day events, convert to local date format to avoid timezone issues
+  let startDateTime = event.start_time;
+  let endDateTime = event.end_time;
+  
+  // If no end_time provided, set a default duration for point-in-time events
+  if (!endDateTime) {
+    const startTime = new Date(event.start_time);
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+    endDateTime = endTime.toISOString();
+  }
+  
+  if (isAllDay) {
+    // Convert UTC dates to local date strings to avoid timezone shifts
+    const startLocalDate = startDate.getUTCFullYear() + '-' + 
+      String(startDate.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+      String(startDate.getUTCDate()).padStart(2, '0');
+    const endLocalDate = endDate.getUTCFullYear() + '-' + 
+      String(endDate.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+      String(endDate.getUTCDate()).padStart(2, '0');
+    
+    startDateTime = startLocalDate + 'T00:00:00';
+    endDateTime = endLocalDate + 'T23:59:59';
+  }
+
   return {
     id: `derived-${event.id}`,  // Prefix to prevent ID conflicts with regular events
     title: event.title,
-    start_datetime: event.start_time,
-    end_datetime: event.end_time ?? event.start_time,
-    is_all_day: false,
+    start_datetime: startDateTime,
+    end_datetime: endDateTime,
+    is_all_day: isAllDay,
     is_recurring: false,
     color: eventTypeToColor(event.event_type),
-    // Store source entity metadata in description for click navigation
-    description: JSON.stringify({
-      isDerived: true,
-      event_type: event.event_type,
-      decision_id: event.decision_id,
-      task_id: event.task_id,
-      review_id: event.review_id,
-      project_id: event.project_id,  // Used to build correct navigation URL with permission
-    }),
+    description: combinedDescription,
   };
 }
 
@@ -185,5 +226,36 @@ function eventTypeToColor(eventType: string): string {
     case "decision_review": return "#F59E0B"; // Orange - Review
     case "task": return "#10B981";            // Green - Task
     default: return "#6B7280";
+  }
+}
+
+// Helper functions to extract information from derived event descriptions
+export function extractUserDescription(eventDescription: string): string {
+  if (!eventDescription) return "";
+  
+  const metadataDelimiter = "\n\n__METADATA__\n";
+  const parts = eventDescription.split(metadataDelimiter);
+  return parts[0] || "";
+}
+
+export function extractNavigationMetadata(eventDescription: string): any {
+  if (!eventDescription) return null;
+  
+  const metadataDelimiter = "\n\n__METADATA__\n";
+  const parts = eventDescription.split(metadataDelimiter);
+  
+  if (parts.length < 2) {
+    // Fallback: try to parse the entire description as JSON (for backward compatibility)
+    try {
+      return JSON.parse(eventDescription);
+    } catch {
+      return null;
+    }
+  }
+  
+  try {
+    return JSON.parse(parts[1]);
+  } catch {
+    return null;
   }
 }

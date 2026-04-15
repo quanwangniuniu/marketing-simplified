@@ -10,6 +10,7 @@ from django.utils import timezone
 from core.models import Project, ProjectMember
 from meetings.models import MeetingDecisionOrigin
 from .models import CommitRecord, Decision, DecisionEdge, Review, Signal
+from calendars.models import CalendarEvent
 from .permissions import DecisionPermission
 from decision.services import invalid_state_response, validate_decision_edge
 from .serializers import (
@@ -160,6 +161,7 @@ class DecisionDraftViewSet(
         # Auto-promote PREDRAFT to DRAFT when user explicitly saves
         if instance.status == Decision.Status.PREDRAFT:
             instance.promote_to_draft()
+            instance.is_pre_draft = False
             instance.save()
 
     def retrieve(self, request, *args, **kwargs):
@@ -258,20 +260,9 @@ class DecisionViewSet(
 
     def retrieve(self, request, *args, **kwargs):
         decision = self.get_object()
-        if decision.status in (
-            Decision.Status.DRAFT,
-            Decision.Status.AWAITING_APPROVAL,
-        ):
-            return invalid_state_response(
-                current_status=decision.status,
-                allowed_statuses=[
-                    Decision.Status.COMMITTED,
-                    Decision.Status.REVIEWED,
-                    Decision.Status.ARCHIVED,
-                ],
-                suggested_action="Use GET /decisions/drafts/{decisionId}",
-            )
-
+        # Allow viewing decisions in all statuses - the original logic was preventing 
+        # users from viewing and deleting draft decisions from the calendar interface
+        
         serializer = self.get_serializer(decision)
         return Response(serializer.data)
 
@@ -817,7 +808,12 @@ class DecisionViewSet(
         decision = self.get_object()
         if decision.is_deleted:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+        with transaction.atomic():
+        # Delete all CalendarEvents derived from this Decision before soft-deleting
+            CalendarEvent.objects.filter(decision=decision).delete()
         
-        decision.is_deleted = True
-        decision.save(update_fields=["is_deleted", "updated_at"])
+            decision.is_deleted = True
+            decision.save(update_fields=["is_deleted", "updated_at"])
+    
         return Response(status=status.HTTP_204_NO_CONTENT)

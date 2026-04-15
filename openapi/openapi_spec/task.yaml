@@ -93,6 +93,9 @@ paths:
       description: |
         Includes **`origin_meeting`** when the task was created with `origin_meeting_id` (bidirectional
         knowledge navigation). Otherwise **`null`**.
+
+        Includes **`origin_action_item`** when the task was created by converting a meeting action item
+        (SMP-489). Otherwise **`null`**.
       parameters:
         - in: path
           name: id
@@ -691,6 +694,18 @@ components:
         detail_url: { type: string, description: In-app path to the meeting workspace }
         url: { type: string, description: Legacy alias for detail_url }
 
+    OriginActionItem:
+      type: object
+      nullable: true
+      description: Meeting action item this task was converted from (immutable lineage), or null.
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        meeting_id: { type: integer }
+        project_id: { type: integer }
+        detail_url: { type: string, description: In-app path to the meeting workspace }
+        url: { type: string, description: Legacy alias for detail_url }
+
     Task:
       type: object
       properties:
@@ -706,6 +721,7 @@ components:
         project: { $ref: "#/components/schemas/ProjectSummary" }
         due_date: { type: string, format: date }
         origin_meeting: { $ref: "#/components/schemas/OriginMeeting" }
+        origin_action_item: { $ref: "#/components/schemas/OriginActionItem" }
 
     TaskCreateRequest:
       type: object
