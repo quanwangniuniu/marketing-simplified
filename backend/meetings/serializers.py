@@ -502,6 +502,7 @@ class MeetingActionItemSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "order_index",
+            "is_resolved",
             "created_at",
             "updated_at",
             "converted_task_id",
