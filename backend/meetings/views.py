@@ -262,32 +262,6 @@ class MeetingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=["get"], url_path="lifecycle")
-    def lifecycle(self, request, project_id=None, pk=None):
-        """Return current lifecycle state and available transitions."""
-        meeting = self.get_object()
-        data = {
-            "status": meeting.status,
-            "available_transitions": get_available_transitions(meeting),
-        }
-        serializer = MeetingLifecycleSerializer(data)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["post"], url_path="lifecycle/transition")
-    def transition(self, request, project_id=None, pk=None):
-        """Execute a lifecycle transition."""
-        meeting = self.get_object()
-        serializer = TransitionRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        updated = execute_transition(meeting, serializer.validated_data["to_state"])
-        return Response(
-            {
-                "status": updated.status,
-                "available_transitions": get_available_transitions(updated),
-            },
-            status=status.HTTP_200_OK,
-        )
-
 
 class AgendaItemViewSet(viewsets.ModelViewSet):
     serializer_class = AgendaItemSerializer

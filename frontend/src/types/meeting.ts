@@ -69,6 +69,7 @@ export interface MeetingListItem {
   scheduled_date: string | null;
   /** Time of day (`HH:MM:SS`) when present on detail; list rows omit this. */
   scheduled_time?: string | null;
+  status: MeetingStatus;
   meeting_type: string;
   meeting_type_slug: string;
   participants: MeetingListParticipant[];

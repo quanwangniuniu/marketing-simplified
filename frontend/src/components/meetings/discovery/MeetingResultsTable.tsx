@@ -3,8 +3,24 @@
 import Link from 'next/link';
 import { ChevronRight, Loader2 } from 'lucide-react';
 
-import type { MeetingListItem } from '@/types/meeting';
+import type { MeetingListItem, MeetingStatus } from '@/types/meeting';
 import { cn } from '@/lib/utils';
+
+const STATUS_LABELS: Record<MeetingStatus, string> = {
+  draft: 'Draft',
+  planned: 'Planned',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  archived: 'Archived',
+};
+
+const STATUS_COLORS: Record<MeetingStatus, string> = {
+  draft: 'bg-slate-100 text-slate-600',
+  planned: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-yellow-100 text-yellow-700',
+  completed: 'bg-green-100 text-green-700',
+  archived: 'bg-gray-100 text-gray-500',
+};
 
 const MAX_INLINE_KNOWLEDGE_LINKS = 2;
 
@@ -206,9 +222,14 @@ function MeetingResultCard({
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-2 pl-1">
-        {m.is_archived ? (
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-            Archived
+        {m.status ? (
+          <span
+            className={cn(
+              'rounded-md px-2 py-0.5 text-xs font-medium',
+              STATUS_COLORS[m.status] ?? 'bg-slate-100 text-slate-600',
+            )}
+          >
+            {STATUS_LABELS[m.status] ?? m.status}
           </span>
         ) : null}
         <button
