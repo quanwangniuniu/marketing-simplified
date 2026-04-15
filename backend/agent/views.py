@@ -134,11 +134,12 @@ class ChatView(EnglishResponseMixin, APIView):
         action = serializer.validated_data.get('action')
         calendar_context = serializer.validated_data.get('calendar_context')
         workflow_id = serializer.validated_data.get('workflow_id')
+        column_mapping = serializer.validated_data.get('column_mapping')
 
         should_persist_user_message = action not in {
             'start_follow_up', 'cancel_follow_up',
             'confirm_decision', 'create_tasks', 'generate_miro',
-            'distribute_message',
+            'distribute_message', 'confirm_columns',
         }
 
         # Auto-generate title from first real user message
@@ -195,6 +196,7 @@ class ChatView(EnglishResponseMixin, APIView):
                     file_id=file_id,
                     calendar_context=calendar_context,
                     workflow_id=workflow_id,
+                    column_mapping=column_mapping,
                 ):
                     chunk_type = chunk.get('type', 'text')
                     content = chunk.get('content', '')
@@ -443,24 +445,33 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
             }
             yield f"data: {json.dumps(file_event)}\n\n"
 
-            # Run analysis
+            # Route through the workflow engine (column detection + analysis).
             assistant_content_parts = []
             assistant_metadata = {"file_id": result['id']}
             last_message_type = 'text'
 
-            for chunk in orchestrator.analyze_file(result['id']):
-                chunk_type = chunk.get('type', 'text')
-                content = chunk.get('content', '')
-                data = chunk.get('data')
+            try:
+                for chunk in orchestrator.handle_message("", file_id=result['id']):
+                    chunk_type = chunk.get('type', 'text')
+                    content = chunk.get('content', '')
+                    data = chunk.get('data')
 
-                assistant_content_parts.append(content)
-                last_message_type = chunk_type
-                if data:
-                    assistant_metadata.update(data)
+                    if chunk_type == 'done':
+                        # Intercept done event to attach session_id for the frontend.
+                        break
 
-                yield f"data: {json.dumps(chunk, default=str)}\n\n"
+                    if content:
+                        assistant_content_parts.append(content)
+                    last_message_type = chunk_type
+                    if data:
+                        assistant_metadata.update(data)
 
-            # Save assistant message
+                    yield f"data: {json.dumps(chunk, default=str)}\n\n"
+            except Exception:
+                logger.exception("FileUploadAnalyzeView workflow error")
+                yield f"data: {json.dumps({'type': 'error', 'content': 'An internal error occurred. Please try again.'})}\n\n"
+
+            # Save accumulated assistant message
             if assistant_content_parts:
                 AgentMessage.objects.create(
                     session=session,
@@ -470,7 +481,7 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
                     metadata=assistant_metadata,
                 )
 
-            # Done event with session_id
+            # Done event with session_id so the frontend can persist the session.
             done_event = {
                 "type": "done",
                 "data": {"session_id": str(session.id)},
@@ -557,23 +568,20 @@ class DecisionPromoteView(EnglishResponseMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, decision_id):
-        project = _get_user_project(request)
-        if not project:
-            return Response(
-                {"detail": "No active project."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         try:
             decision = Decision.objects.get(
                 id=decision_id,
-                project=project,
-                is_pre_draft=True,
                 is_deleted=False,
             )
         except Decision.DoesNotExist:
             return Response(
-                {"detail": "Pre-draft decision not found."},
+                {"detail": "Decision not found."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        if not ProjectMember.objects.filter(project=decision.project, user=request.user).exists():
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
             )
         decision.is_pre_draft = False
         decision.save(update_fields=['is_pre_draft', 'updated_at'])

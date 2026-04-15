@@ -632,7 +632,7 @@ const DecisionTree = ({
   }, [focusDateKey, dateColumns, scale]);
 
   return (
-    <div className="relative rounded-2xl border border-gray-200 bg-white">
+    <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white">
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm">
         <button
           type="button"
@@ -661,7 +661,7 @@ const DecisionTree = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`h-[320px] overflow-auto ${dragState.current.dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`h-[320px] w-full overflow-auto ${dragState.current.dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div
           ref={contentRef}
