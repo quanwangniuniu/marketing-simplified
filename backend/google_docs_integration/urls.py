@@ -9,6 +9,8 @@ from .views import (
     GoogleDocsRawExportView,
     GoogleDocsImportView,
     GoogleDocsStatusView,
+    GoogleSheetsImportView,
+    GoogleSheetsExportView,
 )
 
 urlpatterns = [
@@ -20,4 +22,6 @@ urlpatterns = [
     path("import/", GoogleDocsImportView.as_view(), name="google-docs-import"),
     path("export/", GoogleDocsExportView.as_view(), name="google-docs-export"),
     path("export/raw/", GoogleDocsRawExportView.as_view(), name="google-docs-export-raw"),
+    path("sheets/import/", GoogleSheetsImportView.as_view(), name="google-sheets-import"),
+    path("sheets/export/", GoogleSheetsExportView.as_view(), name="google-sheets-export"),
 ]

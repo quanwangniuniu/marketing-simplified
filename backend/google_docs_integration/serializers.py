@@ -24,3 +24,15 @@ class GoogleDocsExportSerializer(serializers.Serializer):
 class GoogleDocsRawExportSerializer(serializers.Serializer):
     title = serializers.CharField(required=False, allow_blank=True)
     content = serializers.CharField(required=True, allow_blank=True)
+
+
+class GoogleSheetsImportSerializer(serializers.Serializer):
+    sheet_url = serializers.CharField()
+
+
+class GoogleSheetsExportSerializer(serializers.Serializer):
+    title = serializers.CharField(required=False, allow_blank=True)
+    matrix = serializers.ListField(
+        child=serializers.ListField(child=serializers.CharField(allow_blank=True)),
+        required=True,
+    )

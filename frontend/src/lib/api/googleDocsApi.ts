@@ -59,4 +59,19 @@ export const googleDocsApi = {
     });
     return response.data as { document_id: string; url: string };
   },
+
+  importFromGoogleSheets: async (sheetUrl: string) => {
+    const response = await api.post("/api/google-docs/sheets/import/", {
+      sheet_url: sheetUrl,
+    });
+    return response.data as { title: string; matrix: string[][] };
+  },
+
+  exportToGoogleSheets: async (title: string, matrix: string[][]) => {
+    const response = await api.post("/api/google-docs/sheets/export/", {
+      title,
+      matrix,
+    });
+    return response.data as { spreadsheet_id: string; url: string };
+  },
 };

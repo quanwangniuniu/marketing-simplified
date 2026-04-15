@@ -14,12 +14,14 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 GOOGLE_DOCS_URL = "https://docs.googleapis.com/v1/documents"
 GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
+GOOGLE_SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets"
 
 GOOGLE_SCOPES = [
     "openid",
     "email",
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
 ]
 
 
@@ -258,3 +260,68 @@ def list_google_docs(access_token: str, page_size: int = 20) -> list[dict]:
         for item in files
         if item.get("id")
     ]
+
+
+def _col_letter(n: int) -> str:
+    """Convert 1-based column number to column letter(s): 1→A, 26→Z, 27→AA."""
+    result = ""
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        result = chr(65 + remainder) + result
+    return result or "A"
+
+
+def fetch_google_sheet(spreadsheet_id: str, access_token: str) -> tuple[str, list]:
+    """Fetch first sheet of a Google Spreadsheet, return (title, matrix)."""
+    meta_response = requests.get(
+        f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        params={"fields": "properties.title,sheets.properties.title"},
+        timeout=20,
+    )
+    meta_response.raise_for_status()
+    metadata = meta_response.json()
+    title = metadata.get("properties", {}).get("title") or "Imported Sheet"
+    sheets = metadata.get("sheets", [])
+    first_sheet = sheets[0]["properties"]["title"] if sheets else "Sheet1"
+
+    values_response = requests.get(
+        f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{first_sheet}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=20,
+    )
+    values_response.raise_for_status()
+    matrix = values_response.json().get("values") or []
+    return title, matrix
+
+
+def export_to_google_sheet(title: str, matrix: list, access_token: str) -> dict:
+    """Create a new Google Sheet and write matrix data into it, return spreadsheet URL."""
+    create_response = requests.post(
+        GOOGLE_SHEETS_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "properties": {"title": title or "Exported Sheet"},
+            "sheets": [{"properties": {"title": "Sheet1"}}],
+        },
+        timeout=20,
+    )
+    create_response.raise_for_status()
+    spreadsheet_id = create_response.json()["spreadsheetId"]
+
+    if matrix:
+        max_cols = max((len(row) for row in matrix), default=0)
+        range_notation = f"Sheet1!A1:{_col_letter(max_cols)}{len(matrix)}"
+        update_response = requests.put(
+            f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{range_notation}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"valueInputOption": "USER_ENTERED"},
+            json={"values": matrix},
+            timeout=30,
+        )
+        update_response.raise_for_status()
+
+    return {
+        "spreadsheet_id": spreadsheet_id,
+        "url": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
+    }

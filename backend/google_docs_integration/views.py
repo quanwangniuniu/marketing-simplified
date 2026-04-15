@@ -1,3 +1,4 @@
+import re
 import requests
 from django.conf import settings
 from django.core import signing
@@ -15,16 +16,22 @@ from .serializers import (
     GoogleDocsRawExportSerializer,
     GoogleDocsImportSerializer,
     GoogleDocsStatusSerializer,
+    GoogleSheetsImportSerializer,
+    GoogleSheetsExportSerializer,
 )
 from .services import (
     build_google_auth_url,
     create_google_doc,
     exchange_code_for_token,
+    export_to_google_sheet,
     fetch_document_text,
     fetch_google_email,
+    fetch_google_sheet,
     list_google_docs,
     run_google_api_with_token_retry,
 )
+
+GOOGLE_SHEET_URL_ID_REGEX = re.compile(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', re.IGNORECASE)
 
 GOOGLE_DOCS_STATE_SALT = "google-docs-oauth-state"
 GOOGLE_DOCS_STATE_MAX_AGE_SECONDS = 600
@@ -303,3 +310,58 @@ class GoogleDocsRawExportView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         return Response(doc_payload, status=status.HTTP_200_OK)
+
+
+class GoogleSheetsImportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = GoogleSheetsImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
+        if not connection or not connection.access_token:
+            return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        sheet_url = serializer.validated_data["sheet_url"]
+        match = GOOGLE_SHEET_URL_ID_REGEX.search(sheet_url)
+        spreadsheet_id = match.group(1) if match else sheet_url.strip()
+
+        try:
+            title, matrix = run_google_api_with_token_retry(
+                connection, lambda token: fetch_google_sheet(spreadsheet_id, token)
+            )
+        except requests.HTTPError as exc:
+            return _google_api_error_response(exc)
+        except requests.RequestException:
+            return Response(
+                {"error": "Google Sheets service is temporarily unavailable. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"title": title, "matrix": matrix}, status=status.HTTP_200_OK)
+
+
+class GoogleSheetsExportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = GoogleSheetsExportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
+        if not connection or not connection.access_token:
+            return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        title = serializer.validated_data.get("title") or "Exported Sheet"
+        matrix = serializer.validated_data.get("matrix") or []
+
+        try:
+            result = run_google_api_with_token_retry(
+                connection, lambda token: export_to_google_sheet(title, matrix, token)
+            )
+        except requests.HTTPError as exc:
+            return _google_api_error_response(exc)
+        except requests.RequestException:
+            return Response(
+                {"error": "Google Sheets service is temporarily unavailable. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(result, status=status.HTTP_200_OK)
