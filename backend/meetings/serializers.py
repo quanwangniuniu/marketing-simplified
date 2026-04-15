@@ -99,7 +99,6 @@ class MeetingSerializer(serializers.ModelSerializer):
             "updated_at",
             "participant_user_ids",
         ]
-        read_only_fields = ["id", "project", "status"]
         read_only_fields = [
             "id",
             "project",
