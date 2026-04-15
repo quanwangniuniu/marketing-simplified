@@ -516,7 +516,7 @@ class MeetingActionItemSerializer(serializers.ModelSerializer):
     def get_converted_task_id(self, obj):
         try:
             return obj.derived_task.id
-        except ObjectDoesNotExist:
+        except (ObjectDoesNotExist, AttributeError):
             return None
 
 

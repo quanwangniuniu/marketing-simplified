@@ -289,7 +289,7 @@ class TestMeetingLifecycleAPI(TestCase):
 
     def test_to_archived_blocked_by_unresolved_action_items(self):
         meeting = _meeting(self.project, status=Meeting.STATUS_COMPLETED)
-        MeetingActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=False)
+        MeetingActionItem.objects.create(meeting=meeting, title="Follow up", description="Follow up", is_resolved=False)
         response = self.client.post(
             self._transition_url(meeting), {"to_state": "archived"}, format="json"
         )
@@ -299,7 +299,7 @@ class TestMeetingLifecycleAPI(TestCase):
 
     def test_to_archived_allowed_when_all_action_items_resolved(self):
         meeting = _meeting(self.project, status=Meeting.STATUS_COMPLETED)
-        MeetingActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=True)
+        MeetingActionItem.objects.create(meeting=meeting, title="Follow up", description="Follow up", is_resolved=True)
         response = self.client.post(
             self._transition_url(meeting), {"to_state": "archived"}, format="json"
         )
@@ -325,7 +325,7 @@ class TestMeetingLifecycleAPI(TestCase):
         meeting = _meeting(self.project)
         response = self.client.post(
             self._action_items_url(meeting),
-            {"description": "Send report", "is_resolved": False},
+            {"title": "Send report", "description": "Send report", "is_resolved": False},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -333,7 +333,7 @@ class TestMeetingLifecycleAPI(TestCase):
 
     def test_resolve_action_item(self):
         meeting = _meeting(self.project)
-        item = MeetingActionItem.objects.create(meeting=meeting, description="Send report", is_resolved=False)
+        item = MeetingActionItem.objects.create(meeting=meeting, title="Send report", description="Send report", is_resolved=False)
         url = f"{self._action_items_url(meeting)}{item.id}/"
         response = self.client.patch(url, {"is_resolved": True}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -345,7 +345,7 @@ class TestMeetingLifecycleAPI(TestCase):
         self.client.force_authenticate(user=self.outsider)
         response = self.client.post(
             self._action_items_url(meeting),
-            {"description": "Should fail"},
+            {"title": "Should fail", "description": "Should fail"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
