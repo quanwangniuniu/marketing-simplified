@@ -10,17 +10,23 @@ import toast from 'react-hot-toast';
 import SlackIntegrationModal from '@/components/slack/SlackIntegrationModal';
 import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
 import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
+import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
+import { useProjectStore } from '@/lib/projectStore';
 
 function SettingsPageContent() {
     const { user, logout, refreshUser } = useAuth();
+    const activeProject = useProjectStore((state) => state.activeProject);
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isSlackModalOpen, setIsSlackModalOpen] = useState(false);
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
     const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
+    const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
+    const [slackStatusLoading, setSlackStatusLoading] = useState(true);
     const hasOpenedSlackRef = useRef(false);
     const hasOpenedZoomRef = useRef(false);
     const hasOpenedGoogleDocsRef = useRef(false);
+    const userId = user?.id ?? null;
 
     // Refresh user data once on mount only — not in a loop.
     // Must NOT include `user` in deps: refreshUser() updates user → would re-trigger infinitely.
@@ -29,11 +35,52 @@ function SettingsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        let isActive = true;
+
+        const loadSlackStatus = async () => {
+            if (!userId) {
+                if (isActive) {
+                    setSlackStatus(null);
+                    setSlackStatusLoading(false);
+                }
+                return;
+            }
+
+            setSlackStatusLoading(true);
+
+            try {
+                const status = await slackApi.getStatus(
+                    activeProject?.id ? { projectId: activeProject.id } : undefined
+                );
+                if (isActive) {
+                    setSlackStatus(status);
+                }
+            } catch (error) {
+                console.error('Failed to load Slack status:', error);
+                if (isActive) {
+                    setSlackStatus(null);
+                }
+            } finally {
+                if (isActive) {
+                    setSlackStatusLoading(false);
+                }
+            }
+        };
+
+        void loadSlackStatus();
+
+        return () => {
+            isActive = false;
+        };
+    }, [activeProject?.id, userId]);
+
     // Handle URL parameters (modal auto-open, OAuth redirects).
-    // No dependency on `user` — these only need searchParams and router.
     useEffect(() => {
         if (searchParams.get('open_slack') === '1' && !hasOpenedSlackRef.current) {
-            setIsSlackModalOpen(true);
+            if (!slackStatusLoading && slackStatus?.can_manage_slack) {
+                setIsSlackModalOpen(true);
+            }
             hasOpenedSlackRef.current = true;
 
             const newParams = new URLSearchParams(searchParams.toString());
@@ -103,7 +150,10 @@ function SettingsPageContent() {
                 : window.location.pathname;
             router.replace(newUrl, { scroll: false });
         }
-    }, [searchParams, router]);
+    }, [slackStatus, slackStatusLoading, searchParams, router]);
+
+    const canManageSlack = !!slackStatus?.can_manage_slack;
+    const isSlackCardDisabled = slackStatusLoading || !canManageSlack;
 
     const layoutUser = user
         ? {
@@ -146,7 +196,7 @@ function SettingsPageContent() {
                             <h2 className="text-lg font-semibold text-gray-900 mb-4">Integrations</h2>
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {/* Slack Card */}
-                                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all">
+                                <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm transition-all ${isSlackCardDisabled ? 'opacity-75' : 'hover:shadow-md'}`}>
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-[#4A154B] rounded-lg flex items-center justify-center">
@@ -163,11 +213,23 @@ function SettingsPageContent() {
                                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                                         Connect your Slack workspace to receive notifications and manage tasks directly from Slack.
                                     </p>
+                                    {isSlackCardDisabled && (
+                                        <p className="text-xs text-gray-500 mb-4">
+                                            {slackStatusLoading
+                                                ? 'Checking Slack permissions...'
+                                                : 'Slack can only be managed by project owners, Super Administrators, Organization Admins, Team Leaders, and Campaign Managers for projects they oversee.'}
+                                        </p>
+                                    )}
                                     <button
-                                        onClick={() => setIsSlackModalOpen(true)}
-                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                        onClick={() => {
+                                            if (!isSlackCardDisabled) {
+                                                setIsSlackModalOpen(true);
+                                            }
+                                        }}
+                                        disabled={isSlackCardDisabled}
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors shadow-sm disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-blue-700"
                                     >
-                                        Configure
+                                        {slackStatusLoading ? 'Loading...' : 'Configure'}
                                     </button>
                                 </div>
 
@@ -246,7 +308,9 @@ function SettingsPageContent() {
 export default function SettingsPage() {
     return (
         <ProtectedRoute>
-            <SettingsPageContent />
+            <Suspense>
+                <SettingsPageContent />
+            </Suspense>
         </ProtectedRoute>
     );
 }
