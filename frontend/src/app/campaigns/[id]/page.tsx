@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { CampaignObjective, CampaignPlatform } from '@/types/campaign';
 import Layout from '@/components/layout/Layout';
@@ -19,8 +19,18 @@ import EditSnapshotModal from '@/components/campaigns/EditSnapshotModal';
 import CampaignTasks from '@/components/campaigns/CampaignTasks';
 import SaveAsTemplateModal from '@/components/campaigns/SaveAsTemplateModal';
 import AdVariationManagement from '@/components/ad-variations/AdVariationManagement';
+import { EmailDraftsWorkspace } from '@/components/email-drafts/EmailDraftsWorkspace';
+import AdCreativeTable from '@/components/facebook_meta/AdCreativeTable';
+import AdCreativeModal from '@/components/facebook_meta/AdCreativeModal';
+import AdTable from '@/components/google_ads/AdTable';
+import AdModal from '@/components/google_ads/AdModal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import { useFacebookMetaData } from '@/hooks/useFacebookMetaData';
+import { useGoogleAdsData } from '@/hooks/useGoogleAdsData';
+import { mailchimpApi } from '@/lib/api/mailchimpApi';
+import { klaviyoApi } from '@/lib/api/klaviyoApi';
 import Button from '@/components/button/Button';
-import { ArrowLeft, Target, Mail, Tv } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Tv } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 
@@ -33,106 +43,605 @@ const TABS: { id: CampaignTab; label: string }[] = [
   { id: 'ad-drafts', label: 'Ad Drafts' },
 ];
 
+// ─── Sub-tab pill navigation ──────────────────────────────────────────────────
+
+function SubTabNav<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { id: T; label: string }[];
+  active: T;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className="flex space-x-1 rounded-lg bg-gray-100 p-1 mb-6 w-fit">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            active === tab.id
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Delete confirm toast helper ─────────────────────────────────────────────
+
+function showDeleteConfirmToast(title: string, onConfirm: () => void) {
+  toast(
+    (t) => (
+      <div className="w-[340px] rounded-xl border border-red-100 bg-white p-4 shadow-xl">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-full bg-red-50 p-2 text-red-600">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <p className="text-sm font-semibold text-gray-900">Delete draft?</p>
+            <p className="text-sm text-gray-600">
+              This will permanently delete{' '}
+              <span className="font-semibold">{`"${title}"`}</span>.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => toast.dismiss(t.id)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(t.id);
+              onConfirm();
+            }}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      duration: 10000,
+      style: { padding: 0, background: 'transparent', boxShadow: 'none', border: 'none' },
+    }
+  );
+}
+
+// ─── Mailchimp Drafts Sub-tab ────────────────────────────────────────────────
+
+function MailchimpDraftsSubTab({ campaignId }: { campaignId: string }) {
+  const router = useRouter();
+  const [rawDrafts, setRawDrafts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api
+      .get(`/api/mailchimp/email-drafts/?campaign_id=${campaignId}`)
+      .then((res) => setRawDrafts(res.data?.results ?? res.data ?? []))
+      .catch(() => setError('Failed to load Mailchimp drafts'))
+      .finally(() => setLoading(false));
+  }, [campaignId]);
+
+  const handleDelete = async (draftId: number, draftTitle: string) => {
+    try {
+      await mailchimpApi.deleteEmailDraft(draftId);
+      setRawDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      toast.success(`Deleted "${draftTitle}"`);
+    } catch {
+      toast.error('Failed to delete email draft. Please try again.');
+    }
+  };
+
+  const drafts = useMemo(
+    () =>
+      rawDrafts.map((d: any) => ({
+        id: d.id,
+        title: d.settings?.subject_line || d.subject || 'Untitled Email',
+        previewText: d.settings?.preview_text || d.preview_text || '',
+        fromName: d.settings?.from_name || d.from_name || '',
+        status: d.status || 'draft',
+        typeLabel: d.type || 'Regular email',
+        sendTime: d.send_time || d.updated_at,
+        recipients: d.recipients || 0,
+      })),
+    [rawDrafts]
+  );
+
+  return (
+    <EmailDraftsWorkspace
+      pageTitle="Mailchimp Drafts"
+      searchPlaceholder="Search Mailchimp drafts"
+      drafts={drafts}
+      loading={loading}
+      error={error}
+      initialView="list"
+      loadingMessage="Loading Mailchimp drafts..."
+      emptyStateTitle="No Mailchimp drafts linked to this campaign."
+      emptyStateDescription="Go to the Mailchimp page to create and link a draft to this campaign."
+      noSearchResultMessage="No drafts match your search."
+      showListPreview
+      onCreate={() => router.push('/mailchimp/templates')}
+      onOpen={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/mailchimp/${draft.id}`)
+      }
+      onEdit={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/mailchimp/${draft.id}`)
+      }
+      onSend={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/mailchimp/${draft.id}`)
+      }
+      onDelete={(draft) =>
+        showDeleteConfirmToast(draft.title, () =>
+          handleDelete(Number(draft.id), draft.title)
+        )
+      }
+    />
+  );
+}
+
+// ─── Klaviyo Drafts Sub-tab ──────────────────────────────────────────────────
+
+function KlaviyoDraftsSubTab({ campaignId }: { campaignId: string }) {
+  const router = useRouter();
+  const [rawDrafts, setRawDrafts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    api
+      .get(`/api/klaviyo/klaviyo-drafts/?campaign_id=${campaignId}`)
+      .then((res) => setRawDrafts(res.data?.results ?? res.data ?? []))
+      .catch(() => setError('Failed to load Klaviyo drafts'))
+      .finally(() => setLoading(false));
+  }, [campaignId]);
+
+  const handleDelete = async (draftId: number, draftTitle: string) => {
+    try {
+      await klaviyoApi.deleteEmailDraft(draftId);
+      setRawDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      toast.success(`Deleted "${draftTitle}"`);
+    } catch {
+      toast.error('Failed to delete email draft. Please try again.');
+    }
+  };
+
+  const drafts = useMemo(
+    () =>
+      rawDrafts.map((d: any) => ({
+        id: d.id,
+        title: d.name || d.subject || 'Untitled email template',
+        previewText: d.subject || '',
+        fromName: d.name || '',
+        status: d.status || 'draft',
+        typeLabel: 'Email template',
+        sendTime: d.updated_at || d.created_at,
+        recipients: 0,
+      })),
+    [rawDrafts]
+  );
+
+  return (
+    <EmailDraftsWorkspace
+      pageTitle="Klaviyo Drafts"
+      searchPlaceholder="Search Klaviyo drafts"
+      drafts={drafts}
+      loading={loading}
+      error={error}
+      initialView="list"
+      loadingMessage="Loading Klaviyo drafts..."
+      emptyStateTitle="No Klaviyo drafts linked to this campaign."
+      emptyStateDescription="Go to the Klaviyo page to create and link a draft to this campaign."
+      noSearchResultMessage="No drafts match your search."
+      showListPreview
+      onCreate={() => router.push('/klaviyo')}
+      onOpen={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/klaviyo/${draft.id}`)
+      }
+      onEdit={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/klaviyo/${draft.id}`)
+      }
+      onSend={(draft) =>
+        router.push(`/campaigns/${campaignId}/email-drafts/klaviyo/${draft.id}`)
+      }
+      onDelete={(draft) =>
+        showDeleteConfirmToast(draft.title, () =>
+          handleDelete(Number(draft.id), draft.title)
+        )
+      }
+    />
+  );
+}
+
 // ─── Email Drafts Tab ────────────────────────────────────────────────────────
 
-interface MailchimpDraftItem {
-  id: number;
-  title: string;
-  status: string;
-  platform: 'mailchimp';
-}
+type EmailSubTab = 'mailchimp' | 'klaviyo';
 
-interface KlaviyoDraftItem {
-  id: number;
-  title: string;
-  status: string;
-  platform: 'klaviyo';
-}
-
-type EmailDraftItem = MailchimpDraftItem | KlaviyoDraftItem;
+const EMAIL_SUB_TABS: { id: EmailSubTab; label: string }[] = [
+  { id: 'mailchimp', label: 'Mailchimp' },
+  { id: 'klaviyo', label: 'Klaviyo' },
+];
 
 function EmailDraftsTab({ campaignId }: { campaignId: string }) {
+  const [activeSubTab, setActiveSubTab] = useState<EmailSubTab>('mailchimp');
+
+  return (
+    <div>
+      <SubTabNav tabs={EMAIL_SUB_TABS} active={activeSubTab} onChange={setActiveSubTab} />
+      {activeSubTab === 'mailchimp' && <MailchimpDraftsSubTab campaignId={campaignId} />}
+      {activeSubTab === 'klaviyo' && <KlaviyoDraftsSubTab campaignId={campaignId} />}
+    </div>
+  );
+}
+
+// ─── Facebook Meta Ad Drafts Sub-tab ─────────────────────────────────────────
+
+function FacebookDraftsSubTab({ campaignId }: { campaignId: string }) {
   const router = useRouter();
-  const [drafts, setDrafts] = useState<EmailDraftItem[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [selectedCreative, setSelectedCreative] = useState<any>(null);
+
+  const {
+    adCreatives,
+    loading,
+    submitting,
+    fetchAdCreatives,
+    createAdCreative,
+    updateAdCreative,
+    deleteAdCreative,
+    currentPage,
+    totalPages,
+    totalCount,
+    pageSize,
+    hasNext,
+    hasPrevious,
+    nextPage,
+    previousPage,
+    goToPage,
+    sortBy,
+    sortOrder,
+    filters,
+    sortByField,
+    applyFilters,
+    clearFilters,
+  } = useFacebookMetaData();
+
+  useEffect(() => {
+    fetchAdCreatives({ campaign_id: campaignId } as any);
+  }, [campaignId, fetchAdCreatives]);
+
+  const handleCreate = async (formData: any) => {
+    await createAdCreative(formData);
+    setShowCreateModal(false);
+  };
+
+  const handleUpdate = async (formData: any) => {
+    if (selectedCreative) {
+      await updateAdCreative(selectedCreative.id, formData);
+      setShowUpdateModal(false);
+      setSelectedCreative(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTargetId) {
+      await deleteAdCreative(deleteTargetId);
+      setDeleteTargetId(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm font-medium text-gray-700">Facebook Meta Ad Creatives</h3>
+        <button
+          className="btn btn-primary text-sm"
+          onClick={() => setShowCreateModal(true)}
+          disabled={submitting}
+        >
+          New Ad Creative
+        </button>
+      </div>
+
+      <AdCreativeTable
+        creatives={adCreatives}
+        loading={loading}
+        onView={(id) => router.push(`/campaigns/${campaignId}/ad-drafts/facebook/${id}`)}
+        onEdit={(id) => {
+          const creative = adCreatives.find((c: any) => c.id === id);
+          if (creative) {
+            setSelectedCreative(creative);
+            setShowUpdateModal(true);
+          }
+        }}
+        onDelete={(id) => {
+          setDeleteTargetId(id);
+          setShowDeleteModal(true);
+        }}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        hasNext={hasNext}
+        hasPrevious={hasPrevious}
+        onNextPage={nextPage}
+        onPreviousPage={previousPage}
+        onPageChange={goToPage}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={sortByField}
+        filters={filters}
+        onFilterChange={applyFilters}
+        onClearFilters={clearFilters}
+      />
+
+      <AdCreativeModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreate}
+        submitting={submitting}
+      />
+
+      <AdCreativeModal
+        isOpen={showUpdateModal}
+        onClose={() => {
+          setShowUpdateModal(false);
+          setSelectedCreative(null);
+        }}
+        onSubmit={handleUpdate}
+        submitting={submitting}
+        mode="update"
+        adCreative={selectedCreative}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeleteTargetId(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete Ad Creative"
+        message="Are you sure you want to delete this ad creative? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        loading={submitting}
+      />
+    </div>
+  );
+}
+
+// ─── Google Ads Sub-tab ──────────────────────────────────────────────────────
+
+function GoogleAdsDraftsSubTab({ campaignId }: { campaignId: string }) {
+  const router = useRouter();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [selectedAd, setSelectedAd] = useState<any>(null);
+
+  const {
+    ads,
+    loading,
+    submitting,
+    fetchAds,
+    createAd,
+    updateAd,
+    deleteAd,
+    currentPage,
+    totalPages,
+    totalCount,
+    pageSize,
+    hasNext,
+    hasPrevious,
+    nextPage,
+    previousPage,
+    goToPage,
+    sortBy,
+    sortOrder,
+    filters,
+    sortByField,
+    applyFilters,
+    clearFilters,
+  } = useGoogleAdsData();
+
+  useEffect(() => {
+    fetchAds({ campaign_id: campaignId } as any);
+  }, [campaignId, fetchAds]);
+
+  const handleCreate = async (formData: any) => {
+    const createdAd = await createAd(formData);
+    setShowCreateModal(false);
+    router.push(`/campaigns/${campaignId}/ad-drafts/google/${createdAd.id}/design`);
+    return createdAd;
+  };
+
+  const handleUpdate = async (formData: any) => {
+    if (selectedAd) {
+      const updatedAd = await updateAd(selectedAd.id, formData);
+      setShowUpdateModal(false);
+      setSelectedAd(null);
+      return updatedAd;
+    }
+    throw new Error('No ad selected for update');
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTargetId !== null) {
+      await deleteAd(deleteTargetId);
+      setDeleteTargetId(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm font-medium text-gray-700">Google Ads</h3>
+        <button
+          className="btn btn-primary text-sm"
+          onClick={() => setShowCreateModal(true)}
+          disabled={submitting}
+        >
+          New Ad
+        </button>
+      </div>
+
+      <AdTable
+        ads={ads}
+        loading={loading}
+        onView={(id) => router.push(`/campaigns/${campaignId}/ad-drafts/google/${id}`)}
+        onEdit={(id) => {
+          const ad = ads.find((a: any) => a.id === id);
+          if (ad) {
+            setSelectedAd(ad);
+            setShowUpdateModal(true);
+          }
+        }}
+        onDelete={(id) => {
+          setDeleteTargetId(id);
+          setShowDeleteModal(true);
+        }}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        pageSize={pageSize}
+        hasNext={hasNext}
+        hasPrevious={hasPrevious}
+        onNextPage={nextPage}
+        onPreviousPage={previousPage}
+        onPageChange={goToPage}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={sortByField}
+        filters={filters}
+        onFilterChange={applyFilters}
+        onClearFilters={clearFilters}
+      />
+
+      <AdModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreate}
+        submitting={submitting}
+        mode="create"
+        existingAds={ads}
+      />
+
+      <AdModal
+        isOpen={showUpdateModal}
+        onClose={() => {
+          setShowUpdateModal(false);
+          setSelectedAd(null);
+        }}
+        onSubmit={handleUpdate}
+        submitting={submitting}
+        mode="update"
+        ad={selectedAd}
+        existingAds={ads}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeleteTargetId(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete Ad"
+        message="Are you sure you want to delete this ad? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        loading={submitting}
+      />
+    </div>
+  );
+}
+
+// ─── TikTok Drafts Sub-tab ───────────────────────────────────────────────────
+
+function TikTokDraftsSubTab({ campaignId }: { campaignId: string }) {
+  const router = useRouter();
+  const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [mailchimpRes, klaviyoRes] = await Promise.allSettled([
-          api.get(`/api/mailchimp/email-drafts/?campaign_id=${campaignId}`),
-          api.get(`/api/klaviyo/klaviyo-drafts/?campaign_id=${campaignId}`),
-        ]);
-
-        const mailchimpDrafts: MailchimpDraftItem[] =
-          mailchimpRes.status === 'fulfilled'
-            ? (mailchimpRes.value.data?.results ?? mailchimpRes.value.data ?? []).map((d: any) => ({
-                id: d.id,
-                title: d.settings?.subject_line || d.subject || 'Untitled',
-                status: d.status || 'draft',
-                platform: 'mailchimp' as const,
-              }))
-            : [];
-
-        const klaviyoDrafts: KlaviyoDraftItem[] =
-          klaviyoRes.status === 'fulfilled'
-            ? (klaviyoRes.value.data?.results ?? klaviyoRes.value.data ?? []).map((d: any) => ({
-                id: d.id,
-                title: d.name || d.subject || 'Untitled',
-                status: d.status || 'draft',
-                platform: 'klaviyo' as const,
-              }))
-            : [];
-
-        setDrafts([...mailchimpDrafts, ...klaviyoDrafts]);
-      } catch {
-        toast.error('Failed to load email drafts');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    setLoading(true);
+    api
+      .get(
+        `/api/tiktok/creation/sidebar/brief_info_list/?campaign_id=${campaignId}`
+      )
+      .then((res) => {
+        const list =
+          res.data?.data?.ad_group_brief_info_list ?? res.data?.results ?? res.data ?? [];
+        setGroups(list);
+      })
+      .catch(() => toast.error('Failed to load TikTok drafts'))
+      .finally(() => setLoading(false));
   }, [campaignId]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        <span className="ml-3 text-gray-600">Loading email drafts…</span>
+        <span className="ml-3 text-gray-600">Loading TikTok drafts…</span>
       </div>
     );
   }
 
-  if (drafts.length === 0) {
+  const allItems = groups.flatMap((g: any) =>
+    (g.items ?? []).map((item: any) => ({ ...item, groupName: g.group_name || g.name }))
+  );
+
+  if (allItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <Mail className="h-12 w-12 mb-3 opacity-40" />
-        <p className="text-sm">No email drafts linked to this campaign yet.</p>
+        <Tv className="h-12 w-12 mb-3 opacity-40" />
+        <p className="text-sm">No TikTok drafts linked to this campaign yet.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      {drafts.map((draft) => (
+      {allItems.map((item: any) => (
         <div
-          key={`${draft.platform}-${draft.id}`}
+          key={item.ad_draft_id}
           onClick={() =>
             router.push(
-              `/campaigns/${campaignId}/email-drafts/${draft.platform}/${draft.id}`
+              `/campaigns/${campaignId}/ad-drafts/tiktok/${item.ad_draft_id}`
             )
           }
           className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
         >
-          <div className="flex items-center gap-3">
-            <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">{draft.title}</p>
-              <p className="text-xs text-gray-500 capitalize">
-                {draft.platform} · {draft.status}
-              </p>
-            </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {item.name || 'Untitled Draft'}
+            </p>
+            {item.groupName && (
+              <p className="text-xs text-gray-500">{item.groupName}</p>
+            )}
           </div>
           <span className="text-xs text-blue-600 font-medium">Open →</span>
         </div>
@@ -143,122 +652,29 @@ function EmailDraftsTab({ campaignId }: { campaignId: string }) {
 
 // ─── Ad Drafts Tab ───────────────────────────────────────────────────────────
 
-interface AdDraftItem {
-  id: string;
-  name: string;
-  status: string;
-  platform: 'facebook' | 'tiktok' | 'google';
-}
+type AdSubTab = 'facebook' | 'google' | 'tiktok';
+
+const AD_SUB_TABS: { id: AdSubTab; label: string }[] = [
+  { id: 'facebook', label: 'Facebook Meta' },
+  { id: 'google', label: 'Google Ads' },
+  { id: 'tiktok', label: 'TikTok' },
+];
 
 function AdDraftsTab({ campaignId }: { campaignId: string }) {
-  const router = useRouter();
-  const [drafts, setDrafts] = useState<AdDraftItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [fbRes, googleRes, tiktokRes] = await Promise.allSettled([
-          api.get(`/api/facebook_meta/adcreatives/?campaign_id=${campaignId}`),
-          api.get(`/api/google_ads/ads/?campaign_id=${campaignId}`),
-          api.get(
-            `/api/tiktok/creation/sidebar/brief_info_list/?campaign_id=${campaignId}`
-          ),
-        ]);
-
-        const fbDrafts: AdDraftItem[] =
-          fbRes.status === 'fulfilled'
-            ? (fbRes.value.data?.results ?? fbRes.value.data ?? []).map((d: any) => ({
-                id: String(d.id),
-                name: d.name || 'Untitled Creative',
-                status: d.status || '',
-                platform: 'facebook' as const,
-              }))
-            : [];
-
-        const googleDrafts: AdDraftItem[] =
-          googleRes.status === 'fulfilled'
-            ? (googleRes.value.data?.results ?? googleRes.value.data ?? []).map((d: any) => ({
-                id: String(d.id),
-                name: d.name || 'Untitled Ad',
-                status: d.status || '',
-                platform: 'google' as const,
-              }))
-            : [];
-
-        const tiktokDrafts: AdDraftItem[] =
-          tiktokRes.status === 'fulfilled'
-            ? (tiktokRes.value.data?.data?.ad_group_brief_info_list ?? []).flatMap(
-                (group: any) =>
-                  (group.items ?? []).map((item: any) => ({
-                    id: String(item.ad_draft_id),
-                    name: item.name || 'Untitled Draft',
-                    status: item.status || '',
-                    platform: 'tiktok' as const,
-                  }))
-              )
-            : [];
-
-        setDrafts([...fbDrafts, ...googleDrafts, ...tiktokDrafts]);
-      } catch {
-        toast.error('Failed to load ad drafts');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [campaignId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        <span className="ml-3 text-gray-600">Loading ad drafts…</span>
-      </div>
-    );
-  }
-
-  if (drafts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <Tv className="h-12 w-12 mb-3 opacity-40" />
-        <p className="text-sm">No ad drafts linked to this campaign yet.</p>
-      </div>
-    );
-  }
-
-  const platformLabel: Record<AdDraftItem['platform'], string> = {
-    facebook: 'Facebook Meta',
-    tiktok: 'TikTok',
-    google: 'Google Ads',
-  };
+  const [activeSubTab, setActiveSubTab] = useState<AdSubTab>('facebook');
 
   return (
-    <div className="space-y-2">
-      {drafts.map((draft) => (
-        <div
-          key={`${draft.platform}-${draft.id}`}
-          onClick={() =>
-            router.push(
-              `/campaigns/${campaignId}/ad-drafts/${draft.platform}/${draft.id}`
-            )
-          }
-          className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Target className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">{draft.name}</p>
-              <p className="text-xs text-gray-500">
-                {platformLabel[draft.platform]}
-                {draft.status ? ` · ${draft.status}` : ''}
-              </p>
-            </div>
-          </div>
-          <span className="text-xs text-blue-600 font-medium">Open →</span>
-        </div>
-      ))}
+    <div>
+      <SubTabNav tabs={AD_SUB_TABS} active={activeSubTab} onChange={setActiveSubTab} />
+      {activeSubTab === 'facebook' && (
+        <FacebookDraftsSubTab campaignId={campaignId} />
+      )}
+      {activeSubTab === 'google' && (
+        <GoogleAdsDraftsSubTab campaignId={campaignId} />
+      )}
+      {activeSubTab === 'tiktok' && (
+        <TikTokDraftsSubTab campaignId={campaignId} />
+      )}
     </div>
   );
 }
