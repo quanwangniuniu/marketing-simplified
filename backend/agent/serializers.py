@@ -85,12 +85,19 @@ class ChatInputSerializer(serializers.Serializer):
     )
     file_id = serializers.UUIDField(required=False, allow_null=True)
     action = serializers.ChoiceField(
-        choices=['analyze', 'confirm_decision', 'create_tasks', 'generate_miro', 'distribute_message', 'start_follow_up', 'cancel_follow_up'],
+        choices=[
+            'analyze', 'confirm_decision', 'create_tasks', 'generate_miro',
+            'distribute_message', 'start_follow_up', 'cancel_follow_up',
+            'confirm_columns',
+        ],
         required=False,
         allow_null=True,
     )
     calendar_context = serializers.JSONField(required=False, allow_null=True)
     workflow_id = serializers.UUIDField(required=False, allow_null=True)
+    # User-approved column mapping for confirm_columns action.
+    # Format: {original_header: canonical_name or "unknown"}
+    column_mapping = serializers.JSONField(required=False, allow_null=True)
 
 
 class AgentWorkflowStepSerializer(serializers.ModelSerializer):

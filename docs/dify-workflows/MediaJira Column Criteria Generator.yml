@@ -1,0 +1,256 @@
+app:
+  description: Given a list of spreadsheet column names, generate structured success
+    criteria that tell the downstream analysis workflow what to look for and how to
+    judge the data quality and anomalies.
+  icon: "\U0001F4CB"
+  icon_background: "#E0F7FA"
+  mode: workflow
+  name: MediaJira Column Criteria Generator
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/gemini:0.7.15@ca2b8f2599b87de968354f0e2ccbbc0d76bac5ebf275c3f0fbdae48881d74518
+    version: null
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: start-to-llm
+      source: start
+      sourceHandle: source
+      target: llm-generate-criteria
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: code
+      id: llm-to-validate
+      source: llm-generate-criteria
+      sourceHandle: source
+      target: code-validate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: end
+      id: validate-to-end
+      source: code-validate
+      sourceHandle: source
+      target: end
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: Column names from the uploaded spreadsheet (JSON array).
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - default: '[]'
+          hint: JSON array of column name strings, e.g. ["Amount spent","Impressions","CTR"]
+          label: column_names
+          options: []
+          placeholder: ''
+          required: true
+          type: text-input
+          variable: column_names
+      height: 109
+      id: start
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.2
+            thinking_mode: false
+          mode: chat
+          name: gemini-2.5-flash
+          provider: langgenius/gemini/google
+        prompt_config:
+          jinja2_variables:
+          - value_selector:
+            - start
+            - column_names
+            variable: column_names
+        prompt_template:
+        - role: system
+          text: "You are a data analysis expert specialising in digital advertising\
+            \ and marketing performance data.\n\nYou will receive a JSON array of\
+            \ spreadsheet column names. Your task is to:\n1. Identify what type of\
+            \ dataset this is (e.g. Meta Ads Performance, Google Ads, GA4, etc.).\n\
+            2. For each column, define what valid data looks like and what anomaly\
+            \ rules to apply during analysis.\n3. List the key analysis goals for\
+            \ this dataset.\n\nReturn ONLY valid JSON with this exact structure (no\
+            \ markdown, no explanation):\n\n{\n  \"schema_type\": \"brief name for\
+            \ this dataset type\",\n  \"key_columns\": [\"list\", \"of\", \"most\"\
+            , \"important\", \"columns\"],\n  \"criteria\": [\n    {\n      \"column\"\
+            : \"exact column name from input\",\n      \"required\": true,\n      \"\
+            data_type\": \"one of: numeric, string, date, boolean\",\n      \"expectation\"\
+            : \"description of what valid values look like\",\n      \"anomaly_rule\"\
+            : \"description of what counts as suspicious or invalid\"\n    }\n  ],\n\
+            \  \"analysis_goals\": [\n    \"specific analysis objective inferred from\
+            \ these columns\"\n  ]\n}\n\nRules:\n- Only include columns that are\
+            \ analytically meaningful (skip pure identifiers like IDs and names unless\
+            \ they are needed for scope).\n- For financial columns (spend, cost, revenue,\
+            \ ROAS), always set required: true.\n- For ratio columns (CTR, CVR, ROAS),\
+            \ anomaly_rule should specify sensible thresholds (e.g. CTR > 10% is suspicious\
+            \ for most campaigns).\n- Return ONLY the JSON object, nothing else."
+        - edition_type: jinja2
+          jinja2_text: "Column names:\n{{ column_names }}\n\nGenerate success criteria\
+            \ for these columns now."
+          role: user
+          text: 'Column names:'
+        selected: false
+        title: Generate Criteria
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm-generate-criteria
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main(criteria_json: str) -> dict:\n    import json, re\n\n    text\
+          \ = criteria_json.strip()\n    # Strip markdown fences if present\n    text\
+          \ = re.sub(r'^```(?:json)?\\n?', '', text)\n    text = re.sub(r'\\n?```$',\
+          \ '', text)\n    text = text.strip()\n\n    try:\n        result = json.loads(text)\n\
+          \    except json.JSONDecodeError:\n        return {\n            'criteria_json':\
+          \ json.dumps({\n                'schema_type': 'unknown',\n            \
+          \    'key_columns': [],\n                'criteria': [],\n             \
+          \   'analysis_goals': []\n            }),\n            'is_valid': 0\n \
+          \       }\n\n    # Ensure required top-level keys are present\n    result.setdefault('schema_type',\
+          \ 'unknown')\n    result.setdefault('key_columns', [])\n    result.setdefault('criteria',\
+          \ [])\n    result.setdefault('analysis_goals', [])\n\n    # Ensure each\
+          \ criterion has the required fields\n    valid_types = {'numeric', 'string',\
+          \ 'date', 'boolean'}\n    for c in result['criteria']:\n        c.setdefault('column',\
+          \ '')\n        c.setdefault('required', False)\n        if c.get('data_type')\
+          \ not in valid_types:\n            c['data_type'] = 'string'\n        c.setdefault('expectation',\
+          \ '')\n        c.setdefault('anomaly_rule', '')\n\n    return {\n       \
+          \ 'criteria_json': json.dumps(result),\n        'is_valid': 1\n    }\n"
+        code_language: python3
+        outputs:
+          criteria_json:
+            children: null
+            type: string
+          is_valid:
+            children: null
+            type: number
+        selected: false
+        title: Validate & Normalise
+        type: code
+        variables:
+        - value_selector:
+          - llm-generate-criteria
+          - text
+          value_type: string
+          variable: criteria_json
+      height: 52
+      id: code-validate
+      position:
+        x: 684
+        y: 282
+      positionAbsolute:
+        x: 684
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: Return the validated criteria JSON.
+        outputs:
+        - value_selector:
+          - code-validate
+          - criteria_json
+          value_type: string
+          variable: text
+        selected: false
+        title: End
+        type: end
+      height: 88
+      id: end
+      position:
+        x: 986
+        y: 282
+      positionAbsolute:
+        x: 986
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.9
