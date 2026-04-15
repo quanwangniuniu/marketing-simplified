@@ -1,6 +1,7 @@
 import api from '../api';
 import type {
   Meeting,
+  MeetingStatus,
   MeetingCreateRequest,
   MeetingUpdateRequest,
   MeetingPartialUpdateRequest,
@@ -190,6 +191,7 @@ function normalizeMeetingListItem(raw: Record<string, unknown>): MeetingListItem
     ),
     related_tasks: normalizeKnowledgeLinks(raw.related_tasks ?? raw.relatedTasks),
     is_archived: Boolean(raw.is_archived),
+    status: typeof raw.status === 'string' ? raw.status as MeetingStatus : 'draft',
   };
 }
 
