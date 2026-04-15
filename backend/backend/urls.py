@@ -73,6 +73,7 @@ urlpatterns = [
     path('api/', include('meetings.urls')),
     path("", include("django_prometheus.urls")),
     path("api/v1/zoom/", include("zoom_integration.urls")),
+    path("api/google-docs/", include("google_docs_integration.urls")),
 ]
 
 if settings.DEBUG:

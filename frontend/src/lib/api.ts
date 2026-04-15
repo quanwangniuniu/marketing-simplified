@@ -92,7 +92,8 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url;
 
-    if (status === 401 && url !== '/auth/login/') {
+    const isGoogleDocsUrl = typeof url === 'string' && url.startsWith('/api/google-docs/');
+    if (status === 401 && url !== '/auth/login/' && !isGoogleDocsUrl) {
       // Clear auth data and redirect to login on unauthorized requests
       // This will be handled by the Zustand store
       if (typeof window !== 'undefined') {
