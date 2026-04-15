@@ -3,7 +3,7 @@ from rest_framework.test import APIClient
 from django.test import TestCase
 
 from core.models import Organization, Project, ProjectMember, CustomUser
-from meetings.models import Meeting, AgendaItem, ParticipantLink, ActionItem
+from meetings.models import Meeting, AgendaItem, ParticipantLink, MeetingActionItem
 
 
 def _meeting(project, **kwargs):
@@ -109,6 +109,50 @@ class TestMeetingLifecycleAPI(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         meeting.refresh_from_db()
         self.assertEqual(meeting.status, Meeting.STATUS_DRAFT)
+
+    def test_in_progress_back_to_planned(self):
+        """Rollback: in_progress → planned is a valid transition for postponed meetings."""
+        meeting = _meeting(self.project, status=Meeting.STATUS_IN_PROGRESS)
+        response = self.client.post(
+            self._transition_url(meeting), {"to_state": "planned"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.status, Meeting.STATUS_PLANNED)
+
+    def test_in_progress_back_to_planned_preserves_data(self):
+        """Rolling back to planned must not lose agenda items or participants."""
+        meeting = _meeting(self.project, status=Meeting.STATUS_IN_PROGRESS, objective="Keep this")
+        ParticipantLink.objects.create(meeting=meeting, user=self.member)
+        AgendaItem.objects.create(meeting=meeting, content="Agenda 1", order_index=0)
+
+        self.client.post(
+            self._transition_url(meeting), {"to_state": "planned"}, format="json"
+        )
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.status, Meeting.STATUS_PLANNED)
+        self.assertEqual(meeting.objective, "Keep this")
+        self.assertEqual(meeting.participant_links.count(), 1)
+        self.assertEqual(meeting.agenda_items.count(), 1)
+
+    def test_in_progress_back_to_planned_non_member_denied(self):
+        """Non-project-member cannot rollback in_progress → planned."""
+        meeting = _meeting(self.project, status=Meeting.STATUS_IN_PROGRESS)
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(
+            self._transition_url(meeting), {"to_state": "planned"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.status, Meeting.STATUS_IN_PROGRESS)
+
+    def test_in_progress_rollback_shows_in_lifecycle(self):
+        """GET lifecycle for in_progress meeting must list 'planned' as available."""
+        meeting = _meeting(self.project, status=Meeting.STATUS_IN_PROGRESS)
+        response = self.client.get(self._lifecycle_url(meeting))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("planned", response.data["available_transitions"])
+        self.assertIn("completed", response.data["available_transitions"])
 
     # ------------------------------------------------------------------
     # Invalid transitions (wrong order / skipping states)
@@ -245,7 +289,7 @@ class TestMeetingLifecycleAPI(TestCase):
 
     def test_to_archived_blocked_by_unresolved_action_items(self):
         meeting = _meeting(self.project, status=Meeting.STATUS_COMPLETED)
-        ActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=False)
+        MeetingActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=False)
         response = self.client.post(
             self._transition_url(meeting), {"to_state": "archived"}, format="json"
         )
@@ -255,7 +299,7 @@ class TestMeetingLifecycleAPI(TestCase):
 
     def test_to_archived_allowed_when_all_action_items_resolved(self):
         meeting = _meeting(self.project, status=Meeting.STATUS_COMPLETED)
-        ActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=True)
+        MeetingActionItem.objects.create(meeting=meeting, description="Follow up", is_resolved=True)
         response = self.client.post(
             self._transition_url(meeting), {"to_state": "archived"}, format="json"
         )
@@ -271,7 +315,7 @@ class TestMeetingLifecycleAPI(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     # ------------------------------------------------------------------
-    # ActionItem CRUD endpoints
+    # MeetingActionItem CRUD endpoints
     # ------------------------------------------------------------------
 
     def _action_items_url(self, meeting):
@@ -285,11 +329,11 @@ class TestMeetingLifecycleAPI(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(ActionItem.objects.filter(meeting=meeting).count(), 1)
+        self.assertEqual(MeetingActionItem.objects.filter(meeting=meeting).count(), 1)
 
     def test_resolve_action_item(self):
         meeting = _meeting(self.project)
-        item = ActionItem.objects.create(meeting=meeting, description="Send report", is_resolved=False)
+        item = MeetingActionItem.objects.create(meeting=meeting, description="Send report", is_resolved=False)
         url = f"{self._action_items_url(meeting)}{item.id}/"
         response = self.client.patch(url, {"is_resolved": True}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
