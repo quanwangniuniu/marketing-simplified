@@ -10,6 +10,7 @@ urlpatterns = [
     path('tasks/bulk_action/', TaskViewSet.as_view({'post': 'bulk_action'}), name='task-bulk-action'),
     path('tasks/force-create/', TaskViewSet.as_view({'post': 'force_create'}), name='task-force-create'),
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}), name='task-detail'),
+    path('tasks/<int:pk>/origins/', TaskViewSet.as_view({'get': 'meeting_origins'}), name='task-origins'),
     
     # Task action endpoints
     path('tasks/<int:pk>/link/', TaskViewSet.as_view({'post': 'link'}), name='task-link'),

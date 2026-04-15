@@ -1,6 +1,7 @@
 import json
 from typing import Iterable
 from django.apps import apps
+from django.core.exceptions import ObjectDoesNotExist
 
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
@@ -13,6 +14,7 @@ from meetings.models import (
     ArtifactLink,
     MeetingTemplate,
     MeetingDocument,
+    MeetingActionItem,
 )
 from meetings.knowledge_links import (
     generated_decisions_payload,
@@ -501,4 +503,69 @@ class MeetingDocumentSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "meeting", "last_edited_by", "created_at", "updated_at"]
+
+
+class MeetingActionItemSerializer(serializers.ModelSerializer):
+    """CRUD for meeting follow-up action items (before task conversion)."""
+
+    converted_task_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeetingActionItem
+        fields = [
+            "id",
+            "meeting",
+            "title",
+            "description",
+            "order_index",
+            "created_at",
+            "updated_at",
+            "converted_task_id",
+        ]
+        read_only_fields = [
+            "id",
+            "meeting",
+            "created_at",
+            "updated_at",
+            "converted_task_id",
+        ]
+
+    def get_converted_task_id(self, obj):
+        try:
+            return obj.derived_task.id
+        except ObjectDoesNotExist:
+            return None
+
+
+class ActionItemConvertSerializer(serializers.Serializer):
+    owner_id = serializers.IntegerField(required=False, allow_null=True)
+    due_date = serializers.DateField(required=False, allow_null=True)
+    priority = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    type = serializers.CharField(default="execution")
+    current_approver_id = serializers.IntegerField(required=False, allow_null=True)
+    create_as_draft = serializers.BooleanField(default=False)
+
+    def validate_priority(self, value):
+        if value == "":
+            return None
+        return value
+
+
+class BulkActionItemConvertItemSerializer(serializers.Serializer):
+    action_item_id = serializers.IntegerField()
+    owner_id = serializers.IntegerField(required=False, allow_null=True)
+    due_date = serializers.DateField(required=False, allow_null=True)
+    priority = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    type = serializers.CharField(default="execution")
+    current_approver_id = serializers.IntegerField(required=False, allow_null=True)
+    create_as_draft = serializers.BooleanField(default=False)
+
+    def validate_priority(self, value):
+        if value == "":
+            return None
+        return value
+
+
+class BulkActionItemConvertSerializer(serializers.Serializer):
+    items = serializers.ListField(child=BulkActionItemConvertItemSerializer(), min_length=1)
 

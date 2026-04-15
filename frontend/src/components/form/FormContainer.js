@@ -8,17 +8,13 @@ export default function FormContainer({ children, title, subtitle }) {
           <div className="text-center mb-8">
             <div className="flex flex-col justify-center mb-4 items-center">
               <Image
-                src="/login_logo_square.jpeg"
+                src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
-                width={278}
-                height={69}
-                className="h-16 w-auto"
+                width={400}
+                height={100}
+                className="h-20 w-auto"
                 priority
               />
-              <h1 className="text-3xl font-bold">
-                <span className="text-blue-800">Marketing</span>
-                <span className="text-gray-900"> Simplified</span>
-              </h1>
             </div>
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
             {subtitle && <p className="mt-2 text-gray-600">{subtitle}</p>}

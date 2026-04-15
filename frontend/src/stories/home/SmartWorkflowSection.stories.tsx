@@ -19,9 +19,5 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => {
-    const redirectToLogin = () => {};
-
-    return <SmartWorkflowSection onRedirectToLogin={redirectToLogin} />;
-  },
+  render: () => <SmartWorkflowSection />,
 };
