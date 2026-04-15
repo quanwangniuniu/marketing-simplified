@@ -25,7 +25,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 const TODO_STATE_REGEX = /data-todo-state="(checked|unchecked)"/i;
-const GOOGLE_DOC_URL_ID_REGEX = /\/document\/d\/([a-zA-Z0-9_-]+)/i;
+const GOOGLE_DOC_URL_ID_REGEX = /\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/i;
 
 const extractGoogleDocId = (value: string): string => {
   const trimmed = value.trim();

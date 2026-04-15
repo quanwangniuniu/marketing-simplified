@@ -31,7 +31,7 @@ from .services import (
     run_google_api_with_token_retry,
 )
 
-GOOGLE_SHEET_URL_ID_REGEX = re.compile(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', re.IGNORECASE)
+GOOGLE_SHEET_URL_ID_REGEX = re.compile(r'/spreadsheets/(?:u/\d+/)?d/([a-zA-Z0-9_-]+)', re.IGNORECASE)
 
 GOOGLE_DOCS_STATE_SALT = "google-docs-oauth-state"
 GOOGLE_DOCS_STATE_MAX_AGE_SECONDS = 600
@@ -76,7 +76,7 @@ class GoogleDocsStatusView(APIView):
             is_active=True,
         ).first()
         payload = {
-            "connected": bool(connection and connection.access_token),
+            "connected": bool(connection and connection.get_access_token()),
             "google_email": connection.google_email if connection else None,
         }
         serializer = GoogleDocsStatusSerializer(data=payload)
@@ -150,8 +150,8 @@ class GoogleDocsCallbackView(APIView):
             email = fetch_google_email(access_token)
             connection, _ = GoogleDocsConnection.objects.get_or_create(user_id=user_id)
             connection.google_email = email
-            connection.access_token = access_token
-            connection.refresh_token = token_data.get("refresh_token") or connection.refresh_token
+            connection.set_access_token(access_token)
+            connection.set_refresh_token(token_data.get("refresh_token") or connection.get_refresh_token())
             connection.token_expiry = token_data.get("token_expiry")
             connection.is_active = True
             connection.save()
@@ -169,9 +169,9 @@ class GoogleDocsDisconnectView(APIView):
         if not connection:
             return Response({"success": True}, status=status.HTTP_200_OK)
         connection.is_active = False
-        connection.access_token = None
-        connection.refresh_token = None
-        connection.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
+        connection.set_access_token(None)
+        connection.set_refresh_token(None)
+        connection.save(update_fields=["is_active", "encrypted_access_token", "encrypted_refresh_token", "updated_at"])
         return Response({"success": True}, status=status.HTTP_200_OK)
 
 
@@ -182,7 +182,7 @@ class GoogleDocsImportView(APIView):
         serializer = GoogleDocsImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         document_id = serializer.validated_data["document_id"]
@@ -223,7 +223,7 @@ class GoogleDocsDocumentListView(APIView):
 
     def get(self, request):
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         page_size_param = request.query_params.get("pageSize")
@@ -252,7 +252,7 @@ class GoogleDocsExportView(APIView):
         serializer = GoogleDocsExportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         decision = Decision.objects.filter(
@@ -292,7 +292,7 @@ class GoogleDocsRawExportView(APIView):
         serializer = GoogleDocsRawExportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         title = serializer.validated_data.get("title") or "Exported Document"
@@ -319,7 +319,7 @@ class GoogleSheetsImportView(APIView):
         serializer = GoogleSheetsImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         sheet_url = serializer.validated_data["sheet_url"]
@@ -347,7 +347,7 @@ class GoogleSheetsExportView(APIView):
         serializer = GoogleSheetsExportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         connection = GoogleDocsConnection.objects.filter(user=request.user, is_active=True).first()
-        if not connection or not connection.access_token:
+        if not connection or not connection.get_access_token():
             return Response({"error": "Google Docs is not connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         title = serializer.validated_data.get("title") or "Exported Sheet"

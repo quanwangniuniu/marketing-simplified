@@ -1,6 +1,6 @@
 from datetime import timedelta
 from html import escape
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import requests
 from django.conf import settings
@@ -80,27 +80,27 @@ def refresh_google_tokens(refresh_token: str) -> dict:
 
 
 def _persist_refreshed_tokens(connection: GoogleDocsConnection, payload: dict) -> None:
-    connection.access_token = payload["access_token"]
+    connection.set_access_token(payload["access_token"])
     new_refresh = payload.get("refresh_token")
     if new_refresh:
-        connection.refresh_token = new_refresh
+        connection.set_refresh_token(new_refresh)
     connection.token_expiry = payload.get("token_expiry")
-    connection.save(update_fields=["access_token", "refresh_token", "token_expiry", "updated_at"])
+    connection.save(update_fields=["encrypted_access_token", "encrypted_refresh_token", "token_expiry", "updated_at"])
 
 
 def get_access_token_for_api(connection: GoogleDocsConnection) -> str:
-    if not connection.access_token:
+    if not connection.get_access_token():
         raise ValueError("Google Docs is not connected.")
     now = timezone.now()
     buffer = timedelta(minutes=2)
     expiry_ok = connection.token_expiry and connection.token_expiry > now + buffer
     if expiry_ok:
-        return connection.access_token
-    if not connection.refresh_token:
-        return connection.access_token
-    payload = refresh_google_tokens(connection.refresh_token)
+        return connection.get_access_token()
+    if not connection.get_refresh_token():
+        return connection.get_access_token()
+    payload = refresh_google_tokens(connection.get_refresh_token())
     _persist_refreshed_tokens(connection, payload)
-    return connection.access_token
+    return connection.get_access_token()
 
 
 def run_google_api_with_token_retry(connection: GoogleDocsConnection, fn):
@@ -110,11 +110,11 @@ def run_google_api_with_token_retry(connection: GoogleDocsConnection, fn):
     except requests.HTTPError as exc:
         if exc.response is None or exc.response.status_code != 401:
             raise
-        if not connection.refresh_token:
+        if not connection.get_refresh_token():
             raise
-        payload = refresh_google_tokens(connection.refresh_token)
+        payload = refresh_google_tokens(connection.get_refresh_token())
         _persist_refreshed_tokens(connection, payload)
-        return fn(connection.access_token)
+        return fn(connection.get_access_token())
 
 
 def fetch_google_email(access_token: str) -> str | None:
@@ -286,7 +286,7 @@ def fetch_google_sheet(spreadsheet_id: str, access_token: str) -> tuple[str, lis
     first_sheet = sheets[0]["properties"]["title"] if sheets else "Sheet1"
 
     values_response = requests.get(
-        f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{first_sheet}",
+        f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{quote(first_sheet, safe='')}",
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=20,
     )
