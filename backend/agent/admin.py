@@ -3,6 +3,8 @@ from .models import (
     AgentSession, AgentMessage, ImportedCSVFile,
     AgentWorkflowRun, AgentWorkflowDefinition,
     AgentWorkflowStep, AgentStepExecution,
+    FieldCategory, DataSchemaTemplate,
+    ImportedDataField, ImportedDataRecord,
 )
 
 
@@ -47,3 +49,33 @@ class AgentWorkflowStepAdmin(admin.ModelAdmin):
 class AgentStepExecutionAdmin(admin.ModelAdmin):
     list_display = ('id', 'workflow_run', 'step_name', 'step_order', 'status', 'started_at')
     list_filter = ('status',)
+
+
+@admin.register(FieldCategory)
+class FieldCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'display_name', 'is_system', 'project', 'created_at')
+    list_filter = ('is_system',)
+    search_fields = ('name', 'display_name')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(DataSchemaTemplate)
+class DataSchemaTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'source_platform', 'is_system', 'is_learned', 'usage_count', 'created_at')
+    list_filter = ('source_platform', 'is_system', 'is_learned')
+    search_fields = ('name',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(ImportedDataField)
+class ImportedDataFieldAdmin(admin.ModelAdmin):
+    list_display = ('original_name', 'canonical_name', 'category', 'value_type', 'confidence', 'file', 'position')
+    list_filter = ('category', 'value_type')
+    search_fields = ('original_name', 'canonical_name')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(ImportedDataRecord)
+class ImportedDataRecordAdmin(admin.ModelAdmin):
+    list_display = ('id', 'file', 'row_index', 'quality_score', 'created_at')
+    readonly_fields = ('created_at',)

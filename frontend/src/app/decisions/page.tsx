@@ -430,7 +430,7 @@ const DecisionsPage = () => {
           return (
           <div
             key={groupKey}
-            className="rounded-2xl border border-gray-200 bg-white shadow-sm"
+            className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
           >
             <div
               className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4"
@@ -920,9 +920,9 @@ const DecisionsPage = () => {
   ]);
 
   return (
-    <Layout>
+    <Layout mainScrollMode="container">
       <ProtectedRoute>
-        <div className="flex h-full flex-col gap-6 bg-gray-50 px-6 py-6">
+        <div className="flex h-full flex-col gap-6 overflow-x-hidden overflow-y-auto bg-gray-50 px-6 py-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">Decisions</h1>
