@@ -22,7 +22,8 @@ interface NotionLayoutProps {
   onExportGoogleDoc: () => void | Promise<void>;
   onSave: () => void | Promise<void>;
   isSaving: boolean;
-  googleDocsBusy: boolean;
+  googleDocsImportBusy: boolean;
+  googleDocsExportBusy: boolean;
   hasChanges: boolean;
   isLoadingEditor: boolean;
   blocks: EditorBlock[];
@@ -46,7 +47,8 @@ export default function NotionLayout({
   onExportGoogleDoc,
   onSave,
   isSaving,
-  googleDocsBusy,
+  googleDocsImportBusy,
+  googleDocsExportBusy,
   hasChanges,
   isLoadingEditor,
   blocks,
@@ -124,17 +126,17 @@ export default function NotionLayout({
               type="button"
               onClick={onImportGoogleDoc}
               className="px-3 py-1.5 text-sm bg-emerald-600 text-white hover:bg-emerald-700 rounded-md transition-colors font-medium disabled:opacity-60"
-              disabled={!selectedDraftId || googleDocsBusy}
+              disabled={!selectedDraftId || googleDocsImportBusy || googleDocsExportBusy}
             >
-              {googleDocsBusy ? 'Importing…' : 'Import Doc'}
+              {googleDocsImportBusy ? 'Importing…' : 'Import Doc'}
             </button>
             <button
               type="button"
               onClick={onExportGoogleDoc}
               className="px-3 py-1.5 text-sm bg-violet-600 text-white hover:bg-violet-700 rounded-md transition-colors font-medium disabled:opacity-60"
-              disabled={!selectedDraftId || googleDocsBusy}
+              disabled={!selectedDraftId || googleDocsImportBusy || googleDocsExportBusy}
             >
-              {googleDocsBusy ? 'Exporting…' : 'Export Doc'}
+              {googleDocsExportBusy ? 'Exporting…' : 'Export Doc'}
             </button>
             <button
               type="button"

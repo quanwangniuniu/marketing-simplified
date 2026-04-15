@@ -311,15 +311,16 @@ def export_to_google_sheet(title: str, matrix: list, access_token: str) -> dict:
 
     if matrix:
         max_cols = max((len(row) for row in matrix), default=0)
-        range_notation = f"Sheet1!A1:{_col_letter(max_cols)}{len(matrix)}"
-        update_response = requests.put(
-            f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{range_notation}",
-            headers={"Authorization": f"Bearer {access_token}"},
-            params={"valueInputOption": "USER_ENTERED"},
-            json={"values": matrix},
-            timeout=30,
-        )
-        update_response.raise_for_status()
+        if max_cols > 0:
+            range_notation = f"Sheet1!A1:{_col_letter(max_cols)}{len(matrix)}"
+            update_response = requests.put(
+                f"{GOOGLE_SHEETS_URL}/{spreadsheet_id}/values/{range_notation}",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={"valueInputOption": "USER_ENTERED"},
+                json={"values": matrix},
+                timeout=30,
+            )
+            update_response.raise_for_status()
 
     return {
         "spreadsheet_id": spreadsheet_id,

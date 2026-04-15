@@ -243,7 +243,8 @@ function NotionPageContent() {
   const [lastEditedAt, setLastEditedAt] = useState<Date | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [deletingDraftId, setDeletingDraftId] = useState<number | null>(null);
-  const [googleDocsBusy, setGoogleDocsBusy] = useState<boolean>(false);
+  const [googleDocsImportBusy, setGoogleDocsImportBusy] = useState<boolean>(false);
+  const [googleDocsExportBusy, setGoogleDocsExportBusy] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [importDocumentId, setImportDocumentId] = useState<string>('');
   const [googleDocsListLoading, setGoogleDocsListLoading] = useState<boolean>(false);
@@ -859,7 +860,7 @@ function NotionPageContent() {
       return;
     }
     try {
-      setGoogleDocsBusy(true);
+      setGoogleDocsImportBusy(true);
       const payload = await googleDocsApi.importDocument(normalizedDocumentId);
       const importedTitle = payload?.title || title;
       const importedContent = payload?.content || '';
@@ -875,7 +876,7 @@ function NotionPageContent() {
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to import Google Doc.');
     } finally {
-      setGoogleDocsBusy(false);
+      setGoogleDocsImportBusy(false);
     }
   }, [importDocumentId, plainTextToHtml, selectedDraftId, title]);
 
@@ -885,7 +886,7 @@ function NotionPageContent() {
       return;
     }
     try {
-      setGoogleDocsBusy(true);
+      setGoogleDocsExportBusy(true);
       const content = blocks
         .map((block) => {
           if (block.type === 'divider') return '----------------';
@@ -902,7 +903,7 @@ function NotionPageContent() {
     } catch (error: any) {
       toast.error(error?.response?.data?.error || 'Failed to export Google Doc.');
     } finally {
-      setGoogleDocsBusy(false);
+      setGoogleDocsExportBusy(false);
     }
   }, [blocks, htmlToPlainText, selectedDraftId, title]);
 
@@ -929,7 +930,8 @@ function NotionPageContent() {
         onExportGoogleDoc={handleExportGoogleDoc}
         onSave={handleSave}
         isSaving={isSaving}
-        googleDocsBusy={googleDocsBusy}
+        googleDocsImportBusy={googleDocsImportBusy}
+        googleDocsExportBusy={googleDocsExportBusy}
         hasChanges={hasChanges}
         isLoadingEditor={isLoadingEditor}
         blocks={blocks}
@@ -1000,7 +1002,7 @@ function NotionPageContent() {
               type="button"
               onClick={() => setIsImportModalOpen(false)}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              disabled={googleDocsBusy}
+              disabled={googleDocsImportBusy}
             >
               Cancel
             </button>
@@ -1008,9 +1010,9 @@ function NotionPageContent() {
               type="button"
               onClick={handleConfirmImportGoogleDoc}
               className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-              disabled={googleDocsBusy || !importDocumentId.trim()}
+              disabled={googleDocsImportBusy || !importDocumentId.trim()}
             >
-              {googleDocsBusy ? 'Importing…' : 'Import'}
+              {googleDocsImportBusy ? 'Importing…' : 'Import'}
             </button>
           </DialogFooter>
         </DialogContent>
