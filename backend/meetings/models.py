@@ -143,7 +143,7 @@ class Meeting(TimeStampedModel):
     scheduled_date = models.DateField(blank=True, null=True)
     scheduled_time = models.TimeField(blank=True, null=True)
     external_reference = models.CharField(max_length=255, blank=True, null=True)
-    layout_config = models.JSONField(default=list, null=True, blank=True)
+    layout_config = models.JSONField(default=dict, null=True, blank=True)
     status = models.CharField(
         max_length=32,
         choices=STATUS_CHOICES,

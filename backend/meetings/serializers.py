@@ -84,6 +84,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "scheduled_date",
             "scheduled_time",
             "external_reference",
+            "layout_config",
             "status",
             "is_archived",
             "participants",
@@ -118,6 +119,13 @@ class MeetingSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["meeting_type"] = instance.type_definition.label
+        lc = data.get("layout_config")
+        if lc is None:
+            data["layout_config"] = []
+        elif isinstance(lc, (list, dict)):
+            pass
+        else:
+            data["layout_config"] = []
         return data
 
     def get_participants(self, obj):
@@ -153,17 +161,6 @@ class MeetingSerializer(serializers.ModelSerializer):
         project = validated_data["project"]
         validated_data["type_definition"] = ensure_meeting_type_definition(project, label)
         return Meeting.objects.create(**validated_data)
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        lc = data.get("layout_config")
-        if lc is None:
-            data["layout_config"] = []
-        elif isinstance(lc, (list, dict)):
-            pass
-        else:
-            data["layout_config"] = []
-        return data
 
     def validate_layout_config(self, value):
         if value is None:
