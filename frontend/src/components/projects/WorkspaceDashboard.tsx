@@ -1,7 +1,7 @@
 'use client';
 
 // SMP-472: Project Workspace Dashboard
-// Displays Decision / Task / Spreadsheet summaries scoped to a single project.
+// Displays Decision / Task / Spreadsheet / Pattern summaries scoped to a single project.
 // This is an orientation surface — read-only, no editing, quick navigation only.
 
 import { useEffect, useState } from 'react';
@@ -11,20 +11,24 @@ import { WorkspaceAPI, type WorkspaceDashboardData } from '@/lib/api/workspaceAp
 
 // ── Status badge helpers ────────────────────────────────────────────────────
 
-// Maps backend status strings to readable labels and colors
+// Maps backend Decision status strings to readable labels and colors
 const DECISION_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  COMMITTED:        { label: 'Committed',        color: 'bg-green-100 text-green-800' },
-  AWAITING_APPROVAL:{ label: 'Awaiting Approval', color: 'bg-yellow-100 text-yellow-800' },
-  REVIEWED:         { label: 'Reviewed',          color: 'bg-blue-100 text-blue-800' },
-  DRAFT:            { label: 'Draft',             color: 'bg-gray-100 text-gray-600' },
+  COMMITTED: { label: 'Committed', color: 'bg-green-100 text-green-800' },
+  AWAITING_APPROVAL: { label: 'Awaiting Approval', color: 'bg-yellow-100 text-yellow-800' },
+  REVIEWED: { label: 'Reviewed', color: 'bg-blue-100 text-blue-800' },
+  DRAFT: { label: 'Draft', color: 'bg-gray-100 text-gray-600' },
 };
 
+// Maps backend Task status strings to readable labels and colors
 const TASK_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  SUBMITTED:   { label: 'Submitted',   color: 'bg-blue-100 text-blue-800' },
-  UNDER_REVIEW:{ label: 'Under Review',color: 'bg-yellow-100 text-yellow-800' },
-  REJECTED:    { label: 'Rejected',    color: 'bg-red-100 text-red-800' },
-  DRAFT:       { label: 'Draft',       color: 'bg-gray-100 text-gray-600' },
+  SUBMITTED: { label: 'Submitted', color: 'bg-blue-100 text-blue-800' },
+  UNDER_REVIEW: { label: 'Under Review', color: 'bg-yellow-100 text-yellow-800' },
+  REJECTED: { label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  DRAFT: { label: 'Draft', color: 'bg-gray-100 text-gray-600' },
 };
+
+// Terminal statuses — overdue label is not shown for these
+const TERMINAL_STATUSES = ['APPROVED', 'LOCKED', 'CANCELLED'];
 
 function StatusBadge({ label, color }: { label: string; color: string }) {
   return (
@@ -136,7 +140,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
   if (!data) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
 
       {/* ── Decision Zone ── */}
       <ZoneCard
@@ -153,13 +157,20 @@ export default function WorkspaceDashboard({ projectId }: Props) {
           return (
             <Link
               key={decision.id}
+              // Include project_id so Decision detail page passes permission check
               href={`/decisions/${decision.id}?project_id=${projectId}`}
               className="flex flex-col gap-1 py-3 hover:bg-gray-50 -mx-5 px-5 transition-colors"
             >
               <span className="text-sm font-medium text-gray-900 line-clamp-1">
                 {decision.title ?? '(Untitled decision)'}
               </span>
-              <StatusBadge label={badge.label} color={badge.color} />
+              <div className="flex items-center gap-2 flex-wrap">
+                <StatusBadge label={badge.label} color={badge.color} />
+                {/* Unresolved badge: shown when decision has linked tasks not yet completed */}
+                {decision.has_unresolved_tasks && (
+                  <span className="text-xs font-medium text-orange-600">Unresolved</span>
+                )}
+              </div>
             </Link>
           );
         })}
@@ -177,11 +188,12 @@ export default function WorkspaceDashboard({ projectId }: Props) {
             label: task.status,
             color: 'bg-gray-100 text-gray-600',
           };
-          // Highlight overdue tasks in red
+
+          // Show Overdue label if due date is in the past and task is not in a terminal status
           const isOverdue =
             task.due_date &&
             new Date(task.due_date) < new Date() &&
-            !['APPROVED', 'LOCKED', 'CANCELLED'].includes(task.status);
+            !TERMINAL_STATUSES.includes(task.status);
 
           return (
             <Link
@@ -192,10 +204,19 @@ export default function WorkspaceDashboard({ projectId }: Props) {
               <span className="text-sm font-medium text-gray-900 line-clamp-1">
                 {task.summary}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge label={badge.label} color={badge.color} />
+                {/* Decision-linked badge: shown when task is linked to a Decision */}
+                {task.is_decision_linked && (
+                  <span className="text-xs font-medium text-purple-600">Decision</span>
+                )}
+                {/* Overdue badge: shown when due date has passed */}
                 {isOverdue && (
                   <span className="text-xs font-medium text-red-600">Overdue</span>
+                )}
+                {/* Blocked badge: shown when another task is blocking this one */}
+                {task.is_blocked && (
+                  <span className="text-xs font-medium text-orange-600">Blocked</span>
                 )}
               </div>
             </Link>
@@ -211,14 +232,14 @@ export default function WorkspaceDashboard({ projectId }: Props) {
         emptyMessage="No spreadsheets in this project yet."
       >
         {data.spreadsheets.map((sheet) => {
-          // Format updated_at to relative time for display
+          // Convert updated_at to a human-readable relative time string
           const updatedAt = new Date(sheet.updated_at);
           const diffMs = Date.now() - updatedAt.getTime();
           const diffHours = Math.floor(diffMs / 3600000);
           const relativeTime =
             diffHours < 1 ? 'just now' :
-            diffHours < 24 ? `${diffHours}h ago` :
-            `${Math.floor(diffHours / 24)}d ago`;
+              diffHours < 24 ? `${diffHours}h ago` :
+                `${Math.floor(diffHours / 24)}d ago`;
 
           return (
             <Link
@@ -229,8 +250,49 @@ export default function WorkspaceDashboard({ projectId }: Props) {
               <span className="text-sm font-medium text-gray-900 line-clamp-1">
                 {sheet.name}
               </span>
-              <span className="ml-2 shrink-0 text-xs text-gray-400">{relativeTime}</span>
+              <div className="flex items-center gap-2 ml-2 shrink-0">
+                {/* Running badge: shown when a PatternJob is queued or running */}
+                {sheet.has_running_job && (
+                  <span className="text-xs font-medium text-blue-600">Running</span>
+                )}
+                <span className="text-xs text-gray-400">{relativeTime}</span>
+              </div>
             </Link>
+          );
+        })}
+      </ZoneCard>
+
+      {/* ── Pattern Zone ── */}
+      <ZoneCard
+        title="🔁 Patterns"
+        count={data.patterns.length}
+        viewAllHref={`/projects/${projectId}/spreadsheets`}
+        emptyMessage="No patterns used in this project yet."
+      >
+        {data.patterns.map((pattern) => {
+          // Convert updated_at to a human-readable relative time string
+          const updatedAt = new Date(pattern.updated_at);
+          const diffMs = Date.now() - updatedAt.getTime();
+          const diffHours = Math.floor(diffMs / 3600000);
+          const relativeTime =
+            diffHours < 1 ? 'just now' :
+              diffHours < 24 ? `${diffHours}h ago` :
+                `${Math.floor(diffHours / 24)}d ago`;
+
+          return (
+            <div
+              key={pattern.id}
+              className="flex items-center justify-between py-3 -mx-5 px-5"
+            >
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                  {pattern.name}
+                </span>
+                {/* Show version number for reference */}
+                <span className="text-xs text-gray-400">v{pattern.version}</span>
+              </div>
+              <span className="ml-2 shrink-0 text-xs text-gray-400">{relativeTime}</span>
+            </div>
           );
         })}
       </ZoneCard>

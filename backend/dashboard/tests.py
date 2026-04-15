@@ -207,3 +207,201 @@ class ProjectWorkspaceDashboardTest(TestCase):
 
         response = self.client.get(self.url)
         self.assertEqual(len(response.json()["decisions"]), 0)
+
+
+    def _make_task_relation(self, source_task, target_task, relationship_type):
+        """Helper: create a TaskRelation between two tasks"""
+        from task.models import TaskRelation
+        return TaskRelation.objects.create(
+            source_task=source_task,
+            target_task=target_task,
+            relationship_type=relationship_type
+        )
+
+    def _make_pattern_job(self, spreadsheet, status='running'):
+        """Helper: create a PatternJob for a spreadsheet"""
+        from spreadsheet.models import PatternJob, WorkflowPattern, Sheet
+        pattern = WorkflowPattern.objects.create(
+            owner=self.user,
+            name="Test Pattern"
+        )
+        sheet = Sheet.objects.create(
+            spreadsheet=spreadsheet,
+            name="Sheet1",
+            position=0
+        )
+        return PatternJob.objects.create(
+            pattern=pattern,
+            spreadsheet=spreadsheet,
+            sheet=sheet,
+            status=status,
+            created_by=self.user
+        )
+
+    def test_blocked_tasks_are_included(self):
+        """Tasks blocked by another task must appear in dashboard."""
+        from task.models import TaskRelation
+        blocker = self._make_task(self.project, status=Task.Status.SUBMITTED)
+        blocked = self._make_task(self.project, status=Task.Status.SUBMITTED)
+        self._make_task_relation(blocker, blocked, TaskRelation.BLOCKS)
+
+        response = self.client.get(self.url)
+        task_ids = [t['id'] for t in response.json()['tasks']]
+        self.assertIn(blocked.id, task_ids)
+
+    def test_blocked_task_has_is_blocked_flag(self):
+        """Blocked tasks must have is_blocked=True in response."""
+        from task.models import TaskRelation
+        blocker = self._make_task(self.project, status=Task.Status.SUBMITTED)
+        blocked = self._make_task(self.project, status=Task.Status.SUBMITTED)
+        self._make_task_relation(blocker, blocked, TaskRelation.BLOCKS)
+
+        response = self.client.get(self.url)
+        tasks = response.json()['tasks']
+        blocked_task = next((t for t in tasks if t['id'] == blocked.id), None)
+        self.assertIsNotNone(blocked_task)
+        self.assertTrue(blocked_task['is_blocked'])
+
+    def test_non_blocked_task_has_is_blocked_false(self):
+        """Non-blocked tasks must have is_blocked=False."""
+        task = self._make_task(self.project, status=Task.Status.SUBMITTED)
+        response = self.client.get(self.url)
+        tasks = response.json()['tasks']
+        task_data = next((t for t in tasks if t['id'] == task.id), None)
+        self.assertFalse(task_data['is_blocked'])
+
+    def test_spreadsheet_has_running_job_flag(self):
+        """Spreadsheets with running PatternJob must have has_running_job=True."""
+        sheet = self._make_spreadsheet(self.project, name="Active Sheet")
+        self._make_pattern_job(sheet, status='running')
+
+        response = self.client.get(self.url)
+        sheets = response.json()['spreadsheets']
+        sheet_data = next((s for s in sheets if s['id'] == sheet.id), None)
+        self.assertIsNotNone(sheet_data)
+        self.assertTrue(sheet_data['has_running_job'])
+
+    def test_spreadsheet_without_running_job_has_flag_false(self):
+        """Spreadsheets without running PatternJob must have has_running_job=False."""
+        sheet = self._make_spreadsheet(self.project)
+        response = self.client.get(self.url)
+        sheets = response.json()['spreadsheets']
+        sheet_data = next((s for s in sheets if s['id'] == sheet.id), None)
+        self.assertFalse(sheet_data['has_running_job'])
+
+    def _make_decision_linked_task(self, project, decision, status=Task.Status.SUBMITTED):
+        """Helper: create a task linked to a decision via content_type + object_id."""
+        from django.contrib.contenttypes.models import ContentType
+        from decision.models import Decision as DecisionModel
+        task = Task.objects.create(
+            summary="Decision-linked Task",
+            project=project,
+            owner=self.user,
+            type="execution",
+            status=status,
+            content_type=ContentType.objects.get_for_model(DecisionModel),
+            object_id=str(decision.id),
+        )
+        return task
+
+    def test_decision_linked_tasks_shown_first(self):
+        """Tasks linked to a decision must appear in the dashboard task zone."""
+        decision = self._make_decision(self.project)
+        linked_task = self._make_decision_linked_task(self.project, decision)
+        unlinked_task = self._make_task(self.project)
+
+        response = self.client.get(self.url)
+        task_ids = [t['id'] for t in response.json()['tasks']]
+        self.assertIn(linked_task.id, task_ids)
+        self.assertIn(unlinked_task.id, task_ids)
+
+    def test_decision_linked_task_has_flag(self):
+        """Tasks linked to a decision must have is_decision_linked=True."""
+        decision = self._make_decision(self.project)
+        linked_task = self._make_decision_linked_task(self.project, decision)
+
+        response = self.client.get(self.url)
+        tasks = response.json()['tasks']
+        task_data = next((t for t in tasks if t['id'] == linked_task.id), None)
+        self.assertIsNotNone(task_data)
+        self.assertTrue(task_data['is_decision_linked'])
+
+    def test_unlinked_task_has_no_decision_flag(self):
+        """Tasks not linked to a decision must have is_decision_linked=False."""
+        task = self._make_task(self.project)
+        response = self.client.get(self.url)
+        tasks = response.json()['tasks']
+        task_data = next((t for t in tasks if t['id'] == task.id), None)
+        self.assertFalse(task_data['is_decision_linked'])
+
+    def test_decisions_with_unresolved_execution_shown(self):
+        """Decisions with linked tasks not yet completed must appear in dashboard."""
+        decision = self._make_decision(self.project)
+        self._make_decision_linked_task(
+            self.project, decision, status=Task.Status.SUBMITTED
+        )
+        response = self.client.get(self.url)
+        decision_ids = [d['id'] for d in response.json()['decisions']]
+        self.assertIn(decision.id, decision_ids)
+
+    def test_decisions_with_all_tasks_completed_not_flagged(self):
+        """Decisions whose all linked tasks are completed must have has_unresolved_tasks=False."""
+        decision = self._make_decision(self.project)
+        self._make_decision_linked_task(
+            self.project, decision, status=Task.Status.APPROVED
+        )
+        response = self.client.get(self.url)
+        decisions = response.json()['decisions']
+        decision_data = next((d for d in decisions if d['id'] == decision.id), None)
+        if decision_data:
+            self.assertFalse(decision_data['has_unresolved_tasks'])
+
+    def _make_workflow_pattern(self, spreadsheet, name="Test Pattern"):
+        """Helper: create a WorkflowPattern originating from a spreadsheet."""
+        from spreadsheet.models import WorkflowPattern
+        return WorkflowPattern.objects.create(
+            owner=self.user,
+            name=name,
+            origin_spreadsheet_id=spreadsheet.id,
+            is_archived=False,
+        )
+
+    def test_workflow_patterns_shown_in_response(self):
+        """WorkflowPatterns from project spreadsheets must appear in dashboard."""
+        sheet = self._make_spreadsheet(self.project, name="Pattern Sheet")
+        self._make_workflow_pattern(sheet, name="My Pattern")
+
+        response = self.client.get(self.url)
+        self.assertIn("patterns", response.json())
+        self.assertEqual(len(response.json()["patterns"]), 1)
+        self.assertEqual(response.json()["patterns"][0]["name"], "My Pattern")
+
+    def test_archived_patterns_not_shown(self):
+        """Archived WorkflowPatterns must not appear in dashboard."""
+        from spreadsheet.models import WorkflowPattern
+        sheet = self._make_spreadsheet(self.project)
+        WorkflowPattern.objects.create(
+            owner=self.user,
+            name="Archived Pattern",
+            origin_spreadsheet_id=sheet.id,
+            is_archived=True,
+        )
+        response = self.client.get(self.url)
+        self.assertEqual(len(response.json()["patterns"]), 0)
+
+    def test_patterns_from_other_project_not_shown(self):
+        """Patterns from other project spreadsheets must not appear."""
+        other_sheet = self._make_spreadsheet(self.other_project, name="Other Sheet")
+        self._make_workflow_pattern(other_sheet, name="Other Pattern")
+
+        response = self.client.get(self.url)
+        self.assertEqual(len(response.json()["patterns"]), 0)
+
+    def test_patterns_limited_to_five(self):
+        """At most 5 patterns should be returned."""
+        sheet = self._make_spreadsheet(self.project)
+        for i in range(7):
+            self._make_workflow_pattern(sheet, name=f"Pattern {i}")
+
+        response = self.client.get(self.url)
+        self.assertLessEqual(len(response.json()["patterns"]), 5)

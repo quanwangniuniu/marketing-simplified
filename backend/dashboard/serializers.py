@@ -89,31 +89,66 @@ class DashboardSummarySerializer(serializers.Serializer):
     types_of_work = TypeBreakdownSerializer(many=True)
     recent_activity = ActivityEventSerializer(many=True)
 
+
 # ── SMP-472: Project Workspace Dashboard serializers ──────────────────────
 
 from decision.models import Decision
-from spreadsheet.models import Spreadsheet
+from spreadsheet.models import Spreadsheet, WorkflowPattern
 
 
 class WorkspaceDecisionSerializer(serializers.ModelSerializer):
     """Decision summary for Project Workspace Dashboard."""
+    has_unresolved_tasks = serializers.SerializerMethodField()
+
     class Meta:
         model = Decision
-        fields = ['id', 'title', 'status', 'risk_level', 'updated_at']
+        fields = ['id', 'title', 'status', 'risk_level', 'updated_at', 'has_unresolved_tasks']
+
+    def get_has_unresolved_tasks(self, obj):
+        """Return True if this decision has linked tasks not yet completed."""
+        return obj.has_unresolved_tasks_flag
 
 
 class WorkspaceTaskSerializer(serializers.ModelSerializer):
     """Task summary for Project Workspace Dashboard."""
+    is_blocked = serializers.SerializerMethodField()
+    is_decision_linked = serializers.SerializerMethodField()
+
     class Meta:
         model = Task
-        fields = ['id', 'summary', 'status', 'priority', 'type', 'due_date', 'updated_at']
+        fields = [
+            'id', 'summary', 'status', 'priority', 'type',
+            'due_date', 'updated_at', 'is_blocked', 'is_decision_linked'
+        ]
+
+    def get_is_blocked(self, obj):
+        """Return True if this task is blocked by another task via TaskRelation.BLOCKS."""
+        return obj.is_blocked_flag
+
+    def get_is_decision_linked(self, obj):
+        """Return True if this task is linked to a Decision via content_type GenericForeignKey."""
+        return obj.is_decision_linked_flag
 
 
 class WorkspaceSpreadsheetSerializer(serializers.ModelSerializer):
     """Spreadsheet summary for Project Workspace Dashboard."""
+    has_running_job = serializers.SerializerMethodField()
+
     class Meta:
         model = Spreadsheet
-        fields = ['id', 'name', 'updated_at']
+        fields = ['id', 'name', 'updated_at', 'has_running_job']
+
+    def get_has_running_job(self, obj):
+        """Return True if this spreadsheet has a queued or running PatternJob."""
+        return obj.has_running_job_flag
+
+
+class WorkspacePatternSerializer(serializers.ModelSerializer):
+    """WorkflowPattern summary for Project Workspace Dashboard."""
+
+    class Meta:
+        model = WorkflowPattern
+        fields = ['id', 'name', 'description', 'version', 'updated_at']
 
 
 class ProjectWorkspaceDashboardSerializer(serializers.Serializer):
@@ -121,3 +156,4 @@ class ProjectWorkspaceDashboardSerializer(serializers.Serializer):
     decisions = WorkspaceDecisionSerializer(many=True)
     tasks = WorkspaceTaskSerializer(many=True)
     spreadsheets = WorkspaceSpreadsheetSerializer(many=True)
+    patterns = WorkspacePatternSerializer(many=True)

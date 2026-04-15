@@ -45,8 +45,8 @@ def disable_tracing(func):
 
 class DashboardSummaryView(APIView):
     """
-    Dashboard summary endpoint - Returns all dashboard statistics
-    Supports optional project_id filtering
+    Dashboard summary endpoint - Returns all dashboard statistics.
+    Supports optional project_id filtering.
 
     PERFORMANCE NOTES:
     - SAFETY LOCK 2: Tracing disabled for this endpoint (high response body size)
@@ -188,7 +188,7 @@ class DashboardSummaryView(APIView):
         """
         Gather recent activity from multiple sources and unify them.
 
-        CRITICAL OPTIMIZATION: Direct project_id filtering instead of subqueries
+        CRITICAL OPTIMIZATION: Direct project_id filtering instead of subqueries.
         - Much faster than task__in=queryset which creates expensive subqueries
         - Uses indexed project_id field for fast lookups
         """
@@ -246,7 +246,7 @@ class DashboardSummaryView(APIView):
         return activities[:limit]
 
     def _get_human_readable_time(self, timestamp):
-        """Convert timestamp to human-readable format"""
+        """Convert timestamp to human-readable relative time string."""
         now = timezone.now()
         diff = now - timestamp
         seconds = diff.total_seconds()
@@ -276,15 +276,16 @@ class ProjectWorkspaceDashboardView(APIView):
     """
     Project Workspace Dashboard endpoint for SMP-472.
 
-    Returns a lightweight summary of Decisions, Tasks, and Spreadsheets
-    scoped strictly to the requested project. This is an orientation surface,
-    not an analytics dashboard — no cross-project data is ever returned.
+    Returns a lightweight summary of Decisions, Tasks, Spreadsheets, and
+    WorkflowPatterns scoped strictly to the requested project.
+    This is an orientation surface, not an analytics dashboard —
+    no cross-project data is ever returned.
 
     Query params:
         project_id (int, required): The project to scope the dashboard to.
 
     Returns:
-        200: { decisions: [...], tasks: [...], spreadsheets: [...] }
+        200: { decisions: [...], tasks: [...], spreadsheets: [...], patterns: [...] }
         400: If project_id is missing or invalid.
         401: If the user is not authenticated.
     """
@@ -311,8 +312,33 @@ class ProjectWorkspaceDashboardView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from django.db import models as django_models
+        from django.db.models import Exists, OuterRef
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models.functions import Cast
+        from task.models import TaskRelation
+        from spreadsheet.models import PatternJob, WorkflowPattern
+
+        # Get ContentType for Decision — used to identify decision-linked tasks
+        decision_content_type = ContentType.objects.get_for_model(Decision)
+
+        # Terminal task statuses — tasks in these states are considered resolved
+        RESOLVED_TASK_STATUSES = [
+            Task.Status.APPROVED,
+            Task.Status.LOCKED,
+            Task.Status.CANCELLED,
+        ]
+
         # --- Decision Zone ---
-        # Show active decisions: committed or awaiting approval, most recent first
+        # Show active decisions: committed, awaiting approval, or reviewed
+        # Annotate with has_unresolved_tasks_flag: True if any linked task is not yet resolved
+
+        unresolved_tasks_subquery = Task.objects.filter(
+            project_id=project_id,
+            content_type=decision_content_type,
+            object_id=Cast(OuterRef('pk'), django_models.CharField()),
+        ).exclude(status__in=RESOLVED_TASK_STATUSES)
+
         decisions = Decision.objects.filter(
             project_id=project_id,
             is_deleted=False,
@@ -321,10 +347,27 @@ class ProjectWorkspaceDashboardView(APIView):
                 Decision.Status.AWAITING_APPROVAL,
                 Decision.Status.REVIEWED,
             ]
+        ).annotate(
+            has_unresolved_tasks_flag=Exists(unresolved_tasks_subquery)
         ).order_by('-updated_at')[:self.ZONE_LIMIT]
 
         # --- Task Zone ---
-        # Show tasks that need attention: submitted, under review, or rejected
+        # Show tasks needing attention: submitted, under review, or rejected
+        # Annotate with is_blocked_flag and is_decision_linked_flag
+        # Priority order: decision-linked first, then blocked, then by updated_at
+
+        # Subquery: is this task blocked by another task via TaskRelation.BLOCKS?
+        blocked_subquery = TaskRelation.objects.filter(
+            target_task=OuterRef('pk'),
+            relationship_type=TaskRelation.BLOCKS,
+        )
+
+        # Subquery: is this task linked to a Decision via GenericForeignKey?
+        decision_linked_subquery = Task.objects.filter(
+            pk=OuterRef('pk'),
+            content_type=decision_content_type,
+        )
+
         tasks = Task.objects.filter(
             project_id=project_id,
             status__in=[
@@ -332,12 +375,44 @@ class ProjectWorkspaceDashboardView(APIView):
                 Task.Status.UNDER_REVIEW,
                 Task.Status.REJECTED,
             ]
-        ).order_by('-updated_at')[:self.ZONE_LIMIT]
+        ).annotate(
+            is_blocked_flag=Exists(blocked_subquery),
+            is_decision_linked_flag=Exists(decision_linked_subquery),
+        ).order_by(
+            '-is_decision_linked_flag',  # Decision-linked tasks appear first
+            '-is_blocked_flag',           # Blocked tasks appear second
+            '-updated_at',
+        )[:self.ZONE_LIMIT]
 
         # --- Spreadsheet Zone ---
         # Show recently active spreadsheets in this project
+        # Annotate with has_running_job_flag: True if a PatternJob is queued or running
+
+        running_job_subquery = PatternJob.objects.filter(
+            spreadsheet=OuterRef('pk'),
+            status__in=['queued', 'running'],
+        )
+
         spreadsheets = Spreadsheet.objects.filter(
             project_id=project_id,
+            is_deleted=False,
+        ).annotate(
+            has_running_job_flag=Exists(running_job_subquery)
+        ).order_by('-updated_at')[:self.ZONE_LIMIT]
+
+        # --- Pattern Zone ---
+        # Show recently used WorkflowPatterns that originated from this project's spreadsheets
+        # WorkflowPattern has no direct project_id, so we filter via origin_spreadsheet_id
+
+        # Get all spreadsheet IDs belonging to this project
+        project_spreadsheet_ids = Spreadsheet.objects.filter(
+            project_id=project_id,
+            is_deleted=False,
+        ).values_list('id', flat=True)
+
+        patterns = WorkflowPattern.objects.filter(
+            origin_spreadsheet_id__in=project_spreadsheet_ids,
+            is_archived=False,
             is_deleted=False,
         ).order_by('-updated_at')[:self.ZONE_LIMIT]
 
@@ -346,6 +421,7 @@ class ProjectWorkspaceDashboardView(APIView):
             'decisions': list(decisions),
             'tasks': list(tasks),
             'spreadsheets': list(spreadsheets),
+            'patterns': list(patterns),
         }
         serializer = ProjectWorkspaceDashboardSerializer(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
