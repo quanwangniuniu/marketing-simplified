@@ -308,6 +308,13 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
     await fetchProjects();
   }, [fetchProjects]);
 
+  useEffect(() => {
+    if (!membersModalOpen || !selectedProject) return;
+    const fresh = projects.find((p) => p.id === selectedProject.id);
+    if (!fresh || fresh === selectedProject) return;
+    setSelectedProject(fresh);
+  }, [membersModalOpen, projects, selectedProject]);
+
   const handleAcceptInvite = async (invite: ProjectInvitationData) => {
     if (!invite.token) { toast.error('Missing invitation token.'); return; }
     if (!invite.approved) { toast.error('Invitation is pending approval.'); return; }

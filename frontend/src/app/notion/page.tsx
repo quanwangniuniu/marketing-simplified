@@ -7,6 +7,15 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { NotionDraftAPI } from '@/lib/api/notionDraftApi';
 import { createEmptyBlock } from '@/components/notion/NotionEditor';
 import NotionLayout from '@/components/notion/NotionLayout';
+import { GoogleDocListItem, googleDocsApi } from '@/lib/api/googleDocsApi';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DraftStatus,
   DraftSummary,
@@ -16,6 +25,18 @@ import {
 import { toast } from 'react-hot-toast';
 
 const TODO_STATE_REGEX = /data-todo-state="(checked|unchecked)"/i;
+const GOOGLE_DOC_URL_ID_REGEX = /\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/i;
+
+const extractGoogleDocId = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const match = trimmed.match(GOOGLE_DOC_URL_ID_REGEX);
+  if (match?.[1]) {
+    return match[1];
+  }
+  return trimmed;
+};
+
 const addTodoMarkerIfMissing = (html: string) => {
   if (TODO_STATE_REGEX.test(html)) {
     return html;
@@ -222,6 +243,13 @@ function NotionPageContent() {
   const [lastEditedAt, setLastEditedAt] = useState<Date | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [deletingDraftId, setDeletingDraftId] = useState<number | null>(null);
+  const [googleDocsImportBusy, setGoogleDocsImportBusy] = useState<boolean>(false);
+  const [googleDocsExportBusy, setGoogleDocsExportBusy] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importDocumentId, setImportDocumentId] = useState<string>('');
+  const [googleDocsListLoading, setGoogleDocsListLoading] = useState<boolean>(false);
+  const [googleDocsDocuments, setGoogleDocsDocuments] = useState<GoogleDocListItem[]>([]);
+  const [googleDocsListError, setGoogleDocsListError] = useState<string | null>(null);
 
   const router = useRouter();
   const snapshotRef = useRef<string>(buildSnapshot(title, status, blocks));
@@ -768,6 +796,117 @@ function NotionPageContent() {
     }
   }, [lastEditedAt]);
 
+  const htmlToPlainText = useCallback((html: string) => {
+    if (typeof window === 'undefined') return html;
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return (temp.textContent || temp.innerText || '').trim();
+  }, []);
+
+  const plainTextToHtml = useCallback((text: string) => {
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return escaped.replace(/\n/g, '<br>');
+  }, []);
+
+  const handleOpenImportGoogleDoc = useCallback(() => {
+    if (!selectedDraftId) {
+      toast.error('Select a draft first.');
+      return;
+    }
+    setImportDocumentId('');
+    setGoogleDocsDocuments([]);
+    setGoogleDocsListError(null);
+    setIsImportModalOpen(true);
+  }, [selectedDraftId]);
+
+  useEffect(() => {
+    if (!isImportModalOpen) return;
+    let cancelled = false;
+    const loadDocuments = async () => {
+      try {
+        setGoogleDocsListLoading(true);
+        const docs = await googleDocsApi.listDocuments(30);
+        if (!cancelled) {
+          setGoogleDocsDocuments(docs);
+          setGoogleDocsListError(null);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setGoogleDocsDocuments([]);
+          const message =
+            error?.response?.data?.error || 'Failed to load Google Docs files. You can paste a Doc URL/ID.';
+          setGoogleDocsListError(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setGoogleDocsListLoading(false);
+        }
+      }
+    };
+    loadDocuments();
+    return () => {
+      cancelled = true;
+    };
+  }, [isImportModalOpen]);
+
+  const handleConfirmImportGoogleDoc = useCallback(async () => {
+    if (!selectedDraftId) return;
+    const normalizedDocumentId = extractGoogleDocId(importDocumentId);
+    if (!normalizedDocumentId) {
+      toast.error('Please select a document or paste a Google Doc URL/ID.');
+      return;
+    }
+    try {
+      setGoogleDocsImportBusy(true);
+      const payload = await googleDocsApi.importDocument(normalizedDocumentId);
+      const importedTitle = payload?.title || title;
+      const importedContent = payload?.content || '';
+      const importedHtml = payload?.content_html || plainTextToHtml(importedContent);
+      const block = createEmptyBlock('rich_text');
+      block.html = importedHtml;
+      setTitle(importedTitle);
+      setBlocks([block]);
+      setLastEditedAt(new Date());
+      setHasChanges(true);
+      setIsImportModalOpen(false);
+      toast.success('Imported Google Doc into this draft. Click Save to persist.');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to import Google Doc.');
+    } finally {
+      setGoogleDocsImportBusy(false);
+    }
+  }, [importDocumentId, plainTextToHtml, selectedDraftId, title]);
+
+  const handleExportGoogleDoc = useCallback(async () => {
+    if (!selectedDraftId) {
+      toast.error('Select a draft first.');
+      return;
+    }
+    try {
+      setGoogleDocsExportBusy(true);
+      const content = blocks
+        .map((block) => {
+          if (block.type === 'divider') return '----------------';
+          return htmlToPlainText(block.html || '');
+        })
+        .filter((line) => line.length > 0)
+        .join('\n\n');
+
+      const payload = await googleDocsApi.exportRawContent(title || 'Untitled', content);
+      if (payload?.url) {
+        window.open(payload.url, '_blank');
+      }
+      toast.success('Exported to Google Docs.');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || 'Failed to export Google Doc.');
+    } finally {
+      setGoogleDocsExportBusy(false);
+    }
+  }, [blocks, htmlToPlainText, selectedDraftId, title]);
+
   return (
     <Layout
       showHeader={true}
@@ -787,8 +926,12 @@ function NotionPageContent() {
         onTitleChange={setTitle}
         lastEditedLabel={lastEditedLabel}
         onOpenPreview={() => setIsPreviewOpen(true)}
+        onImportGoogleDoc={handleOpenImportGoogleDoc}
+        onExportGoogleDoc={handleExportGoogleDoc}
         onSave={handleSave}
         isSaving={isSaving}
+        googleDocsImportBusy={googleDocsImportBusy}
+        googleDocsExportBusy={googleDocsExportBusy}
         hasChanges={hasChanges}
         isLoadingEditor={isLoadingEditor}
         blocks={blocks}
@@ -796,6 +939,84 @@ function NotionPageContent() {
         isPreviewOpen={isPreviewOpen}
         onClosePreview={() => setIsPreviewOpen(false)}
       />
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Google Doc</DialogTitle>
+            <DialogDescription>
+              Select a Google Doc from the list. If listing is unavailable, paste a Doc URL or ID.
+            </DialogDescription>
+          </DialogHeader>
+          {googleDocsListError ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {googleDocsListError}
+            </div>
+          ) : null}
+          <div className="max-h-[320px] overflow-y-auto rounded-md border border-gray-200">
+            {googleDocsListLoading ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-500">Loading Google Docs...</div>
+            ) : googleDocsDocuments.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-500">
+                No Google Docs files found for this connected account.
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {googleDocsDocuments.map((doc) => {
+                  const selected = importDocumentId === doc.id;
+                  return (
+                    <li key={doc.id}>
+                      <button
+                        type="button"
+                        onClick={() => setImportDocumentId(doc.id)}
+                        className={`w-full px-4 py-3 text-left transition-colors ${
+                          selected ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-gray-900">{doc.name}</div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          {doc.modified_time
+                            ? `Updated ${new Date(doc.modified_time).toLocaleString()}`
+                            : 'No modified time'}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="google-doc-url-or-id" className="text-sm font-medium text-gray-700">
+              Google Doc URL or ID
+            </label>
+            <input
+              id="google-doc-url-or-id"
+              value={importDocumentId}
+              onChange={(event) => setImportDocumentId(event.target.value)}
+              placeholder="https://docs.google.com/document/d/... or document ID"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(false)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              disabled={googleDocsImportBusy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmImportGoogleDoc}
+              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              disabled={googleDocsImportBusy || !importDocumentId.trim()}
+            >
+              {googleDocsImportBusy ? 'Importing…' : 'Import'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

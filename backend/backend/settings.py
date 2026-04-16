@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'agent.apps.AgentConfig',
     'meetings.apps.MeetingsConfig',
     'zoom_integration.apps.ZoomIntegrationConfig',
+    'google_docs_integration.apps.GoogleDocsIntegrationConfig',
 ]
 
 MIDDLEWARE = [
@@ -629,4 +630,6 @@ MEETINGS_REQUIRE_PARTICIPANTS_AT_CREATE = config(
 
 ZOOM_CLIENT_ID     = os.environ.get("ZOOM_CLIENT_ID", "")
 ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET", "")
-ZOOM_REDIRECT_URI  = os.environ.get("ZOOM_REDIRECT_URI", "http://localhost/api/v1/zoom/callback/")
+ZOOM_REDIRECT_URI  = os.environ.get("ZOOM_REDIRECT_URI", "")
+# Webhook only: Secret Token from Zoom Marketplace app → Feature → Webhooks (not OAuth client secret).
+ZOOM_WEBHOOK_SECRET_TOKEN = os.environ.get("ZOOM_WEBHOOK_SECRET_TOKEN", "")

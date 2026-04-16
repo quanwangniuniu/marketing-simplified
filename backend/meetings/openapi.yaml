@@ -1,0 +1,366 @@
+openapi: 3.0.3
+info:
+  title: Meeting Lifecycle API
+  description: |
+    API for managing meeting lifecycle states and transitions.
+    Meetings follow a defined state machine: Draft → Planned → In Progress → Completed → Archived.
+    State transitions are system-controlled and cannot be set directly via PATCH.
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication
+
+  schemas:
+    MeetingStatus:
+      type: string
+      enum: [draft, planned, in_progress, completed, archived]
+      description: |
+        Lifecycle state of a meeting.
+        - draft: Initial state, meeting not yet confirmed
+        - planned: Meeting scheduled with participants
+        - in_progress: Meeting is currently active
+        - completed: Meeting finished with documentation
+        - archived: Terminal state, no further transitions allowed
+
+    LifecycleState:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/MeetingStatus'
+        available_transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeetingStatus'
+          description: List of states this meeting can legally transition to from its current state
+          example: ["planned"]
+      required:
+        - status
+        - available_transitions
+
+    TransitionRequest:
+      type: object
+      properties:
+        to_state:
+          $ref: '#/components/schemas/MeetingStatus'
+      required:
+        - to_state
+
+    TransitionResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/MeetingStatus'
+        available_transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeetingStatus'
+          description: Available transitions from the new state
+      required:
+        - status
+        - available_transitions
+
+    ActionItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        meeting:
+          type: integer
+          readOnly: true
+          description: ID of the meeting this action item belongs to
+        description:
+          type: string
+          description: Description of the follow-up task
+          example: "Send meeting summary to stakeholders"
+        assigned_to:
+          type: integer
+          nullable: true
+          description: User ID of the assignee
+        is_resolved:
+          type: boolean
+          default: false
+          description: Whether this action item has been completed
+      required:
+        - description
+
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message explaining why the transition was rejected
+          example: "Cannot transition to in_progress: meeting has no participants."
+      required:
+        - detail
+
+    PermissionError:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "You do not have permission to perform this action."
+      required:
+        - detail
+
+paths:
+  /projects/{project_id}/meetings/{meeting_id}/lifecycle/:
+    get:
+      summary: Get current lifecycle state
+      description: Returns the current lifecycle state of a meeting and the list of valid next transitions.
+      operationId: getMeetingLifecycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the project
+        - name: meeting_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the meeting
+      responses:
+        '200':
+          description: Current lifecycle state and available transitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleState'
+              examples:
+                draft:
+                  summary: Meeting in draft state
+                  value:
+                    status: draft
+                    available_transitions: ["planned"]
+                archived:
+                  summary: Meeting in terminal state
+                  value:
+                    status: archived
+                    available_transitions: []
+        '403':
+          description: User is not a member of this project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionError'
+        '404':
+          description: Meeting or project not found
+
+  /projects/{project_id}/meetings/{meeting_id}/lifecycle/transition/:
+    post:
+      summary: Execute a lifecycle transition
+      description: |
+        Transitions a meeting to a new lifecycle state.
+        
+        Transition rules:
+        - draft → planned (no validation required)
+        - planned → in_progress (requires at least one participant)
+        - planned → draft (rollback allowed)
+        - in_progress → completed (requires non-empty objective and at least one agenda item)
+        - completed → archived (requires all action items to be resolved, if any exist)
+        - archived → any state (blocked, terminal state)
+        
+        Status is read-only and cannot be set via PATCH on the meeting resource.
+      operationId: executeMeetingTransition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: meeting_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+            examples:
+              draft_to_planned:
+                summary: Transition from draft to planned
+                value:
+                  to_state: planned
+              planned_to_in_progress:
+                summary: Transition from planned to in_progress
+                value:
+                  to_state: in_progress
+      responses:
+        '200':
+          description: Transition successful, returns updated state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitionResponse'
+              example:
+                status: planned
+                available_transitions: ["in_progress", "draft"]
+        '400':
+          description: |
+            Transition rejected. Possible reasons:
+            - Invalid target state (not in STATUS_CHOICES)
+            - Transition not allowed from current state
+            - Validation rule not met (e.g. no participants, no agenda items)
+            - Meeting is in terminal state (archived)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                invalid_transition:
+                  summary: State jump not allowed
+                  value:
+                    detail: "Cannot transition from draft to completed."
+                no_participants:
+                  summary: Validation rule not met
+                  value:
+                    detail: "Cannot transition to in_progress: meeting has no participants."
+                terminal_state:
+                  summary: Meeting is archived
+                  value:
+                    detail: "Cannot transition from archived: this is a terminal state."
+        '403':
+          description: User is not a member of this project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionError'
+        '404':
+          description: Meeting or project not found
+
+  /projects/{project_id}/meetings/{meeting_id}/action-items/:
+    get:
+      summary: List action items for a meeting
+      operationId: listActionItems
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: meeting_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of action items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActionItem'
+        '403':
+          description: User is not a member of this project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionError'
+
+    post:
+      summary: Create an action item
+      operationId: createActionItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: meeting_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionItem'
+            example:
+              description: "Send follow-up email to client"
+              assigned_to: 42
+              is_resolved: false
+      responses:
+        '201':
+          description: Action item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '403':
+          description: User is not a member of this project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionError'
+
+  /projects/{project_id}/meetings/{meeting_id}/action-items/{id}/:
+    patch:
+      summary: Update an action item (e.g. mark as resolved)
+      operationId: updateActionItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: meeting_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionItem'
+            example:
+              is_resolved: true
+      responses:
+        '200':
+          description: Action item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '403':
+          description: User is not a member of this project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionError'
+        '404':
+          description: Action item not found
