@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'agent.apps.AgentConfig',
     'meetings.apps.MeetingsConfig',
     'zoom_integration.apps.ZoomIntegrationConfig',
+    'google_docs_integration.apps.GoogleDocsIntegrationConfig',
 ]
 
 MIDDLEWARE = [

@@ -1,6 +1,7 @@
 import api from '../api';
 import type {
   Meeting,
+  MeetingStatus,
   MeetingCreateRequest,
   MeetingUpdateRequest,
   MeetingPartialUpdateRequest,
@@ -273,6 +274,7 @@ function normalizeMeetingListItem(raw: Record<string, unknown>): MeetingListItem
     ),
     related_tasks: normalizeKnowledgeLinks(raw.related_tasks ?? raw.relatedTasks),
     is_archived: Boolean(raw.is_archived),
+    status: typeof raw.status === 'string' ? raw.status as MeetingStatus : 'draft',
   };
 }
 
@@ -595,6 +597,27 @@ export const MeetingsAPI = {
     );
     return response.data;
   },
+  async getLifecycle(
+  projectId: number,
+  meetingId: number,
+): Promise<{ status: string; available_transitions: string[] }> {
+  const response = await api.get(
+    `${basePath(projectId)}/${meetingId}/lifecycle/`,
+  );
+  return response.data as { status: string; available_transitions: string[] };
+},
+
+async executeTransition(
+  projectId: number,
+  meetingId: number,
+  toState: string,
+): Promise<{ status: string; available_transitions: string[] }> {
+  const response = await api.post(
+    `${basePath(projectId)}/${meetingId}/lifecycle/transition/`,
+    { to_state: toState },
+  );
+  return response.data as { status: string; available_transitions: string[] };
+},
 
   /** SMP-489: meeting follow-up action items (before task conversion). */
   async listMeetingActionItems(

@@ -12,7 +12,6 @@ from meetings.models import (
     AgendaItem,
     ParticipantLink,
     ArtifactLink,
-    MeetingTemplate,
     MeetingDocument,
     MeetingActionItem,
 )
@@ -117,6 +116,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "related_decisions",
             "related_tasks",
             "zoom_post_meeting",
+            "status",
         ]
 
     def get_participants(self, obj):
@@ -386,6 +386,7 @@ class MeetingListSerializer(serializers.ModelSerializer):
             "title",
             "summary",
             "scheduled_date",
+            "status",
             "meeting_type",
             "meeting_type_slug",
             "participants",
@@ -466,37 +467,20 @@ class ArtifactLinkSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "meeting"]
 
 
-class MeetingTemplateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MeetingTemplate
-        fields = ["id", "name", "layout_config", "created_at", "updated_at", "user"]
-        read_only_fields = ["id", "created_at", "updated_at", "user"]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        lc = data.get("layout_config")
-        if lc is None:
-            data["layout_config"] = {}
-        return data
+class MeetingLifecycleSerializer(serializers.Serializer):
+    """Read-only: current state and available next transitions."""
 
-    def validate_layout_config(self, value):
-        if value is None:
-            return {}
-        if isinstance(value, list):
-            return {"blocks": value}
-        if not isinstance(value, dict):
-            raise serializers.ValidationError(
-                "layout_config must be a JSON object (e.g. {blocks, nestedSections}) or null."
-            )
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError(
-                "layout_config must be JSON-serializable (no functions or circular references)."
-            )
-        return value
+    status = serializers.CharField(read_only=True)
+    available_transitions = serializers.ListField(
+        child=serializers.CharField(), read_only=True
+    )
 
 
+class TransitionRequestSerializer(serializers.Serializer):
+    """Validates the body of a transition POST request."""
+
+    to_state = serializers.ChoiceField(choices=[c[0] for c in Meeting.STATUS_CHOICES])
 class MeetingDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = apps.get_model("meetings", "MeetingDocument")
@@ -525,6 +509,7 @@ class MeetingActionItemSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "order_index",
+            "is_resolved",
             "created_at",
             "updated_at",
             "converted_task_id",
@@ -540,7 +525,7 @@ class MeetingActionItemSerializer(serializers.ModelSerializer):
     def get_converted_task_id(self, obj):
         try:
             return obj.derived_task.id
-        except ObjectDoesNotExist:
+        except (ObjectDoesNotExist, AttributeError):
             return None
 
 

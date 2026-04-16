@@ -21,6 +21,7 @@ import { MeetingActionItemsSection } from '@/components/meetings/MeetingActionIt
 import { ProjectMemberPicker } from '@/components/meetings/ProjectMemberPicker';
 import { formatProjectMemberLabel } from '@/components/meetings/projectMemberLabel';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import { zoomApi } from '@/lib/api/zoomApi';
 import {
@@ -37,9 +38,10 @@ import {
   type UnifiedMeetingTemplateOption,
 } from '@/lib/meetings/unifiedMeetingTemplates';
 import { replaceAgendaAndLayoutFromNested } from '@/lib/meetings/replaceMeetingAgendaFromTemplate';
+import { MeetingLifecyclePanel } from '@/components/meetings/MeetingLifecyclePanel';
 import { hasVisibleText, sanitizeDocumentPreviewHtml } from '@/lib/meetings/documentPreview';
-import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink } from '@/types/meeting';
 
+import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink, MeetingStatus } from '@/types/meeting';
 function PanelSection({
   title,
   description,
@@ -530,6 +532,17 @@ export function MeetingSummaryPanel({
             >
               <ZoomPostMeetingSection zoomPostMeeting={meeting?.zoom_post_meeting} />
             </PanelSection>
+
+            <section>
+  <MeetingLifecyclePanel
+    projectId={projectId}
+    meetingId={meetingId}
+    onStatusChanged={(newStatus) => {
+      if (meeting) setMeeting({ ...meeting, status: newStatus as MeetingStatus });
+      onMeetingUpdated?.({ ...meeting!, status: newStatus as MeetingStatus });
+    }}
+  />
+</section>
 
             <PanelSection title="Participants" description="Who is in this meeting.">
               {loadingPeople ? (
