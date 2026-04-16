@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { createPortal } from 'react-dom';
 import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2 } from 'lucide-react';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
+import { googleDocsApi } from '@/lib/api/googleDocsApi';
 import toast from 'react-hot-toast';
 import Modal from '@/components/ui/Modal';
 import {
@@ -615,6 +616,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   const [selectedXlsxSheet, setSelectedXlsxSheet] = useState<string>('');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportMenuAnchor, setExportMenuAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [sheetsImportModalOpen, setSheetsImportModalOpen] = useState(false);
+  const [sheetsImportUrl, setSheetsImportUrl] = useState('');
+  const [sheetsImportLoading, setSheetsImportLoading] = useState(false);
   const [headerMenu, setHeaderMenu] = useState<{
     type: 'row' | 'col';
     index: number;
@@ -4371,6 +4375,59 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     setSelectedXlsxSheet('');
   }, []);
 
+  const handleImportGoogleSheets = useCallback(async () => {
+    const url = sheetsImportUrl.trim();
+    if (!url) return;
+    setSheetsImportLoading(true);
+    try {
+      const { matrix } = await googleDocsApi.importFromGoogleSheets(url);
+      setSheetsImportModalOpen(false);
+      setSheetsImportUrl('');
+      setIsImporting(true);
+      setImportProgress({ current: 0, total: 0 });
+      await runImportMatrix(matrix);
+      toast.success('Google Sheets import complete');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Google Sheets import failed. Please try again.';
+      toast.error(msg);
+    } finally {
+      setSheetsImportLoading(false);
+      setIsImporting(false);
+      setImportProgress(null);
+    }
+  }, [sheetsImportUrl, runImportMatrix]);
+
+  const handleExportGoogleSheets = useCallback(async () => {
+    const matrix = buildUsedRangeMatrix();
+    const title = getExportFileBaseName();
+    const toastId = toast.loading('Exporting to Google Sheets...');
+    try {
+      const result = await googleDocsApi.exportToGoogleSheets(title, matrix);
+      toast.dismiss(toastId);
+      toast.success(
+        (t) => (
+          <span>
+            Exported!{' '}
+            <a
+              href={result.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-blue-600"
+              onClick={() => toast.dismiss(t.id)}
+            >
+              Open in Google Sheets
+            </a>
+          </span>
+        ),
+        { duration: 8000 }
+      );
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      const msg = err?.response?.data?.error || 'Google Sheets export failed. Please try again.';
+      toast.error(msg);
+    }
+  }, [buildUsedRangeMatrix, getExportFileBaseName]);
+
   useEffect(() => {
     if (!exportMenuOpen) return;
 
@@ -5065,6 +5122,15 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         >
           Import
         </button>
+        <button
+          type="button"
+          onClick={() => setSheetsImportModalOpen(true)}
+          disabled={isImporting}
+          title="Import from Google Sheets"
+          className="rounded border border-green-200 px-2 py-0.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-60"
+        >
+          Sheets Import
+        </button>
         <div className="relative" ref={exportMenuRef}>
           <button
             type="button"
@@ -5122,6 +5188,17 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   role="menuitem"
                 >
                   Export as XLSX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportGoogleSheets();
+                    setExportMenuOpen(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-semibold text-green-700 hover:bg-green-50"
+                  role="menuitem"
+                >
+                  Export to Google Sheets
                 </button>
               </div>,
               document.body
@@ -5627,6 +5704,49 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           disabled={!activeCell}
         />
       </div>
+
+      {sheetsImportModalOpen && (
+        <Modal isOpen={true} onClose={() => { setSheetsImportModalOpen(false); setSheetsImportUrl(''); }}>
+          <div className="w-[min(420px,calc(100vw-2rem))]">
+            <div className="rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
+              <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-900">Import from Google Sheets</h2>
+                <p className="mt-1 text-sm text-gray-500">Paste the Google Sheets URL or spreadsheet ID</p>
+              </div>
+              <div className="px-6 py-5 flex flex-col gap-4">
+                <input
+                  type="text"
+                  value={sheetsImportUrl}
+                  onChange={(e) => setSheetsImportUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+                  disabled={sheetsImportLoading}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleImportGoogleSheets(); }}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setSheetsImportModalOpen(false); setSheetsImportUrl(''); }}
+                    disabled={sheetsImportLoading}
+                    className="rounded px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportGoogleSheets}
+                    disabled={sheetsImportLoading || !sheetsImportUrl.trim()}
+                    className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
+                  >
+                    {sheetsImportLoading ? 'Importing...' : 'Import'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {xlsxImport && (
         <Modal isOpen={true} onClose={handleCancelXlsxImport}>

@@ -29,6 +29,7 @@ describe('Meeting knowledge navigation (discovery + summary + detail hooks)', ()
       meeting_type_slug: 'planning',
       participants: [],
       tags: [],
+      status: 'draft',
       decision_count: 1,
       task_count: 1,
       generated_decisions: [
