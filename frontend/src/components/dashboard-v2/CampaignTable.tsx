@@ -8,6 +8,8 @@ import type { CampaignData } from '@/lib/mock/dashboardMock';
 
 interface CampaignTableProps {
   campaigns: CampaignData[];
+  title?: string;
+  compact?: boolean;
 }
 
 type SortKey = 'spend' | 'roas' | 'change';
@@ -18,7 +20,7 @@ const platformIcons: Record<string, { label: string; color: string }> = {
   tiktok: { label: 'T', color: 'bg-gray-900' },
 };
 
-export default function CampaignTable({ campaigns }: CampaignTableProps) {
+export default function CampaignTable({ campaigns, title = 'Campaign Performance', compact = false }: CampaignTableProps) {
   const [sortBy, setSortBy] = useState<SortKey>('roas');
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -35,8 +37,10 @@ export default function CampaignTable({ campaigns }: CampaignTableProps) {
   return (
     <Card className="border-[0.5px] border-gray-200 bg-white shadow-none">
       <CardHeader className="pb-2 px-4 pt-4">
-        <CardTitle className="text-sm font-medium text-gray-900">Campaign Performance</CardTitle>
-        <p className="text-[11px] text-gray-400">Anomalous campaigns highlighted in red</p>
+        <CardTitle className="text-sm font-medium text-gray-900">{title}</CardTitle>
+        <p className="text-[11px] text-gray-400">
+          {compact ? 'Campaigns requiring attention' : 'Anomalous campaigns highlighted in red'}
+        </p>
       </CardHeader>
       <CardContent className="px-0 pb-2">
         <div className="overflow-x-auto">

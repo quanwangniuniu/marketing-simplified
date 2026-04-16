@@ -16,6 +16,58 @@ export const mockKPIs: KPIData = {
   dataFreshness: { lastSync: '2026-04-15T00:28:00Z', status: 'synced' },
 };
 
+// --- KPI Attribution Data ---
+
+export interface KPIAttribution {
+  factors: { label: string; impact: string; direction: 'up' | 'down' | 'neutral' }[];
+  topContributor: { name: string; detail: string };
+  comparedTo: string;
+}
+
+export const mockAttributions: Record<string, KPIAttribution> = {
+  totalCost: {
+    factors: [
+      { label: 'Meta CPC increased 18% across all ad sets', impact: '+$4,200', direction: 'up' },
+      { label: 'Google PMax auto-scaled budget by 12%', impact: '+$2,800', direction: 'up' },
+      { label: 'TikTok paused 2 underperforming campaigns', impact: '-$1,100', direction: 'down' },
+    ],
+    topContributor: { name: 'META | FES | ADV+ | Soul Sucking', detail: 'Spent $2,327 with 0.07x ROAS — highest waste' },
+    comparedTo: 'Mar 1–15 vs Apr 1–15',
+  },
+  activeAds: {
+    factors: [
+      { label: '12 new ad variants launched for Q2', impact: '+12 ads', direction: 'up' },
+      { label: '4 ads paused due to policy violations', impact: '-4 ads', direction: 'down' },
+    ],
+    topContributor: { name: 'Google | PMax | Q2 Launch', detail: 'Auto-generated 8 responsive variants' },
+    comparedTo: 'Last week (343 active)',
+  },
+  budgetPacing: {
+    factors: [
+      { label: 'Meta delivery constrained by narrow audience', impact: '-15% pace', direction: 'down' },
+      { label: 'Google spending on track at 95% daily target', impact: 'On pace', direction: 'neutral' },
+    ],
+    topContributor: { name: 'META | FES | LAL 1%', detail: 'Only spending 45% of daily budget — audience too small' },
+    comparedTo: 'Ideal pace: $1,500/day — Actual: $1,280/day',
+  },
+  avgRoas: {
+    factors: [
+      { label: 'Google Brand search ROAS steady at 6.8x', impact: 'Anchor', direction: 'up' },
+      { label: '5 Meta campaigns below 0.5x dragging average', impact: '-1.2x avg', direction: 'down' },
+    ],
+    topContributor: { name: 'Google | Search | Brand Terms', detail: '6.82x ROAS — best performer, 23% of spend' },
+    comparedTo: 'Last month avg: 3.86x → Current: 4.21x',
+  },
+  dataFreshness: {
+    factors: [
+      { label: 'Meta & Google syncing every 15 min', impact: 'Normal', direction: 'neutral' },
+      { label: 'TikTok API delayed — last sync 1h ago', impact: 'Stale', direction: 'down' },
+    ],
+    topContributor: { name: 'TikTok Ads API', detail: 'Rate limit hit — next sync scheduled in 12 min' },
+    comparedTo: 'Target: < 30 min freshness',
+  },
+};
+
 // --- Budget Pacing Chart Data (30 days) ---
 
 export interface PacingDataPoint {
@@ -185,3 +237,38 @@ export const mockDataSources: DataSourceStatus[] = [
   { name: 'TikTok Ads', platform: 'tiktok', status: 'warning', lastSync: '2026-04-14T23:10:00Z' },
   { name: 'Slack', platform: 'slack', status: 'connected', lastSync: '2026-04-15T00:30:00Z' },
 ];
+
+// --- Recent Activity ---
+
+export interface ActivityItem {
+  id: number;
+  type: 'success' | 'error' | 'warning' | 'info';
+  message: string;
+  time: string;
+}
+
+export const mockActivities: ActivityItem[] = [
+  { id: 1, type: 'success', message: 'Google PMax auto-scaled budget +12%', time: '2026-04-15T00:30:00Z' },
+  { id: 2, type: 'error', message: 'META | Soul Sucking CPC spiked 45% — alert created', time: '2026-04-15T00:15:00Z' },
+  { id: 3, type: 'warning', message: 'TikTok API rate limit — sync delayed 1h', time: '2026-04-14T23:10:00Z' },
+  { id: 4, type: 'info', message: 'Weekly report generated for Q2 Product Launch', time: '2026-04-14T20:00:00Z' },
+  { id: 5, type: 'success', message: '2 new ad variants approved by Ray', time: '2026-04-14T16:30:00Z' },
+  { id: 6, type: 'info', message: 'Budget pacing recalculated — on track at 68%', time: '2026-04-14T12:00:00Z' },
+];
+
+// --- Account Health ---
+
+export interface AccountHealth {
+  overallScore: number;
+  metrics: { label: string; value: number; status: 'healthy' | 'warning' | 'critical' }[];
+}
+
+export const mockAccountHealth: AccountHealth = {
+  overallScore: 72,
+  metrics: [
+    { label: 'Budget Utilization', value: 68, status: 'healthy' },
+    { label: 'Creative Freshness', value: 45, status: 'warning' },
+    { label: 'Anomaly Rate', value: 50, status: 'critical' },
+    { label: 'Data Completeness', value: 92, status: 'healthy' },
+  ],
+};

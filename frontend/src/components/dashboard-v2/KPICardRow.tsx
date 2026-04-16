@@ -2,10 +2,11 @@
 
 import { DollarSign, BarChart3, TrendingUp, Target, RefreshCw } from 'lucide-react';
 import KPICard from './KPICard';
-import type { KPIData } from '@/lib/mock/dashboardMock';
+import type { KPIData, KPIAttribution } from '@/lib/mock/dashboardMock';
 
 interface KPICardRowProps {
   data: KPIData;
+  attributions: Record<string, KPIAttribution>;
 }
 
 function formatCurrency(value: number): string {
@@ -21,7 +22,7 @@ function formatTimeAgo(dateStr: string): string {
   return `${hours}h ago`;
 }
 
-export default function KPICardRow({ data }: KPICardRowProps) {
+export default function KPICardRow({ data, attributions }: KPICardRowProps) {
   return (
     <div className="grid grid-cols-5 gap-3">
       <KPICard
@@ -31,6 +32,7 @@ export default function KPICardRow({ data }: KPICardRowProps) {
         change={data.totalCost.change}
         status={data.totalCost.change > 20 ? 'warning' : 'neutral'}
         subtitle={data.totalCost.period}
+        attribution={attributions.totalCost}
       />
       <KPICard
         title="Active Ads"
@@ -39,6 +41,7 @@ export default function KPICardRow({ data }: KPICardRowProps) {
         change={data.activeAds.change}
         status="healthy"
         subtitle={data.activeAds.breakdown}
+        attribution={attributions.activeAds}
       />
       <KPICard
         title="Budget Pacing"
@@ -47,6 +50,7 @@ export default function KPICardRow({ data }: KPICardRowProps) {
         status={data.budgetPacing.status === 'on_track' ? 'healthy' : data.budgetPacing.status === 'over' ? 'critical' : 'warning'}
         progressValue={data.budgetPacing.value}
         progressMax={data.budgetPacing.target}
+        attribution={attributions.budgetPacing}
       />
       <KPICard
         title="Avg ROAS"
@@ -55,6 +59,7 @@ export default function KPICardRow({ data }: KPICardRowProps) {
         change={Number((data.avgRoas.change / data.avgRoas.value * 100).toFixed(1))}
         status={data.avgRoas.status}
         subtitle="Return on ad spend"
+        attribution={attributions.avgRoas}
       />
       <KPICard
         title="Data Freshness"
@@ -62,6 +67,7 @@ export default function KPICardRow({ data }: KPICardRowProps) {
         icon={RefreshCw}
         status={data.dataFreshness.status === 'synced' ? 'healthy' : data.dataFreshness.status === 'stale' ? 'warning' : 'critical'}
         subtitle="All platforms"
+        attribution={attributions.dataFreshness}
       />
     </div>
   );
