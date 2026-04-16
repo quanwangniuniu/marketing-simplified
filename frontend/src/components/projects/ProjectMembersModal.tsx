@@ -19,6 +19,7 @@ import {
   ProjectMemberData,
   ProjectRoleOption,
 } from "@/lib/api/projectApi";
+import Modal from "@/components/ui/Modal";
 
 type ProjectMembersModalProps = {
   isOpen: boolean;
@@ -100,6 +101,9 @@ export default function ProjectMembersModal({
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [roleEdits, setRoleEdits] = useState<Record<number, string>>({});
+  const [transferOwnerMember, setTransferOwnerMember] =
+    useState<ProjectMemberData | null>(null);
+  const [transferOwnerPhrase, setTransferOwnerPhrase] = useState("");
   const [activeView, setActiveView] = useState<
     "members" | "approvals" | "acceptances" | "invites"
   >("members");
@@ -401,16 +405,56 @@ export default function ProjectMembersModal({
     }
   };
 
-  const handleTransferOwner = async (member: ProjectMemberData) => {
-    if (!projectId) return;
+  const handleMemberRoleSelectChange = async (
+    member: ProjectMemberData,
+    nextRole: string
+  ) => {
+    if (nextRole === member.role) return;
+    setRoleEdits((prev) => ({ ...prev, [member.id]: nextRole }));
+    const ok = await handleRoleChange(member, nextRole);
+    if (!ok) {
+      setRoleEdits((prev) => ({ ...prev, [member.id]: member.role }));
+    }
+  };
+
+  const openTransferOwnerModal = (member: ProjectMemberData) => {
     if (member.role === "owner") return;
-    const label = formatMemberLabel(member);
-    if (!window.confirm(`Transfer ownership to ${label}?`)) {
+    const email = member.user?.email?.trim();
+    if (!email) {
+      toast.error("This member has no email on file. Ownership cannot be transferred.");
       return;
     }
+    setTransferOwnerMember(member);
+    setTransferOwnerPhrase("");
+  };
+
+  const closeTransferOwnerModal = () => {
+    setTransferOwnerMember(null);
+    setTransferOwnerPhrase("");
+  };
+
+  const transferOwnerExpectedPhrase = useMemo(() => {
+    if (!transferOwnerMember?.user?.email) return "";
+    return `Transfer to ${transferOwnerMember.user.email.trim()}`;
+  }, [transferOwnerMember]);
+
+  const transferOwnerPhraseMatches = useMemo(() => {
+    const typed = transferOwnerPhrase.trim();
+    const expected = transferOwnerExpectedPhrase.trim();
+    return typed.length > 0 && typed === expected;
+  }, [transferOwnerPhrase, transferOwnerExpectedPhrase]);
+
+  const confirmTransferOwner = async () => {
+    if (!projectId || !transferOwnerMember) return;
+    if (!transferOwnerPhraseMatches) {
+      toast.error("Phrase does not match. Please type the confirmation exactly.");
+      return;
+    }
+    const member = transferOwnerMember;
     const didUpdate = await handleRoleChange(member, "owner");
     if (didUpdate) {
-      await loadMembers();
+      closeTransferOwnerModal();
+      onMembersUpdated?.();
     }
   };
 
@@ -718,10 +762,10 @@ export default function ProjectMembersModal({
                             <select
                               value={roleEdits[member.id] ?? member.role}
                               onChange={(event) =>
-                                setRoleEdits((prev) => ({
-                                  ...prev,
-                                  [member.id]: event.target.value,
-                                }))
+                                void handleMemberRoleSelectChange(
+                                  member,
+                                  event.target.value
+                                )
                               }
                               disabled={updatingId === member.id}
                               className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70"
@@ -735,34 +779,16 @@ export default function ProjectMembersModal({
                             {isOwner && (
                               <button
                                 type="button"
-                                onClick={() => handleTransferOwner(member)}
+                                onClick={() => openTransferOwnerModal(member)}
                                 disabled={updatingId === member.id}
                                 className="inline-flex items-center gap-1 rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 Transfer owner
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleRoleChange(
-                                  member,
-                                  roleEdits[member.id] ?? member.role
-                                )
-                              }
-                              disabled={
-                                updatingId === member.id ||
-                                (roleEdits[member.id] ?? member.role) ===
-                                  member.role
-                              }
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {updatingId === member.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                "Change role"
-                              )}
-                            </button>
+                            {updatingId === member.id && (
+                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-500" aria-hidden />
+                            )}
                           </>
                         ) : (
                           <span
@@ -1022,13 +1048,91 @@ export default function ProjectMembersModal({
     </div>
   );
 
+  const transferOwnerLabel = transferOwnerMember
+    ? formatMemberLabel(transferOwnerMember)
+    : "";
+
+  const transferModal = (
+    <Modal isOpen={!!transferOwnerMember} onClose={closeTransferOwnerModal}>
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Transfer project ownership
+        </h3>
+        <p className="mt-2 text-sm text-gray-600">
+          <span className="font-medium text-red-600">
+            You will no longer be the project owner.
+          </span>{" "}
+          To confirm, type the phrase below exactly, then click Confirm transfer.
+        </p>
+        {transferOwnerMember && (
+          <>
+            <p className="mt-3 text-xs text-gray-500">
+              Transferring to{" "}
+              <span className="font-medium text-gray-800">
+                {transferOwnerLabel}
+              </span>
+            </p>
+            <p className="mt-3 text-xs font-medium text-gray-700">
+              Type this phrase:
+            </p>
+            <code className="mt-1 block rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+              {transferOwnerExpectedPhrase || "—"}
+            </code>
+            <label htmlFor="transfer-owner-phrase" className="mt-4 block text-xs font-medium text-gray-700">
+              Confirmation
+            </label>
+            <input
+              id="transfer-owner-phrase"
+              type="text"
+              value={transferOwnerPhrase}
+              onChange={(e) => setTransferOwnerPhrase(e.target.value)}
+              autoComplete="off"
+              placeholder={transferOwnerExpectedPhrase}
+              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeTransferOwnerModal}
+                disabled={updatingId === transferOwnerMember.id}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmTransferOwner()}
+                disabled={
+                  !transferOwnerPhraseMatches ||
+                  updatingId === transferOwnerMember.id
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {updatingId === transferOwnerMember.id && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                Confirm transfer
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+
   if (variant === "panel") {
-    return content;
+    return (
+      <>
+        {content}
+        {transferModal}
+      </>
+    );
   }
 
   return (
-    <div className="w-full">
-      {content}
-    </div>
+    <>
+      <div className="w-full">{content}</div>
+      {transferModal}
+    </>
   );
 }

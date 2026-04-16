@@ -1,15 +1,13 @@
 // src/components/layout/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Bell, User, Settings, LogOut, HelpCircle, Globe } from 'lucide-react';
+import { Bell, User, Settings, LogOut, HelpCircle, Globe } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import Image from 'next/image';
 import Link from 'next/link';
 
 interface HeaderProps {
   className?: string;
-  onSearchChange?: (query: string) => void;
-  searchPlaceholder?: string;
   user?: {
     name: string;
     email: string;
@@ -33,8 +31,6 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({
   className = '',
-  onSearchChange,
-  searchPlaceholder = 'Search for anything...',
   user = {
     name: 'Admin',
     email: 'admin@company.com',
@@ -74,7 +70,6 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const { language, setLanguage, t } = useLanguage();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -95,12 +90,6 @@ const Header: React.FC<HeaderProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const query = event.target.value;
-    setSearchQuery(query);
-    onSearchChange?.(query);
-  };
 
   const handleNotificationClick = (id: string) => {
     onNotificationClick?.(id);
@@ -135,22 +124,6 @@ const Header: React.FC<HeaderProps> = ({
                 priority
               />
           </Link>
-
-          {/* Search Bar */}
-          <div className="flex-1 max-w-lg mx-8">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-brand-teal focus:border-brand-teal transition-colors duration-200"
-              />
-            </div>
-          </div>
 
           {/* Right Section */}
           <div className="flex items-center gap-4">
