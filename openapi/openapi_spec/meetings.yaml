@@ -1,19 +1,20 @@
 openapi: 3.0.3
 info:
-  title: Meetings ‚Äî knowledge discovery (list)
-  version: 1.0.0
+  title: Meetings ‚Ä?knowledge discovery & lifecycle
+  version: 1.1.0
   description: |
-    Contract for **project-scoped meeting list retrieval** with filters and lightweight content search (`q`).
+    Contract for **project-scoped meeting operations**: list retrieval with filters, detail retrieval,
+    and **lifecycle state management** (state query, allowed-transitions query, transition execution).
     Base URL matches Django routing: meetings are mounted under **`/api/v1/`**.
 
     **Structured filters (`meeting_type`, `tag`):** Unknown or project-unused slugs (including types never
     instantiated in the project) return **200** with an empty `results` list‚Äîfilters apply via joins; there is
-    no separate **400** for ‚Äúslug not defined on project.‚Äù Malformed query types (dates, ordering, page, etc.)
+    no separate **400** for ‚Äúslug not defined on project.‚Ä?Malformed query types (dates, ordering, page, etc.)
     still yield **400** as documented per parameter.
 
     **Frozen query parameter names for this list endpoint:** `q`, `meeting_type`, `participant`,
     `exclude_participant`, `tag`, `date_from`, `date_to`, `is_archived`, `has_generated_decisions`,
-    `has_generated_tasks`, `ordering`, `page` ‚Äî each is defined under `paths[...].get.parameters` below.
+    `has_generated_tasks`, `ordering`, `page` ‚Ä?each is defined under `paths[...].get.parameters` below.
 
     **Per-section ordering (Incoming vs Completed)** on the Next.js meetings hub is **client-side React state**
     after the list is split; it is **not** a URL or API parameter.
@@ -25,7 +26,7 @@ servers:
   - url: http://localhost:8000/
 
 paths:
-  /api/v1/projects/{project_id}/meetings/:
+  /api/projects/{project_id}/meetings/:
     get:
       summary: List meetings (search & filters)
       description: |
@@ -47,7 +48,7 @@ paths:
         for this project, and **404** when the project identifier does not resolve to a resource the server
         exposes. The exact status for a given situation depends on product security policy (e.g. existence
         disclosure, ordering of permission checks vs lookup). Callers should treat **either** as ‚Äúno usable
-        list for this `project_id`‚Äù and must not infer cross-project data from the response.
+        list for this `project_id`‚Ä?and must not infer cross-project data from the response.
 
         **Unknown query parameters:** Names not listed in this operation are not part of this contract;
         typical DRF behavior is to ignore them.
@@ -151,7 +152,7 @@ paths:
           in: query
           required: false
           description: |
-            Sort field. Prefix `-` for descending. Unsupported values ‚Üí **400**.
+            Sort field. Prefix `-` for descending. Unsupported values ‚Ü?**400**.
 
             **Planned allowed values** (implementation must reject anything else):
             - `created_at`, `-created_at` (default if omitted: `-created_at`)
@@ -180,7 +181,7 @@ paths:
                 default:
                   value:
                     count: 42
-                    next: "http://localhost:8000/api/v1/projects/1/meetings/?page=2"
+                    next: "http://localhost:8000/api/projects/1/meetings/?page=2"
                     previous: null
                     results:
                       - id: 10
@@ -263,7 +264,7 @@ paths:
               example:
                 detail: Not found.
 
-  /api/v1/projects/{project_id}/meetings/{meeting_id}/:
+  /api/projects/{project_id}/meetings/{meeting_id}/:
     get:
       summary: Get meeting detail (knowledge navigation)
       description: |
@@ -282,12 +283,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
-        - name: meeting_id
-          in: path
-          required: true
-          schema:
-            type: integer
-            minimum: 1
+        - $ref: "#/components/parameters/MeetingId"
       responses:
         "200":
           description: Meeting detail
@@ -314,6 +310,211 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/projects/{project_id}/meetings/{meeting_id}/lifecycle/:
+    get:
+      summary: Get meeting lifecycle state & allowed transitions
+      description: |
+        Returns the meeting's **current lifecycle status** and the list of states it can legally
+        transition to from its current position.
+
+        **State machine:**
+
+        | Current state   | Allowed next states                   |
+        |-----------------|---------------------------------------|
+        | `draft`         | `planned`                             |
+        | `planned`       | `in_progress`, `draft`                |
+        | `in_progress`   | `completed`, `planned`                |
+        | `completed`     | `archived`                            |
+        | `archived`      | *(terminal ‚Ä?no transitions allowed)* |
+
+        The response always includes both fields. When `available_transitions` is empty the meeting
+        is in a terminal state.
+
+        **Note:** This endpoint does **not** evaluate pre-transition validation rules. A state listed
+        in `available_transitions` may still be rejected by `POST .../lifecycle/transition/` if
+        business-rule preconditions are not satisfied (see transition endpoint).
+      tags:
+        - meetings-lifecycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      responses:
+        "200":
+          description: Current state and legal next transitions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingLifecycleResponse"
+              examples:
+                draft_meeting:
+                  summary: Meeting in draft state
+                  value:
+                    status: draft
+                    available_transitions:
+                      - planned
+                in_progress_meeting:
+                  summary: Meeting in progress
+                  value:
+                    status: in_progress
+                    available_transitions:
+                      - completed
+                      - planned
+                terminal:
+                  summary: Archived (terminal) meeting
+                  value:
+                    status: archived
+                    available_transitions: []
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller cannot access this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project or meeting not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{project_id}/meetings/{meeting_id}/lifecycle/transition/:
+    post:
+      summary: Execute a lifecycle state transition
+      description: |
+        Attempts to move the meeting from its **current** lifecycle state to the requested `to_state`.
+
+        **Processing order:**
+        1. Validate `to_state` is a known state name ‚Ü?**400** (`to_state` error) if not.
+        2. Check the state machine allows the transition from the current state ‚Ü?**400** (`transition` error)
+           if disallowed or the meeting is in a terminal state.
+        3. Run **pre-transition validation rules** for the target state ‚Ü?**400** (`transition` error) if
+           preconditions are not met.
+        4. Persist the new state and return the updated lifecycle snapshot.
+
+        **Pre-transition validation rules (current implementation):**
+
+        | Target state    | Precondition                                                                         |
+        |-----------------|--------------------------------------------------------------------------------------|
+        | `in_progress`   | Meeting must have **at least one participant** (`ParticipantLink`).                   |
+        | `completed`     | Meeting must have a **non-empty objective** AND **at least one agenda item**.         |
+        | `archived`      | **All action items** must be resolved (`ActionItem.is_resolved = true`).              |
+        | `draft`         | No additional validation.                                                            |
+        | `planned`       | No additional validation.                                                            |
+
+        Validation logic is extensible; additional rules may be added without changing this contract
+        shape (new error messages will appear under the `transition` key).
+
+        On success the response body is identical to `GET .../lifecycle/` ‚Ä?the caller receives the
+        **new** status and the transitions now available from it.
+      tags:
+        - meetings-lifecycle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/MeetingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionRequest"
+            examples:
+              to_planned:
+                summary: Move draft ‚Ü?planned
+                value:
+                  to_state: planned
+              to_completed:
+                summary: Move in_progress ‚Ü?completed
+                value:
+                  to_state: completed
+      responses:
+        "200":
+          description: Transition succeeded. Returns updated lifecycle snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingLifecycleResponse"
+              examples:
+                now_planned:
+                  value:
+                    status: planned
+                    available_transitions:
+                      - in_progress
+                      - draft
+        "400":
+          description: |
+            Transition rejected. Possible causes:
+
+            - **`to_state`**: not a valid state name.
+            - **`transition`**: disallowed by the state machine (wrong source state or terminal state).
+            - **`transition`**: pre-transition validation failed (missing participants, unresolved actions, etc.).
+
+            Error body follows DRF field-error format: keys are field/category names, values are arrays of
+            human-readable messages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransitionValidationErrorResponse"
+              examples:
+                invalid_state_name:
+                  summary: Unknown state value
+                  value:
+                    to_state:
+                      - "'foo' is not a valid meeting state."
+                disallowed_transition:
+                  summary: State machine does not allow this move
+                  value:
+                    transition:
+                      - "Cannot transition from 'draft' to 'completed'. Allowed transitions: ['planned']."
+                terminal_state:
+                  summary: Meeting already archived
+                  value:
+                    transition:
+                      - "Meeting is in a terminal state ('archived') and cannot be transitioned."
+                missing_participants:
+                  summary: Pre-transition validation ‚Ä?no participants
+                  value:
+                    transition:
+                      - "Meeting must have at least one participant before moving to In Progress."
+                incomplete_for_completion:
+                  summary: Pre-transition validation ‚Ä?objective + agenda
+                  value:
+                    transition:
+                      - "Meeting must have an objective before marking as Completed."
+                      - "Meeting must have at least one agenda item before marking as Completed."
+                unresolved_actions:
+                  summary: Pre-transition validation ‚Ä?action items
+                  value:
+                    transition:
+                      - "Meeting has 3 unresolved action item(s). Resolve them before archiving."
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller cannot access this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project or meeting not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -331,7 +532,68 @@ components:
         type: integer
         minimum: 1
 
+    MeetingId:
+      name: meeting_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+
   schemas:
+    MeetingLifecycleResponse:
+      type: object
+      required: [status, available_transitions]
+      description: |
+        Snapshot of a meeting's lifecycle position. Returned by both the lifecycle GET and the
+        transition POST (after a successful state change).
+      properties:
+        status:
+          type: string
+          enum: [draft, planned, in_progress, completed, archived]
+          description: Current lifecycle state of the meeting.
+        available_transitions:
+          type: array
+          items:
+            type: string
+            enum: [draft, planned, in_progress, completed, archived]
+          description: |
+            States the meeting may legally move to **next**. Empty array when the meeting is in a
+            terminal state (`archived`).
+
+    TransitionRequest:
+      type: object
+      required: [to_state]
+      properties:
+        to_state:
+          type: string
+          enum: [draft, planned, in_progress, completed, archived]
+          description: The target lifecycle state to transition to.
+
+    TransitionValidationErrorResponse:
+      type: object
+      description: |
+        Field-keyed transition validation errors (DRF format). Keys are either `to_state`
+        (invalid state name) or `transition` (disallowed move or failed precondition). Values
+        are arrays of human-readable error messages.
+      properties:
+        to_state:
+          type: array
+          items:
+            type: string
+          description: Errors related to the `to_state` value itself (e.g. unknown state name).
+        transition:
+          type: array
+          items:
+            type: string
+          description: |
+            Errors related to the transition attempt: disallowed by state machine, terminal state,
+            or pre-transition validation failure.
+      additionalProperties:
+        type: array
+        items:
+          type: string
+
     MeetingParticipantSnippet:
       type: object
       required: [user_id]
@@ -359,7 +621,7 @@ components:
       type: object
       required: [id, title, url]
       description: |
-        Minimal object for contextual navigation (meeting ‚Üî decision ‚Üî task).
+        Minimal object for contextual navigation (meeting ‚Ü?decision ‚Ü?task).
         `url` / `detail_url` are **in-app paths** (Next.js App Router), not the API URL.
         When present, `detail_url` duplicates `url` (preferred key for new clients).
       properties:
@@ -426,11 +688,11 @@ components:
         decision_count:
           type: integer
           minimum: 0
-          description: Number of **generated** (origin) decisions ‚Äî `MeetingDecisionOrigin` rows.
+          description: Number of **generated** (origin) decisions ‚Ä?`MeetingDecisionOrigin` rows.
         task_count:
           type: integer
           minimum: 0
-          description: Number of **generated** (origin) tasks ‚Äî `MeetingTaskOrigin` rows.
+          description: Number of **generated** (origin) tasks ‚Ä?`MeetingTaskOrigin` rows.
         generated_decisions_count:
           type: integer
           minimum: 0
@@ -471,7 +733,7 @@ components:
       type: object
       description: |
         Full meeting payload from `MeetingSerializer` (retrieve). Includes the same generated/related knowledge
-        navigation fields as list rows, plus workspace fields (`objective`, `status`, timestamps, ‚Ä¶).
+        navigation fields as list rows, plus workspace fields (`objective`, `status`, timestamps, ‚Ä?.
       required:
         - id
         - project
@@ -591,24 +853,24 @@ components:
           type: integer
           minimum: 0
           description: |
-            Hub UI only: **B** ‚Äî count of meetings in the **Incoming** lane (project scope, no discovery filters),
+            Hub UI only: **B** ‚Ä?count of meetings in the **Incoming** lane (project scope, no discovery filters),
             same calendar-day split as the client.
         incoming_result_count:
           type: integer
           minimum: 0
           description: |
-            Hub UI only: **A** ‚Äî same Incoming lane subset, then discovery filters applied (full queryset, not the
+            Hub UI only: **A** ‚Ä?same Incoming lane subset, then discovery filters applied (full queryset, not the
             current page of `results`).
         completed_lane_total:
           type: integer
           minimum: 0
           description: |
-            Hub UI only: **B** ‚Äî count of meetings in the **Completed** lane without discovery filters.
+            Hub UI only: **B** ‚Ä?count of meetings in the **Completed** lane without discovery filters.
         completed_result_count:
           type: integer
           minimum: 0
           description: |
-            Hub UI only: **A** ‚Äî Completed lane + discovery filters.
+            Hub UI only: **A** ‚Ä?Completed lane + discovery filters.
         incoming_lane_filtered:
           type: integer
           minimum: 0
