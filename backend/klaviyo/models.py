@@ -50,6 +50,13 @@ class EmailDraft(TimeStampedModel):
         choices=STATUS_CHOICES,
         default=STATUS_DRAFT,
     )
+    media_campaign = models.ForeignKey(
+        'campaign.Campaign',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='klaviyo_drafts',
+    )
 
     def __str__(self) -> str:
         """

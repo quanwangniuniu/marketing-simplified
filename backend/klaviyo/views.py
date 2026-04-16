@@ -54,6 +54,10 @@ class EmailDraftViewSet(viewsets.ModelViewSet):
         if user and user.is_authenticated:
             qs = qs.filter(user=user)
 
+        campaign_id = self.request.query_params.get('campaign_id')
+        if campaign_id:
+            qs = qs.filter(media_campaign_id=campaign_id)
+
         return qs
 
     def get_serializer_class(self):

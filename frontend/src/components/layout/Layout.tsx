@@ -27,7 +27,6 @@ interface LayoutProps {
   };
   showPermissionRole?: boolean; // New prop to show permission-based role
   onUserAction?: (action: 'profile' | 'settings' | 'logout') => void;
-  onSearch?: (query: string) => void;
   onNotificationClick?: (id: string) => void;
 }
 
@@ -42,7 +41,6 @@ const Layout: React.FC<LayoutProps> = ({
   unsavedChangesGuard,
   user: propUser,
   onUserAction,
-  onSearch,
   onNotificationClick,
 }) => {
   const usePageScroll = mainScrollMode === 'page';
@@ -122,13 +120,6 @@ const Layout: React.FC<LayoutProps> = ({
     onUserAction?.(action);
   };
 
-  // handle searching
-  const handleSearch = (query: string) => {
-    console.log('Search query:', query);
-    // TODO: search in real projects
-    onSearch?.(query);
-  };
-
   // handle notification click action
   const handleNotificationClick = (id: string) => {
     console.log('Notification clicked:', id);
@@ -144,13 +135,12 @@ const Layout: React.FC<LayoutProps> = ({
           <Header
             user={user}
             onUserMenuClick={handleUserAction}
-            onSearchChange={handleSearch}
             onNotificationClick={handleNotificationClick}
           />
         )}
 
         {/* main */}
-        <div className={`flex min-h-0 flex-1 items-stretch ${usePageScroll ? 'overflow-visible' : 'overflow-hidden'}`}>
+        <div className={`flex flex-1 ${usePageScroll ? 'overflow-visible' : 'overflow-hidden'}`}>
           {/* sidebar */}
           {showSidebar && (
             <Sidebar

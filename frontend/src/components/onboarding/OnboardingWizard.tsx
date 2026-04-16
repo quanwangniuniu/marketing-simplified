@@ -265,7 +265,7 @@ const OnboardingWizard: React.FC = () => {
       markCompleted(project);
       // Refresh projects in store and navigate to the main workspace
       refreshProjects().finally(() => {
-        router.push('/campaigns');
+        router.push('/tasks');
       });
       toast.success('Onboarding complete. Project created!');
     } catch (error: any) {

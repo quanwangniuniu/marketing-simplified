@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
@@ -16,6 +16,8 @@ import AdPreviewPanel from '@/components/google_ads/preview/AdPreviewPanel';
 function GoogleAdsDesignPageContent() {
   const { adId } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
   const { user, logout } = useAuth();
   const [videoAdValidation, setVideoAdValidation] = useState<{ isValid: boolean; errors: string[] }>({ isValid: false, errors: [] });
   const [formDataGetter, setFormDataGetter] = useState<(() => any) | null>(null);
@@ -303,8 +305,11 @@ function GoogleAdsDesignPageContent() {
   };
 
   const handleBack = () => {
-    console.log('handleBack called - navigating to /google_ads');
-    router.push('/google_ads');
+    const safeReturnTo =
+      returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+        ? returnTo
+        : '/google_ads';
+    router.push(safeReturnTo);
   };
 
   if (loading) {

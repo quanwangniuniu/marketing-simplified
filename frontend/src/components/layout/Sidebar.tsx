@@ -18,20 +18,13 @@ import {
   ChevronRight,
   Users,
   BarChart3,
-  FileText,
   FileSpreadsheet,
   CheckSquare,
   Calendar,
   Bell,
   ListTodo,
   UserRoundCog,
-  Facebook,
-  Video,
   Notebook,
-  Target,
-  Mail,
-  LayoutDashboard,
-  Square,
   Bot,
   Presentation,
 } from "lucide-react";
@@ -94,12 +87,6 @@ const getNavigationItems = (
         : "Meeting preparation and project meetings",
     },
     {
-      name: "Ad Variations",
-      href: "/variations",
-      icon: Target,
-      description: "Manage ad variations and creative testing",
-    },
-    {
       name: t ? t("sidebar.tasks") : "Tasks",
       href: "/tasks",
       icon: ListTodo,
@@ -114,51 +101,10 @@ const getNavigationItems = (
       description: "Decision workbench and history",
     },
     {
-      name: "Email Draft",
-      href: "#",
-      icon: Mail,
-      description: "Email drafts and campaigns",
-      children: [
-        {
-          name: "Mailchimp",
-          href: "/mailchimp",
-          icon: Mail,
-        },
-        {
-          name: "Klaviyo",
-          href: "/klaviyo",
-          icon: Mail,
-        },
-      ],
-    },
-    {
       name: t ? t('sidebar.notion') : 'Notion',
       href: '/notion',
       icon: Notebook,
       description: t ? t('sidebar.notion_editor') : 'Draft documents with Notion-like editor',
-    },
-    {
-      name: "Ads Draft",
-      href: "#",
-      icon: Target,
-      description: "Ad creative management",
-      children: [
-        {
-          name: t ? t('sidebar.facebook_meta') : 'Facebook Meta',
-          href: '/facebook_meta',
-          icon: Facebook,
-        },
-        {
-          name: t ? t("sidebar.tiktok") : "TikTok",
-          href: "/tiktok",
-          icon: Video,
-        },
-        {
-          name: t ? t("sidebar.google_ads") : "Google Ads",
-          href: "/google_ads",
-          icon: Target,
-        },
-      ],
     },
     // {
     //   name: t ? t("sidebar.reports") : "Reports",

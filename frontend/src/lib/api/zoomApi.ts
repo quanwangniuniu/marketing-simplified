@@ -6,11 +6,18 @@ export interface ZoomStatus {
 
 export interface ZoomMeeting {
   meeting_id: string;
+  /** Zoom meeting instance UUID when returned by create; needed for past-meeting APIs. */
+  uuid: string;
   topic: string;
   join_url: string;
   start_url: string;
   start_time: string;
   duration: number;
+}
+
+export interface ZoomMeetingLinkPayload {
+  zoom_meeting_id: string;
+  zoom_uuid?: string;
 }
 
 export const zoomApi = {
@@ -39,5 +46,21 @@ export const zoomApi = {
       duration,
     });
     return response.data;
+  },
+
+  /**
+   * Persist Zoom identity on the MediaJira meeting (ZoomMeetingData). Call after createMeeting.
+   */
+  linkMeetingData: async (
+    projectId: number,
+    meetingId: number,
+    payload: ZoomMeetingLinkPayload,
+  ): Promise<void> => {
+    await api.post('/api/v1/zoom/meetings/link/', {
+      project_id: projectId,
+      meeting_id: meetingId,
+      zoom_meeting_id: payload.zoom_meeting_id,
+      zoom_uuid: payload.zoom_uuid ?? '',
+    });
   },
 };
