@@ -332,12 +332,13 @@ class CreateAdCreativeSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = AdCreative
-        fields = ['name', 'object_story_spec', 'object_story_id', 'authorization_category']
+        fields = ['name', 'object_story_spec', 'object_story_id', 'authorization_category', 'media_campaign']
         extra_kwargs = {
             'name': {'required': True},
             'object_story_spec': {'required': False},
             'object_story_id': {'required': False},
-            'authorization_category': {'required': False}
+            'authorization_category': {'required': False},
+            'media_campaign': {'required': False},
         }
     
     def validate_name(self, value):

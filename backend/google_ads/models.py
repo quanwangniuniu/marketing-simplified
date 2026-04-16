@@ -1016,16 +1016,24 @@ class Ad(models.Model):
         help_text="Media assets used in this ad"
     )
     
+    media_campaign = models.ForeignKey(
+        'campaign.Campaign',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='google_ads',
+    )
+
     # ========== Timestamps ==========
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['status']),
         ]
-    
+
     def __str__(self):
         customer_id = self.customer_account.customer_id if self.customer_account else "No Account"
         return f"Ad: {self.name or self.type} - {customer_id}"
