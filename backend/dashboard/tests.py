@@ -28,6 +28,10 @@ class ProjectWorkspaceDashboardTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", email="test@test.com", password="pass"
         )
+        # Provide names so workspace avatar initials are stable and human-friendly.
+        self.user.first_name = "Test"
+        self.user.last_name = "User"
+        self.user.save(update_fields=["first_name", "last_name"])
 
         # Create two projects — to verify no cross-project data leakage
         self.project = Project.objects.create(
@@ -147,29 +151,29 @@ class ProjectWorkspaceDashboardTest(TestCase):
         tasks = response.json()["tasks"]
         self.assertEqual(len(tasks), 1)
 
-    def test_decisions_limited_to_five(self):
-        """At most 5 decisions should be returned."""
+    def test_decisions_limited_to_zone_cap(self):
+        """Decisions list should be capped to the workspace zone limit."""
         for i in range(7):
             self._make_decision(self.project)
 
         response = self.client.get(self.url)
-        self.assertLessEqual(len(response.json()["decisions"]), 5)
+        self.assertLessEqual(len(response.json()["decisions"]), 20)
 
-    def test_tasks_limited_to_five(self):
-        """At most 5 tasks should be returned."""
+    def test_tasks_limited_to_zone_cap(self):
+        """Tasks list should be capped to the workspace zone limit."""
         for i in range(7):
             self._make_task(self.project)
 
         response = self.client.get(self.url)
-        self.assertLessEqual(len(response.json()["tasks"]), 5)
+        self.assertLessEqual(len(response.json()["tasks"]), 20)
 
-    def test_spreadsheets_limited_to_five(self):
-        """At most 5 spreadsheets should be returned."""
+    def test_spreadsheets_limited_to_zone_cap(self):
+        """Spreadsheets list should be capped to the workspace zone limit."""
         for i in range(7):
             self._make_spreadsheet(self.project, name=f"Sheet {i}")
 
         response = self.client.get(self.url)
-        self.assertLessEqual(len(response.json()["spreadsheets"]), 5)
+        self.assertLessEqual(len(response.json()["spreadsheets"]), 20)
 
     def test_decision_fields_present(self):
         """Each decision item must have required fields for frontend navigation."""
@@ -189,6 +193,17 @@ class ProjectWorkspaceDashboardTest(TestCase):
         self.assertIn("summary", task)
         self.assertIn("status", task)
         self.assertIn("priority", task)
+        self.assertIn("is_overdue", task)
+        self.assertIn("owner_initials", task)
+
+    def test_task_owner_initials_uses_owner_name(self):
+        """Task rows should include owner_initials derived from owner name."""
+        task = self._make_task(self.project)
+        response = self.client.get(self.url)
+        tasks = response.json()["tasks"]
+        row = next((t for t in tasks if t["id"] == task.id), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row["owner_initials"], "TU")
 
     def test_spreadsheet_fields_present(self):
         """Each spreadsheet item must have required fields for frontend navigation."""
@@ -249,6 +264,34 @@ class ProjectWorkspaceDashboardTest(TestCase):
         task_ids = [t['id'] for t in response.json()['tasks']]
         self.assertIn(blocked.id, task_ids)
 
+    def test_task_priority_queue_orders_overdue_then_blocked_then_decision_linked(self):
+        """Task queue should prioritize overdue, then blocked, then decision-linked tasks."""
+        from task.models import TaskRelation
+
+        today = timezone.now().date()
+        overdue_task = self._make_task(
+            self.project,
+            status=Task.Status.SUBMITTED,
+            due_date=today - timedelta(days=1),
+        )
+        blocked_task = self._make_task(self.project, status=Task.Status.SUBMITTED, due_date=today + timedelta(days=2))
+        blocker = self._make_task(self.project, status=Task.Status.SUBMITTED, due_date=today + timedelta(days=3))
+        self._make_task_relation(blocker, blocked_task, TaskRelation.BLOCKS)
+        decision = self._make_decision(self.project)
+        decision_linked_task = self._make_decision_linked_task(
+            self.project,
+            decision,
+            status=Task.Status.SUBMITTED,
+        )
+        neutral_task = self._make_task(self.project, status=Task.Status.SUBMITTED, due_date=today + timedelta(days=5))
+
+        response = self.client.get(self.url)
+        ordered_ids = [t["id"] for t in response.json()["tasks"]]
+        self.assertEqual(
+            ordered_ids[:4],
+            [overdue_task.id, blocked_task.id, decision_linked_task.id, neutral_task.id],
+        )
+
     def test_blocked_task_has_is_blocked_flag(self):
         """Blocked tasks must have is_blocked=True in response."""
         from task.models import TaskRelation
@@ -288,6 +331,21 @@ class ProjectWorkspaceDashboardTest(TestCase):
         sheets = response.json()['spreadsheets']
         sheet_data = next((s for s in sheets if s['id'] == sheet.id), None)
         self.assertFalse(sheet_data['has_running_job'])
+
+    def test_spreadsheet_priority_queue_shows_running_jobs_first(self):
+        """Operations spreadsheet queue should prioritize running jobs over recency."""
+        older_running = self._make_spreadsheet(self.project, name="Running Sheet")
+        self._make_pattern_job(older_running, status='running')
+        newer_idle = self._make_spreadsheet(self.project, name="Idle Sheet")
+
+        # Force recency difference: idle is newer, but running sheet should still come first.
+        Spreadsheet.objects.filter(id=older_running.id).update(updated_at=timezone.now() - timedelta(days=2))
+        Spreadsheet.objects.filter(id=newer_idle.id).update(updated_at=timezone.now())
+
+        response = self.client.get(self.url)
+        sheets = response.json()['spreadsheets']
+        sheet_ids = [s['id'] for s in sheets]
+        self.assertEqual(sheet_ids[:2], [older_running.id, newer_idle.id])
 
     def _make_decision_linked_task(self, project, decision, status=Task.Status.SUBMITTED):
         """Helper: create a task linked to a decision via content_type + object_id."""
@@ -356,6 +414,20 @@ class ProjectWorkspaceDashboardTest(TestCase):
         if decision_data:
             self.assertFalse(decision_data['has_unresolved_tasks'])
 
+    def test_decision_priority_queue_orders_awaiting_then_unresolved_then_high_risk(self):
+        """Decision queue should prioritize awaiting review, unresolved execution, then high risk."""
+        awaiting = self._make_decision(self.project, dec_status=Decision.Status.AWAITING_APPROVAL)
+        unresolved = self._make_decision(self.project, dec_status=Decision.Status.REVIEWED)
+        self._make_decision_linked_task(self.project, unresolved, status=Task.Status.SUBMITTED)
+        high_risk = self._make_decision(self.project, dec_status=Decision.Status.COMMITTED)
+        high_risk.risk_level = 'HIGH'
+        high_risk.save(update_fields=['risk_level'])
+        self._make_decision(self.project, dec_status=Decision.Status.COMMITTED)
+
+        response = self.client.get(self.url)
+        ordered_ids = [d['id'] for d in response.json()['decisions']]
+        self.assertEqual(ordered_ids[:3], [awaiting.id, unresolved.id, high_risk.id])
+
     def _make_workflow_pattern(self, spreadsheet, name="Test Pattern"):
         """Helper: create a WorkflowPattern originating from a spreadsheet."""
         from spreadsheet.models import WorkflowPattern
@@ -375,6 +447,7 @@ class ProjectWorkspaceDashboardTest(TestCase):
         self.assertIn("patterns", response.json())
         self.assertEqual(len(response.json()["patterns"]), 1)
         self.assertEqual(response.json()["patterns"][0]["name"], "My Pattern")
+        self.assertEqual(response.json()["patterns"][0]["origin_spreadsheet_id"], sheet.id)
 
     def test_archived_patterns_not_shown(self):
         """Archived WorkflowPatterns must not appear in dashboard."""
@@ -397,11 +470,23 @@ class ProjectWorkspaceDashboardTest(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(len(response.json()["patterns"]), 0)
 
-    def test_patterns_limited_to_five(self):
-        """At most 5 patterns should be returned."""
+    def test_patterns_limited_to_zone_cap(self):
+        """Patterns list should be capped to the workspace zone limit."""
         sheet = self._make_spreadsheet(self.project)
         for i in range(7):
             self._make_workflow_pattern(sheet, name=f"Pattern {i}")
 
         response = self.client.get(self.url)
-        self.assertLessEqual(len(response.json()["patterns"]), 5)
+        self.assertLessEqual(len(response.json()["patterns"]), 20)
+
+    def test_pattern_priority_queue_shows_running_origin_first(self):
+        """Patterns from spreadsheets with running jobs should appear before idle origins."""
+        running_sheet = self._make_spreadsheet(self.project, name="Running Origin")
+        idle_sheet = self._make_spreadsheet(self.project, name="Idle Origin")
+        running_pattern = self._make_workflow_pattern(running_sheet, name="Running Pattern")
+        idle_pattern = self._make_workflow_pattern(idle_sheet, name="Idle Pattern")
+        self._make_pattern_job(running_sheet, status='running')
+
+        response = self.client.get(self.url)
+        pattern_ids = [p["id"] for p in response.json()["patterns"]]
+        self.assertEqual(pattern_ids[:2], [str(running_pattern.id), str(idle_pattern.id)])

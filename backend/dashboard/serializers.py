@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.utils import timezone
 from task.models import Task
 from core.models import CustomUser
 
@@ -113,12 +114,15 @@ class WorkspaceTaskSerializer(serializers.ModelSerializer):
     """Task summary for Project Workspace Dashboard."""
     is_blocked = serializers.SerializerMethodField()
     is_decision_linked = serializers.SerializerMethodField()
+    is_overdue = serializers.SerializerMethodField()
+    owner_initials = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
             'id', 'summary', 'status', 'priority', 'type',
-            'due_date', 'updated_at', 'is_blocked', 'is_decision_linked'
+            'due_date', 'updated_at', 'is_overdue', 'is_blocked', 'is_decision_linked',
+            'owner_initials',
         ]
 
     def get_is_blocked(self, obj):
@@ -128,6 +132,49 @@ class WorkspaceTaskSerializer(serializers.ModelSerializer):
     def get_is_decision_linked(self, obj):
         """Return True if this task is linked to a Decision via content_type GenericForeignKey."""
         return obj.is_decision_linked_flag
+
+    def get_is_overdue(self, obj):
+        """Return True if due_date is in the past for a non-terminal task status."""
+        if hasattr(obj, 'is_overdue_flag'):
+            return bool(obj.is_overdue_flag)
+        if not obj.due_date:
+            return False
+        terminal_statuses = {Task.Status.APPROVED, Task.Status.LOCKED, Task.Status.CANCELLED}
+        return obj.status not in terminal_statuses and obj.due_date < timezone.localdate()
+
+    def get_owner_initials(self, obj):
+        """
+        Return 1–2 letter initials for the task owner.
+        Prefer first/last name; fallback to username; then email local-part.
+        """
+        owner = getattr(obj, 'owner', None)
+        if not owner:
+            return None
+
+        first = (getattr(owner, 'first_name', '') or '').strip()
+        last = (getattr(owner, 'last_name', '') or '').strip()
+        if first or last:
+            letters = []
+            if first:
+                letters.append(first[0])
+            if last:
+                letters.append(last[0])
+            return ''.join(letters).upper()[:2] or None
+
+        username = (getattr(owner, 'username', '') or '').strip()
+        if username:
+            parts = [p for p in username.replace('_', ' ').replace('.', ' ').split(' ') if p]
+            letters = [p[0] for p in parts[:2] if p]
+            return ''.join(letters).upper()[:2] or username[:2].upper()
+
+        email = (getattr(owner, 'email', '') or '').strip()
+        if email:
+            local = email.split('@')[0]
+            parts = [p for p in local.replace('_', ' ').replace('.', ' ').split(' ') if p]
+            letters = [p[0] for p in parts[:2] if p]
+            return ''.join(letters).upper()[:2] or local[:2].upper()
+
+        return None
 
 
 class WorkspaceSpreadsheetSerializer(serializers.ModelSerializer):
@@ -148,7 +195,10 @@ class WorkspacePatternSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkflowPattern
-        fields = ['id', 'name', 'description', 'version', 'updated_at']
+        fields = [
+            'id', 'name', 'description', 'version', 'updated_at',
+            'origin_spreadsheet_id',
+        ]
 
 
 class ProjectWorkspaceDashboardSerializer(serializers.Serializer):

@@ -292,7 +292,10 @@ class ProjectWorkspaceDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     # Maximum items returned per zone — keeps the dashboard lightweight
-    ZONE_LIMIT = 5
+    # Soft cap per zone payload. UI now supports progressive reveal ("Show more"),
+    # so this should be high enough to provide meaningful expansion while keeping
+    # the workspace response lightweight.
+    ZONE_LIMIT = 20
 
     def get(self, request):
         # --- Validate project_id ---
@@ -329,9 +332,16 @@ class ProjectWorkspaceDashboardView(APIView):
             Task.Status.CANCELLED,
         ]
 
+        # Workspace queue policy (single source of truth for prioritization):
+        # 1) Decisions: awaiting approval > unresolved execution > high risk > recent updates
+        # 2) Tasks: overdue > blocked > decision-linked > recent updates
+        # 3) Operations:
+        #    - Spreadsheets: running/queued jobs first, then recent updates
+        #    - Patterns: origins with running/queued jobs first, then recent updates
+
         # --- Decision Zone ---
-        # Show active decisions: committed, awaiting approval, or reviewed
-        # Annotate with has_unresolved_tasks_flag: True if any linked task is not yet resolved
+        # Show active decisions and order as an action queue:
+        # awaiting approval first, then unresolved execution, then high risk, then recency.
 
         unresolved_tasks_subquery = Task.objects.filter(
             project_id=project_id,
@@ -348,13 +358,31 @@ class ProjectWorkspaceDashboardView(APIView):
                 Decision.Status.REVIEWED,
             ]
         ).annotate(
-            has_unresolved_tasks_flag=Exists(unresolved_tasks_subquery)
-        ).order_by('-updated_at')[:self.ZONE_LIMIT]
+            has_unresolved_tasks_flag=Exists(unresolved_tasks_subquery),
+            is_awaiting_review_flag=django_models.Case(
+                django_models.When(
+                    status=Decision.Status.AWAITING_APPROVAL,
+                    then=django_models.Value(True),
+                ),
+                default=django_models.Value(False),
+                output_field=django_models.BooleanField(),
+            ),
+            is_high_risk_flag=django_models.Case(
+                django_models.When(risk_level='HIGH', then=django_models.Value(True)),
+                default=django_models.Value(False),
+                output_field=django_models.BooleanField(),
+            ),
+        ).order_by(
+            '-is_awaiting_review_flag',
+            '-has_unresolved_tasks_flag',
+            '-is_high_risk_flag',
+            '-updated_at',
+        )[:self.ZONE_LIMIT]
 
         # --- Task Zone ---
-        # Show tasks needing attention: submitted, under review, or rejected
-        # Annotate with is_blocked_flag and is_decision_linked_flag
-        # Priority order: decision-linked first, then blocked, then by updated_at
+        # Show tasks needing execution attention: submitted, under review, or rejected
+        # Annotate with urgency/action flags used by the project workspace queue:
+        # overdue first, then blocked, then decision-linked, then recency.
 
         # Subquery: is this task blocked by another task via TaskRelation.BLOCKS?
         blocked_subquery = TaskRelation.objects.filter(
@@ -375,18 +403,27 @@ class ProjectWorkspaceDashboardView(APIView):
                 Task.Status.UNDER_REVIEW,
                 Task.Status.REJECTED,
             ]
-        ).annotate(
+        ).select_related('owner').annotate(
+            is_overdue_flag=django_models.Case(
+                django_models.When(
+                    due_date__lt=timezone.localdate(),
+                    then=django_models.Value(True),
+                ),
+                default=django_models.Value(False),
+                output_field=django_models.BooleanField(),
+            ),
             is_blocked_flag=Exists(blocked_subquery),
             is_decision_linked_flag=Exists(decision_linked_subquery),
         ).order_by(
-            '-is_decision_linked_flag',  # Decision-linked tasks appear first
-            '-is_blocked_flag',           # Blocked tasks appear second
+            '-is_overdue_flag',          # Overdue tasks are highest urgency
+            '-is_blocked_flag',          # Then blocked tasks
+            '-is_decision_linked_flag',  # Then decision-linked tasks
             '-updated_at',
         )[:self.ZONE_LIMIT]
 
         # --- Spreadsheet Zone ---
-        # Show recently active spreadsheets in this project
-        # Annotate with has_running_job_flag: True if a PatternJob is queued or running
+        # Show operationally active spreadsheets in this project:
+        # running jobs first, then most recently updated.
 
         running_job_subquery = PatternJob.objects.filter(
             spreadsheet=OuterRef('pk'),
@@ -398,11 +435,11 @@ class ProjectWorkspaceDashboardView(APIView):
             is_deleted=False,
         ).annotate(
             has_running_job_flag=Exists(running_job_subquery)
-        ).order_by('-updated_at')[:self.ZONE_LIMIT]
+        ).order_by('-has_running_job_flag', '-updated_at')[:self.ZONE_LIMIT]
 
         # --- Pattern Zone ---
-        # Show recently used WorkflowPatterns that originated from this project's spreadsheets
-        # WorkflowPattern has no direct project_id, so we filter via origin_spreadsheet_id
+        # Show operationally active patterns scoped to this project:
+        # patterns whose origin spreadsheet currently has running jobs first, then recency.
 
         # Get all spreadsheet IDs belonging to this project
         project_spreadsheet_ids = Spreadsheet.objects.filter(
@@ -410,11 +447,18 @@ class ProjectWorkspaceDashboardView(APIView):
             is_deleted=False,
         ).values_list('id', flat=True)
 
+        pattern_origin_running_subquery = PatternJob.objects.filter(
+            spreadsheet_id=OuterRef('origin_spreadsheet_id'),
+            status__in=['queued', 'running'],
+        )
+
         patterns = WorkflowPattern.objects.filter(
             origin_spreadsheet_id__in=project_spreadsheet_ids,
             is_archived=False,
             is_deleted=False,
-        ).order_by('-updated_at')[:self.ZONE_LIMIT]
+        ).annotate(
+            is_origin_running_flag=Exists(pattern_origin_running_subquery),
+        ).order_by('-is_origin_running_flag', '-updated_at')[:self.ZONE_LIMIT]
 
         # --- Serialize and respond ---
         data = {

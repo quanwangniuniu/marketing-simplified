@@ -1,16 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import Layout from '@/components/layout/Layout';
 import { DerivedProjectStatus, ProjectFilter, useProjects } from '@/hooks/useProjects';
 import { ProjectAPI, ProjectData, ProjectInvitationData } from '@/lib/api/projectApi';
+import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   FileSpreadsheet,
   FolderOpen,
@@ -45,40 +47,23 @@ const formatRelativeDate = (value?: string | null) => {
 
 const getRoleBadgeClasses = (role?: string) => {
   switch (role) {
-    case 'owner':
-      return 'bg-zinc-900 text-white';
-    case 'member':
-      return 'bg-sky-100 text-sky-800';
-    case 'viewer':
-      return 'bg-slate-100 text-slate-700';
-    case 'Approver':
-      return 'bg-emerald-100 text-emerald-800';
-    case 'Reviewer':
-      return 'bg-amber-100 text-amber-800';
-    case 'Organization Admin':
-      return 'bg-violet-100 text-violet-800';
-    case 'Super Administrator':
-      return 'bg-black text-white';
-    case 'Team Leader':
-      return 'bg-fuchsia-100 text-fuchsia-800';
-    case 'Campaign Manager':
-      return 'bg-cyan-100 text-cyan-800';
-    case 'Budget Controller':
-      return 'bg-rose-100 text-rose-800';
-    case 'Data Analyst':
-      return 'bg-blue-100 text-blue-800';
-    case 'Senior Media Buyer':
-      return 'bg-indigo-100 text-indigo-800';
-    case 'Specialist Media Buyer':
-      return 'bg-purple-100 text-purple-800';
-    case 'Junior Media Buyer':
-      return 'bg-teal-100 text-teal-800';
-    case 'Designer':
-      return 'bg-pink-100 text-pink-800';
-    case 'Copywriter':
-      return 'bg-orange-100 text-orange-800';
-    default:
-      return 'bg-gray-100 text-gray-700';
+    case 'owner': return 'bg-zinc-900 text-white';
+    case 'member': return 'bg-sky-100 text-sky-800';
+    case 'viewer': return 'bg-slate-100 text-slate-700';
+    case 'Approver': return 'bg-emerald-100 text-emerald-800';
+    case 'Reviewer': return 'bg-amber-100 text-amber-800';
+    case 'Organization Admin': return 'bg-violet-100 text-violet-800';
+    case 'Super Administrator': return 'bg-black text-white';
+    case 'Team Leader': return 'bg-fuchsia-100 text-fuchsia-800';
+    case 'Campaign Manager': return 'bg-cyan-100 text-cyan-800';
+    case 'Budget Controller': return 'bg-rose-100 text-rose-800';
+    case 'Data Analyst': return 'bg-blue-100 text-blue-800';
+    case 'Senior Media Buyer': return 'bg-indigo-100 text-indigo-800';
+    case 'Specialist Media Buyer': return 'bg-purple-100 text-purple-800';
+    case 'Junior Media Buyer': return 'bg-teal-100 text-teal-800';
+    case 'Designer': return 'bg-pink-100 text-pink-800';
+    case 'Copywriter': return 'bg-orange-100 text-orange-800';
+    default: return 'bg-gray-100 text-gray-700';
   }
 };
 
@@ -90,6 +75,8 @@ const ProjectCard = ({
   onManageMembers,
   updating,
   deleting,
+  isExpanded,
+  onToggleExpand,
 }: {
   project: ProjectWithStatus;
   onToggleActive: (projectId: number, isActive: boolean) => void;
@@ -98,115 +85,131 @@ const ProjectCard = ({
   onManageMembers: (project: ProjectWithStatus) => void;
   updating: boolean;
   deleting: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) => {
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <DecorativeGlow variant="subtle" />
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-            <FolderOpen className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
-              {project.is_active && (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-label="Active project" />
-              )}
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* Card body */}
+      <div className="relative flex flex-col p-5">
+        <DecorativeGlow variant="subtle" />
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+              <FolderOpen className="h-5 w-5" />
             </div>
-            <p className="text-sm text-gray-500">
-              {project.organization?.name || 'No organization'} ·{' '}
-              {project.owner?.name || project.owner?.email || 'Unassigned owner'}
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+                {project.is_active && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-label="Active project" />
+                )}
+              </div>
+              <p className="text-sm text-gray-500">
+                {project.organization?.name || 'No organization'} ·{' '}
+                {project.owner?.name || project.owner?.email || 'Unassigned owner'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onDelete(project.id)}
+            disabled={deleting}
+            className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Delete project
+          </button>
+        </div>
+
+        <p className="mt-3 min-h-[48px] text-sm text-gray-600">
+          {project.description || 'No description provided for this project yet.'}
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-gray-400" />
+            <span className="font-semibold text-gray-900">
+              {typeof project.member_count === 'number' ? project.member_count : 0}
+            </span>
+            members
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock3 className="h-4 w-4 text-gray-400" />
+            Updated {formatRelativeDate(project.updated_at || project.created_at)}
           </div>
         </div>
-        <button
-          onClick={() => onDelete(project.id)}
-          disabled={deleting}
-          className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          Delete project
-        </button>
-      </div>
 
-      <p className="mt-3 min-h-[48px] text-sm text-gray-600">
-        {project.description || 'No description provided for this project yet.'}
-      </p>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-gray-400" />
-          <span className="font-semibold text-gray-900">
-            {typeof project.member_count === 'number' ? project.member_count : 0}
-          </span>
-          members
-        </div>
-        <div className="flex items-center gap-2">
-          <Clock3 className="h-4 w-4 text-gray-400" />
-          Updated {formatRelativeDate(project.updated_at || project.created_at)}
-        </div>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-          <button
-            onClick={() => onToggleCompleted(project.id)}
-            className={`rounded-full px-3 py-1 font-semibold transition ${
-              project.isCompletedResolved
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+            <button
+              onClick={() => onToggleCompleted(project.id)}
+              className={`rounded-full px-3 py-1 font-semibold transition ${project.isCompletedResolved
                 ? 'bg-slate-800 text-white hover:bg-slate-900'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {project.isCompletedResolved ? 'Completed' : 'Completed'}
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={`/projects/${project.id}`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
-            aria-label="Open project workspace"
-            title="Open project workspace"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </a>
-          <a
-            href={`/projects/${project.id}/miro`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
-            aria-label="Miro Boards"
-            title="Miro Boards"
-          >
-            <Presentation className="h-4 w-4" />
-          </a>
-          <a
-            href={`/projects/${project.id}/spreadsheets`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
-            aria-label="Spreadsheets"
-            title="Spreadsheets"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-          </a>
-          <button
-            onClick={() => onManageMembers(project)}
-            className="inline-flex items-center justify-center rounded-full p-2 text-slate-700 transition hover:bg-slate-100"
-            aria-label="Members"
-            title="Members"
-          >
-            <Users className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onToggleActive(project.id, !!project.isActiveResolved)}
-            disabled={updating}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
-              project.isActiveResolved
+                }`}
+            >
+              {project.isCompletedResolved ? 'Completed' : 'Mark complete'}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/projects/${project.id}/miro`}
+              className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
+              aria-label="Miro Boards"
+              title="Miro Boards"
+            >
+              <Presentation className="h-4 w-4" />
+            </a>
+            <a
+              href={`/projects/${project.id}/spreadsheets`}
+              className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
+              aria-label="Spreadsheets"
+              title="Spreadsheets"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+            </a>
+            <button
+              type="button"
+              onClick={() => onManageMembers(project)}
+              className="inline-flex items-center justify-center rounded-full p-2 text-slate-700 transition hover:bg-slate-100"
+              aria-label="Members"
+              title="Members"
+            >
+              <Users className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleActive(project.id, !!project.isActiveResolved)}
+              disabled={updating}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${project.isActiveResolved
                 ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
                 : 'bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70'
-            }`}
-          >
-            {updating && <Loader2 className="h-4 w-4 animate-spin" />}
-            {project.isActiveResolved ? 'Active' : 'Mark active'}
-          </button>
+                }`}
+            >
+              {updating && <Loader2 className="h-4 w-4 animate-spin" />}
+              {project.isActiveResolved ? 'Active' : 'Mark active'}
+            </button>
+          </div>
         </div>
+
+        {/* Expand/collapse toggle */}
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="flex w-full items-center justify-center gap-2 border-t border-gray-100 bg-gray-50 py-2 text-xs font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+        >
+          {isExpanded ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5" />
+              Hide workspace
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5" />
+              Show workspace
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
@@ -234,6 +237,8 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
   const [invitesError, setInvitesError] = useState<string | null>(null);
   const [acceptingInviteId, setAcceptingInviteId] = useState<number | null>(null);
   const [deleteConfirmProject, setDeleteConfirmProject] = useState<{ id: number; name: string } | null>(null);
+  // Tracks which project's workspace dashboard is currently expanded
+  const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -273,15 +278,12 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
 
   const filteredProjects = useMemo(() => {
     let list = decoratedProjects;
-
     if (filter === 'active') {
       list = list.filter((item) => item.derivedStatus === 'active');
     } else if (filter === 'completed') {
       list = list.filter((item) => item.derivedStatus === 'completed');
     }
-
     if (!search.trim()) return list;
-
     const term = search.toLowerCase();
     return list.filter((item) => {
       const name = item.name?.toLowerCase() || '';
@@ -307,14 +309,8 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
   }, [fetchProjects]);
 
   const handleAcceptInvite = async (invite: ProjectInvitationData) => {
-    if (!invite.token) {
-      toast.error('Missing invitation token.');
-      return;
-    }
-    if (!invite.approved) {
-      toast.error('Invitation is pending approval.');
-      return;
-    }
+    if (!invite.token) { toast.error('Missing invitation token.'); return; }
+    if (!invite.approved) { toast.error('Invitation is pending approval.'); return; }
     try {
       setAcceptingInviteId(invite.id);
       await ProjectAPI.acceptInvitation(invite.token);
@@ -322,11 +318,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
       await fetchProjects();
       await loadPendingInvites();
     } catch (err: any) {
-      const message =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to accept invitation.';
+      const message = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to accept invitation.';
       toast.error(message);
     } finally {
       setAcceptingInviteId(null);
@@ -352,67 +344,37 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         </div>
       );
     }
-
     if (invitesError) {
       return (
         <div className="mb-6 flex items-center justify-between rounded-2xl border border-red-200 bg-white px-4 py-4 text-sm text-red-600 shadow-sm">
           <span>{invitesError}</span>
-          <button
-            onClick={loadPendingInvites}
-            className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
+          <button onClick={loadPendingInvites} className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">Retry</button>
         </div>
       );
     }
-
     if (pendingInvites.length === 0) return null;
-
     return (
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-gray-900">Pending invitations</p>
-            <p className="text-xs text-gray-500">
-              Accept to join the project and appear in member lists.
-            </p>
+            <p className="text-xs text-gray-500">Accept to join the project and appear in member lists.</p>
           </div>
-          <button
-            onClick={loadPendingInvites}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700"
-          >
-            Refresh
-          </button>
+          <button onClick={loadPendingInvites} className="text-xs font-medium text-blue-600 hover:text-blue-700">Refresh</button>
         </div>
         <div className="mt-4 space-y-3">
           {pendingInvites.map((invite) => (
-            <div
-              key={invite.id}
-              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
-            >
+            <div key={invite.id} className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-900">
-                  {invite.project?.name || 'Project'}
-                </p>
+                <p className="text-sm font-semibold text-gray-900">{invite.project?.name || 'Project'}</p>
                 <div className="mt-1 flex items-center gap-2">
                   <span className="text-xs text-gray-500">Role:</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getRoleBadgeClasses(
-                      invite.role
-                    )}`}
-                  >
-                    {invite.role}
-                  </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getRoleBadgeClasses(invite.role)}`}>{invite.role}</span>
                   {!invite.approved && (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                      Pending approval
-                    </span>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">Pending approval</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Invited by {invite.invited_by?.name || invite.invited_by?.email || 'Owner'}
-                </p>
+                <p className="text-xs text-gray-500">Invited by {invite.invited_by?.name || invite.invited_by?.email || 'Owner'}</p>
               </div>
               <button
                 onClick={() => handleAcceptInvite(invite)}
@@ -439,35 +401,25 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         </div>
       );
     }
-
     if (error) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
           <AlertCircle className="h-6 w-6" />
           <p className="mt-3 font-semibold">Could not load projects</p>
           <p className="text-sm text-red-500">{error}</p>
-          <button
-            onClick={() => fetchProjects()}
-            className="mt-4 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
+          <button onClick={() => fetchProjects()} className="mt-4 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Retry</button>
         </div>
       );
     }
-
     if (filter === 'completed') {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-600">
           <FolderOpen className="h-7 w-7 text-gray-400" />
           <p className="mt-3 font-semibold text-gray-900">No completed projects yet</p>
-          <p className="text-sm text-gray-500">
-            Projects will show up here once the backend marks them as completed or archived.
-          </p>
+          <p className="text-sm text-gray-500">Projects will show up here once the backend marks them as completed or archived.</p>
         </div>
       );
     }
-
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-600">
         <FolderOpen className="h-7 w-7 text-gray-400" />
@@ -549,21 +501,47 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
                 <div className="sm:col-span-2">{renderEmptyState()}</div>
               ) : (
                 filteredProjects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    onToggleActive={setActiveProject}
-                    onDelete={() => {
-                      setDeleteConfirmProject({
-                        id: project.id,
-                        name: project.name || 'this project',
-                      });
-                    }}
-                    onToggleCompleted={toggleCompletedProjectId}
-                    onManageMembers={handleOpenMembers}
-                    updating={updatingProjectId === project.id}
-                    deleting={deletingProjectId === project.id}
-                  />
+                  <Fragment key={project.id}>
+                    <ProjectCard
+                      project={project}
+                      onToggleActive={setActiveProject}
+                      onDelete={() => {
+                        setDeleteConfirmProject({
+                          id: project.id,
+                          name: project.name || 'this project',
+                        });
+                      }}
+                      onToggleCompleted={toggleCompletedProjectId}
+                      onManageMembers={handleOpenMembers}
+                      updating={updatingProjectId === project.id}
+                      deleting={deletingProjectId === project.id}
+                      isExpanded={expandedProjectId === project.id}
+                      onToggleExpand={() =>
+                        setExpandedProjectId(
+                          expandedProjectId === project.id ? null : project.id
+                        )
+                      }
+                    />
+                    {/* Full-width workspace dashboard — spans both columns when expanded */}
+                    {expandedProjectId === project.id && (
+                      <div className="sm:col-span-2 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            {project.name} — Workspace
+                          </h3>
+                          <button
+                            onClick={() => setExpandedProjectId(null)}
+                            className="text-xs text-gray-400 hover:text-gray-600"
+                          >
+                            ✕ Close
+                          </button>
+                        </div>
+                        <div className="p-6">
+                          <WorkspaceDashboard projectId={project.id} />
+                        </div>
+                      </div>
+                    )}
+                  </Fragment>
                 ))
               )}
             </div>

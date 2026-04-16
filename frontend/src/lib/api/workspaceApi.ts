@@ -20,8 +20,10 @@ export interface WorkspaceTask {
   type: string;
   due_date: string | null;
   updated_at: string;
+  is_overdue: boolean; // True when due date is past and task is not in terminal status
   is_blocked: boolean; // True if another task is blocking this one
   is_decision_linked: boolean; // True if this task is linked to a Decision
+  owner_initials?: string | null; // Responsible person's initials (e.g. "TU")
 }
 
 export interface WorkspaceSpreadsheet {
@@ -37,6 +39,8 @@ export interface WorkspacePattern {
   description: string;
   version: number;
   updated_at: string;
+  /** Spreadsheet where the pattern was created; used to link to `/projects/:id/spreadsheets/:spreadsheetId`. */
+  origin_spreadsheet_id: number | null;
 }
 
 export interface WorkspaceDashboardData {
@@ -61,6 +65,6 @@ export const WorkspaceAPI = {
       .get<WorkspaceDashboardData>("/api/dashboard/workspace/", {
         params: { project_id: projectId },
       })
-      .then((response) => response.data);
+      .then((response: { data: WorkspaceDashboardData }) => response.data);
   },
 };
