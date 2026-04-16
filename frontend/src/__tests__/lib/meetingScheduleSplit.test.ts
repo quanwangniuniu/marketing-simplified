@@ -13,6 +13,7 @@ function row(partial: Partial<MeetingListItem> & { id: number }): MeetingListIte
     meeting_type_slug: 'x',
     participants: [],
     tags: [],
+    
     decision_count: 0,
     task_count: 0,
     generated_decisions: [],
@@ -20,6 +21,7 @@ function row(partial: Partial<MeetingListItem> & { id: number }): MeetingListIte
     related_decisions: [],
     related_tasks: [],
     is_archived: false,
+    status: 'draft',
     ...partial,
   };
 }

@@ -118,7 +118,7 @@ export function DecisionEditor() {
   const activeProject = useProjectStore((s) => s.activeProject)
 
   // Batch management for pre-draft decisions only
-  const predraftItems = decisionList.filter((d) => d.status === "predraft")
+  const predraftItems = decisionList.filter((d) => d.status?.toLowerCase() === "predraft")
 
   const batchDeleteFn = useCallback(async (id: string | number) => {
     await DecisionAPI.deleteDecision(Number(id), activeProject?.id)
@@ -187,7 +187,7 @@ export function DecisionEditor() {
     setOptions([])
     setSelectedOption("")
     setEditingDecisionId(d.id)
-    setEditingStatus(d.status || "draft")
+    setEditingStatus((d.status || "draft").toLowerCase())
     setIsPreDraft(d.is_pre_draft ?? false)
     setViewMode("edit")
 
@@ -638,7 +638,7 @@ export function DecisionEditor() {
           ) : (
             <div className="space-y-2">
               {decisionList.map((d) => {
-                const isPredraft = d.status === "predraft"
+                const isPredraft = d.status?.toLowerCase() === "predraft"
                 const isExiting = batch.isExiting(d.id)
                 return (
                   <div

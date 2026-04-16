@@ -9,6 +9,7 @@ import { Settings as SettingsIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SlackIntegrationModal from '@/components/slack/SlackIntegrationModal';
 import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
+import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
 import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
 import { useProjectStore } from '@/lib/projectStore';
 
@@ -19,14 +20,16 @@ function SettingsPageContent() {
     const searchParams = useSearchParams();
     const [isSlackModalOpen, setIsSlackModalOpen] = useState(false);
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
+    const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
     const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
     const [slackStatusLoading, setSlackStatusLoading] = useState(true);
     const hasOpenedSlackRef = useRef(false);
     const hasOpenedZoomRef = useRef(false);
+    const hasOpenedGoogleDocsRef = useRef(false);
     const userId = user?.id ?? null;
 
-    // Refresh user data once on mount only - not in a loop.
-    // Must NOT include `user` in deps: refreshUser() updates user and would re-trigger infinitely.
+    // Refresh user data once on mount only — not in a loop.
+    // Must NOT include `user` in deps: refreshUser() updates user → would re-trigger infinitely.
     useEffect(() => {
         refreshUser();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,6 +103,18 @@ function SettingsPageContent() {
             router.replace(newUrl, { scroll: false });
         }
 
+        if (searchParams.get('open_google_docs') === '1' && !hasOpenedGoogleDocsRef.current) {
+            setIsGoogleDocsModalOpen(true);
+            hasOpenedGoogleDocsRef.current = true;
+
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('open_google_docs');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
+
         const zoomError = searchParams.get('zoom_error');
         if (zoomError) {
             const messages: Record<string, string> = {
@@ -113,6 +128,23 @@ function SettingsPageContent() {
             toast.error(messages[zoomError] ?? 'Zoom connection failed. Please try again.');
             const newParams = new URLSearchParams(searchParams.toString());
             newParams.delete('zoom_error');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
+
+        const googleDocsError = searchParams.get('google_docs_error');
+        if (googleDocsError) {
+            const messages: Record<string, string> = {
+                missing_code: 'Google Docs connection failed: missing callback code.',
+                state_expired: 'Google Docs connection failed: authorization expired. Please try again.',
+                invalid_state: 'Google Docs connection failed: invalid state.',
+                token_exchange_failed: 'Google Docs connection failed: token exchange failed.',
+            };
+            toast.error(messages[googleDocsError] ?? 'Google Docs connection failed. Please try again.');
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('google_docs_error');
             const newUrl = newParams.toString()
                 ? `${window.location.pathname}?${newParams.toString()}`
                 : window.location.pathname;
@@ -226,6 +258,32 @@ function SettingsPageContent() {
                                         Configure
                                     </button>
                                 </div>
+
+                                {/* Google Docs Card */}
+                                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-[#0F9D58] rounded-lg flex items-center justify-center">
+                                                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7zm0 1.5L18.5 8H14zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900">Google Docs</h3>
+                                                <p className="text-sm text-gray-500">Import & Export Documents</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                                        Connect Google Docs to import external documents and export decision content.
+                                    </p>
+                                    <button
+                                        onClick={() => setIsGoogleDocsModalOpen(true)}
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                    >
+                                        Configure
+                                    </button>
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -239,6 +297,10 @@ function SettingsPageContent() {
                 isOpen={isZoomModalOpen}
                 onClose={() => setIsZoomModalOpen(false)}
             />
+            <GoogleDocsIntegrationModal
+                isOpen={isGoogleDocsModalOpen}
+                onClose={() => setIsGoogleDocsModalOpen(false)}
+            />
         </Layout>
     );
 }
@@ -246,7 +308,9 @@ function SettingsPageContent() {
 export default function SettingsPage() {
     return (
         <ProtectedRoute>
-            <SettingsPageContent />
+            <Suspense>
+                <SettingsPageContent />
+            </Suspense>
         </ProtectedRoute>
     );
 }

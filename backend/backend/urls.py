@@ -65,7 +65,7 @@ urlpatterns = [
     path('api/', include('automationWorkflow.urls')),
     path('api/chat/', include('chat.urls')),
     path('api/experiment/', include('experiment.urls')),
-    path('api/v1/', include('calendars.urls')),
+    path('api/', include('calendars.urls')),
     path('api/', include('ad_variations.urls')),
     path('api/', include('campaign.urls')),
     path('api/slack/', include('slack_integration.urls')),
@@ -73,6 +73,7 @@ urlpatterns = [
     path('api/', include('meetings.urls')),
     path("", include("django_prometheus.urls")),
     path("api/v1/zoom/", include("zoom_integration.urls")),
+    path("api/google-docs/", include("google_docs_integration.urls")),
 ]
 
 if settings.DEBUG:

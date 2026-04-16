@@ -161,6 +161,7 @@ class DecisionDraftViewSet(
         # Auto-promote PREDRAFT to DRAFT when user explicitly saves
         if instance.status == Decision.Status.PREDRAFT:
             instance.promote_to_draft()
+            instance.is_pre_draft = False
             instance.save()
 
     def retrieve(self, request, *args, **kwargs):
