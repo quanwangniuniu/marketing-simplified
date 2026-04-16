@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { MeetingDateTimePicker } from '@/components/meetings/MeetingDateTimePicker';
 import { MeetingSummaryKnowledgeNav } from '@/components/meetings/MeetingSummaryKnowledgeNav';
 import { MeetingSummaryRelatedArtifacts } from '@/components/meetings/MeetingSummaryRelatedArtifacts';
+import { ZoomPostMeetingSection } from '@/components/meetings/ZoomPostMeetingSection';
 import { MeetingActionItemsSection } from '@/components/meetings/MeetingActionItemsSection';
 import { ProjectMemberPicker } from '@/components/meetings/ProjectMemberPicker';
 import { formatProjectMemberLabel } from '@/components/meetings/projectMemberLabel';
@@ -288,6 +289,10 @@ export function MeetingSummaryPanel({
         startTime,
         60,
       );
+      await zoomApi.linkMeetingData(projectId, meetingId, {
+        zoom_meeting_id: zoomMeeting.meeting_id,
+        zoom_uuid: zoomMeeting.uuid,
+      });
       setExtRefDraft(zoomMeeting.join_url);
       const updated = await MeetingsAPI.patchMeeting(projectId, meetingId, {
         external_reference: zoomMeeting.join_url,
@@ -521,6 +526,12 @@ export function MeetingSummaryPanel({
               </div>
             </PanelSection>
 
+            <PanelSection
+              title="Zoom post-meeting"
+              description="Status, recordings, and summary from Zoom after the meeting ends (when linked)."
+            >
+              <ZoomPostMeetingSection zoomPostMeeting={meeting?.zoom_post_meeting} />
+            </PanelSection>
 
             <section>
   <MeetingLifecyclePanel
