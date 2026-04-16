@@ -7,7 +7,7 @@ import { MessageList, type ChatMessage } from "./MessageList"
 import { ChatInput } from "./ChatInput"
 import { ActionBar } from "./ActionBar"
 import { AgentAPI } from "@/lib/api/agentApi"
-import type { SSEEvent, AgentAction, AgentMessage, AnalysisResult, WorkflowStepState } from "@/types/agent"
+import type { SSEEvent, AgentAction, AgentMessage, AnalysisResult, WorkflowStepState, ColumnDetectionData } from "@/types/agent"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
 import type { StepProgressItem } from "./StepProgress"
 
@@ -166,7 +166,15 @@ export function AgentChatPage() {
     : undefined
   const latestAnalysisMessageId = [...messages].reverse().find((message) => message.type === "analysis")?.id ?? null
 
+  const sessionIdRef = useRef<string | null>(null)
+  const stepProgressMsgIdRef = useRef<string | null>(null)
+  // Stores pending auto-confirm mapping when column_mapping event is received
+  const pendingAutoConfirmRef = useRef<Record<string, string> | null>(null)
+  // Always points to the latest handleConfirmColumns so it can be called from handleFileUpload
+  const handleConfirmColumnsRef = useRef<((m: Record<string, string>) => void) | null>(null)
+
   const setSessionId = useCallback((id: string | null) => {
+    sessionIdRef.current = id
     setSessionIdState(id)
     if (id) {
       sessionStorage.setItem("agent-session-id", id)
@@ -318,6 +326,7 @@ export function AgentChatPage() {
 
     let contentParts: string[] = []
     let analysisData: AnalysisResult | null = null
+    let columnMappingReceived = false
 
     abortRef.current = AgentAPI.uploadAndAnalyze(
       file,
@@ -328,9 +337,47 @@ export function AgentChatPage() {
           updateMessage(aiMsgId, {
             content: event.content || "File uploaded. Analyzing...",
           })
+        } else if (event.type === "step_progress" && event.data) {
+          const { step_order, step_name, total_steps } = event.data
+          if (step_order != null && step_name && total_steps) {
+            setStepProgress((prev) => {
+              const updated = [...prev]
+              for (const s of updated) {
+                if (s.order < step_order && s.status === "running") {
+                  s.status = "completed"
+                }
+              }
+              const existing = updated.find((s) => s.order === step_order)
+              if (existing) {
+                existing.status = "running"
+                existing.name = step_name
+              } else {
+                while (updated.length < total_steps) {
+                  const order = updated.length + 1
+                  updated.push({
+                    order,
+                    name: order === step_order ? step_name : `Step ${order}`,
+                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                  })
+                }
+              }
+              return updated
+            })
+          }
+        } else if (event.type === "column_mapping" && event.data) {
+          columnMappingReceived = true
+          const detectionData = event.data as unknown as ColumnDetectionData
+          // Auto-confirm silently — store mapping to trigger after stream ends
+          pendingAutoConfirmRef.current = detectionData.mappings
+          updateMessage(aiMsgId, {
+            content: event.content || "Column detection complete. Generating success criteria...",
+            type: "text",
+          })
         } else if (event.type === "text") {
-          contentParts.push(event.content || "")
-          updateMessage(aiMsgId, { content: contentParts.join("\n") })
+          if (!columnMappingReceived) {
+            contentParts.push(event.content || "")
+            updateMessage(aiMsgId, { content: contentParts.join("\n") })
+          }
         } else if (event.type === "analysis") {
           contentParts.push(event.content || "")
           analysisData = (event.data as unknown as AnalysisResult) || null
@@ -347,10 +394,12 @@ export function AgentChatPage() {
           // Individual anomalies are added to the right panel via the
           // AnomalyCard "+ Add" button — no auto-broadcast on new analysis.
         } else if (event.type === "confirmation_request") {
-          contentParts.push(event.content || "")
-          updateMessage(aiMsgId, {
-            content: contentParts.join("\n"),
-          })
+          // If column mapping already shown, don't overwrite the card — just
+          // silently wait for user confirmation via ColumnMappingCard buttons.
+          if (!columnMappingReceived) {
+            contentParts.push(event.content || "")
+            updateMessage(aiMsgId, { content: contentParts.join("\n") })
+          }
         } else if (event.type === "follow_up_prompt") {
           contentParts.push(event.content || "")
           setFollowUpAvailable(false)
@@ -369,6 +418,27 @@ export function AgentChatPage() {
             window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
             void refreshFollowUpState(sid)
           }
+          // Attach final step progress to the message
+          setStepProgress((prev) => {
+            if (prev.length > 0) {
+              const final = prev.map((s) => ({
+                ...s,
+                status: s.status === "running" ? "completed" as const : s.status,
+              }))
+              updateMessage(aiMsgId, { stepProgress: final })
+              return final
+            }
+            return prev
+          })
+          // Auto-confirm column mapping if pending (workflow paused at await_confirmation)
+          const pendingMapping = pendingAutoConfirmRef.current
+          if (pendingMapping) {
+            pendingAutoConfirmRef.current = null
+            setIsStreaming(false)
+            setTimeout(() => {
+              handleConfirmColumnsRef.current?.(pendingMapping)
+            }, 100)
+          }
         }
       },
       (error) => {
@@ -383,6 +453,139 @@ export function AgentChatPage() {
       }
     )
   }, [sessionId, addMessage, updateMessage, setSessionId, refreshFollowUpState])
+
+  /** Confirm detected column mapping and resume paused workflow */
+  const handleConfirmColumns = useCallback(async (mapping: Record<string, string>) => {
+    const sid = sessionIdRef.current
+    if (!sid) return
+
+    const aiMsgId = `ai-${Date.now()}`
+    addMessage({ id: aiMsgId, role: "assistant", content: AGENT_MESSAGES.CHAT_THINKING, type: "text" })
+    setIsStreaming(true)
+    // Preserve step names from the upload phase; reset steps 3+ to pending
+    setStepProgress((prev) =>
+      prev.map((s) => ({
+        ...s,
+        status: s.order <= 2 ? ("completed" as const) : ("pending" as const),
+      }))
+    )
+    let contentParts: string[] = []
+
+    abortRef.current = AgentAPI.sendMessage(
+      sid,
+      { message: "confirm_columns", action: "confirm_columns", column_mapping: mapping },
+      (event: SSEEvent) => {
+        if (event.type === "done") return
+
+        if (event.type === "step_progress" && event.data) {
+          const { step_order, step_name, total_steps } = event.data
+          if (step_order != null && step_name && total_steps) {
+            setStepProgress((prev) => {
+              const updated = [...prev]
+              for (const s of updated) {
+                if (s.order < step_order && s.status === "running") {
+                  s.status = "completed"
+                }
+              }
+              const existing = updated.find((s) => s.order === step_order)
+              if (existing) {
+                existing.status = "running"
+                existing.name = step_name
+              } else {
+                while (updated.length < total_steps) {
+                  const order = updated.length + 1
+                  updated.push({
+                    order,
+                    name: order === step_order ? step_name : `Step ${order}`,
+                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                  })
+                }
+              }
+              return updated
+            })
+          }
+          return
+        }
+
+        if (event.content && event.type !== "miro_status" && event.type !== "follow_up_prompt") {
+          contentParts.push(event.content)
+          updateMessage(aiMsgId, { content: contentParts.join("\n") })
+        }
+
+        if (event.type === "analysis" && event.data) {
+          const data = event.data as unknown as AnalysisResult
+          setFollowUpAvailable(true)
+          setFollowUpStarted(false)
+          setStepState((prev) => ({ ...prev, analysisComplete: true }))
+          updateMessage(aiMsgId, {
+            type: "analysis",
+            anomalies: data.anomalies,
+            suggestedDecision: data.suggested_decision,
+            recommendedTasks: data.recommended_tasks,
+          })
+        }
+        if (event.type === "decision_draft" && event.data) {
+          const decisionId = event.data?.decision_id
+          setStepState((prev) => ({ ...prev, decisionCreated: true }))
+          updateMessage(aiMsgId, {
+            content: contentParts.join("\n"),
+            type: "decision_created",
+            navigateTo: "decisions",
+            navigateLabel: "Review Pre-Draft",
+            decisionId: decisionId ? Number(decisionId) : undefined,
+          })
+        }
+        if (event.type === "task_created" && event.data) {
+          setStepState((prev) => ({ ...prev, tasksCreated: true }))
+          updateMessage(aiMsgId, {
+            content: contentParts.join("\n"),
+            type: "tasks_created",
+            navigateTo: "tasks",
+            navigateLabel: "Go to Tasks",
+          })
+        }
+      },
+      (error) => {
+        updateMessage(aiMsgId, { content: `Error: ${error.message}`, type: "error" })
+        setIsStreaming(false)
+      },
+      () => {
+        void refreshFollowUpState(sid)
+        setStepProgress((prev) => {
+          if (prev.length > 0) {
+            const final = prev.map((s) => ({
+              ...s,
+              status: s.status === "running" ? "completed" as const : s.status,
+            }))
+            updateMessage(aiMsgId, { stepProgress: final })
+            stepProgressMsgIdRef.current = aiMsgId
+            return final
+          }
+          return prev
+        })
+        setIsStreaming(false)
+      }
+    )
+  }, [addMessage, updateMessage, refreshFollowUpState])
+
+  // Keep ref in sync so handleFileUpload's done handler can call the latest version
+  handleConfirmColumnsRef.current = handleConfirmColumns
+
+  /** Re-upload: reset to welcome screen so the user can upload a different file */
+  const handleReupload = useCallback(() => {
+    sessionIdRef.current = null
+    stepProgressMsgIdRef.current = null
+    setSessionIdState(null)
+    sessionStorage.removeItem("agent-session-id")
+    setMessages([])
+    setHasStarted(false)
+    setIsStreaming(false)
+    setFollowUpAvailable(false)
+    setFollowUpStarted(false)
+    setStepProgress([])
+    setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
+    abortRef.current?.abort()
+  }, [])
 
   /** Handle text message send */
   const handleSendMessage = useCallback(async (text: string, calendarContext?: Record<string, unknown>) => {
@@ -610,6 +813,37 @@ export function AgentChatPage() {
       (event: SSEEvent) => {
         if (event.type === "done") return
 
+        if (event.type === "step_progress" && event.data) {
+          const { step_order, step_name, total_steps } = event.data
+          if (step_order != null && step_name && total_steps) {
+            setStepProgress((prev) => {
+              const updated = [...prev]
+              for (const s of updated) {
+                if (s.order < step_order && s.status === "running") s.status = "completed"
+              }
+              const existing = updated.find((s) => s.order === step_order)
+              if (existing) {
+                existing.status = "running"
+                existing.name = step_name
+              } else {
+                while (updated.length < total_steps) {
+                  const order = updated.length + 1
+                  updated.push({
+                    order,
+                    name: order === step_order ? step_name : `Step ${order}`,
+                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                  })
+                }
+              }
+              // Update the existing step progress message live
+              const spMsgId = stepProgressMsgIdRef.current
+              if (spMsgId) updateMessage(spMsgId, { stepProgress: [...updated] })
+              return updated
+            })
+          }
+          return
+        }
+
         if (event.content && event.type !== "miro_status" && event.type !== "follow_up_prompt") {
           contentParts.push(event.content)
           updateMessage(aiMsgId, { content: contentParts.join("\n") })
@@ -662,6 +896,18 @@ export function AgentChatPage() {
       },
       () => {
         void refreshFollowUpState(sessionId)
+        setStepProgress((prev) => {
+          if (prev.length > 0) {
+            const final = prev.map((s) => ({
+              ...s,
+              status: s.status === "running" ? "completed" as const : s.status,
+            }))
+            const spMsgId = stepProgressMsgIdRef.current
+            if (spMsgId) updateMessage(spMsgId, { stepProgress: final })
+            return final
+          }
+          return prev
+        })
         setIsStreaming(false)
       }
     )
@@ -690,7 +936,7 @@ export function AgentChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <MessageList messages={messages} onAction={handleAction} latestAnalysisMessageId={latestAnalysisMessageId} showFollowUpToggle={followUpAvailable || followUpStarted} followUpActive={followUpStarted} stepState={stepState} onNavigate={(view, msg) => {
+      <MessageList messages={messages} onAction={handleAction} onConfirmColumns={handleConfirmColumns} onReupload={handleReupload} latestAnalysisMessageId={latestAnalysisMessageId} showFollowUpToggle={followUpAvailable || followUpStarted} followUpActive={followUpStarted} stepState={stepState} onNavigate={(view, msg) => {
         if (msg?.navigateHref && typeof window !== "undefined") {
           window.location.href = msg.navigateHref
           return
@@ -701,7 +947,7 @@ export function AgentChatPage() {
           setPendingDecisionId(msg.decisionId)
         }
       }} />
-      <ActionBar stepState={stepState} onAction={handleAction} disabled={isStreaming} />
+      <ActionBar stepState={stepState} onAction={handleAction} onReupload={handleReupload} disabled={isStreaming} />
       <ChatInput
         onSend={handleSendMessage}
         onFileUpload={handleFileUpload}

@@ -706,6 +706,7 @@ class TestMeetingsKnowledgeListAPI(TestCase):
                 "title",
                 "summary",
                 "scheduled_date",
+                "status",
                 "meeting_type",
                 "meeting_type_slug",
                 "participants",
