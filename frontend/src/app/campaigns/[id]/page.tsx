@@ -43,6 +43,8 @@ const TABS: { id: CampaignTab; label: string }[] = [
   { id: 'ad-drafts', label: 'Ad Drafts' },
 ];
 
+const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
+
 // ─── Sub-tab pill navigation ──────────────────────────────────────────────────
 
 function SubTabNav<T extends string>({
@@ -330,7 +332,7 @@ function FacebookDraftsSubTab({ campaignId }: { campaignId: string }) {
   }, [campaignId, fetchAdCreatives]);
 
   const handleCreate = async (formData: any) => {
-    await createAdCreative(formData);
+    await createAdCreative({ ...formData, media_campaign: formData?.media_campaign ?? campaignId });
     setShowCreateModal(false);
   };
 
@@ -471,7 +473,7 @@ function GoogleAdsDraftsSubTab({ campaignId }: { campaignId: string }) {
   }, [campaignId, fetchAds]);
 
   const handleCreate = async (formData: any) => {
-    const createdAd = await createAd(formData);
+    const createdAd = await createAd({ ...formData, media_campaign: campaignId });
     setShowCreateModal(false);
     router.push(`/campaigns/${campaignId}/ad-drafts/google/${createdAd.id}/design`);
     return createdAd;
@@ -611,7 +613,10 @@ function TikTokDraftsSubTab({ campaignId }: { campaignId: string }) {
   }
 
   const allItems = groups.flatMap((g: any) =>
-    (g.items ?? []).map((item: any) => ({ ...item, groupName: g.group_name || g.name }))
+    (g.creative_brief_info_item_list ?? []).map((item: any) => ({
+      ...item,
+      groupName: g.group_name || g.name,
+    }))
   );
 
   if (allItems.length === 0) {
@@ -627,10 +632,10 @@ function TikTokDraftsSubTab({ campaignId }: { campaignId: string }) {
     <div className="space-y-2">
       {allItems.map((item: any) => (
         <div
-          key={item.ad_draft_id}
+          key={item.id ?? item.ad_draft_id}
           onClick={() =>
             router.push(
-              `/campaigns/${campaignId}/ad-drafts/tiktok/${item.ad_draft_id}`
+              `/campaigns/${campaignId}/ad-drafts/tiktok/${item.id ?? item.ad_draft_id}`
             )
           }
           className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
@@ -699,7 +704,8 @@ export default function CampaignDetailPage() {
   const [snapshotsRefreshKey, setSnapshotsRefreshKey] = useState(0);
   const [saveAsTemplateModalOpen, setSaveAsTemplateModalOpen] = useState(false);
 
-  const activeTab = (searchParams.get('tab') as CampaignTab) || 'overview';
+  const tabParam = searchParams.get('tab') ?? '';
+  const activeTab: CampaignTab = VALID_TABS.has(tabParam) ? (tabParam as CampaignTab) : 'overview';
 
   const handleTabChange = (tab: CampaignTab) => {
     router.replace(`/campaigns/${campaignId}?tab=${tab}`, { scroll: false });

@@ -37,7 +37,10 @@ class AdsListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         """Get all ads for current user"""
-        queryset = Ad.objects.all()
+        queryset = Ad.objects.filter(
+            Q(customer_account__created_by=self.request.user) |
+            Q(created_by__isnull=True)
+        )
         campaign_id = self.request.query_params.get('campaign_id')
         if campaign_id:
             queryset = queryset.filter(media_campaign_id=campaign_id)

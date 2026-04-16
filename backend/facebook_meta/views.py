@@ -47,6 +47,8 @@ class AdCreativesView(generics.ListCreateAPIView):
             'object_story_spec_video_data',
             'object_story_spec_text_data',
             'object_story_spec_template_data'
+        ).filter(
+            actor=self.request.user
         ).distinct().order_by('id')
         campaign_id = self.request.query_params.get('campaign_id')
         if campaign_id:

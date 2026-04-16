@@ -41,10 +41,14 @@ function TikTokAdDraftDetailContent() {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await api.get(`/api/tiktok/creation/detail/?ad_draft_id=${adDraftId}`);
-        setDraft(res.data?.data || res.data);
+        const draftId = String(adDraftId);
+        const res = await api.post('/api/tiktok/creation/detail/', { ad_draft_ids: [draftId] });
+        const drafts: TikTokAdDraft[] = res.data?.data?.ad_drafts || [];
+        const matched = drafts.find((item) => String(item.id) === draftId) || drafts[0] || null;
+        if (!matched) throw new Error('Draft not found');
+        setDraft(matched);
       } catch (err: any) {
-        setError(err.response?.data?.detail || 'Failed to load TikTok ad draft');
+        setError(err.response?.data?.detail || err.message || 'Failed to load TikTok ad draft');
       } finally {
         setLoading(false);
       }

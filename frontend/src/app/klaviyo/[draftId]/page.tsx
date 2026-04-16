@@ -739,8 +739,13 @@ export default function KlaviyoEmailBuilderPage() {
   }, [redo, setCanvasBlocks]);
 
   // Handle exit
+  const safeReturnTo =
+    returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+      ? returnTo
+      : '/klaviyo';
+
   const handleExit = () => {
-    router.push(returnTo || "/klaviyo");
+    router.push(safeReturnTo);
   };
 
   // Keyboard shortcuts
@@ -783,7 +788,7 @@ export default function KlaviyoEmailBuilderPage() {
               Invalid draft link. Please open a draft from the Klaviyo list.
             </p>
             <button
-              onClick={() => router.push(returnTo || "/klaviyo")}
+              onClick={() => router.push(safeReturnTo)}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Back to Drafts
@@ -814,7 +819,7 @@ export default function KlaviyoEmailBuilderPage() {
           <div className="text-center max-w-md">
             <p className="text-red-600 mb-4">{loadError}</p>
             <button
-              onClick={() => router.push(returnTo || "/klaviyo")}
+              onClick={() => router.push(safeReturnTo)}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Back to Drafts

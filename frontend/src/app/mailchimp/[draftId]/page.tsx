@@ -1731,7 +1731,11 @@ export default function EmailBuilderPage() {
       // Clear success message after 2 seconds and navigate
       setTimeout(() => {
         setSaveSuccess(false);
-        router.push(returnTo || "/mailchimp");
+        router.push(
+          returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+            ? returnTo
+            : '/mailchimp'
+        );
       }, 2000);
     } catch (error) {
       console.error("Failed to save email draft:", error);

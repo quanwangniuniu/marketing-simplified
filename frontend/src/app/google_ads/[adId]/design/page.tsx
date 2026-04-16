@@ -305,7 +305,11 @@ function GoogleAdsDesignPageContent() {
   };
 
   const handleBack = () => {
-    router.push(returnTo || '/google_ads');
+    const safeReturnTo =
+      returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+        ? returnTo
+        : '/google_ads';
+    router.push(safeReturnTo);
   };
 
   if (loading) {
