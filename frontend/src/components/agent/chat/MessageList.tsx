@@ -1,20 +1,21 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { Bot, User, FileSpreadsheet, ArrowRight, CalendarPlus } from "lucide-react"
+import { Bot, User, FileSpreadsheet, ArrowRight, CalendarPlus, UploadCloud } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
 import { AnomalyCard } from "./AnomalyCard"
+import { ColumnMappingCard } from "./ColumnMappingCard"
 import { DecisionCard } from "./DecisionCard"
 import { FollowUpCard } from "./FollowUpCard"
 import { MiroGenerateCard } from "./MiroGenerateCard"
 import { DistributeMessageCard } from "./DistributeMessageCard"
 import { TaskListCard } from "./TaskListCard"
-import type { AnomalyItem, SuggestedDecision, RecommendedTask, WorkflowStepState } from "@/types/agent"
+import type { AnomalyItem, SuggestedDecision, RecommendedTask, WorkflowStepState, ColumnDetectionData } from "@/types/agent"
 import { StepProgress, type StepProgressItem } from "./StepProgress"
 
-export type ChatMessageType = "text" | "analysis" | "file_uploaded" | "decision_created" | "tasks_created" | "miro_status" | "step_progress" | "error" | "calendar_invite"
+export type ChatMessageType = "text" | "analysis" | "file_uploaded" | "decision_created" | "tasks_created" | "miro_status" | "step_progress" | "error" | "calendar_invite" | "column_mapping"
 
 export interface ChatMessage {
   id: string
@@ -25,6 +26,7 @@ export interface ChatMessage {
   anomalies?: AnomalyItem[]
   suggestedDecision?: SuggestedDecision
   recommendedTasks?: RecommendedTask[]
+  columnMappingData?: ColumnDetectionData
   fileName?: string
   navigateTo?: string
   navigateLabel?: string
@@ -40,6 +42,8 @@ interface MessageListProps {
   messages: ChatMessage[]
   onAction?: (action: string) => void
   onNavigate?: (view: string, message?: ChatMessage) => void
+  onConfirmColumns?: (mapping: Record<string, string>) => void
+  onReupload?: () => void
   latestAnalysisMessageId?: string | null
   showFollowUpToggle?: boolean
   followUpActive?: boolean
@@ -50,6 +54,8 @@ export function MessageList({
   messages,
   onAction,
   onNavigate,
+  onConfirmColumns,
+  onReupload,
   latestAnalysisMessageId,
   showFollowUpToggle,
   followUpActive,
@@ -138,6 +144,8 @@ export function MessageList({
             )}
 
 
+            {/* Column mapping is handled silently — stored in DB, not shown to user */}
+
             {/* Analysis result cards — progressive gating */}
             {message.anomalies && message.anomalies.length > 0 && (
               <AnomalyCard anomalies={message.anomalies} />
@@ -178,6 +186,19 @@ export function MessageList({
           </div>
         </div>
       ))}
+      {stepState?.analysisComplete && (
+        <div className="flex justify-center pt-2 pb-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs text-muted-foreground"
+            onClick={() => onReupload?.()}
+          >
+            <UploadCloud className="h-3.5 w-3.5" />
+            Upload New File
+          </Button>
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   )

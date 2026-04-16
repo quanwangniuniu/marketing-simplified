@@ -255,6 +255,8 @@ DIFY_API_KEY = config('DIFY_API_KEY', default='')
 DIFY_CHAT_API_KEY = config('DIFY_CHAT_API_KEY', default='')
 DIFY_MIRO_API_KEY = config('DIFY_MIRO_API_KEY', default='')
 DIFY_CALENDAR_API_KEY = config('DIFY_CALENDAR_API_KEY', default='')
+DIFY_COLUMN_DETECTION_API_KEY = config('DIFY_COLUMN_DETECTION_API_KEY', default='')
+DIFY_CRITERIA_API_KEY = config('DIFY_CRITERIA_API_KEY', default='')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

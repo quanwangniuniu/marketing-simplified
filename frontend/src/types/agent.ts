@@ -76,6 +76,7 @@ export type SSEEventType =
   | 'calendar_invite'
   | 'calendar_updated'
   | 'step_progress'
+  | 'column_mapping'
   | 'done'
   | 'error';
 
@@ -87,7 +88,7 @@ export interface SSEEvent {
 
 // ==================== Chat Request ====================
 
-export type AgentAction = 'analyze' | 'confirm_decision' | 'create_tasks' | 'generate_miro' | 'distribute_message' | 'start_follow_up' | 'cancel_follow_up';
+export type AgentAction = 'analyze' | 'confirm_decision' | 'create_tasks' | 'generate_miro' | 'distribute_message' | 'start_follow_up' | 'cancel_follow_up' | 'confirm_columns';
 
 export interface CalendarContextPayload {
   type: 'calendar' | 'event';
@@ -110,6 +111,9 @@ export interface AgentChatRequest {
   action?: AgentAction;
   calendar_context?: CalendarContextPayload;
   workflow_id?: string;
+  // User-approved column mapping for confirm_columns action.
+  // Format: {original_header: canonical_name or "unknown"}
+  column_mapping?: Record<string, string>;
 }
 
 // ==================== Analysis Types ====================
@@ -139,6 +143,19 @@ export interface AgentSpreadsheet {
 }
 
 // ==================== UI State Types ====================
+
+// ==================== Column Detection Types ====================
+
+export interface ColumnDetectionData {
+  schema_key: string | null
+  schema_name: string
+  source: 'rule' | 'llm' | 'none'
+  confidence: number
+  mappings: Record<string, string>
+  categories: Record<string, string>
+  unrecognized: string[]
+  column_confidences: Record<string, number>
+}
 
 // ==================== Imported CSV File ====================
 
@@ -197,7 +214,9 @@ export type WorkflowStepType =
   | 'create_decision'
   | 'create_tasks'
   | 'custom_api'
-  | 'await_confirmation';
+  | 'await_confirmation'
+  | 'detect_columns'
+  | 'normalize_data';
 
 export interface AgentWorkflowStep {
   id: string;
