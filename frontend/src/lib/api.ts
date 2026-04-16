@@ -91,8 +91,18 @@ api.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url;
+    const responseData = error.response?.data;
 
-    if (status === 401 && url !== '/auth/login/') {
+    const isGoogleDocsUrl = typeof url === 'string' && url.startsWith('/api/google-docs/');
+    const googleErrorMessage = responseData?.error;
+    const googleErrorCode = responseData?.error_code;
+    const isGoogleIntegrationTokenError =
+      googleErrorCode === 'google_token_expired' ||
+      googleErrorCode === 'google_unauthorized' ||
+      (typeof googleErrorMessage === 'string' && googleErrorMessage.toLowerCase().includes('google session expired'));
+    const shouldBypassGlobalLogout = isGoogleDocsUrl && isGoogleIntegrationTokenError;
+
+    if (status === 401 && url !== '/auth/login/' && !shouldBypassGlobalLogout) {
       // Clear auth data and redirect to login on unauthorized requests
       // This will be handled by the Zustand store
       if (typeof window !== 'undefined') {

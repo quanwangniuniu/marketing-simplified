@@ -1194,6 +1194,328 @@ class Notification(TimeStampedModel):
 
 
 # -----------------------------
+# CalendarEvent (System Projection)
+# -----------------------------
+class CalendarEvent(TimeStampedModel):
+    """
+    System-projected calendar event derived from a Decision or Task.
+
+    CalendarEvents are NOT user-created objects. They are projections of
+    domain entities onto the calendar surface. No calendar-specific
+    timestamps are stored — all timing is derived from the source entity
+    by the service layer at read time.
+
+    Event types and required sources
+    ---------------------------------
+    DECISION        decision (required), task (must be null)
+                    Represents the moment a Decision is committed.
+
+    TASK            task (required), decision (must be null)
+                    Represents a Task appearing on the calendar (e.g. due date).
+
+    DECISION_REVIEW decision (required), task (must be null)
+                    System-generated reminder to review a committed Decision.
+                    Timing is controlled entirely by the service layer.
+
+    Snapshot traceability
+    ---------------------
+    Access via:  calendar_event.decision.commit_record.validation_snapshot
+    No direct FK to CommitRecord is required; the OneToOne relation on
+    Decision makes the chain unambiguous.
+
+    Cascade rules
+    -------------
+    Deleting a Decision cascades to its DECISION and DECISION_REVIEW events.
+    Deleting a Task cascades to its TASK events.
+    Events cannot exist without a source entity (enforced by DB constraints
+    and clean()).
+    """
+
+    class EventType(models.TextChoices):
+        DECISION = 'DECISION', 'Decision Event'
+        TASK = 'TASK', 'Task Event'
+        DECISION_REVIEW = 'DECISION_REVIEW', 'Decision Review Event'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='calendar_events',
+        help_text='Tenant boundary. Validated against source entity project organization.',
+    )
+
+    event_type = models.CharField(
+        max_length=30,
+        choices=EventType.choices,
+        help_text='Determines which source FK is active and how timing is derived.',
+    )
+
+    # --- Source entity references ---------------------------------------------
+    # Exactly one of (decision, task) is non-null depending on event_type.
+    # Enforced by CheckConstraints and clean().
+
+    decision = models.ForeignKey(
+        'decision.Decision',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='calendar_events',
+        help_text=(
+            'Required for DECISION and DECISION_REVIEW event types. '
+            'Snapshot accessible via decision.commit_record.validation_snapshot.'
+        ),
+    )
+
+    task = models.ForeignKey(
+        'task.Task',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='calendar_events',
+        help_text='Required for TASK event type.',
+    )
+
+    class Meta:
+        db_table = 'calendar_projected_events'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['organization', 'event_type'], name='cal_event_org_type_idx'),
+            models.Index(fields=['organization', 'decision'], name='cal_event_org_decision_idx'),
+            models.Index(fields=['organization', 'task'], name='cal_event_org_task_idx'),
+        ]
+        constraints = [
+            # DECISION requires decision, forbids task.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='DECISION')
+                    | (models.Q(decision__isnull=False) & models.Q(task__isnull=True))
+                ),
+                name='cal_event_decision_needs_decision',
+            ),
+            # TASK requires task, forbids decision.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='TASK')
+                    | (models.Q(task__isnull=False) & models.Q(decision__isnull=True))
+                ),
+                name='cal_event_task_needs_task',
+            ),
+            # DECISION_REVIEW requires decision, forbids task.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='DECISION_REVIEW')
+                    | (models.Q(decision__isnull=False) & models.Q(task__isnull=True))
+                ),
+                name='cal_event_review_needs_decision',
+            ),
+            # One CalendarEvent per (decision, event_type) — no duplicate projections.
+            models.UniqueConstraint(
+                fields=['decision', 'event_type'],
+                condition=models.Q(decision__isnull=False) & models.Q(is_deleted=False),
+                name='unique_cal_event_per_decision_type',
+            ),
+            # One CalendarEvent per (task, event_type) — no duplicate projections.
+            models.UniqueConstraint(
+                fields=['task', 'event_type'],
+                condition=models.Q(task__isnull=False) & models.Q(is_deleted=False),
+                name='unique_cal_event_per_task_type',
+            ),
+        ]
+
+    def __str__(self):
+        source_id = self.decision_id or self.task_id
+        return f'CalendarEvent[{self.event_type}] → {source_id}'
+
+    def clean(self):
+        super().clean()
+
+        if self.event_type == self.EventType.DECISION:
+            if not self.decision_id:
+                raise ValidationError({'decision': 'DECISION event requires a decision.'})
+            if self.task_id:
+                raise ValidationError({'task': 'DECISION event must not have a task.'})
+
+        elif self.event_type == self.EventType.TASK:
+            if not self.task_id:
+                raise ValidationError({'task': 'TASK event requires a task.'})
+            if self.decision_id:
+                raise ValidationError({'decision': 'TASK event must not have a decision.'})
+
+        elif self.event_type == self.EventType.DECISION_REVIEW:
+            if not self.decision_id:
+                raise ValidationError({'decision': 'DECISION_REVIEW event requires a decision.'})
+            if self.task_id:
+                raise ValidationError({'task': 'DECISION_REVIEW event must not have a task.'})
+
+    def save(self, *args, validate: bool = True, **kwargs):
+        if validate:
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# -----------------------------
+# CalendarEvent (System Projection)
+# -----------------------------
+class CalendarEvent(TimeStampedModel):
+    """
+    System-projected calendar event derived from a Decision or Task.
+
+    CalendarEvents are NOT user-created objects. They are projections of
+    domain entities onto the calendar surface. No calendar-specific
+    timestamps are stored — all timing is derived from the source entity
+    by the service layer at read time.
+
+    Event types and required sources
+    ---------------------------------
+    DECISION        decision (required), task (must be null)
+                    Represents the moment a Decision is committed.
+
+    TASK            task (required), decision (must be null)
+                    Represents a Task appearing on the calendar (e.g. due date).
+
+    DECISION_REVIEW decision (required), task (must be null)
+                    System-generated reminder to review a committed Decision.
+                    Timing is controlled entirely by the service layer.
+
+    Snapshot traceability
+    ---------------------
+    Access via:  calendar_event.decision.commit_record.validation_snapshot
+    No direct FK to CommitRecord is required; the OneToOne relation on
+    Decision makes the chain unambiguous.
+
+    Cascade rules
+    -------------
+    Deleting a Decision cascades to its DECISION and DECISION_REVIEW events.
+    Deleting a Task cascades to its TASK events.
+    Events cannot exist without a source entity (enforced by DB constraints
+    and clean()).
+    """
+
+    class EventType(models.TextChoices):
+        DECISION = 'DECISION', 'Decision Event'
+        TASK = 'TASK', 'Task Event'
+        DECISION_REVIEW = 'DECISION_REVIEW', 'Decision Review Event'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='calendar_events',
+        help_text='Tenant boundary. Validated against source entity project organization.',
+    )
+
+    event_type = models.CharField(
+        max_length=30,
+        choices=EventType.choices,
+        help_text='Determines which source FK is active and how timing is derived.',
+    )
+
+    # --- Source entity references ---------------------------------------------
+    # Exactly one of (decision, task) is non-null depending on event_type.
+    # Enforced by CheckConstraints and clean().
+
+    decision = models.ForeignKey(
+        'decision.Decision',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='calendar_events',
+        help_text=(
+            'Required for DECISION and DECISION_REVIEW event types. '
+            'Snapshot accessible via decision.commit_record.validation_snapshot.'
+        ),
+    )
+
+    task = models.ForeignKey(
+        'task.Task',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='calendar_events',
+        help_text='Required for TASK event type.',
+    )
+
+    class Meta:
+        db_table = 'calendar_projected_events'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['organization', 'event_type'], name='cal_event_org_type_idx'),
+            models.Index(fields=['organization', 'decision'], name='cal_event_org_decision_idx'),
+            models.Index(fields=['organization', 'task'], name='cal_event_org_task_idx'),
+        ]
+        constraints = [
+            # DECISION requires decision, forbids task.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='DECISION')
+                    | (models.Q(decision__isnull=False) & models.Q(task__isnull=True))
+                ),
+                name='cal_event_decision_needs_decision',
+            ),
+            # TASK requires task, forbids decision.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='TASK')
+                    | (models.Q(task__isnull=False) & models.Q(decision__isnull=True))
+                ),
+                name='cal_event_task_needs_task',
+            ),
+            # DECISION_REVIEW requires decision, forbids task.
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(event_type='DECISION_REVIEW')
+                    | (models.Q(decision__isnull=False) & models.Q(task__isnull=True))
+                ),
+                name='cal_event_review_needs_decision',
+            ),
+            # One CalendarEvent per (decision, event_type) — no duplicate projections.
+            models.UniqueConstraint(
+                fields=['decision', 'event_type'],
+                condition=models.Q(decision__isnull=False) & models.Q(is_deleted=False),
+                name='unique_cal_event_per_decision_type',
+            ),
+            # One CalendarEvent per (task, event_type) — no duplicate projections.
+            models.UniqueConstraint(
+                fields=['task', 'event_type'],
+                condition=models.Q(task__isnull=False) & models.Q(is_deleted=False),
+                name='unique_cal_event_per_task_type',
+            ),
+        ]
+
+    def __str__(self):
+        source_id = self.decision_id or self.task_id
+        return f'CalendarEvent[{self.event_type}] → {source_id}'
+
+    def clean(self):
+        super().clean()
+
+        if self.event_type == self.EventType.DECISION:
+            if not self.decision_id:
+                raise ValidationError({'decision': 'DECISION event requires a decision.'})
+            if self.task_id:
+                raise ValidationError({'task': 'DECISION event must not have a task.'})
+
+        elif self.event_type == self.EventType.TASK:
+            if not self.task_id:
+                raise ValidationError({'task': 'TASK event requires a task.'})
+            if self.decision_id:
+                raise ValidationError({'decision': 'TASK event must not have a decision.'})
+
+        elif self.event_type == self.EventType.DECISION_REVIEW:
+            if not self.decision_id:
+                raise ValidationError({'decision': 'DECISION_REVIEW event requires a decision.'})
+            if self.task_id:
+                raise ValidationError({'task': 'DECISION_REVIEW event must not have a task.'})
+
+    def save(self, *args, validate: bool = True, **kwargs):
+        if validate:
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# -----------------------------
 # Calendar Event (System Projection)
 # -----------------------------
 class CalendarEvent(TimeStampedModel):

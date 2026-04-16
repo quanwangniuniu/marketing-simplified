@@ -49,6 +49,7 @@ import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 import { MeetingGeneratedKnowledgeSection } from '@/components/meetings/MeetingGeneratedKnowledgeSection';
+import { ZoomPostMeetingSection } from '@/components/meetings/ZoomPostMeetingSection';
 
 import { MeetingHeader } from '@/components/meetings/meeting-header';
 import { AgendaSection } from '@/components/meetings/agenda-section';
@@ -2160,6 +2161,16 @@ export default function MeetingWorkspacePage() {
                     dangerouslySetInnerHTML={{ __html: documentPreviewHtml }}
                   />
                 ) : null}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-800">Zoom post-meeting</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Recording and summary from Zoom after the meeting (when linked).
+                </p>
+                <div className="mt-3">
+                  <ZoomPostMeetingSection zoomPostMeeting={meeting.zoom_post_meeting} />
+                </div>
               </div>
 
               {meeting && Number.isFinite(projectId) && Number.isFinite(meetingId) ? (

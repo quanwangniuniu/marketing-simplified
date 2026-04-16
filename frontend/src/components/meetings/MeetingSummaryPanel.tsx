@@ -16,10 +16,12 @@ import { Button } from '@/components/ui/button';
 import { MeetingDateTimePicker } from '@/components/meetings/MeetingDateTimePicker';
 import { MeetingSummaryKnowledgeNav } from '@/components/meetings/MeetingSummaryKnowledgeNav';
 import { MeetingSummaryRelatedArtifacts } from '@/components/meetings/MeetingSummaryRelatedArtifacts';
+import { ZoomPostMeetingSection } from '@/components/meetings/ZoomPostMeetingSection';
 import { MeetingActionItemsSection } from '@/components/meetings/MeetingActionItemsSection';
 import { ProjectMemberPicker } from '@/components/meetings/ProjectMemberPicker';
 import { formatProjectMemberLabel } from '@/components/meetings/projectMemberLabel';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import { zoomApi } from '@/lib/api/zoomApi';
 import {
@@ -36,9 +38,10 @@ import {
   type UnifiedMeetingTemplateOption,
 } from '@/lib/meetings/unifiedMeetingTemplates';
 import { replaceAgendaAndLayoutFromNested } from '@/lib/meetings/replaceMeetingAgendaFromTemplate';
+import { MeetingLifecyclePanel } from '@/components/meetings/MeetingLifecyclePanel';
 import { hasVisibleText, sanitizeDocumentPreviewHtml } from '@/lib/meetings/documentPreview';
-import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink } from '@/types/meeting';
 
+import type { Meeting, MeetingDocument, MeetingPartialUpdateRequest, ParticipantLink, MeetingStatus } from '@/types/meeting';
 function PanelSection({
   title,
   description,
@@ -286,6 +289,10 @@ export function MeetingSummaryPanel({
         startTime,
         60,
       );
+      await zoomApi.linkMeetingData(projectId, meetingId, {
+        zoom_meeting_id: zoomMeeting.meeting_id,
+        zoom_uuid: zoomMeeting.uuid,
+      });
       setExtRefDraft(zoomMeeting.join_url);
       const updated = await MeetingsAPI.patchMeeting(projectId, meetingId, {
         external_reference: zoomMeeting.join_url,
@@ -518,6 +525,24 @@ export function MeetingSummaryPanel({
                 )}
               </div>
             </PanelSection>
+
+            <PanelSection
+              title="Zoom post-meeting"
+              description="Status, recordings, and summary from Zoom after the meeting ends (when linked)."
+            >
+              <ZoomPostMeetingSection zoomPostMeeting={meeting?.zoom_post_meeting} />
+            </PanelSection>
+
+            <section>
+  <MeetingLifecyclePanel
+    projectId={projectId}
+    meetingId={meetingId}
+    onStatusChanged={(newStatus) => {
+      if (meeting) setMeeting({ ...meeting, status: newStatus as MeetingStatus });
+      onMeetingUpdated?.({ ...meeting!, status: newStatus as MeetingStatus });
+    }}
+  />
+</section>
 
             <PanelSection title="Participants" description="Who is in this meeting.">
               {loadingPeople ? (

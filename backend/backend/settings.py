@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'agent.apps.AgentConfig',
     'meetings.apps.MeetingsConfig',
     'zoom_integration.apps.ZoomIntegrationConfig',
+    'google_docs_integration.apps.GoogleDocsIntegrationConfig',
 ]
 
 MIDDLEWARE = [
@@ -255,6 +256,8 @@ DIFY_API_KEY = config('DIFY_API_KEY', default='')
 DIFY_CHAT_API_KEY = config('DIFY_CHAT_API_KEY', default='')
 DIFY_MIRO_API_KEY = config('DIFY_MIRO_API_KEY', default='')
 DIFY_CALENDAR_API_KEY = config('DIFY_CALENDAR_API_KEY', default='')
+DIFY_COLUMN_DETECTION_API_KEY = config('DIFY_COLUMN_DETECTION_API_KEY', default='')
+DIFY_CRITERIA_API_KEY = config('DIFY_CRITERIA_API_KEY', default='')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -627,4 +630,6 @@ MEETINGS_REQUIRE_PARTICIPANTS_AT_CREATE = config(
 
 ZOOM_CLIENT_ID     = os.environ.get("ZOOM_CLIENT_ID", "")
 ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET", "")
-ZOOM_REDIRECT_URI  = os.environ.get("ZOOM_REDIRECT_URI", "http://localhost/api/v1/zoom/callback/")
+ZOOM_REDIRECT_URI  = os.environ.get("ZOOM_REDIRECT_URI", "")
+# Webhook only: Secret Token from Zoom Marketplace app → Feature → Webhooks (not OAuth client secret).
+ZOOM_WEBHOOK_SECRET_TOKEN = os.environ.get("ZOOM_WEBHOOK_SECRET_TOKEN", "")

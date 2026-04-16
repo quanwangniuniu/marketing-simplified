@@ -1,7 +1,10 @@
+import json
 import logging
 
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.utils.crypto import get_random_string
@@ -10,16 +13,40 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
+from meetings.models import Meeting
+from meetings.views import _ensure_project_membership
+
 from .services import (
     get_authorization_url,
     exchange_code_for_token,
     save_token_for_user,
     create_zoom_meeting,
+    upsert_zoom_meeting_identity,
+    find_zoom_meeting_data_for_webhook,
+)
+from .tasks import process_zoom_webhook_event
+from .webhook import (
+    ZOOM_URL_VALIDATION_EVENT,
+    encrypt_zoom_url_validation_token,
+    is_timestamp_valid,
+    verify_zoom_webhook_signature,
 )
 from .models import ZoomCredential
-from .serializers import CreateMeetingSerializer, MeetingResponseSerializer
+from .serializers import (
+    CreateMeetingSerializer,
+    MeetingResponseSerializer,
+    ZoomMeetingLinkSerializer,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _zoom_api_id_to_str(value) -> str:
+    """Zoom may return numeric ids; normalize to str for API and storage."""
+    if value is None:
+        return ""
+    return str(value)
+
 
 ZOOM_OAUTH_STATE_SALT = "zoom-oauth-state"
 ZOOM_OAUTH_STATE_MAX_AGE_SECONDS = 600
@@ -157,8 +184,10 @@ class CreateMeetingView(APIView):
             )
 
         # Map Zoom's "id" to API field "meeting_id" (DRF input validation uses field names, not source=).
+        zoom_uuid = meeting_data.get("uuid")
         response_payload = {
-            "meeting_id": meeting_data.get("id"),
+            "meeting_id": _zoom_api_id_to_str(meeting_data.get("id")),
+            "uuid": "" if zoom_uuid is None else str(zoom_uuid),
             "topic": meeting_data.get("topic"),
             "join_url": meeting_data.get("join_url"),
             "start_url": meeting_data.get("start_url"),
@@ -186,3 +215,131 @@ class CreateMeetingView(APIView):
             response_serializer.validated_data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class ZoomMeetingLinkView(APIView):
+    """
+    POST /api/v1/zoom/meetings/link/
+    Persist Zoom meeting identity on the project's MediaJira Meeting (ZoomMeetingData).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ZoomMeetingLinkSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        meeting = get_object_or_404(
+            Meeting.objects.filter(is_deleted=False),
+            id=serializer.validated_data["meeting_id"],
+            project_id=serializer.validated_data["project_id"],
+        )
+        _ensure_project_membership(request.user, meeting.project)
+
+        upsert_zoom_meeting_identity(
+            meeting,
+            zoom_meeting_id=serializer.validated_data["zoom_meeting_id"],
+            zoom_uuid=serializer.validated_data.get("zoom_uuid") or "",
+            zoom_host_user=request.user,
+        )
+        return Response(
+            {
+                "project_id": meeting.project_id,
+                "meeting_id": meeting.id,
+                "zoom_meeting_id": serializer.validated_data["zoom_meeting_id"],
+                "zoom_uuid": serializer.validated_data.get("zoom_uuid") or "",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ZoomWebhookView(APIView):
+    """
+    POST /api/v1/zoom/webhook/
+    Zoom event notifications. ``endpoint.url_validation`` is handled first (no HMAC).
+    Other events require ``x-zm-request-timestamp`` and ``x-zm-signature`` (v0 HMAC).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        raw_body = request.body
+        try:
+            data = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return Response({"error": "invalid json"}, status=status.HTTP_400_BAD_REQUEST)
+
+        secret = getattr(settings, "ZOOM_WEBHOOK_SECRET_TOKEN", "") or ""
+        event = data.get("event")
+
+        if event == ZOOM_URL_VALIDATION_EVENT:
+            if not secret:
+                return Response(
+                    {"error": "webhook secret not configured"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            payload = data.get("payload") or {}
+            plain = payload.get("plainToken")
+            if not plain or not isinstance(plain, str):
+                return Response(
+                    {"error": "invalid url validation payload"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            enc = encrypt_zoom_url_validation_token(plain, secret)
+            return Response(
+                {"plainToken": plain, "encryptedToken": enc},
+                status=status.HTTP_200_OK,
+            )
+
+        if not secret:
+            return Response(
+                {"error": "webhook secret not configured"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        ts = request.headers.get("x-zm-request-timestamp") or request.headers.get(
+            "X-ZM-REQUEST-TIMESTAMP"
+        )
+        sig = request.headers.get("x-zm-signature") or request.headers.get("X-ZM-SIGNATURE")
+        if not ts or not is_timestamp_valid(ts):
+            return Response({"error": "invalid timestamp"}, status=status.HTTP_401_UNAUTHORIZED)
+        if not sig or not verify_zoom_webhook_signature(
+            raw_body=raw_body,
+            timestamp=ts,
+            signature_header=sig,
+            secret=secret,
+        ):
+            return Response({"error": "invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        payload = data.get("payload") or {}
+        obj = payload.get("object") or {}
+        zoom_meeting_id = str(obj.get("id") or "").strip()
+        zu = obj.get("uuid")
+        zoom_uuid_str = "" if zu is None else str(zu)
+
+        row = find_zoom_meeting_data_for_webhook(
+            zoom_meeting_id,
+            zoom_uuid_str if zoom_uuid_str else None,
+        )
+        if not row:
+            logger.info(
+                "Zoom webhook: no ZoomMeetingData for zoom_meeting_id=%s (event=%s)",
+                zoom_meeting_id,
+                event,
+            )
+            return Response({"received": True}, status=status.HTTP_200_OK)
+
+        try:
+            process_zoom_webhook_event.delay(
+                event_type=event or "",
+                zoom_meeting_data_id=row.pk,
+                webhook_uuid=zoom_uuid_str,
+            )
+        except Exception:
+            logger.exception("Zoom webhook: failed to enqueue Celery task")
+            return Response({"error": "enqueue failed"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        return Response({"received": True}, status=status.HTTP_200_OK)

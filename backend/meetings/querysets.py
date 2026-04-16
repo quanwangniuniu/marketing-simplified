@@ -12,7 +12,7 @@ class MeetingQuerySet(models.QuerySet):
         from meetings.models import MeetingDecisionOrigin, MeetingTaskOrigin
 
         return (
-            self.select_related("project", "type_definition")
+            self.select_related("project", "type_definition", "zoom_meeting_data")
             .prefetch_related(
                 "participant_links",
                 "tag_assignments__tag_definition",
