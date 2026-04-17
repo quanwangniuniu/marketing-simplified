@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { AnomalyAlerts } from "../overview/AnomalyAlerts"
 import { RecentDecisions } from "../overview/RecentDecisions"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { AgentListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 type TabValue = "alerts" | "decisions"
 
@@ -18,12 +19,14 @@ export function RightPanel() {
   const { isRightPanelOpen, setActiveView, setPendingDecisionId } = useAgentLayout()
   const [activeTab, setActiveTab] = useState<TabValue>("alerts")
   const [anomalies, setAnomalies] = useState<{ type: string; severity: string; campaign: string; description: string; cost: number; roas?: number }[]>([])
+  const [anomaliesLoading, setAnomaliesLoading] = useState(true)
 
   // Load latest anomalies from backend on mount
   useEffect(() => {
     AgentAPI.fetchLatestAnomalies()
       .then((data) => { if (data?.length) setAnomalies(data) })
       .catch(() => {})
+      .finally(() => setAnomaliesLoading(false))
   }, [])
 
   // Listen for analysis-complete events from chat (session restore only)
@@ -101,12 +104,16 @@ export function RightPanel() {
         <div className="flex-1 overflow-y-auto">
           {/* Alerts Tab */}
           <div className={cn("p-3", activeTab !== "alerts" && "hidden")}>
-            <AnomalyAlerts anomalies={anomalies} loading={false} compact />
+            <AnomalyAlerts anomalies={anomalies} loading={anomaliesLoading} compact />
           </div>
 
           {/* Decisions Tab */}
           <div className={cn("p-3", activeTab !== "decisions" && "hidden")}>
-            <RecentDecisions compact onSelect={handleDecisionSelect} />
+            <RecentDecisions
+              compact
+              onSelect={handleDecisionSelect}
+              loadingFallback={<AgentListSkeleton compact rows={4} />}
+            />
           </div>
         </div>
       </div>

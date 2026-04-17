@@ -12,6 +12,7 @@ import { NewTaskModal } from "./NewTaskModal"
 // import toast from "react-hot-toast"
 import { useTaskFilterParams } from "@/hooks/useTaskFilterParams"
 import { TaskFilterPanel } from "@/components/tasks/TaskFilterPanel"
+import { AgentTaskBoardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 const columns: ColumnStatus[] = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"]
 
@@ -114,11 +115,7 @@ export function TaskBoard() {
   })
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        Loading tasks...
-      </div>
-    )
+    return <AgentTaskBoardSkeleton />
   }
 
   return (

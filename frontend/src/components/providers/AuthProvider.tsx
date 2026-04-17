@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../../lib/authStore';
-import { useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 // Props for AuthProvider component
@@ -13,7 +13,7 @@ interface AuthProviderProps {
 // AuthProvider component that handles authentication state initialization
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { initializeAuth, loading, initialized, hasHydrated } = useAuthStore();
-  const router = useRouter();
+  const pathname = usePathname();
 
   // Initialize authentication state on component mount
   useEffect(() => {
@@ -31,8 +31,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, [initializeAuth, hasHydrated]);
 
-  // Show loading screen while initializing authentication
-  if (!initialized || loading) {
+  const isAgentRoute = pathname?.startsWith('/agent');
+  const deferToAgentSkeletons = Boolean(isAgentRoute);
+
+  // Show loading screen while initializing authentication unless the agent shell
+  // should take over loading presentation for an authenticated session.
+  if ((!initialized || loading) && !deferToAgentSkeletons) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

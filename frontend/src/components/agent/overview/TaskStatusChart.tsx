@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, Label } from "recharts"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { AgentChartCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: "Draft", color: "#52525b" },
@@ -53,17 +54,17 @@ export function TaskStatusChart() {
 
   const total = data.reduce((sum, d) => sum + d.value, 0)
 
+  if (loading) {
+    return <AgentChartCardSkeleton title="Decision Status" height="h-[140px]" />
+  }
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-card-foreground">Decision Status</CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <div className="h-[140px] flex items-center justify-center text-muted-foreground text-sm">
-            Loading...
-          </div>
-        ) : data.length === 0 ? (
+        {data.length === 0 ? (
           <div className="h-[140px] flex items-center justify-center text-muted-foreground text-sm">
             No decisions yet
           </div>

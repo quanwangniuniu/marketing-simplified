@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { AgentSpreadsheetTableSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface AdRow {
   name: string
@@ -36,20 +37,24 @@ function getRoiColor(roi: number): string {
 
 interface DataTableProps {
   fileId: string
+  loading?: boolean
 }
 
-export function DataTable({ fileId }: DataTableProps) {
+export function DataTable({ fileId, loading = false }: DataTableProps) {
   const [data, setData] = useState<AdRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
+    if (loading) {
+      return
+    }
     if (!fileId) {
-      setLoading(false)
+      setDataLoading(false)
       setData([])
       return
     }
     let cancelled = false
-    setLoading(true)
+    setDataLoading(true)
     async function load() {
       try {
         const report = await AgentAPI.fetchReportData(fileId)
@@ -67,12 +72,14 @@ export function DataTable({ fileId }: DataTableProps) {
       } catch {
         setData([])
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setDataLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [fileId])
+  }, [fileId, loading])
+
+  const isLoading = loading || dataLoading
 
   const totals = data.reduce(
     (acc, row) => ({
@@ -85,12 +92,8 @@ export function DataTable({ fileId }: DataTableProps) {
   const avgRoas = totals.cost > 0 ? totals.revenue / totals.cost : 0
   const avgRoi = totals.cost > 0 ? ((totals.revenue - totals.cost) / totals.cost) * 100 : 0
 
-  if (loading) {
-    return (
-      <div className="rounded-lg border border-border p-8 text-center text-muted-foreground text-sm">
-        Loading spreadsheet data...
-      </div>
-    )
+  if (isLoading) {
+    return <AgentSpreadsheetTableSkeleton />
   }
 
   if (data.length === 0) {
