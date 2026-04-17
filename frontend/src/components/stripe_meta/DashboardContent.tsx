@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import useStripe from '@/hooks/useStripe';
 import usePlan from '@/hooks/usePlan';
 import { useRouter } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface DashboardContentProps {
   user: {
@@ -21,8 +22,19 @@ interface DashboardContentProps {
   };
 }
 
+function DashboardSummarySkeleton({ showButton = false }: { showButton?: boolean }) {
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-10 w-full rounded-lg" />
+      <Skeleton className="h-10 w-full rounded-lg" />
+      <Skeleton className="h-10 w-full rounded-lg" />
+      {showButton && <Skeleton className="h-10 w-full rounded-lg" />}
+    </div>
+  );
+}
+
 export default function DashboardContent({ user }: DashboardContentProps) {
-  const { getSubscription, getUsage, getSubscriptionLoading, getUsageLoading } = useStripe();
+  const { getSubscription, getUsage } = useStripe();
   const { cancelSubscription } = usePlan();
   const router = useRouter();
   const [subscription, setSubscription] = useState<any>(null);
@@ -142,7 +154,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
         pollIntervalRef.current = null;
       }
     };
-  }, [user?.organization?.id]); // Only depend on organization ID
+  }, [getSubscription, getUsage, user?.organization?.id]); // Only depend on organization ID
 
   return (
     <div className="space-y-6">
@@ -190,10 +202,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
           </div>
           {user?.organization ? (
             isLoading ? (
-              <div className="text-center py-4">
-                <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Loading subscription...</p>
-              </div>
+              <DashboardSummarySkeleton showButton={isOrgAdmin} />
             ) : subscription ? (
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -234,7 +243,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
                   <AlertTriangle className="w-6 h-6 text-gray-400" />
                 </div>
                 <p className="text-sm text-gray-500 mb-2">No Subscription</p>
-                <p className="text-xs text-gray-400">You don't have an active subscription yet.</p>
+                <p className="text-xs text-gray-400">You don&apos;t have an active subscription yet.</p>
               </div>
             )
           ) : (
@@ -243,7 +252,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
                 <AlertTriangle className="w-6 h-6 text-gray-400" />
               </div>
               <p className="text-sm text-gray-500 mb-2">Organization Required</p>
-              <p className="text-xs text-gray-400">You haven't joined any organization, so subscription information is not available.</p>
+                <p className="text-xs text-gray-400">You haven&apos;t joined any organization, so subscription information is not available.</p>
             </div>
           )}
         </div>
@@ -257,10 +266,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
           </div>
           {user?.organization ? (
             isLoading ? (
-              <div className="text-center py-4">
-                <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Loading usage...</p>
-              </div>
+              <DashboardSummarySkeleton />
             ) : usage ? (
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -297,7 +303,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
                 <AlertTriangle className="w-6 h-6 text-gray-400" />
               </div>
               <p className="text-sm text-gray-500 mb-2">Organization Required</p>
-              <p className="text-xs text-gray-400">You haven't joined any organization, so usage tracking is not available.</p>
+                <p className="text-xs text-gray-400">You haven&apos;t joined any organization, so usage tracking is not available.</p>
             </div>
           )}
         </div>

@@ -1,8 +1,13 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
+import {
+  AGENT_VIEW_COOKIE_NAME,
+  normalizeAgentView,
+  type AgentView,
+} from "@/lib/agentView"
+export type { AgentView } from "@/lib/agentView"
 
-export type AgentView = "overview" | "spreadsheets" | "decisions" | "tasks" | "workflows" | "settings"
 export type AgentTheme = "light" | "dark" | "system"
 export type FloatingChatMode = "closed" | "floating" | "maximized"
 
@@ -36,17 +41,22 @@ interface AgentLayoutContextType {
 
 const AgentLayoutContext = createContext<AgentLayoutContextType | null>(null)
 
-function getSystemTheme(): "light" | "dark" {
-  if (typeof window === "undefined") return "light"
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+function persistAgentView(view: AgentView) {
+  sessionStorage.setItem(AGENT_VIEW_COOKIE_NAME, view)
+  document.cookie = `${AGENT_VIEW_COOKIE_NAME}=${view}; path=/; max-age=31536000; samesite=lax`
 }
 
-export function AgentLayoutProvider({ children }: { children: ReactNode }) {
-  const [activeView, setActiveViewState] = useState<AgentView>("overview")
-  const [isViewReady, setIsViewReady] = useState(false)
+export function AgentLayoutProvider({
+  children,
+  initialView,
+}: {
+  children: ReactNode
+  initialView: AgentView
+}) {
+  const [activeView, setActiveViewState] = useState<AgentView>(initialView)
+  const [isViewReady] = useState(true)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
   const [theme, setThemeState] = useState<AgentTheme>("light")
-  const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
   const [isInSnapZone, setIsInSnapZone] = useState(false)
   const [pendingDecisionId, setPendingDecisionId] = useState<number | null>(null)
 
@@ -58,28 +68,24 @@ export function AgentLayoutProvider({ children }: { children: ReactNode }) {
 
   const setActiveView = (view: AgentView) => {
     setActiveViewState(view)
-    setIsViewReady(true)
-    sessionStorage.setItem("agent-active-view", view)
+    persistAgentView(view)
   }
 
   // Load persisted view + theme on mount (with "agent" migration guard)
   useEffect(() => {
-    const storedView = sessionStorage.getItem("agent-active-view")
-    if (storedView === "agent") {
-      // Migration: "agent" view no longer exists
-      sessionStorage.setItem("agent-active-view", "overview")
-      setActiveViewState("overview")
-    } else if (storedView && ["overview", "spreadsheets", "decisions", "tasks", "workflows", "settings"].includes(storedView)) {
-      setActiveViewState(storedView as AgentView)
-    }
-    setIsViewReady(true)
+    const storedView = sessionStorage.getItem(AGENT_VIEW_COOKIE_NAME)
+    const resolvedView =
+      storedView === "agent"
+        ? "overview"
+        : normalizeAgentView(storedView || initialView)
+    setActiveViewState(resolvedView)
+    persistAgentView(resolvedView)
     // Theme forced to light — Marketing Simplified does not support dark mode yet
     // const stored = localStorage.getItem("agent-theme") as AgentTheme | null
     // if (stored && ["light", "dark", "system"].includes(stored)) {
     //   setThemeState(stored)
     // }
-    // setSystemTheme(getSystemTheme())
-  }, [])
+  }, [initialView])
 
   // Listen for OS theme changes — disabled while theme is forced to light
   // useEffect(() => {
@@ -96,7 +102,7 @@ export function AgentLayoutProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("agent-theme", t)
   }
 
-  // Force light — when Marketing Simplified supports dark mode, restore: theme === "system" ? systemTheme : theme
+  // Force light — when Marketing Simplified supports dark mode, restore theme resolution here.
   const resolvedTheme: "light" | "dark" = "light"
 
   // --- Floating chat controls ---

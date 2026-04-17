@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Briefcase,
   Building2,
@@ -21,6 +21,7 @@ import DashboardContent from "@/components/stripe_meta/DashboardContent";
 import OrganizationContent from "@/components/stripe_meta/OrganizationContent";
 import PlansSection from "@/components/plans/PlansSection";
 import { TextInput } from "@/components/input/InputPrimitives";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ProfileFields = {
   job: string;
@@ -28,6 +29,175 @@ type ProfileFields = {
   organization: string;
   location: string;
 };
+
+function ProfileValueSkeleton({
+  width,
+  className = "",
+}: {
+  width: string;
+  className?: string;
+}) {
+  return <Skeleton className={`h-4 ${width} ${className}`.trim()} />;
+}
+
+function ProfilePageSkeleton() {
+  return (
+    <Layout user={{ name: "", email: "" }}>
+      <div className="p-6">
+        <div className="space-y-4 profile-header"></div>
+        <div className="profile-content rounded-lg">
+          <div className="profile-content-wrapper pt-12">
+            <div className="profile-content-inner p-6 bg-white rounded-lg shadow-xl border border-gray-200">
+              <div className="flex items-center justify-between border-b border-gray-200 pb-6">
+                <section className="relative rounded-lg border border-gray-200 bg-white flex-1 mr-6 overflow-hidden">
+                  <div className="h-36 w-full bg-gray-100" />
+                  <div className="absolute left-20 top-24">
+                    <Skeleton className="h-24 w-24 rounded-full border-4 border-white" />
+                  </div>
+                  <div className="pb-6 pt-16">
+                    <div className="flex items-start justify-between gap-4 pl-20 pr-6">
+                      <div className="w-24 text-center">
+                        <Skeleton className="mx-auto h-6 w-24" />
+                        <Skeleton className="mx-auto mt-2 h-4 w-32" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-6 flex items-start gap-6 w-full">
+                <div className="w-[30%] min-w-[280px] max-w-[420px] flex flex-col gap-4 shrink-0">
+                  <section className="w-full space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                    <h3 className="text-lg font-semibold text-gray-900">About</h3>
+                    <div className="space-y-3 text-sm text-gray-700">
+                      <div className="flex items-center gap-3 p-2">
+                        <Briefcase className="h-4 w-4 text-gray-500 shrink-0" />
+                        <ProfileValueSkeleton width="w-32" />
+                      </div>
+                      <div className="flex items-center gap-3 p-2">
+                        <Network className="h-4 w-4 text-gray-500 shrink-0" />
+                        <ProfileValueSkeleton width="w-36" />
+                      </div>
+                      <div className="flex items-center gap-3 p-2">
+                        <Building2 className="h-4 w-4 text-gray-500 shrink-0" />
+                        <ProfileValueSkeleton width="w-40" />
+                      </div>
+                      <div className="flex items-center gap-3 p-2">
+                        <MapPin className="h-4 w-4 text-gray-500 shrink-0" />
+                        <ProfileValueSkeleton width="w-28" />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">
+                        Contact
+                      </h4>
+                      <div className="mt-2 flex items-center gap-3 text-sm text-gray-700 p-2">
+                        <Mail className="h-4 w-4 text-gray-500 shrink-0" />
+                        <ProfileValueSkeleton width="w-40" />
+                      </div>
+                    </div>
+                  </section>
+
+                  <button
+                    disabled
+                    className="flex items-center gap-3 w-full p-3 text-sm font-medium text-red-600 rounded-lg border border-gray-200 bg-white opacity-70"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-6 flex-1 min-w-0">
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="border-b border-gray-200 mb-4">
+                      <nav className="-mb-px flex gap-6">
+                        <button
+                          type="button"
+                          className="pb-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600"
+                        >
+                          Dashboard
+                        </button>
+                        <button
+                          type="button"
+                          className="pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500"
+                        >
+                          My Organization
+                        </button>
+                        <button
+                          type="button"
+                          className="pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500"
+                        >
+                          Subscription
+                        </button>
+                      </nav>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div className="text-2xl font-bold">Dashboard</div>
+                        <div className="text-sm text-gray-500">
+                          Last updated: {new Date().toLocaleDateString()}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {Array.from({ length: 3 }).map((_, index) => (
+                          <div
+                            key={`profile-skeleton-card-${index}`}
+                            className="border border-gray-200 rounded-xl p-6"
+                          >
+                            <div className="flex items-center justify-between mb-4">
+                              <Skeleton className="h-6 w-28" />
+                              <Skeleton className="h-8 w-8 rounded-lg" />
+                            </div>
+                            <div className="space-y-3">
+                              <Skeleton className="h-10 w-full rounded-lg" />
+                              <Skeleton className="h-10 w-full rounded-lg" />
+                              <Skeleton className="h-10 w-full rounded-lg" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border border-gray-200 rounded-xl p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="text-lg font-semibold text-gray-800">
+                            Recent Activity
+                          </div>
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" />
+                        </div>
+                        <div className="text-center py-8">
+                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg
+                              className="w-8 h-8 text-gray-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                              />
+                            </svg>
+                          </div>
+                          <p className="text-gray-500 text-sm">
+                            No recent activity to display
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
 
 function ProfilePageContent() {
   const { user, logout, refreshUser } = useAuth();
@@ -54,13 +224,22 @@ function ProfilePageContent() {
     location: userAny?.location ?? "Your location",
   });
 
-  const initialValues: ProfileFields = {
-    job: userAny?.job ?? "Your job title",
-    department: userAny?.department ?? "Your department",
-    organization:
-      (organizationName || user?.organization?.name) ?? "Your organization",
-    location: userAny?.location ?? "Your location",
-  };
+  const initialValues = useMemo<ProfileFields>(
+    () => ({
+      job: userAny?.job ?? "Your job title",
+      department: userAny?.department ?? "Your department",
+      organization:
+        (organizationName || user?.organization?.name) ?? "Your organization",
+      location: userAny?.location ?? "Your location",
+    }),
+    [
+      organizationName,
+      user?.organization?.name,
+      userAny?.department,
+      userAny?.job,
+      userAny?.location,
+    ],
+  );
   const [fields, setFields] = useState<ProfileFields>(initialValues);
 
   useEffect(() => {
@@ -72,12 +251,7 @@ function ProfilePageContent() {
   useEffect(() => {
     savedRef.current = { ...savedRef.current, ...initialValues };
     setFields((prev) => (activeField ? prev : initialValues));
-  }, [
-    user?.organization?.name,
-    userAny?.job,
-    userAny?.department,
-    userAny?.location,
-  ]);
+  }, [activeField, initialValues]);
 
   const saveField = (field: keyof ProfileFields) => {
     savedRef.current = { ...savedRef.current, [field]: fields[field] };
@@ -477,7 +651,7 @@ function ProfilePageContent() {
 
 export default function ProfilePage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute loadingComponent={<ProfilePageSkeleton />}>
       <ProfilePageContent />
     </ProtectedRoute>
   );

@@ -13,7 +13,7 @@ interface AuthProviderProps {
 
 // AuthProvider component that handles authentication state initialization
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { initializeAuth, loading, initialized, hasHydrated, token } = useAuthStore();
+  const { initializeAuth, loading, initialized, hasHydrated } = useAuthStore();
   const pathname = usePathname();
 
   // Initialize authentication state on component mount
@@ -33,9 +33,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [initializeAuth, hasHydrated]);
 
   const { deferGlobalAuthBlock } = getAuthLoadingRoutePolicy(pathname);
-  const shouldDeferGlobalBlocking = Boolean(
-    deferGlobalAuthBlock && hasHydrated && token
-  );
+  const shouldDeferGlobalBlocking = Boolean(deferGlobalAuthBlock);
 
   // Show the global auth boot screen unless the current route is configured
   // to take over loading presentation with its own skeletons.
