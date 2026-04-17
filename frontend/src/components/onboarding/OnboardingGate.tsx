@@ -11,6 +11,7 @@ import OnboardingWizard from './OnboardingWizard';
 const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const isAgentRoute = pathname?.startsWith('/agent');
   const isPublicAuthRoute =
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/register') ||
@@ -24,6 +25,8 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const isRootRoute = pathname === '/';
   const { needsOnboarding, checking } = useOnboarding();
   const showOverlay = !isAuthRoute && (needsOnboarding || checking);
+  const shouldUseNonBlockingAgentCheck = Boolean(isAgentRoute && checking && !needsOnboarding);
+  const shouldBlockBackground = showOverlay && !shouldUseNonBlockingAgentCheck;
 
   useEffect(() => {
     // Requirement: after signup, entering localhost should reset to logged-out
@@ -36,26 +39,36 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
     <div className="relative">
       <div
         className={`min-h-screen transition duration-200 ${
-          showOverlay ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
+          shouldBlockBackground ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
         }`}
       >
         {children}
       </div>
 
-      {showOverlay && (
+      {shouldBlockBackground && (
         <div className="pointer-events-none absolute inset-0 z-[9998] bg-slate-900/70 backdrop-blur-sm" />
       )}
 
       {!isAuthRoute && checking && !needsOnboarding && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-x-hidden px-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-100 px-6 py-5 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+        shouldUseNonBlockingAgentCheck ? (
+          <div className="pointer-events-none fixed right-4 top-4 z-[9999] flex max-w-xs items-center gap-3 rounded-xl border border-teal-100 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" />
             <div>
               <div className="text-sm font-semibold text-gray-900">Preparing your workspace</div>
               <div className="text-xs text-gray-600">Checking your project access...</div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-x-hidden px-4">
+            <div className="bg-white rounded-xl shadow-xl border border-gray-100 px-6 py-5 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Preparing your workspace</div>
+                <div className="text-xs text-gray-600">Checking your project access...</div>
+              </div>
+            </div>
+          </div>
+        )
       )}
 
       {!isAuthRoute && needsOnboarding && (

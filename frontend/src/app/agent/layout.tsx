@@ -12,17 +12,14 @@ const TOUR_KEY = "agent-tour-completed"
 
 function AgentThemeWrapper({ children }: { children: React.ReactNode }) {
   const { resolvedTheme } = useAgentLayout()
-  const [mounted, setMounted] = useState(false)
   const [showTour, setShowTour] = useState(false)
-
-  useEffect(() => setMounted(true), [])
 
   // Check if tour should auto-start on first visit
   useEffect(() => {
-    if (mounted && !localStorage.getItem(TOUR_KEY)) {
+    if (!localStorage.getItem(TOUR_KEY)) {
       setShowTour(true)
     }
-  }, [mounted])
+  }, [])
 
   // Listen for restart-tour event from Settings
   useEffect(() => {
@@ -50,11 +47,7 @@ function AgentThemeWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={resolvedTheme === "dark" ? "dark" : ""}>
-      <div
-        className={`h-screen flex bg-background text-foreground transition-opacity duration-200 ${
-          mounted ? "opacity-100" : "opacity-0"
-        }`}
-      >
+      <div className="h-screen flex bg-background text-foreground">
         {/* Left Sidebar */}
         <LeftSidebar />
 

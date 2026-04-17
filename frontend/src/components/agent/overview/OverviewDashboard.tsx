@@ -8,7 +8,11 @@ import { TaskStatusChart } from "./TaskStatusChart"
 import { CampaignRanking } from "./CampaignRanking"
 import { ActivityFeed } from "./ActivityFeed"
 import { AgentAPI } from "@/lib/api/agentApi"
-import { AgentChartCardSkeleton, AgentOverviewKpiSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import {
+  AgentCampaignPerformanceSkeleton,
+  AgentOverviewKpiSkeleton,
+} from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 const fallbackKpi: { title: string; value: string; change: string; changeType: "up" | "down" | "neutral"; icon: React.ElementType }[] = [
   { title: "Total Cost", value: "$—", change: "—", changeType: "neutral" as const, icon: DollarSign },
@@ -32,7 +36,7 @@ export function OverviewDashboard() {
   useEffect(() => {
     async function loadSummary() {
       try {
-        const summary = await AgentAPI.fetchReportsSummary()
+        const summary = await withMinimumDelay(AgentAPI.fetchReportsSummary())
         if (summary && summary.total_cost !== undefined) {
           setKpiData([
             { title: "Total Cost", value: `$${summary.total_cost.toLocaleString()}`, change: `${summary.file_count} files`, changeType: "neutral" as const, icon: DollarSign },
@@ -75,7 +79,7 @@ export function OverviewDashboard() {
       {/* Bottom Row */}
       <div className="grid grid-cols-2 gap-4">
         {summaryLoading ? (
-          <AgentChartCardSkeleton title="Campaign Performance" height="h-[220px]" />
+          <AgentCampaignPerformanceSkeleton />
         ) : (
           <CampaignRanking topCampaigns={campaignData.top} />
         )}

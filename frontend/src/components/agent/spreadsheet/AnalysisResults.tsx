@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 // AgentAPI removed — analysis results come from pipeline SSE
 import { AgentAnalysisCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { sleep } from "@/lib/agentLoading"
 
 interface AnomalyCard {
   id: number
@@ -38,8 +39,14 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Report summary endpoint removed — analysis results come from pipeline SSE in Phase 2
-    setLoading(false)
+    let cancelled = false
+    async function finishLoading() {
+      // Report summary endpoint removed — analysis results come from pipeline SSE in Phase 2
+      await sleep()
+      if (!cancelled) setLoading(false)
+    }
+    finishLoading()
+    return () => { cancelled = true }
   }, [filename])
 
   const toggleSelection = (id: number) => {

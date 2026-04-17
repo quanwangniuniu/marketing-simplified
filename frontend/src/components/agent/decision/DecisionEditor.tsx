@@ -37,8 +37,9 @@ import type { DecisionOptionDraft, DecisionRiskLevel } from "@/types/decision"
 import toast from "react-hot-toast"
 import {
   AgentDecisionDetailSkeleton,
-  AgentListSkeleton,
+  AgentDecisionListSkeleton,
 } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 // ─── Types ────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ export function DecisionEditor() {
     let cancelled = false
     async function load() {
       try {
-        const data = await AgentAPI.fetchRecentDecisions()
+        const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
         if (cancelled) return
         setDecisionList(data)
       } catch {
@@ -206,10 +207,10 @@ export function DecisionEditor() {
       // Try draft endpoint first, then committed
       const projectId = activeProject?.id
       try {
-        detail = await DecisionAPI.getDraft(d.id, projectId)
+        detail = await withMinimumDelay(DecisionAPI.getDraft(d.id, projectId))
       } catch {
         try {
-          detail = await DecisionAPI.getDecision(d.id, projectId)
+          detail = await withMinimumDelay(DecisionAPI.getDecision(d.id, projectId))
         } catch {
           // neither worked
         }
@@ -453,7 +454,7 @@ export function DecisionEditor() {
 
   const refreshList = async () => {
     try {
-      const data = await AgentAPI.fetchRecentDecisions()
+      const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
       setDecisionList(data)
     } catch {
       // ignore
@@ -640,7 +641,7 @@ export function DecisionEditor() {
           </div>
 
           {listLoading ? (
-            <AgentListSkeleton rows={6} />
+            <AgentDecisionListSkeleton rows={6} />
           ) : decisionList.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No decisions yet. Run an AI analysis to generate one.

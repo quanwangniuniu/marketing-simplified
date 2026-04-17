@@ -9,7 +9,11 @@ import { WorkflowList } from "@/components/agent/workflow/WorkflowList"
 import { SettingsPage } from "@/components/agent/layout/SettingsPage"
 
 export default function AgentPage() {
-  const { activeView } = useAgentLayout()
+  const { activeView, isViewReady } = useAgentLayout()
+
+  if (!isViewReady) {
+    return <div data-tour="tour-main-content" className="h-full" />
+  }
 
   return (
     <div data-tour="tour-main-content" className="h-full">

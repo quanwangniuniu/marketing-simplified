@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, Label } from "recharts"
 import { AgentAPI } from "@/lib/api/agentApi"
-import { AgentChartCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { AgentDecisionStatusSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: "Draft", color: "#52525b" },
@@ -32,7 +33,7 @@ export function TaskStatusChart() {
     let cancelled = false
     async function load() {
       try {
-        const stats = await AgentAPI.fetchDecisionStats()
+        const stats = await withMinimumDelay(AgentAPI.fetchDecisionStats())
         if (cancelled) return
         const chartData = Object.entries(stats)
           .filter(([, count]) => (count as number) > 0)
@@ -55,7 +56,7 @@ export function TaskStatusChart() {
   const total = data.reduce((sum, d) => sum + d.value, 0)
 
   if (loading) {
-    return <AgentChartCardSkeleton title="Decision Status" height="h-[140px]" />
+    return <AgentDecisionStatusSkeleton />
   }
 
   return (

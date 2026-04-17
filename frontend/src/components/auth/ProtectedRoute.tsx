@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { useAuthStore } from '../../lib/authStore';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
 
 // Props for ProtectedRoute component
 interface ProtectedRouteProps {
@@ -24,6 +25,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { isAuthenticated, user, loading, initialized } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const { suppressProtectedRouteLoading } = getAuthLoadingRoutePolicy(pathname);
 
   const hasRequiredRoles =
     requiredRoles.length === 0 ||
@@ -50,7 +53,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Show loading while authentication is being initialized
   if (!initialized || loading) {
-    return loadingComponent ? <>{loadingComponent}</> : null;
+    if (loadingComponent && !suppressProtectedRouteLoading) {
+      return <>{loadingComponent}</>;
+    }
+    return null;
   }
 
   // If authentication is required but user is not authenticated, don't render children

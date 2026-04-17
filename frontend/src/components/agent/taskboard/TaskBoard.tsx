@@ -13,6 +13,7 @@ import { NewTaskModal } from "./NewTaskModal"
 import { useTaskFilterParams } from "@/hooks/useTaskFilterParams"
 import { TaskFilterPanel } from "@/components/tasks/TaskFilterPanel"
 import { AgentTaskBoardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 const columns: ColumnStatus[] = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"]
 
@@ -47,8 +48,9 @@ export function TaskBoard() {
   const [filters, setFilters, clearFilters] = useTaskFilterParams()
 
   const reload = useCallback(async () => {
+    setLoading(true)
     try {
-      const response = await TaskAPI.getTasks(filters)
+      const response = await withMinimumDelay(TaskAPI.getTasks(filters))
       const results = response.data.results || response.data || []
       const mapped: Task[] = results.map((t: Record<string, unknown>) => {
         const ownerObj = t.owner as Record<string, string> | null

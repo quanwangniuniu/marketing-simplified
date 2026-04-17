@@ -14,6 +14,7 @@ interface FloatingChatState {
 
 interface AgentLayoutContextType {
   activeView: AgentView
+  isViewReady: boolean
   setActiveView: (view: AgentView) => void
   isRightPanelOpen: boolean
   toggleRightPanel: () => void
@@ -42,6 +43,7 @@ function getSystemTheme(): "light" | "dark" {
 
 export function AgentLayoutProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveViewState] = useState<AgentView>("overview")
+  const [isViewReady, setIsViewReady] = useState(false)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
   const [theme, setThemeState] = useState<AgentTheme>("light")
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light")
@@ -56,6 +58,7 @@ export function AgentLayoutProvider({ children }: { children: ReactNode }) {
 
   const setActiveView = (view: AgentView) => {
     setActiveViewState(view)
+    setIsViewReady(true)
     sessionStorage.setItem("agent-active-view", view)
   }
 
@@ -69,6 +72,7 @@ export function AgentLayoutProvider({ children }: { children: ReactNode }) {
     } else if (storedView && ["overview", "spreadsheets", "decisions", "tasks", "workflows", "settings"].includes(storedView)) {
       setActiveViewState(storedView as AgentView)
     }
+    setIsViewReady(true)
     // Theme forced to light — Marketing Simplified does not support dark mode yet
     // const stored = localStorage.getItem("agent-theme") as AgentTheme | null
     // if (stored && ["light", "dark", "system"].includes(stored)) {
@@ -144,6 +148,7 @@ export function AgentLayoutProvider({ children }: { children: ReactNode }) {
     <AgentLayoutContext.Provider
       value={{
         activeView,
+        isViewReady,
         setActiveView,
         isRightPanelOpen,
         toggleRightPanel: () => setIsRightPanelOpen((prev) => !prev),

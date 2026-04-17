@@ -10,6 +10,7 @@ import {
   AgentWorkflowListSkeleton,
   AgentWorkflowStepsSkeleton,
 } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 interface ConfigStatus {
   dify_api: boolean
@@ -43,7 +44,7 @@ function WorkflowStepList({ workflowId }: { workflowId: string }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    AgentAPI.listSteps(workflowId)
+    withMinimumDelay(AgentAPI.listSteps(workflowId))
       .then(setSteps)
       .catch(() => setSteps([]))
       .finally(() => setLoading(false))
@@ -133,14 +134,14 @@ export function SettingsPage() {
   }, [])
 
   useEffect(() => {
-    AgentAPI.getConfigStatus()
+    withMinimumDelay(AgentAPI.getConfigStatus())
       .then(setConfigStatus)
       .catch(() => setConfigStatus(null))
       .finally(() => setConfigLoading(false))
   }, [])
 
   useEffect(() => {
-    AgentAPI.listWorkflows()
+    withMinimumDelay(AgentAPI.listWorkflows())
       .then((data) => setWorkflows(data.filter((w) => w.is_system && w.status === "active")))
       .catch(() => setWorkflows([]))
       .finally(() => setWorkflowsLoading(false))

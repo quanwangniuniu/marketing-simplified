@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils"
 import { AnomalyAlerts } from "../overview/AnomalyAlerts"
 import { RecentDecisions } from "../overview/RecentDecisions"
 import { AgentAPI } from "@/lib/api/agentApi"
-import { AgentListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { AgentDecisionListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 type TabValue = "alerts" | "decisions"
 
@@ -23,7 +24,7 @@ export function RightPanel() {
 
   // Load latest anomalies from backend on mount
   useEffect(() => {
-    AgentAPI.fetchLatestAnomalies()
+    withMinimumDelay(AgentAPI.fetchLatestAnomalies())
       .then((data) => { if (data?.length) setAnomalies(data) })
       .catch(() => {})
       .finally(() => setAnomaliesLoading(false))
@@ -112,7 +113,7 @@ export function RightPanel() {
             <RecentDecisions
               compact
               onSelect={handleDecisionSelect}
-              loadingFallback={<AgentListSkeleton compact rows={4} />}
+              loadingFallback={<AgentDecisionListSkeleton compact rows={4} />}
             />
           </div>
         </div>

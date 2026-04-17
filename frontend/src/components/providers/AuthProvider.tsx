@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useAuthStore } from '../../lib/authStore';
 import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
 
 // Props for AuthProvider component
 interface AuthProviderProps {
@@ -12,7 +13,7 @@ interface AuthProviderProps {
 
 // AuthProvider component that handles authentication state initialization
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { initializeAuth, loading, initialized, hasHydrated } = useAuthStore();
+  const { initializeAuth, loading, initialized, hasHydrated, token } = useAuthStore();
   const pathname = usePathname();
 
   // Initialize authentication state on component mount
@@ -31,12 +32,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, [initializeAuth, hasHydrated]);
 
-  const isAgentRoute = pathname?.startsWith('/agent');
-  const deferToAgentSkeletons = Boolean(isAgentRoute);
+  const { deferGlobalAuthBlock } = getAuthLoadingRoutePolicy(pathname);
+  const shouldDeferGlobalBlocking = Boolean(
+    deferGlobalAuthBlock && hasHydrated && token
+  );
 
-  // Show loading screen while initializing authentication unless the agent shell
-  // should take over loading presentation for an authenticated session.
-  if ((!initialized || loading) && !deferToAgentSkeletons) {
+  // Show the global auth boot screen unless the current route is configured
+  // to take over loading presentation with its own skeletons.
+  if ((!initialized || loading) && !shouldDeferGlobalBlocking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

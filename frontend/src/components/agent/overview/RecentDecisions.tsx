@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { AgentAPI } from "@/lib/api/agentApi"
-import { AgentListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { AgentDecisionListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 interface DecisionItem {
   id: number
@@ -63,7 +64,7 @@ export function RecentDecisions({ compact = false, onSelect, loadingFallback }: 
     let cancelled = false
     async function load() {
       try {
-        const data = await AgentAPI.fetchRecentDecisions()
+        const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
         if (cancelled) return
         setDecisions(data)
       } catch {
@@ -87,7 +88,7 @@ export function RecentDecisions({ compact = false, onSelect, loadingFallback }: 
   const content = (
     <div className="space-y-2">
       {loading ? (
-        loadingFallback || <AgentListSkeleton compact={compact} rows={compact ? 4 : 5} />
+        loadingFallback || <AgentDecisionListSkeleton compact={compact} rows={compact ? 4 : 5} />
       ) : decisions.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">No decisions yet</p>
       ) : (

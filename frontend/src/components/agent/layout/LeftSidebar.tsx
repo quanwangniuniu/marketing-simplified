@@ -11,6 +11,7 @@ import { AgentAPI } from "@/lib/api/agentApi"
 import { useBatchManage } from "@/hooks/useBatchManage"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
 import { AgentRecentSessionsSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
+import { withMinimumDelay } from "@/lib/agentLoading"
 
 const navItems: { id: AgentView; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -41,7 +42,7 @@ function formatTimeAgo(iso: string): string {
 }
 
 export function LeftSidebar() {
-  const { activeView, setActiveView, openFloatingChat, floatingChat, isInSnapZone } = useAgentLayout()
+  const { activeView, isViewReady, setActiveView, openFloatingChat, floatingChat, isInSnapZone } = useAgentLayout()
   const [recentSessions, setRecentSessions] = useState<SessionItem[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -54,7 +55,7 @@ export function LeftSidebar() {
       setSessionsLoading(true)
     }
     try {
-      const sessions = await AgentAPI.listSessions()
+      const sessions = await withMinimumDelay(AgentAPI.listSessions())
       setRecentSessions(
         sessions.slice(0, 8).map((s) => ({
           id: String(s.id),
@@ -175,7 +176,7 @@ export function LeftSidebar() {
           <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Workspaces</span>
         </div>
         {navItems.map(({ id, label, icon: Icon }) => {
-          const isActive = activeView === id
+          const isActive = isViewReady && activeView === id
           return (
             <button
               key={id}
@@ -341,7 +342,7 @@ export function LeftSidebar() {
             onClick={() => setActiveView("settings")}
             className={cn(
               "flex items-center gap-2 text-sm transition-colors",
-              activeView === "settings"
+              isViewReady && activeView === "settings"
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-card-foreground"
             )}
