@@ -7,11 +7,11 @@ import { Loader2 } from 'lucide-react';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useAuthStore } from '@/lib/authStore';
 import OnboardingWizard from './OnboardingWizard';
+import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
 
 const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const isAgentRoute = pathname?.startsWith('/agent');
   const isPublicAuthRoute =
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/register') ||
@@ -25,8 +25,11 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const isRootRoute = pathname === '/';
   const { needsOnboarding, checking } = useOnboarding();
   const showOverlay = !isAuthRoute && (needsOnboarding || checking);
-  const shouldUseNonBlockingAgentCheck = Boolean(isAgentRoute && checking && !needsOnboarding);
-  const shouldBlockBackground = showOverlay && !shouldUseNonBlockingAgentCheck;
+  const { deferOnboardingCheckBlock } = getAuthLoadingRoutePolicy(pathname);
+  const shouldUseNonBlockingCheck = Boolean(
+    deferOnboardingCheckBlock && checking && !needsOnboarding,
+  );
+  const shouldBlockBackground = showOverlay && !shouldUseNonBlockingCheck;
 
   useEffect(() => {
     // Requirement: after signup, entering localhost should reset to logged-out
@@ -50,7 +53,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
       )}
 
       {!isAuthRoute && checking && !needsOnboarding && (
-        shouldUseNonBlockingAgentCheck ? (
+        shouldUseNonBlockingCheck ? (
           <div className="pointer-events-none fixed right-4 top-4 z-[9999] flex max-w-xs items-center gap-3 rounded-xl border border-teal-100 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-sm">
             <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" />
             <div>

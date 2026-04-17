@@ -30,6 +30,8 @@ type ProfileFields = {
   location: string;
 };
 
+const PROFILE_SKELETON_DELAY_MS = 2500;
+
 function ProfileValueSkeleton({
   width,
   className = "",
@@ -136,7 +138,10 @@ function ProfilePageSkeleton() {
                       <div className="flex items-center justify-between">
                         <div className="text-2xl font-bold">Dashboard</div>
                         <div className="text-sm text-gray-500">
-                          Last updated: {new Date().toLocaleDateString()}
+                          <span className="inline-flex items-center gap-2">
+                            <span>Last updated:</span>
+                            <Skeleton className="h-4 w-20" />
+                          </span>
                         </div>
                       </div>
 
@@ -148,7 +153,6 @@ function ProfilePageSkeleton() {
                           >
                             <div className="flex items-center justify-between mb-4">
                               <Skeleton className="h-6 w-28" />
-                              <Skeleton className="h-8 w-8 rounded-lg" />
                             </div>
                             <div className="space-y-3">
                               <Skeleton className="h-10 w-full rounded-lg" />
@@ -649,10 +653,28 @@ function ProfilePageContent() {
   );
 }
 
+function DelayedProfilePageContent() {
+  const [showDelayedSkeleton, setShowDelayedSkeleton] = useState(true);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowDelayedSkeleton(false);
+    }, PROFILE_SKELETON_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  if (showDelayedSkeleton) {
+    return <ProfilePageSkeleton />;
+  }
+
+  return <ProfilePageContent />;
+}
+
 export default function ProfilePage() {
   return (
     <ProtectedRoute loadingComponent={<ProfilePageSkeleton />}>
-      <ProfilePageContent />
+      <DelayedProfilePageContent />
     </ProtectedRoute>
   );
 }

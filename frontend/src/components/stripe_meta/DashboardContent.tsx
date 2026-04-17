@@ -41,6 +41,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
   const [usage, setUsage] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const authUser = useAuthStore((state) => state.user);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isOrgAdmin = !!authUser?.roles?.includes('Organization Admin');
@@ -114,6 +115,10 @@ export default function DashboardContent({ user }: DashboardContentProps) {
   };
 
   useEffect(() => {
+    setLastUpdated(new Date().toLocaleDateString());
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
       if (user?.organization?.id) {
         setIsLoading(true);
@@ -161,7 +166,14 @@ export default function DashboardContent({ user }: DashboardContentProps) {
       <div className="flex items-center justify-between">
         <div className="text-2xl font-bold">Dashboard</div>
         <div className="text-sm text-gray-500">
-          Last updated: {new Date().toLocaleDateString()}
+          <span className="inline-flex items-center gap-2">
+            <span>Last updated:</span>
+            {lastUpdated ? (
+              <span>{lastUpdated}</span>
+            ) : (
+              <Skeleton className="h-4 w-20" />
+            )}
+          </span>
         </div>
       </div>
 
