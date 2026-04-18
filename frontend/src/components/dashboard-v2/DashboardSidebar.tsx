@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
@@ -10,6 +10,27 @@ import {
   Bot, ChevronsUpDown, ChevronDown, ChevronRight,
   Target, Mail, Notebook, Facebook, Video, Presentation,
 } from 'lucide-react';
+import { useProjects } from '@/hooks/useProjects';
+import { useAuthStore } from '@/lib/authStore';
+
+const getInitials = (name?: string | null): string => {
+  if (!name) return '?';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+};
+
+const humanize = (value: string): string =>
+  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatBudgetShort = (value: number | string | null | undefined): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  if (numeric >= 1000) return `$${(numeric / 1000).toFixed(0)}k/mo`;
+  return `$${numeric.toFixed(0)}/mo`;
+};
 
 type LucideIcon = typeof LayoutDashboard;
 
@@ -91,6 +112,32 @@ export default function DashboardSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<string[]>([]);
+  const { projects, loading, fetchProjects } = useProjects();
+  const user = useAuthStore((state) => state.user);
+
+  const userDisplayName = useMemo(() => {
+    if (!user) return null;
+    const full = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+    return full || user.username || user.email?.split('@')[0] || 'User';
+  }, [user]);
+
+  const userRole = useMemo(() => {
+    if (!user) return null;
+    const role = Array.isArray(user.roles) ? user.roles[0] : null;
+    return role ? humanize(role) : null;
+  }, [user]);
+
+  useEffect(() => {
+    if (projects.length === 0) fetchProjects();
+  }, [projects.length, fetchProjects]);
+
+  const activeProject = useMemo(
+    () =>
+      projects.find((p) => p.isActiveResolved) ||
+      projects.find((p) => p.is_active) ||
+      null,
+    [projects]
+  );
 
   const toggle = (label: string) => {
     setExpanded((prev) =>
@@ -122,11 +169,32 @@ export default function DashboardSidebar() {
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-bold">Q2</span>
+            <span className="text-white text-xs font-bold">
+              {activeProject ? getInitials(activeProject.name) : '—'}
+            </span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-gray-900 truncate">Q2 Product Launch</div>
-            <div className="text-xs text-gray-400">$45,000/mo</div>
+            {activeProject ? (
+              <>
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {activeProject.name}
+                </div>
+                <div className="text-xs text-gray-400 truncate">
+                  {formatBudgetShort(activeProject.total_monthly_budget) ||
+                    activeProject.organization?.name ||
+                    'No budget set'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {loading ? 'Loading…' : 'Select a project'}
+                </div>
+                <div className="text-xs text-gray-400 truncate">
+                  {loading ? '' : 'No active project'}
+                </div>
+              </>
+            )}
           </div>
           <ChevronsUpDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 shrink-0" />
         </div>
@@ -206,11 +274,17 @@ export default function DashboardSidebar() {
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
-            <span className="text-white text-sm font-semibold">J</span>
+            <span className="text-white text-sm font-semibold">
+              {getInitials(userDisplayName)}
+            </span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-gray-900 truncate">JohnS</div>
-            <div className="text-xs text-gray-400">User</div>
+            <div className="text-sm font-medium text-gray-900 truncate">
+              {userDisplayName || 'Not signed in'}
+            </div>
+            <div className="text-xs text-gray-400 truncate">
+              {userRole || user?.email || 'User'}
+            </div>
           </div>
         </div>
       </button>

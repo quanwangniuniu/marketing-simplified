@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
@@ -15,12 +16,57 @@ interface DashboardLayoutProps {
   upcomingMeetings?: MeetingListItem[];
 }
 
+const humanize = (value: string): string =>
+  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const BREADCRUMB_ROOT: Record<string, string> = {
+  'select-project': 'Projects',
+  overview: 'Dashboard',
+  campaigns: 'Manage',
+  tasks: 'Manage',
+  decisions: 'Manage',
+  spreadsheet: 'Manage',
+  spreadsheets: 'Manage',
+  meetings: 'Collaborate',
+  calendar: 'Collaborate',
+  messages: 'Collaborate',
+  miro: 'Collaborate',
+  variations: 'Content',
+  facebook_meta: 'Content',
+  tiktok: 'Content',
+  google_ads: 'Content',
+  mailchimp: 'Content',
+  klaviyo: 'Content',
+  notion: 'Content',
+  workflows: 'Tools',
+  timeline: 'Tools',
+  settings: 'Tools',
+  agent: 'Overview',
+  profile: 'Account',
+};
+
+const BREADCRUMB_LEAF: Record<string, string> = {
+  'select-project': 'Select Project',
+  overview: 'Overview',
+  spreadsheet: 'Spreadsheets',
+};
+
+const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } => {
+  const segments = (pathname || '').split('/').filter(Boolean);
+  const first = segments[0] || 'overview';
+  const root = BREADCRUMB_ROOT[first] || 'Dashboard';
+  const leaf = BREADCRUMB_LEAF[first] || humanize(first);
+  return { root, leaf };
+};
+
 export default function DashboardLayout({
   children,
   alerts = [],
   upcomingMeetings = [],
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const pathname = usePathname();
+  const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
 
   return (
     <div className="flex h-screen bg-[#F7F8FA] overflow-hidden">
@@ -31,9 +77,9 @@ export default function DashboardLayout({
         {/* Top bar */}
         <header className="flex items-center justify-between px-5 h-12 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-400">Dashboard</span>
+            <span className="text-gray-400">{breadcrumb.root}</span>
             <span className="text-gray-300">/</span>
-            <span className="font-medium text-gray-900">Overview</span>
+            <span className="font-medium text-gray-900">{breadcrumb.leaf}</span>
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell alerts={alerts} />
