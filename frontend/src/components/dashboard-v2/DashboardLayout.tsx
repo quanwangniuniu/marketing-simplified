@@ -1,20 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { PanelRightClose, PanelRightOpen, ArrowLeft } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
-import AlertPanel from './AlertPanel';
-import DataFreshness from './DataFreshness';
-import type { AlertData, DataSourceStatus } from '@/lib/mock/dashboardMock';
+import NotificationBell from './NotificationBell';
+import UpcomingMeetingsPanel from './UpcomingMeetingsPanel';
+import type { AlertData } from '@/lib/mock/dashboardMock';
+import type { MeetingListItem } from '@/types/meeting';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  alerts: AlertData[];
-  dataSources: DataSourceStatus[];
+  alerts?: AlertData[];
+  upcomingMeetings?: MeetingListItem[];
 }
 
-export default function DashboardLayout({ children, alerts, dataSources }: DashboardLayoutProps) {
+export default function DashboardLayout({
+  children,
+  alerts = [],
+  upcomingMeetings = [],
+}: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
 
   return (
@@ -30,8 +35,8 @@ export default function DashboardLayout({ children, alerts, dataSources }: Dashb
             <span className="text-gray-300">/</span>
             <span className="font-medium text-gray-900">Overview</span>
           </div>
-          <div className="flex items-center gap-3">
-            <DataFreshness sources={dataSources} />
+          <div className="flex items-center gap-2">
+            <NotificationBell alerts={alerts} />
             <Button
               variant="ghost"
               size="sm"
@@ -53,7 +58,7 @@ export default function DashboardLayout({ children, alerts, dataSources }: Dashb
         </main>
       </div>
 
-      <AlertPanel alerts={alerts} isOpen={isPanelOpen} />
+      <UpcomingMeetingsPanel meetings={upcomingMeetings} isOpen={isPanelOpen} />
     </div>
   );
 }
