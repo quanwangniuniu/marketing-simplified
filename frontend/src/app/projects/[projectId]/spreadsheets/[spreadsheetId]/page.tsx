@@ -115,6 +115,7 @@ export default function SpreadsheetDetailPage() {
   >([]);
   const applyHighlightStepsRef = useRef<(steps: WorkflowPatternStepRecord[]) => void>(() => {});
   const isReplayingRef = useRef(false);
+  const isCreatingFirstSheetRef = useRef(false);
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
 
   useEffect(() => {
@@ -235,13 +236,20 @@ export default function SpreadsheetDetailPage() {
       return null;
     }
 
-    // Always try to create Sheet1 for the first sheet.
+    // If another concurrent call is already in the process of creation, exit directly.
+    if (isCreatingFirstSheetRef.current) {
+      return null;
+    }
+
+    // lock
+    isCreatingFirstSheetRef.current = true;
+
     try {
       return await SpreadsheetAPI.createSheet(Number(spreadsheetId), { name: 'Sheet1' });
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 400) {
-        // If Sheet1 already exists server-side (race/auto-create), fetch it.
+        // Sheet1 already exists (race/auto-create), fetch it.
         const retryResponse = await SpreadsheetAPI.listSheets(Number(spreadsheetId));
         const retrySheets = retryResponse.results || [];
         if (retrySheets.length > 0) {
@@ -249,6 +257,9 @@ export default function SpreadsheetDetailPage() {
         }
       }
       throw err;
+    } finally {
+      // Unlock regardless of success or failure.
+      isCreatingFirstSheetRef.current = false;
     }
   };
 
