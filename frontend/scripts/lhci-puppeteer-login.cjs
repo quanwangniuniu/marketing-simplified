@@ -49,6 +49,14 @@ module.exports = async function lhciPuppeteerLogin(browser, _context) {
     await page.type('input[name="email"]', creds.email, { delay: 5 });
     await page.type('input[name="password"]', creds.password, { delay: 5 });
 
+    await page.waitForFunction(
+      () => {
+        const button = document.querySelector('form button[type="submit"]');
+        return Boolean(button) && !button.disabled;
+      },
+      { timeout: 30_000 }
+    );
+
     await page.click('form button[type="submit"]');
 
     try {
