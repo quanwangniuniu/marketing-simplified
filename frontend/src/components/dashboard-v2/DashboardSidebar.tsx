@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Megaphone, CheckSquare, GitBranch, Table2,
   Calendar, Users, MessageSquare, Workflow, Clock, Settings,
-  ArrowLeft, Bot, ChevronsUpDown, ChevronDown, ChevronRight,
+  Bot, ChevronsUpDown, ChevronDown, ChevronRight,
   Target, Mail, Notebook, Facebook, Video, Presentation,
 } from 'lucide-react';
 
@@ -197,16 +197,22 @@ export default function DashboardSidebar() {
         ))}
       </nav>
 
-      {/* Back button */}
-      <div className="px-2 py-3 border-t border-gray-100">
-        <button
-          onClick={() => router.push('/select-project')}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-        >
-          <ArrowLeft className="w-[18px] h-[18px]" />
-          All Projects
-        </button>
-      </div>
+      {/* User card */}
+      <button
+        onClick={() => router.push('/profile')}
+        className="px-4 py-3 border-t border-gray-100 w-full hover:bg-gray-50 transition-colors text-left"
+        title="View profile"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
+            <span className="text-white text-sm font-semibold">J</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-gray-900 truncate">JohnS</div>
+            <div className="text-xs text-gray-400">User</div>
+          </div>
+        </div>
+      </button>
     </aside>
   );
 }
