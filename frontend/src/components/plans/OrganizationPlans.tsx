@@ -4,6 +4,41 @@ import { useState } from 'react';
 import PlanCard from './PlanCard';
 import usePlan from '@/hooks/usePlan';
 import { useAuthStore } from '@/lib/authStore';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function PlanCardSkeleton() {
+  return (
+    <div className="relative bg-white border-r border-b border-gray-300 p-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-28" />
+        <Skeleton className="h-5 w-40" />
+        <div className="space-y-2 pt-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+        </div>
+      </div>
+
+      <div className="pt-10">
+        <Skeleton className="h-12 w-32" />
+        <Skeleton className="mt-2 h-4 w-24" />
+      </div>
+
+      <div className="py-6">
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+
+      <div className="border-t border-gray-200 pt-6 space-y-4">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={`plan-card-feature-skeleton-${index}`} className="space-y-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-5 w-32" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function OrganizationPlans() {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -59,7 +94,9 @@ export default function OrganizationPlans() {
 
           <div className="grid border-l border-t border-gray-300 overflow-hidden" style={{gridTemplateRows: 'auto', gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))', gridAutoRows: 'max-content', gridAutoColumns: '1fr'}}>
             {loading ? (
-              <div className="p-8 text-center text-gray-600">Loading plans...</div>
+              Array.from({ length: 3 }).map((_, index) => (
+                <PlanCardSkeleton key={`organization-plan-skeleton-${index}`} />
+              ))
             ) : error ? (
               <div className="p-8 text-center text-red-600">{error}</div>
             ) : plans.length === 0 ? (
@@ -94,4 +131,3 @@ export default function OrganizationPlans() {
     </div>
   );
 }
-

@@ -6,9 +6,6 @@ export interface DecisionCleanupRef {
 }
 
 export async function waitForDecisionsPageReady(page: Page) {
-  await expect(page.getByText('Initializing...')).not.toBeVisible({
-    timeout: 50_000,
-  });
   await expect(page.getByText('Preparing your workspace')).not.toBeVisible({
     timeout: 50_000,
   });

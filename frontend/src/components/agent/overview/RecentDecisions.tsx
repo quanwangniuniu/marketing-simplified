@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { AgentDecisionListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface DecisionItem {
   id: number
@@ -51,9 +52,10 @@ const riskLabels: Record<string, string> = {
 interface RecentDecisionsProps {
   compact?: boolean
   onSelect?: (decisionId: number) => void
+  loadingFallback?: ReactNode
 }
 
-export function RecentDecisions({ compact = false, onSelect }: RecentDecisionsProps) {
+export function RecentDecisions({ compact = false, onSelect, loadingFallback }: RecentDecisionsProps) {
   const [decisions, setDecisions] = useState<DecisionItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -85,7 +87,7 @@ export function RecentDecisions({ compact = false, onSelect }: RecentDecisionsPr
   const content = (
     <div className="space-y-2">
       {loading ? (
-        <p className="text-sm text-muted-foreground text-center py-4">Loading decisions...</p>
+        loadingFallback || <AgentDecisionListSkeleton compact={compact} rows={compact ? 4 : 5} />
       ) : decisions.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">No decisions yet</p>
       ) : (
