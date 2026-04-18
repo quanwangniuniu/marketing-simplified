@@ -30,8 +30,6 @@ type ProfileFields = {
   location: string;
 };
 
-const PROFILE_SKELETON_DELAY_MS = 2500;
-
 function ProfileValueSkeleton({
   width,
   className = "",
@@ -653,28 +651,10 @@ function ProfilePageContent() {
   );
 }
 
-function DelayedProfilePageContent() {
-  const [showDelayedSkeleton, setShowDelayedSkeleton] = useState(true);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setShowDelayedSkeleton(false);
-    }, PROFILE_SKELETON_DELAY_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  if (showDelayedSkeleton) {
-    return <ProfilePageSkeleton />;
-  }
-
-  return <ProfilePageContent />;
-}
-
 export default function ProfilePage() {
   return (
     <ProtectedRoute loadingComponent={<ProfilePageSkeleton />}>
-      <DelayedProfilePageContent />
+      <ProfilePageContent />
     </ProtectedRoute>
   );
 }

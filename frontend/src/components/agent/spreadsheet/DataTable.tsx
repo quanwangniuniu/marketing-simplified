@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { AgentSpreadsheetTableSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 interface AdRow {
   name: string
@@ -58,7 +57,7 @@ export function DataTable({ fileId, loading = false }: DataTableProps) {
     setDataLoading(true)
     async function load() {
       try {
-        const report = await withMinimumDelay(AgentAPI.fetchReportData(fileId))
+        const report = await AgentAPI.fetchReportData(fileId)
         if (cancelled) return
         const rows: AdRow[] = report.rows.map((r: Record<string, unknown>) => ({
           name: (r['Name'] as string) || 'Unknown',

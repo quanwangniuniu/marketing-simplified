@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { AgentDecisionListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 interface DecisionItem {
   id: number
@@ -64,7 +63,7 @@ export function RecentDecisions({ compact = false, onSelect, loadingFallback }: 
     let cancelled = false
     async function load() {
       try {
-        const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
+        const data = await AgentAPI.fetchRecentDecisions()
         if (cancelled) return
         setDecisions(data)
       } catch {

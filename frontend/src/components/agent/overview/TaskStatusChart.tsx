@@ -11,7 +11,6 @@ import {
 import { PieChart, Pie, Cell, Label } from "recharts"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { AgentDecisionStatusSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: "Draft", color: "#52525b" },
@@ -33,7 +32,7 @@ export function TaskStatusChart() {
     let cancelled = false
     async function load() {
       try {
-        const stats = await withMinimumDelay(AgentAPI.fetchDecisionStats())
+        const stats = await AgentAPI.fetchDecisionStats()
         if (cancelled) return
         const chartData = Object.entries(stats)
           .filter(([, count]) => (count as number) > 0)

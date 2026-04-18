@@ -12,7 +12,6 @@ import {
   AgentCampaignPerformanceSkeleton,
   AgentOverviewKpiSkeleton,
 } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 const fallbackKpi: { title: string; value: string; change: string; changeType: "up" | "down" | "neutral"; icon: React.ElementType }[] = [
   { title: "Total Cost", value: "$—", change: "—", changeType: "neutral" as const, icon: DollarSign },
@@ -36,7 +35,7 @@ export function OverviewDashboard() {
   useEffect(() => {
     async function loadSummary() {
       try {
-        const summary = await withMinimumDelay(AgentAPI.fetchReportsSummary())
+        const summary = await AgentAPI.fetchReportsSummary()
         if (summary && summary.total_cost !== undefined) {
           setKpiData([
             { title: "Total Cost", value: `$${summary.total_cost.toLocaleString()}`, change: `${summary.file_count} files`, changeType: "neutral" as const, icon: DollarSign },

@@ -39,7 +39,6 @@ import {
   AgentDecisionDetailSkeleton,
   AgentDecisionListSkeleton,
 } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 // ─── Types ────────────────────────────────────────────
 
@@ -171,7 +170,7 @@ export function DecisionEditor() {
     let cancelled = false
     async function load() {
       try {
-        const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
+        const data = await AgentAPI.fetchRecentDecisions()
         if (cancelled) return
         setDecisionList(data)
       } catch {
@@ -207,10 +206,10 @@ export function DecisionEditor() {
       // Try draft endpoint first, then committed
       const projectId = activeProject?.id
       try {
-        detail = await withMinimumDelay(DecisionAPI.getDraft(d.id, projectId))
+        detail = await DecisionAPI.getDraft(d.id, projectId)
       } catch {
         try {
-          detail = await withMinimumDelay(DecisionAPI.getDecision(d.id, projectId))
+          detail = await DecisionAPI.getDecision(d.id, projectId)
         } catch {
           // neither worked
         }
@@ -454,7 +453,7 @@ export function DecisionEditor() {
 
   const refreshList = async () => {
     try {
-      const data = await withMinimumDelay(AgentAPI.fetchRecentDecisions())
+      const data = await AgentAPI.fetchRecentDecisions()
       setDecisionList(data)
     } catch {
       // ignore

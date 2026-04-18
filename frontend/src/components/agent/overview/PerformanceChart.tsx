@@ -20,7 +20,6 @@ import {
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
 import { DecorativeGlow } from "@/components/ui/decorative-glow"
 import { AgentChartCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
-import { sleep } from "@/lib/agentLoading"
 
 interface TrendPoint {
   date: string
@@ -49,14 +48,8 @@ export function PerformanceChart() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let cancelled = false
-    async function finishLoading() {
-      // Data report endpoints removed — chart will populate once new analysis flow is integrated
-      await sleep()
-      if (!cancelled) setLoading(false)
-    }
-    finishLoading()
-    return () => { cancelled = true }
+    // Data report endpoints removed — chart will populate once new analysis flow is integrated
+    setLoading(false)
   }, [])
 
   if (loading) {

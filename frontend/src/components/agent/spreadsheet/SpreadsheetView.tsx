@@ -9,7 +9,6 @@ import { AgentAPI } from "@/lib/api/agentApi"
 import { ImportedCSVFile } from "@/types/agent"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
 import { debugLog } from "@/lib/agentDebug"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 export function SpreadsheetView() {
   const [reports, setReports] = useState<ImportedCSVFile[]>([])
@@ -19,7 +18,7 @@ export function SpreadsheetView() {
   useEffect(() => {
     async function load() {
       try {
-        const list = await withMinimumDelay(AgentAPI.fetchReports())
+        const list = await AgentAPI.fetchReports()
         setReports(list)
         if (list.length > 0) setSelectedSheet(list[0].filename)
         debugLog("reports", "Loaded:", list.length)
@@ -35,7 +34,7 @@ export function SpreadsheetView() {
   const handleDelete = async (fileId: string) => {
     try {
       await AgentAPI.deleteReport(fileId)
-      const list = await withMinimumDelay(AgentAPI.fetchReports())
+      const list = await AgentAPI.fetchReports()
       setReports(list)
       const deletedReport = reports.find((r) => r.id === fileId)
       if (deletedReport && deletedReport.filename === selectedSheet) {

@@ -11,7 +11,6 @@ import { AgentAPI } from "@/lib/api/agentApi"
 import { useBatchManage } from "@/hooks/useBatchManage"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
 import { AgentRecentSessionsSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
-import { withMinimumDelay } from "@/lib/agentLoading"
 
 const navItems: { id: AgentView; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -55,7 +54,7 @@ export function LeftSidebar() {
       setSessionsLoading(true)
     }
     try {
-      const sessions = await withMinimumDelay(AgentAPI.listSessions())
+      const sessions = await AgentAPI.listSessions()
       setRecentSessions(
         sessions.slice(0, 8).map((s) => ({
           id: String(s.id),
