@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import ProjectHeader from '@/components/select-project/ProjectHeader';
 import ProjectCard from '@/components/select-project/ProjectCard';
 import CreateProjectCard from '@/components/select-project/CreateProjectCard';
 import ChatFAB from '@/components/global-chat/ChatFAB';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
 import { mockProjects, type HealthStatus } from '@/lib/mock/projectsMock';
+import { mockAlerts } from '@/lib/mock/dashboardMock';
+import { mockOverview } from '@/lib/mock/overviewMock';
 
 type FilterStatus = 'all' | 'active' | 'completed' | 'paused';
 
@@ -34,16 +36,14 @@ export default function SelectProjectPage() {
     .sort((a, b) => healthOrder[a.health] - healthOrder[b.health]);
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
-      <ProjectHeader />
-
-      <main className="max-w-[1200px] mx-auto px-8 py-10">
-        <div className="mb-8">
+    <DashboardLayout alerts={mockAlerts} upcomingMeetings={mockOverview.upcomingMeetings}>
+      <div className="max-w-[1200px] mx-auto w-full">
+        <div className="mb-6">
           <h1 className="text-2xl font-semibold text-gray-900 mb-1">
             Select a Project
           </h1>
           <p className="text-sm text-gray-500">
-            Choose a project to view its dashboard, campaigns, and performance data.
+            Switch to another project to view its overview, campaigns, and performance data.
           </p>
         </div>
 
@@ -94,9 +94,9 @@ export default function SelectProjectPage() {
             <p className="text-sm text-gray-400">No projects match your search.</p>
           </div>
         )}
-      </main>
+      </div>
 
       <ChatFAB />
-    </div>
+    </DashboardLayout>
   );
 }

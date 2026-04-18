@@ -20,7 +20,7 @@ import {
 
 export default function DashboardPage() {
   return (
-    <DashboardLayout alerts={mockAlerts} dataSources={mockDataSources}>
+    <DashboardLayout alerts={mockAlerts}>
       <KPICardRow data={mockKPIs} attributions={mockAttributions} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
