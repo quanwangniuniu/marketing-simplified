@@ -46,7 +46,7 @@ export default function ProjectCard({ project, isDefault, onSetDefault }: Projec
   return (
     <Card
       className="group relative cursor-pointer border-[0.5px] border-gray-200 hover:border-[#3CCED7]/40 hover:shadow-md transition-all duration-200 bg-white overflow-hidden"
-      onClick={() => router.push('/dashboard')}
+      onClick={() => router.push('/overview')}
     >
       {/* Health status bar */}
       <div className={`h-[3px] w-full ${healthBarColor[project.health]}`} />
