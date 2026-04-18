@@ -106,9 +106,10 @@ export default function DashboardSidebar() {
           <Image
             src="/marketing_simplified_logo.png"
             alt="Marketing Simplified Logo"
-            width={170}
-            height={80}
-            className="h-14 w-auto"
+            width={220}
+            height={104}
+            className="h-20 w-auto"
+            priority
           />
         </Link>
       </div>
