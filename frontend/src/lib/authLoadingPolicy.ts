@@ -5,22 +5,20 @@ type AuthLoadingRoutePolicy = {
   prefix?: string;
   deferGlobalAuthBlock?: boolean;
   suppressProtectedRouteLoading?: boolean;
-  deferOnboardingCheckBlock?: boolean;
+  delegateOnboardingCheckLoadingToRoute?: boolean;
 };
 
-const AUTH_LOADING_ROUTE_POLICIES: AuthLoadingRoutePolicy[] = [
-  {
-    prefix: "/agent",
-    deferGlobalAuthBlock: true,
-    suppressProtectedRouteLoading: true,
-    deferOnboardingCheckBlock: true,
-  },
-  {
-    path: "/profile",
-    deferGlobalAuthBlock: true,
-    deferOnboardingCheckBlock: true,
-  },
+const ROUTES_WITH_ROUTE_OWNED_LOADING_UI: AuthLoadingRoutePolicy[] = [
+  { prefix: "/agent", suppressProtectedRouteLoading: true },
+  { path: "/profile" },
 ];
+
+const AUTH_LOADING_ROUTE_POLICIES: AuthLoadingRoutePolicy[] =
+  ROUTES_WITH_ROUTE_OWNED_LOADING_UI.map((route) => ({
+    ...route,
+    deferGlobalAuthBlock: true,
+    delegateOnboardingCheckLoadingToRoute: true,
+  }));
 
 function matchesRoutePolicy(pathname: string, policy: AuthLoadingRoutePolicy) {
   if (policy.path) {
@@ -39,7 +37,7 @@ export function getAuthLoadingRoutePolicy(pathname?: string | null) {
     return {
       deferGlobalAuthBlock: false,
       suppressProtectedRouteLoading: false,
-      deferOnboardingCheckBlock: false,
+      delegateOnboardingCheckLoadingToRoute: false,
     };
   }
 
@@ -50,7 +48,8 @@ export function getAuthLoadingRoutePolicy(pathname?: string | null) {
   return {
     deferGlobalAuthBlock: matchedPolicy?.deferGlobalAuthBlock ?? false,
     suppressProtectedRouteLoading: matchedPolicy?.suppressProtectedRouteLoading ?? false,
-    deferOnboardingCheckBlock: matchedPolicy?.deferOnboardingCheckBlock ?? false,
+    delegateOnboardingCheckLoadingToRoute:
+      matchedPolicy?.delegateOnboardingCheckLoadingToRoute ?? false,
   };
 }
 

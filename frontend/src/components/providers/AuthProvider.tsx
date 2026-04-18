@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../../lib/authStore';
 import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -11,10 +11,14 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+const AUTH_BOOT_MIN_SPINNER_MS = 1800;
+
 // AuthProvider component that handles authentication state initialization
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { initializeAuth, loading, initialized, hasHydrated } = useAuthStore();
   const pathname = usePathname();
+  const [shouldRenderSpinner, setShouldRenderSpinner] = useState(false);
+  const spinnerStartedAtRef = useRef<number | null>(null);
 
   // Initialize authentication state on component mount
   useEffect(() => {
@@ -34,19 +38,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const { deferGlobalAuthBlock } = getAuthLoadingRoutePolicy(pathname);
   const shouldDeferGlobalBlocking = Boolean(deferGlobalAuthBlock);
+  const shouldShowBlockingSpinner =
+    (!initialized || loading) && !shouldDeferGlobalBlocking;
 
-  // Show the global auth boot screen unless the current route is configured
-  // to take over loading presentation with its own skeletons.
-  if ((!initialized || loading) && !shouldDeferGlobalBlocking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Initializing...</p>
-        </div>
+  useEffect(() => {
+    if (shouldShowBlockingSpinner) {
+      if (spinnerStartedAtRef.current === null) {
+        spinnerStartedAtRef.current = Date.now();
+      }
+      setShouldRenderSpinner(true);
+      return;
+    }
+
+    if (!shouldRenderSpinner) {
+      spinnerStartedAtRef.current = null;
+      return;
+    }
+
+    const elapsed = spinnerStartedAtRef.current
+      ? Date.now() - spinnerStartedAtRef.current
+      : AUTH_BOOT_MIN_SPINNER_MS;
+    const remaining = Math.max(0, AUTH_BOOT_MIN_SPINNER_MS - elapsed);
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldRenderSpinner(false);
+      spinnerStartedAtRef.current = null;
+    }, remaining);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [shouldRenderSpinner, shouldShowBlockingSpinner]);
+
+  return (
+    <div className="relative min-h-screen">
+      <div
+        className={`min-h-screen transition duration-200 ${
+          shouldRenderSpinner ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
+        }`}
+      >
+        {children}
       </div>
-    );
-  }
 
-  return <>{children}</>;
+      {shouldRenderSpinner && (
+        <div className="pointer-events-none fixed inset-0 z-[9999] flex items-center justify-center bg-white/30 backdrop-blur-md">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/35 backdrop-blur-sm">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[rgba(60,206,215,0.22)] border-r-[rgba(60,206,215,0.72)] border-t-[rgba(166,230,97,0.9)]" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }; 
