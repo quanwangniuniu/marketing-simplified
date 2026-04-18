@@ -30,7 +30,7 @@ class EmailDraftViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter campaigns by the authenticated user"""
-        return Campaign.objects.filter(
+        queryset = Campaign.objects.filter(
             user=self.request.user
         ).select_related(
             'settings', 
@@ -48,6 +48,10 @@ class EmailDraftViewSet(viewsets.ModelViewSet):
             'resend_shortcut_eligibility',
             'resend_shortcut_usage'
         )
+        campaign_id = self.request.query_params.get('campaign_id')
+        if campaign_id:
+            queryset = queryset.filter(media_campaign_id=campaign_id)
+        return queryset
 
     def perform_create(self, serializer):
         """Set the user when creating a new campaign"""

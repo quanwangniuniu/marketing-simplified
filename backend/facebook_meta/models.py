@@ -302,7 +302,14 @@ class AdCreative(models.Model):
     title = models.CharField(max_length=255, blank=True, default="", help_text="Title for link ad, which does not belong to a page.")
     url_tags = models.CharField(max_length=512, blank=True, default="", help_text="A set of query string parameters which will replace or be appended to urls clicked from page post ads.")
     user_page_actor_override = models.BooleanField(default=False, help_text="Used for App Ads. If true, we display the Facebook page associated with the app ads.")
-    video_id = models.CharField(max_length=64, blank=True, default="", help_text="Facebook object ID for video in this ad creative.")    
+    video_id = models.CharField(max_length=64, blank=True, default="", help_text="Facebook object ID for video in this ad creative.")
+    media_campaign = models.ForeignKey(
+        'campaign.Campaign',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='facebook_ad_creatives',
+    )
 
     # Adlabels
     ad_labels = models.ManyToManyField(AdLabel, related_name="creatives", blank=True)

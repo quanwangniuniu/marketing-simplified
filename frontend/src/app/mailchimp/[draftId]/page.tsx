@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Layout from "@/components/layout/Layout";
 import {
   Monitor,
@@ -120,9 +120,11 @@ const isEditableElement = (target: EventTarget | null): boolean => {
 export default function EmailBuilderPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const draftId = params?.draftId
     ? parseInt(params.draftId as string, 10)
     : null;
+  const returnTo = searchParams.get('returnTo');
 
   // Save state management
   const [isSaving, setIsSaving] = useState(false);
@@ -1729,7 +1731,11 @@ export default function EmailBuilderPage() {
       // Clear success message after 2 seconds and navigate
       setTimeout(() => {
         setSaveSuccess(false);
-        router.push("/mailchimp");
+        router.push(
+          returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+            ? returnTo
+            : '/mailchimp'
+        );
       }, 2000);
     } catch (error) {
       console.error("Failed to save email draft:", error);

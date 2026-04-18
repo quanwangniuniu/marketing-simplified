@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
-import { Hash, MessagesSquare, Plus, Star, Users } from 'lucide-react';
+import { Hash, MessagesSquare, Plus, Star, User, Users } from 'lucide-react';
 import type { Chat } from '@/types/chat';
 import { useAuthStore } from '@/lib/authStore';
 import {
@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import type { MessagesNavView } from './NavRail';
 import FilesSidebarView from './FilesSidebarView';
 import ActivitySidebarView from './ActivitySidebarView';
+import ProjectMembersSection from './ProjectMembersSection';
+import type { ProjectMemberData } from '@/lib/api/projectApi';
 
 function normalizeChat(c: Chat): Chat {
   const raw = c.project_id ?? (c as { project?: number }).project;
@@ -32,6 +34,9 @@ interface HomeSidebarProps {
   isLoading: boolean;
   emptyState: React.ReactNode;
   roleByUserId?: Record<number, string>;
+  projectMembers: ProjectMemberData[];
+  isLoadingMembers: boolean;
+  onStartDM: (userId: number) => void;
 }
 
 function Section({
@@ -75,6 +80,9 @@ export default function HomeSidebar({
   isLoading,
   emptyState,
   roleByUserId,
+  projectMembers,
+  isLoadingMembers,
+  onStartDM,
 }: HomeSidebarProps) {
   const currentUserId = useAuthStore((s) => (s.user?.id ? Number(s.user.id) : null));
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -91,6 +99,19 @@ export default function HomeSidebar({
     }
     return { groupChats: group, privateChats: priv };
   }, [chats]);
+
+  // User IDs that already have a DM thread — used to deduplicate the project members list
+  const dmUserIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const chat of privateChats) {
+      for (const p of chat.participants ?? []) {
+        if (p.user?.id && p.user.id !== currentUserId) {
+          ids.add(p.user.id);
+        }
+      }
+    }
+    return ids;
+  }, [privateChats, currentUserId]);
 
   const getPrivateChatDisplayName = useCallback(
     (chat: Chat) => {
@@ -261,7 +282,7 @@ export default function HomeSidebar({
     const showHome = view === 'home';
     const showDmsOnly = view === 'dms';
 
-    if (showDmsOnly && privateChats.length === 0) {
+    if (showDmsOnly && privateChats.length === 0 && !selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">No direct messages</div>;
     }
 
@@ -493,6 +514,21 @@ export default function HomeSidebar({
                 ))}
               </div>
             )}
+          </Section>
+        )}
+
+        {(showHome || showDmsOnly) && selectedProjectId && (
+          <Section
+            title="Project members"
+            icon={<User className="w-3.5 h-3.5" />}
+          >
+            <ProjectMembersSection
+              members={projectMembers}
+              isLoading={isLoadingMembers}
+              currentUserId={currentUserId}
+              dmUserIds={dmUserIds}
+              onStartDM={onStartDM}
+            />
           </Section>
         )}
       </div>

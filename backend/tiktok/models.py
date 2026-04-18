@@ -213,7 +213,14 @@ class AdDraft(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+    media_campaign = models.ForeignKey(
+        'campaign.Campaign',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tiktok_ad_drafts',
+    )
+
     class Meta:
         db_table = 'tiktok_ad_draft'
         verbose_name = 'TikTok Ad Draft'

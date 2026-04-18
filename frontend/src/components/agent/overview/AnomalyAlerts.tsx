@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { DecorativeGlow } from "@/components/ui/decorative-glow"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
+import { AgentAlertListSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface Alert {
   id: number
@@ -107,7 +108,7 @@ export function AnomalyAlerts({ anomalies, loading, compact = false }: AnomalyAl
   const content = (
     <div className="space-y-1.5">
       {loading ? (
-        <p className="text-sm text-muted-foreground text-center py-4">Loading alerts...</p>
+        <AgentAlertListSkeleton compact={compact} rows={compact ? 4 : 5} />
       ) : alerts.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">{AGENT_MESSAGES.EMPTY_ANOMALY_ALERTS}</p>
       ) : (

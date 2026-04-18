@@ -1,10 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { RotateCcw, Workflow, Loader2, ChevronDown, ChevronRight } from "lucide-react"
+import { RotateCcw, Workflow, ChevronDown, ChevronRight } from "lucide-react"
 import { getDebugMode, setDebugMode } from "@/lib/agentDebug"
 import { AgentAPI } from "@/lib/api/agentApi"
 import type { AgentWorkflowDefinition, AgentWorkflowStep } from "@/types/agent"
+import {
+  AgentSettingsConnectionsSkeleton,
+  AgentWorkflowListSkeleton,
+  AgentWorkflowStepsSkeleton,
+} from "@/components/agent/skeletons/AgentSkeletons"
 
 interface ConfigStatus {
   dify_api: boolean
@@ -45,12 +50,7 @@ function WorkflowStepList({ workflowId }: { workflowId: string }) {
   }, [workflowId])
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-1 pl-4 text-xs text-muted-foreground">
-        <Loader2 className="w-3 h-3 animate-spin" />
-        Loading steps...
-      </div>
-    )
+    return <AgentWorkflowStepsSkeleton />
   }
 
   if (steps.length === 0) {
@@ -221,10 +221,7 @@ export function SettingsPage() {
           </h2>
 
           {configLoading ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Checking connections...
-            </div>
+            <AgentSettingsConnectionsSkeleton />
           ) : configStatus === null ? (
             <p className="text-sm text-muted-foreground py-2">
               Unable to fetch configuration status.
@@ -260,10 +257,7 @@ export function SettingsPage() {
           </p>
 
           {workflowsLoading ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading workflows...
-            </div>
+            <AgentWorkflowListSkeleton />
           ) : workflows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">No active system workflows</p>
           ) : (

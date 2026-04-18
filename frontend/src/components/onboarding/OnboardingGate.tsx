@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useAuthStore } from '@/lib/authStore';
 import OnboardingWizard from './OnboardingWizard';
+import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
 
 const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
@@ -23,7 +24,16 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const isAuthRoute = isPublicAuthRoute || isOAuthCallbackRoute;
   const isRootRoute = pathname === '/';
   const { needsOnboarding, checking } = useOnboarding();
-  const showOverlay = !isAuthRoute && (needsOnboarding || checking);
+  const { delegateOnboardingCheckLoadingToRoute } =
+    getAuthLoadingRoutePolicy(pathname);
+  const shouldShowOnboardingWizard = !isAuthRoute && needsOnboarding;
+  const shouldShowBlockingCheck =
+    !isAuthRoute &&
+    checking &&
+    !needsOnboarding &&
+    !delegateOnboardingCheckLoadingToRoute;
+  const shouldBlockBackground =
+    shouldShowOnboardingWizard || shouldShowBlockingCheck;
 
   useEffect(() => {
     // Requirement: after signup, entering localhost should reset to logged-out
@@ -36,19 +46,19 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
     <div className="relative">
       <div
         className={`min-h-screen transition duration-200 ${
-          showOverlay ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
+          shouldBlockBackground ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
         }`}
       >
         {children}
       </div>
 
-      {showOverlay && (
-        <div className="pointer-events-none absolute inset-0 z-[9998] bg-slate-900/70 backdrop-blur-sm" />
+      {shouldBlockBackground && (
+        <div className="pointer-events-none fixed inset-0 z-[9998] bg-white/30 backdrop-blur-md" />
       )}
 
-      {!isAuthRoute && checking && !needsOnboarding && (
+      {shouldShowBlockingCheck && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-x-hidden px-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-100 px-6 py-5 flex items-center gap-3">
+          <div className="rounded-xl border border-white/40 bg-white/35 px-6 py-5 shadow-xl backdrop-blur-sm flex items-center gap-3">
             <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
             <div>
               <div className="text-sm font-semibold text-gray-900">Preparing your workspace</div>
@@ -58,7 +68,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
 
-      {!isAuthRoute && needsOnboarding && (
+      {shouldShowOnboardingWizard && (
         <div className="relative z-[9999] -mt-[100vh] flex min-h-screen w-full items-center justify-center px-4 py-8">
           <OnboardingWizard />
         </div>
