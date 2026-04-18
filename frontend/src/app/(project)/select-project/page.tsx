@@ -6,6 +6,7 @@ import { Search, Loader2, AlertCircle, Mail } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import ProjectCard from '@/components/select-project/ProjectCard';
 import CreateProjectCard from '@/components/select-project/CreateProjectCard';
+import QuickCreateProjectModal from '@/components/select-project/QuickCreateProjectModal';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
 import Modal from '@/components/ui/Modal';
@@ -29,6 +30,7 @@ export default function SelectProjectPage() {
   const [invitesError, setInvitesError] = useState<string | null>(null);
   const [acceptingInviteId, setAcceptingInviteId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const loadPendingInvites = useCallback(async () => {
     try {
@@ -253,7 +255,7 @@ export default function SelectProjectPage() {
                 deleting={deletingProjectId === project.id}
               />
             ))}
-            <CreateProjectCard />
+            <CreateProjectCard onClick={() => setCreateOpen(true)} />
           </div>
         )}
 
@@ -263,6 +265,14 @@ export default function SelectProjectPage() {
           </div>
         )}
       </div>
+
+      <QuickCreateProjectModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={async () => {
+          await fetchProjects();
+        }}
+      />
 
       {deleteConfirm && (
         <Modal
