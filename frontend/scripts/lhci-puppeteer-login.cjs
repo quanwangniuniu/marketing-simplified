@@ -52,7 +52,33 @@ module.exports = async function lhciPuppeteerLogin(browser, _context) {
     await page.waitForFunction(
       () => {
         const button = document.querySelector('form button[type="submit"]');
-        return Boolean(button) && !button.disabled;
+        if (!(button instanceof HTMLButtonElement) || button.disabled) {
+          return false;
+        }
+
+        let node = button;
+        while (node) {
+          const style = window.getComputedStyle(node);
+          if (
+            style.pointerEvents === 'none' ||
+            style.visibility === 'hidden' ||
+            style.display === 'none'
+          ) {
+            return false;
+          }
+          node = node.parentElement;
+        }
+
+        const rect = button.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+          return false;
+        }
+
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const topElement = document.elementFromPoint(centerX, centerY);
+
+        return Boolean(topElement) && button.contains(topElement);
       },
       { timeout: 30_000 }
     );
