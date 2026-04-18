@@ -59,7 +59,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
       {shouldShowBlockingCheck && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-x-hidden px-4">
           <div className="rounded-xl border border-white/40 bg-white/35 px-6 py-5 shadow-xl backdrop-blur-sm flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+            <Loader2 className="w-5 h-5 text-[#3CCED7] animate-spin" />
             <div>
               <div className="text-sm font-semibold text-gray-900">Preparing your workspace</div>
               <div className="text-xs text-gray-600">Checking your project access...</div>
@@ -69,7 +69,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
       )}
 
       {shouldShowOnboardingWizard && (
-        <div className="relative z-[9999] -mt-[100vh] flex min-h-screen w-full items-center justify-center px-4 py-8">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto px-4 py-8">
           <OnboardingWizard />
         </div>
       )}
