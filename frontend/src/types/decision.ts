@@ -1,6 +1,7 @@
 import type { OriginMeetingPayload } from '@/types/meeting';
 
 export type DecisionStatus =
+  | 'PREDRAFT'
   | 'DRAFT'
   | 'AWAITING_APPROVAL'
   | 'COMMITTED'
@@ -149,6 +150,8 @@ export interface DecisionListItem {
   id: number;
   title?: string | null;
   status: DecisionStatus;
+  riskLevel?: DecisionRiskLevel | null;
+  confidenceScore?: number | null;
   projectId?: number | null;
   projectSeq?: number | null;
   updatedAt?: string | null;
