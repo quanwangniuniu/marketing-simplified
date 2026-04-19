@@ -541,7 +541,10 @@ class AdSerializer(serializers.ModelSerializer):
             
             # Related information
             'customer_account', 'created_by', 'media_assets',
-            'customer_account_id', 'created_by_id', 'media_asset_ids'
+            'customer_account_id', 'created_by_id', 'media_asset_ids',
+
+            # Campaign association
+            'media_campaign',
         ]
         read_only_fields = ['id', 'google_ads_id', 'added_by_google_ads', 'system_managed_resource_source', 'created_at', 'updated_at']
     

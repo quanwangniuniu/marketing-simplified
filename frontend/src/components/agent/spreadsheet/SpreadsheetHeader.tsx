@@ -13,12 +13,14 @@ import {
 import ConfirmModal from "@/components/ui/ConfirmModal"
 import { ImportedCSVFile } from "@/types/agent"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
+import { AgentSpreadsheetHeaderSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface SpreadsheetHeaderProps {
   reports: ImportedCSVFile[]
   selectedSheet: string
   onSheetChange: (value: string) => void
   onDelete: (fileId: string) => void
+  loading?: boolean
 }
 
 export function SpreadsheetHeader({
@@ -26,10 +28,15 @@ export function SpreadsheetHeader({
   selectedSheet,
   onSheetChange,
   onDelete,
+  loading = false,
 }: SpreadsheetHeaderProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const selectedReport = reports.find((r) => r.filename === selectedSheet)
+
+  if (loading) {
+    return <AgentSpreadsheetHeaderSkeleton />
+  }
 
   return (
     <div className="flex items-center justify-between gap-4 pb-4 border-b border-border">

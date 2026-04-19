@@ -8,6 +8,10 @@ import { TaskStatusChart } from "./TaskStatusChart"
 import { CampaignRanking } from "./CampaignRanking"
 import { ActivityFeed } from "./ActivityFeed"
 import { AgentAPI } from "@/lib/api/agentApi"
+import {
+  AgentCampaignPerformanceSkeleton,
+  AgentOverviewKpiSkeleton,
+} from "@/components/agent/skeletons/AgentSkeletons"
 
 const fallbackKpi: { title: string; value: string; change: string; changeType: "up" | "down" | "neutral"; icon: React.ElementType }[] = [
   { title: "Total Cost", value: "$—", change: "—", changeType: "neutral" as const, icon: DollarSign },
@@ -26,6 +30,7 @@ interface CampaignItem {
 export function OverviewDashboard() {
   const [kpiData, setKpiData] = useState(fallbackKpi)
   const [campaignData, setCampaignData] = useState<{ top: CampaignItem[]; bottom: CampaignItem[] }>({ top: [], bottom: [] })
+  const [summaryLoading, setSummaryLoading] = useState(true)
 
   useEffect(() => {
     async function loadSummary() {
@@ -42,6 +47,8 @@ export function OverviewDashboard() {
         }
       } catch {
         // keep fallback
+      } finally {
+        setSummaryLoading(false)
       }
     }
     loadSummary()
@@ -51,9 +58,13 @@ export function OverviewDashboard() {
     <div className="p-6 space-y-6">
       {/* KPI Row */}
       <div className="grid grid-cols-4 gap-4">
-        {kpiData.map((kpi) => (
-          <KPICard key={kpi.title} {...kpi} />
-        ))}
+        {summaryLoading ? (
+          <AgentOverviewKpiSkeleton />
+        ) : (
+          kpiData.map((kpi) => (
+            <KPICard key={kpi.title} {...kpi} />
+          ))
+        )}
       </div>
 
       {/* Charts Row */}
@@ -66,7 +77,11 @@ export function OverviewDashboard() {
 
       {/* Bottom Row */}
       <div className="grid grid-cols-2 gap-4">
-        <CampaignRanking topCampaigns={campaignData.top} />
+        {summaryLoading ? (
+          <AgentCampaignPerformanceSkeleton />
+        ) : (
+          <CampaignRanking topCampaigns={campaignData.top} />
+        )}
         <ActivityFeed />
       </div>
     </div>

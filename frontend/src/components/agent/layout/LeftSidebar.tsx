@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { useBatchManage } from "@/hooks/useBatchManage"
 import ConfirmDialog from "@/components/common/ConfirmDialog"
+import { AgentRecentSessionsSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 const navItems: { id: AgentView; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -40,14 +41,18 @@ function formatTimeAgo(iso: string): string {
 }
 
 export function LeftSidebar() {
-  const { activeView, setActiveView, openFloatingChat, floatingChat, isInSnapZone } = useAgentLayout()
+  const { activeView, isViewReady, setActiveView, openFloatingChat, floatingChat, isInSnapZone } = useAgentLayout()
   const [recentSessions, setRecentSessions] = useState<SessionItem[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const editInputRef = useRef<HTMLInputElement>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  const loadSessions = async () => {
+  const loadSessions = async (showLoading = false) => {
+    if (showLoading) {
+      setSessionsLoading(true)
+    }
     try {
       const sessions = await AgentAPI.listSessions()
       setRecentSessions(
@@ -59,6 +64,10 @@ export function LeftSidebar() {
       )
     } catch {
       // keep empty
+    } finally {
+      if (showLoading) {
+        setSessionsLoading(false)
+      }
     }
   }
 
@@ -73,7 +82,7 @@ export function LeftSidebar() {
   })
 
   useEffect(() => {
-    loadSessions()
+    loadSessions(true)
   }, [])
 
   // Refresh sessions when floating chat opens (replaces old "agent view" refresh)
@@ -166,7 +175,7 @@ export function LeftSidebar() {
           <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Workspaces</span>
         </div>
         {navItems.map(({ id, label, icon: Icon }) => {
-          const isActive = activeView === id
+          const isActive = isViewReady && activeView === id
           return (
             <button
               key={id}
@@ -249,7 +258,9 @@ export function LeftSidebar() {
           </button>
         </div>
         <div className="px-2 pb-2 space-y-0.5">
-          {recentSessions.length === 0 ? (
+          {sessionsLoading ? (
+            <AgentRecentSessionsSkeleton />
+          ) : recentSessions.length === 0 ? (
             <span className="px-2 text-xs text-muted-foreground/60">No recent sessions</span>
           ) : (
             recentSessions.map((session) => (
@@ -330,7 +341,7 @@ export function LeftSidebar() {
             onClick={() => setActiveView("settings")}
             className={cn(
               "flex items-center gap-2 text-sm transition-colors",
-              activeView === "settings"
+              isViewReady && activeView === "settings"
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-card-foreground"
             )}

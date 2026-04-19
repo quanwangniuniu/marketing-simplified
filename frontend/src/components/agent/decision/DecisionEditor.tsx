@@ -35,6 +35,10 @@ import { useAgentLayout } from "@/components/agent/AgentLayoutContext"
 import { validateDecisionDraft } from "@/components/decisions/decisionValidation"
 import type { DecisionOptionDraft, DecisionRiskLevel } from "@/types/decision"
 import toast from "react-hot-toast"
+import {
+  AgentDecisionDetailSkeleton,
+  AgentDecisionListSkeleton,
+} from "@/components/agent/skeletons/AgentSkeletons"
 
 // ─── Types ────────────────────────────────────────────
 
@@ -94,6 +98,8 @@ const statusLabels: Record<string, string> = {
   archived: "Archived",
 }
 
+const focusOrder = ["title", "context", "signals", "reasoning", "options", "selected", "priority", "confidence"]
+
 // ─── Component ────────────────────────────────────────
 
 export function DecisionEditor() {
@@ -108,6 +114,7 @@ export function DecisionEditor() {
   const [editingStatus, setEditingStatus] = useState<string>("draft")
   const [isPreDraft, setIsPreDraft] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [commitModalOpen, setCommitModalOpen] = useState(false)
   const [commitConfirmations, setCommitConfirmations] = useState<Record<string, boolean>>({
     alternatives: false,
@@ -176,8 +183,9 @@ export function DecisionEditor() {
     return () => { cancelled = true }
   }, [])
 
-  const loadDecision = async (d: DecisionListItem) => {
+  const loadDecision = useCallback(async (d: DecisionListItem) => {
     // Set basic info immediately and switch to edit view
+    setDetailLoading(true)
     setTitle(d.title)
     const riskLevel = (d.risk_level || "").toLowerCase()
     setPriority(riskLevel === "low" || riskLevel === "medium" || riskLevel === "high" ? riskLevel : "medium")
@@ -250,8 +258,10 @@ export function DecisionEditor() {
       }
     } catch {
       // Keep what we have from the list item
+    } finally {
+      setDetailLoading(false)
     }
-  }
+  }, [activeProject?.id])
 
   const createNew = () => {
     setTitle("")
@@ -264,6 +274,7 @@ export function DecisionEditor() {
     setEditingDecisionId(null)
     setEditingStatus("draft")
     setViewMode("edit")
+    setDetailLoading(false)
   }
 
   // ─── Validation ─────────────────────────────────────
@@ -302,7 +313,6 @@ export function DecisionEditor() {
   const passedCount = validationItems.filter((v) => v.passed).length
   const allPassed = passedCount === validationItems.length
 
-  const focusOrder = ["title", "context", "signals", "reasoning", "options", "selected", "priority", "confidence"]
   const [focusMode, setFocusMode] = useState(false)
   const [focusFailKeys, setFocusFailKeys] = useState<string[]>([])
 
@@ -361,7 +371,7 @@ export function DecisionEditor() {
       // Scroll after render so refs are ready.
       setTimeout(() => scrollToFirstFail(uniqueOrdered), 50)
     },
-    [focusOrder, scrollToFirstFail]
+    [scrollToFirstFail]
   )
 
   const focusFromValidation = useCallback(() => {
@@ -580,7 +590,7 @@ export function DecisionEditor() {
       loadDecision({ id: pendingDecisionId, title: "", status: "draft", risk_level: "", author: "", created_at: "", is_pre_draft: true })
     }
     setPendingDecisionId(null)
-  }, [pendingDecisionId, listLoading, decisionList])
+  }, [pendingDecisionId, listLoading, decisionList, loadDecision, setPendingDecisionId])
 
   // ─── List View ────────────────────────────────────────
 
@@ -630,7 +640,7 @@ export function DecisionEditor() {
           </div>
 
           {listLoading ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">Loading decisions...</div>
+            <AgentDecisionListSkeleton rows={6} />
           ) : decisionList.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No decisions yet. Run an AI analysis to generate one.
@@ -742,14 +752,14 @@ export function DecisionEditor() {
                 size="sm"
                 className="border-input text-card-foreground"
                 onClick={() => saveDraft()}
-                disabled={isSaving}
+                disabled={isSaving || detailLoading}
               >
                 {isSaving ? "Saving..." : isPreDraft ? "Save as Pre-Draft" : "Save Draft"}
               </Button>
               {isPreDraft ? (
                 <Button
                   size="sm"
-                  disabled={isSaving}
+                  disabled={isSaving || detailLoading}
                   onClick={submitAsDraft}
                   className="bg-violet-600 hover:bg-violet-700 text-white"
                 >
@@ -758,7 +768,7 @@ export function DecisionEditor() {
               ) : (
                 <Button
                   size="sm"
-                  disabled={isSaving}
+                  disabled={isSaving || detailLoading}
                   onClick={submitForReview}
                   className={cn(
                     allPassed && !isSaving
@@ -781,6 +791,10 @@ export function DecisionEditor() {
             />
           )}
           <div className="relative z-[11] space-y-6">
+        {detailLoading ? (
+          <AgentDecisionDetailSkeleton />
+        ) : (
+          <>
         {/* Validation Status Bar */}
         <Card className="bg-card border-border">
           <CardContent className="py-3 px-4">
@@ -1206,6 +1220,8 @@ export function DecisionEditor() {
             </CardContent>
           </Card>
         </div>
+          </>
+        )}
           </div>
         </div>
       </div>
