@@ -59,7 +59,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
       { label: 'Tasks', href: '/tasks-v2', icon: CheckSquare },
-      { label: 'Decisions', href: '/decisions', icon: GitBranch },
+      { label: 'Decisions', href: '/decisions-v2', icon: GitBranch },
       { label: 'Spreadsheets', href: '/spreadsheet', icon: Table2 },
     ],
   },

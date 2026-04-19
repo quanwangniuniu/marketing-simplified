@@ -296,7 +296,7 @@ const JiraTasksList = ({
                       <span className="text-slate-400" title="From decision">
                         From{" "}
                         <Link
-                          href={`/decisions/${task.object_id}${task.projectId ? `?project_id=${task.projectId}` : ""}`}
+                          href={`/decisions-v2/${task.object_id}${task.projectId ? `?project_id=${task.projectId}` : ""}`}
                           className="text-indigo-600 hover:text-indigo-800 hover:underline"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -827,7 +827,7 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
                         <span className="text-slate-400 text-[11px]">
                           From{" "}
                           <Link
-                            href={`/decisions/${selectedTask.object_id}${selectedTask.projectId ? `?project_id=${selectedTask.projectId}` : ""}`}
+                            href={`/decisions-v2/${selectedTask.object_id}${selectedTask.projectId ? `?project_id=${selectedTask.projectId}` : ""}`}
                             className="text-indigo-600 hover:text-indigo-800 hover:underline"
                           >
                             Decision #{selectedTask.object_id}

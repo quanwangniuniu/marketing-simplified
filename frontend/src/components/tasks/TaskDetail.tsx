@@ -1718,7 +1718,7 @@ export default function TaskDetail({
                   <p className="text-sm text-slate-500 mt-1">
                     From{" "}
                     <Link
-                      href={`/decisions/${task.object_id}${
+                      href={`/decisions-v2/${task.object_id}${
                         projectId ? `?project_id=${projectId}` : ""
                       }`}
                       className="text-indigo-600 hover:text-indigo-800 hover:underline"
