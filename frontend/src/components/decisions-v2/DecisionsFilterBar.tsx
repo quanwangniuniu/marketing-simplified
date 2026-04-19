@@ -60,11 +60,15 @@ export default function DecisionsFilterBar({
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="search"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
+            aria-label="Search decisions"
             placeholder="Search decisions…"
             className="h-9 w-64 rounded-md border border-gray-200 bg-white pl-8 pr-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition hover:border-gray-300 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30"
           />

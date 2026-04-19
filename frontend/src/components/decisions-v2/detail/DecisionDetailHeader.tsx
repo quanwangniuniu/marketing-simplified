@@ -63,7 +63,7 @@ export default function DecisionDetailHeader({
             title="Back to Decisions"
             className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
           </Link>
           <span className="uppercase tracking-wider">{projectName || 'Project'}</span>
           {projectSeq != null && (
@@ -97,7 +97,7 @@ export default function DecisionDetailHeader({
           {riskLevel && <DecisionRiskPill risk={riskLevel} />}
           {createdByAgent && (
             <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-              <Sparkles className="h-3 w-3" />
+              <Sparkles aria-hidden="true" className="h-3 w-3" />
               AI drafted
             </span>
           )}

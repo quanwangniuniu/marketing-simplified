@@ -36,7 +36,10 @@ export default function DecisionOriginMeetingBlock({ origin, projectId }: Props)
         href={href}
         className="group flex items-start gap-2 rounded-md px-2 py-1.5 transition hover:bg-gray-50"
       >
-        <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 group-hover:text-[#3CCED7]" />
+        <CalendarDays
+          aria-hidden="true"
+          className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 group-hover:text-[#3CCED7]"
+        />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-gray-900 group-hover:text-[#3CCED7]">
             {title}
