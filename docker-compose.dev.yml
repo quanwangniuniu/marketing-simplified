@@ -312,7 +312,7 @@ services:
       context: ./devops/topic-init
       dockerfile: Dockerfile.dev
     container_name: topic-init
-    restart: always
+    restart: on-failure:3
     entrypoint: ["/bin/bash", "/usr/local/bin/entrypoint-dev"]
     depends_on:
       kafka:
