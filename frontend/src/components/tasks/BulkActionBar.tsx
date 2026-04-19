@@ -110,6 +110,40 @@ const BulkActionBar = ({
   const hasMixedStatuses = uniqueStatuses.length > 1;
   const count = selectedIds.length;
 
+  // Map UI target status to its single-task API call.
+  // Backend has no bulk dispatcher endpoint, so each task is dispatched
+  // individually via Promise.allSettled and results are aggregated below.
+  // Reject path supplies a placeholder comment because the backend serializer
+  // requires a non-empty comment when action='reject'.
+  const statusToApi: Record<string, (id: number) => Promise<unknown>> = {
+    DRAFT:     (id) => TaskAPI.revise(id),
+    APPROVED:  (id) => TaskAPI.makeApproval(id, { action: 'approve' }),
+    REJECTED:  (id) => TaskAPI.makeApproval(id, { action: 'reject', comment: 'Bulk reject (no comment provided)' }),
+    LOCKED:    (id) => TaskAPI.lock(id),
+    UNLOCK:    (id) => TaskAPI.unlock(id),
+    CANCELLED: (id) => TaskAPI.cancelTask(id),
+  };
+
+  const extractErrorMessage = (raw: unknown): string => {
+    const err = raw as {
+      response?: { data?: { error?: string; detail?: string; [k: string]: unknown } };
+      message?: string;
+    };
+    const data = err?.response?.data;
+    if (data?.error) return data.error;
+    if (data?.detail) return data.detail;
+    if (data && typeof data === 'object') {
+      // DRF field-level errors: take the first message we find
+      const firstKey = Object.keys(data).find((k) => k !== 'error' && k !== 'detail');
+      if (firstKey) {
+        const val = data[firstKey];
+        if (Array.isArray(val) && val.length > 0) return `${firstKey}: ${val[0]}`;
+        if (typeof val === 'string') return `${firstKey}: ${val}`;
+      }
+    }
+    return err?.message || 'Unknown error';
+  };
+
   const handleConfirm = async () => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
@@ -135,23 +169,51 @@ const BulkActionBar = ({
     const timeoutIds = [stage3Timer];
 
     try {
-      const payload: Record<string, number | string> = {};
-      if (pendingAction === 'assign_approver') {
-        const id = parseInt(approverId, 10);
-        if (!Number.isNaN(id)) payload.approver_id = id;
-      }
-      if (pendingAction === 'change_status') payload.status = newStatus;
+      let dispatch: (id: number) => Promise<unknown>;
 
-      const response = await TaskAPI.bulkAction({ task_ids: selectedIds, action: pendingAction, payload });
+      if (pendingAction === 'submit') {
+        dispatch = (id) => TaskAPI.submitTask(id);
+      } else if (pendingAction === 'assign_approver') {
+        const approver = parseInt(approverId, 10);
+        if (Number.isNaN(approver)) {
+          throw new Error('Approver id is required');
+        }
+        dispatch = (id) => TaskAPI.updateTask(id, { current_approver_id: approver });
+      } else if (pendingAction === 'change_status') {
+        const fn = statusToApi[newStatus];
+        if (!fn) {
+          throw new Error(`Unsupported target status: ${newStatus}`);
+        }
+        dispatch = fn;
+      } else {
+        throw new Error(`Unknown action: ${pendingAction}`);
+      }
+
+      const settled = await Promise.allSettled(
+        selectedIds.map((id) => dispatch(id))
+      );
 
       timeoutIds.forEach(clearTimeout);
       intervals.forEach(clearInterval);
       setProgress(100);
 
-      const { succeeded, failed } = response.data;
+      const succeeded: number[] = [];
+      const failed: { task_id: number; reason: string }[] = [];
+      settled.forEach((res, idx) => {
+        const taskId = selectedIds[idx];
+        if (res.status === 'fulfilled') {
+          succeeded.push(taskId);
+        } else {
+          failed.push({
+            task_id: taskId,
+            reason: extractErrorMessage(res.reason),
+          });
+        }
+      });
+
       if (succeeded.length > 0) toast.success(`${succeeded.length} task(s) updated successfully`);
       if (failed.length > 0) {
-        const reasons = failed.map((f: { task_id: number; reason: string }) => `• Task #${f.task_id}: ${f.reason}`).join('\n');
+        const reasons = failed.map((f) => `• Task #${f.task_id}: ${f.reason}`).join('\n');
         toast.error(`${failed.length} task(s) failed:\n${reasons}`, { duration: 6000 });
       }
 
@@ -166,8 +228,7 @@ const BulkActionBar = ({
       timeoutIds.forEach(clearTimeout);
       intervals.forEach(clearInterval);
       setProgress(0);
-      const err = error as { response?: { data?: { error?: string } }; message?: string };
-      toast.error(err?.response?.data?.error || err?.message || 'Bulk action failed');
+      toast.error(extractErrorMessage(error) || 'Bulk action failed');
     } finally {
       timeoutIds.forEach(clearTimeout);
       intervals.forEach(clearInterval);
