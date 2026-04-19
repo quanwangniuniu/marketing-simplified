@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -8,6 +8,12 @@ import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
 import { useProjectStore } from '@/lib/projectStore';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+import TaskTypeFieldsSection, { fieldId } from '@/components/tasks-v2/new/TaskTypeFieldsSection';
+import TaskCreateChecklistAside, {
+  type ChecklistItem,
+} from '@/components/tasks-v2/new/TaskCreateChecklistAside';
+import { getTypeSchema, getUnfilledRequiredKeys } from '@/lib/tasks-v2/typeFieldSchemas';
+import { TASK_TYPE_CONFIG_STATIC } from '@/lib/taskTypeConfigRegistry';
 
 const PRIORITIES: { value: string; label: string }[] = [
   { value: 'HIGHEST', label: 'Highest' },
@@ -20,6 +26,27 @@ const PRIORITIES: { value: string; label: string }[] = [
 const BRAND_GRADIENT = 'linear-gradient(90deg, #3CCED7 0%, #A6E661 100%)';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const COMMON_ANCHOR = {
+  summary: 'task-common-summary',
+  type: 'task-common-type',
+  priority: 'task-common-priority',
+  schedule: 'task-common-schedule',
+  approver: 'task-common-approver',
+};
+
+function flashAndFocus(el: HTMLElement) {
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('ring-2', 'ring-[#3CCED7]', 'ring-offset-2', 'rounded-md');
+  const focusable =
+    el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+      ? (el as HTMLInputElement)
+      : (el.querySelector('input, textarea, select, button') as HTMLElement | null);
+  if (focusable) focusable.focus();
+  setTimeout(() => {
+    el.classList.remove('ring-2', 'ring-[#3CCED7]', 'ring-offset-2', 'rounded-md');
+  }, 1500);
+}
 
 export default function CreateTaskPage() {
   const router = useRouter();
@@ -42,6 +69,7 @@ export default function CreateTaskPage() {
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [approverId, setApproverId] = useState('');
+  const [typeFormState, setTypeFormState] = useState<Record<string, string>>({});
 
   useEffect(() => {
     TaskAPI.getTaskTypes()
@@ -58,29 +86,87 @@ export default function CreateTaskPage() {
       });
   }, [projectId]);
 
-  const checklist = useMemo(() => {
-    const items = [
-      { key: 'summary', label: 'Summary', required: true, filled: summary.trim().length > 0 },
-      { key: 'type', label: 'Work type', required: true, filled: type.length > 0 },
-      { key: 'priority', label: 'Priority', required: false, filled: priority.length > 0 },
-      { key: 'approver', label: 'Approver', required: false, filled: approverId.length > 0 },
-      { key: 'dates', label: 'Dates', required: false, filled: Boolean(plannedStartDate || startDate || dueDate) },
+  const schema = useMemo(() => getTypeSchema(type), [type]);
+
+  const updateTypeField = useCallback((key: string, value: string) => {
+    setTypeFormState((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  // Reset type-specific fields when the type changes so stale values don't leak.
+  useEffect(() => {
+    setTypeFormState({});
+  }, [type]);
+
+  const checklistItems: ChecklistItem[] = useMemo(() => {
+    const base: ChecklistItem[] = [
+      {
+        key: 'summary',
+        label: 'Summary',
+        required: true,
+        filled: summary.trim().length > 0,
+        anchorId: COMMON_ANCHOR.summary,
+      },
+      {
+        key: 'type',
+        label: 'Work type',
+        required: true,
+        filled: type.length > 0,
+        anchorId: COMMON_ANCHOR.type,
+      },
+      {
+        key: 'priority',
+        label: 'Priority',
+        required: false,
+        filled: priority.length > 0,
+        anchorId: COMMON_ANCHOR.priority,
+      },
+      {
+        key: 'dates',
+        label: 'Dates',
+        required: false,
+        filled: Boolean(plannedStartDate || startDate || dueDate),
+        anchorId: COMMON_ANCHOR.schedule,
+      },
+      {
+        key: 'approver',
+        label: 'Approver',
+        required: false,
+        filled: approverId.length > 0,
+        anchorId: COMMON_ANCHOR.approver,
+      },
     ];
-    const required = items.filter((i) => i.required);
-    return {
-      items,
-      requiredCount: required.length,
-      readyCount: required.filter((i) => i.filled).length,
-      ready: required.every((i) => i.filled),
-    };
-  }, [summary, type, priority, approverId, plannedStartDate, startDate, dueDate]);
+    if (schema) {
+      for (const field of schema.fields) {
+        const filled = (typeFormState[field.key] ?? '').toString().trim().length > 0;
+        base.push({
+          key: `schema:${field.key}`,
+          label: field.label,
+          required: field.required,
+          filled,
+          anchorId: fieldId(schema.type, field.key),
+        });
+      }
+    }
+    return base;
+  }, [summary, type, priority, approverId, plannedStartDate, startDate, dueDate, schema, typeFormState]);
+
+  const allRequiredReady = useMemo(
+    () => checklistItems.filter((i) => i.required).every((i) => i.filled),
+    [checklistItems],
+  );
+
+  const onJump = useCallback((anchorId: string) => {
+    const el = document.getElementById(anchorId);
+    if (!el) return;
+    flashAndFocus(el);
+  }, []);
 
   const submit = async (asDraft: boolean) => {
     if (!projectId) {
       toast.error('No active project. Pick a project first.');
       return;
     }
-    if (!checklist.ready) {
+    if (!allRequiredReady) {
       toast.error('Fill all required fields first.');
       return;
     }
@@ -99,7 +185,41 @@ export default function CreateTaskPage() {
       if (startDate) payload.start_date = startDate;
       if (dueDate) payload.due_date = dueDate;
 
-      await TaskAPI.createTask(payload as never);
+      const res = await TaskAPI.createTask(payload as never);
+      const createdTask = (res?.data as any) ?? {};
+      const createdTaskId = createdTask.id;
+
+      if (schema && createdTaskId) {
+        const missing = getUnfilledRequiredKeys(schema, typeFormState);
+        if (missing.length > 0) {
+          toast.error(`Missing required fields: ${missing.join(', ')}`);
+          return;
+        }
+        const cfg = TASK_TYPE_CONFIG_STATIC[schema.type];
+        if (cfg) {
+          try {
+            const subPayload = cfg.getPayload(
+              typeFormState,
+              {
+                project_id: projectId,
+                summary: summary.trim(),
+                current_approver_id: approverId ? Number(approverId) : null,
+              },
+              { id: createdTaskId },
+            );
+            if (subPayload) {
+              const subRes: any = await cfg.api(subPayload);
+              const subId = (subRes?.data as any)?.id ?? (subRes as any)?.id ?? null;
+              if (subId) {
+                await TaskAPI.linkTask(createdTaskId, cfg.contentType, String(subId));
+              }
+            }
+          } catch {
+            toast.error('Task created but failed to save type-specific fields. You can edit the task to retry.');
+          }
+        }
+      }
+
       toast.success(asDraft ? 'Saved as draft' : 'Task submitted for review');
       router.push('/tasks-v2');
     } catch (err: unknown) {
@@ -111,7 +231,7 @@ export default function CreateTaskPage() {
         e?.response?.data?.error ||
           e?.response?.data?.detail ||
           e?.message ||
-          'Failed to create task'
+          'Failed to create task',
       );
     } finally {
       setSubmitting(null);
@@ -126,7 +246,7 @@ export default function CreateTaskPage() {
           onClick={() => router.push('/tasks-v2')}
           className="mb-4 inline-flex items-center gap-1.5 text-xs text-gray-500 transition hover:text-gray-900"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
+          <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
           Back to tasks
         </button>
 
@@ -134,7 +254,7 @@ export default function CreateTaskPage() {
           <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
             <div className="h-[3px] w-full" style={{ background: BRAND_GRADIENT }} aria-hidden />
 
-            <div className="px-8 pt-7 pb-2">
+            <div id={COMMON_ANCHOR.summary} className="px-8 pt-7 pb-2">
               <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 New task in {activeProject?.name ?? 'project'}
               </p>
@@ -156,7 +276,7 @@ export default function CreateTaskPage() {
 
             <div className="my-2 border-t border-gray-100" />
 
-            <div className="px-8 py-5">
+            <div id={COMMON_ANCHOR.type} className="px-8 py-5">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Work type *
               </p>
@@ -181,7 +301,23 @@ export default function CreateTaskPage() {
               </div>
             </div>
 
-            <div className="px-8 py-5">
+            {schema && (
+              <>
+                <div className="my-2 border-t border-gray-100" />
+                <div className="px-8 py-5">
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-gray-400">
+                    {schema.label} details
+                  </p>
+                  <TaskTypeFieldsSection
+                    schema={schema}
+                    values={typeFormState}
+                    onChange={updateTypeField}
+                  />
+                </div>
+              </>
+            )}
+
+            <div id={COMMON_ANCHOR.priority} className="px-8 py-5">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Priority
               </p>
@@ -208,7 +344,7 @@ export default function CreateTaskPage() {
 
             <div className="my-2 border-t border-gray-100" />
 
-            <div className="px-8 py-5">
+            <div id={COMMON_ANCHOR.schedule} className="px-8 py-5">
               <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Schedule
               </p>
@@ -234,7 +370,7 @@ export default function CreateTaskPage() {
               </div>
             </div>
 
-            <div className="px-8 py-5">
+            <div id={COMMON_ANCHOR.approver} className="px-8 py-5">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Approver
               </p>
@@ -265,7 +401,7 @@ export default function CreateTaskPage() {
               <button
                 type="button"
                 onClick={() => submit(true)}
-                disabled={submitting !== null || !checklist.ready}
+                disabled={submitting !== null || !allRequiredReady}
                 className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
               >
                 {submitting === 'draft' ? 'Saving…' : 'Save as draft'}
@@ -273,12 +409,12 @@ export default function CreateTaskPage() {
               <button
                 type="button"
                 onClick={() => submit(false)}
-                disabled={submitting !== null || !checklist.ready}
+                disabled={submitting !== null || !allRequiredReady}
                 className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
               >
                 {submitting === 'submit' ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
                     Creating…
                   </>
                 ) : (
@@ -289,41 +425,7 @@ export default function CreateTaskPage() {
           </div>
 
           <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
-                  Checklist
-                </p>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                    checklist.ready
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'bg-rose-50 text-rose-600'
-                  }`}
-                >
-                  {checklist.readyCount} of {checklist.requiredCount} required
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {checklist.items.map((item) => {
-                  const dotClass = item.filled
-                    ? 'bg-emerald-500'
-                    : item.required
-                    ? 'border border-rose-200 bg-rose-50'
-                    : 'border border-gray-200 bg-white';
-                  return (
-                    <li key={item.key} className="flex items-center gap-2 text-xs">
-                      <span className={`inline-block h-2 w-2 rounded-full ${dotClass}`} />
-                      <span className={item.filled ? 'text-gray-900' : 'text-gray-500'}>
-                        {item.label}
-                        {item.required ? <span className="ml-0.5 text-rose-500">*</span> : null}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
+            <TaskCreateChecklistAside items={checklistItems} onJump={onJump} />
             <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 text-xs text-gray-500 leading-5">
               Drafts can be edited later. Submitting routes the task into the approval chain configured for this project + work type.
             </div>
