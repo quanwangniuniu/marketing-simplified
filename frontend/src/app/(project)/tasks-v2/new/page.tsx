@@ -25,10 +25,15 @@ export default function CreateTaskPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectIdParam = searchParams?.get('project_id');
+  const linkDecisionIdParam = searchParams?.get('link_decision_id');
   const activeProject = useProjectStore((s) => s.activeProject);
   const projectId = projectIdParam
     ? Number(projectIdParam)
     : activeProject?.id ?? null;
+  const linkDecisionId =
+    linkDecisionIdParam && Number.isFinite(Number(linkDecisionIdParam))
+      ? Number(linkDecisionIdParam)
+      : null;
 
   const [taskTypes, setTaskTypes] = useState<{ value: string; label: string }[]>([]);
   const [members, setMembers] = useState<ProjectMemberData[]>([]);
@@ -99,9 +104,22 @@ export default function CreateTaskPage() {
       if (startDate) payload.start_date = startDate;
       if (dueDate) payload.due_date = dueDate;
 
-      await TaskAPI.createTask(payload as never);
+      const res = await TaskAPI.createTask(payload as never);
+      const createdTaskId = (res?.data as any)?.id;
+      if (linkDecisionId && createdTaskId) {
+        try {
+          await TaskAPI.linkTask(createdTaskId, 'decision', String(linkDecisionId));
+        } catch {
+          toast.error('Task created but failed to link to decision');
+        }
+      }
       toast.success(asDraft ? 'Saved as draft' : 'Task submitted for review');
-      router.push('/tasks-v2');
+      if (linkDecisionId) {
+        const qs = projectId ? `?project_id=${projectId}` : '';
+        router.push(`/decisions-v2/${linkDecisionId}${qs}`);
+      } else {
+        router.push('/tasks-v2');
+      }
     } catch (err: unknown) {
       const e = err as {
         response?: { data?: { error?: string; detail?: string } };
@@ -123,12 +141,24 @@ export default function CreateTaskPage() {
       <div className="mx-auto w-full max-w-5xl px-6 py-8">
         <button
           type="button"
-          onClick={() => router.push('/tasks-v2')}
+          onClick={() => {
+            if (linkDecisionId) {
+              const qs = projectId ? `?project_id=${projectId}` : '';
+              router.push(`/decisions-v2/${linkDecisionId}${qs}`);
+            } else {
+              router.push('/tasks-v2');
+            }
+          }}
           className="mb-4 inline-flex items-center gap-1.5 text-xs text-gray-500 transition hover:text-gray-900"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to tasks
+          {linkDecisionId ? `Back to decision #${linkDecisionId}` : 'Back to tasks'}
         </button>
+        {linkDecisionId && (
+          <div className="mb-4 rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/5 px-3 py-2 text-[12px] text-gray-700">
+            This task will be linked to <span className="font-medium">Decision #{linkDecisionId}</span> on create.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
           <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
