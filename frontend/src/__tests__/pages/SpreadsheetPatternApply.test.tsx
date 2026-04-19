@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 
-import SpreadsheetDetailPage from '@/app/projects/[projectId]/spreadsheets/[spreadsheetId]/page';
+import SpreadsheetDetailPage from '@/app/(project)/projects/[projectId]/spreadsheets/[spreadsheetId]/page';
 import { PatternAPI } from '@/lib/api/patternApi';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 

@@ -191,14 +191,17 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not user.is_verified:
-            return Response(
-                {
-                    'error': 'User not verified',
-                    'errorCode': 'EMAIL_NOT_VERIFIED',
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Email verification gate is disabled while no email service is wired
+        # up in this environment. Restore the check below once SMTP / SES /
+        # Mailgun are configured. See 00_Auth issues B-01.
+        # if not user.is_verified:
+        #     return Response(
+        #         {
+        #             'error': 'User not verified',
+        #             'errorCode': 'EMAIL_NOT_VERIFIED',
+        #         },
+        #         status=status.HTTP_403_FORBIDDEN,
+        #     )
         
         # Check if password is set (for Google OAuth users)
         if not user.password_set:

@@ -1,0 +1,110 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import DashboardSidebar from './DashboardSidebar';
+import NotificationBell from './NotificationBell';
+import UpcomingMeetingsPanel from './UpcomingMeetingsPanel';
+import type { AlertData } from '@/lib/mock/dashboardMock';
+import type { MeetingListItem } from '@/types/meeting';
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  alerts?: AlertData[];
+  upcomingMeetings?: MeetingListItem[];
+}
+
+const humanize = (value: string): string =>
+  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const BREADCRUMB_ROOT: Record<string, string> = {
+  'select-project': 'Projects',
+  overview: 'Dashboard',
+  campaigns: 'Manage',
+  tasks: 'Manage',
+  decisions: 'Manage',
+  spreadsheet: 'Manage',
+  spreadsheets: 'Manage',
+  meetings: 'Collaborate',
+  calendar: 'Collaborate',
+  messages: 'Collaborate',
+  miro: 'Collaborate',
+  variations: 'Content',
+  facebook_meta: 'Content',
+  tiktok: 'Content',
+  google_ads: 'Content',
+  mailchimp: 'Content',
+  klaviyo: 'Content',
+  notion: 'Content',
+  workflows: 'Tools',
+  timeline: 'Tools',
+  settings: 'Tools',
+  agent: 'Overview',
+  profile: 'Account',
+};
+
+const BREADCRUMB_LEAF: Record<string, string> = {
+  'select-project': 'Select Project',
+  overview: 'Overview',
+  spreadsheet: 'Spreadsheets',
+};
+
+const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } => {
+  const segments = (pathname || '').split('/').filter(Boolean);
+  const first = segments[0] || 'overview';
+  const root = BREADCRUMB_ROOT[first] || 'Dashboard';
+  const leaf = BREADCRUMB_LEAF[first] || humanize(first);
+  return { root, leaf };
+};
+
+export default function DashboardLayout({
+  children,
+  alerts = [],
+  upcomingMeetings = [],
+}: DashboardLayoutProps) {
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const pathname = usePathname();
+  const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
+
+  return (
+    <div className="flex h-screen bg-[#F7F8FA] overflow-hidden">
+      <DashboardSidebar />
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-5 h-12 border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-400">{breadcrumb.root}</span>
+            <span className="text-gray-300">/</span>
+            <span className="font-medium text-gray-900">{breadcrumb.leaf}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell alerts={alerts} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700"
+            >
+              {isPanelOpen ? (
+                <><PanelRightClose className="w-4 h-4 mr-1" /> Hide Panel</>
+              ) : (
+                <><PanelRightOpen className="w-4 h-4 mr-1" /> Show Panel</>
+              )}
+            </Button>
+          </div>
+        </header>
+
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto p-5 space-y-4">
+          {children}
+        </main>
+      </div>
+
+      <UpcomingMeetingsPanel meetings={upcomingMeetings} isOpen={isPanelOpen} />
+    </div>
+  );
+}
