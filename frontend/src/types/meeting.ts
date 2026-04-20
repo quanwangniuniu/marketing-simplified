@@ -100,6 +100,7 @@ export interface Meeting {
   scheduled_time: string | null;
   external_reference: string | null;
   status: MeetingStatus;
+  is_archived?: boolean;
   /** Zoom post-meeting snapshot when linked; ``null`` if not linked. */
   zoom_post_meeting?: ZoomPostMeeting | null;
   /** Included on create/detail when the API returns embedded discovery fields. */
@@ -316,6 +317,7 @@ export interface MeetingActionItem {
   title: string;
   description: string;
   order_index: number;
+  is_resolved: boolean;
   created_at?: string;
   updated_at?: string;
   converted_task_id: number | null;
