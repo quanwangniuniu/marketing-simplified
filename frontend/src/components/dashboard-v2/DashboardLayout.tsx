@@ -1,12 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
 import NotificationBell from './NotificationBell';
 import UpcomingMeetingsPanel from './UpcomingMeetingsPanel';
+import { useProjectStore } from '@/lib/projectStore';
+import { MeetingsAPI } from '@/lib/api/meetingsApi';
+import { splitMeetingRowsBySchedule } from '@/lib/meetings/meetingScheduleSplit';
 import type { AlertData } from '@/lib/mock/dashboardMock';
 import type { MeetingListItem } from '@/types/meeting';
 
@@ -62,11 +65,41 @@ const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } 
 export default function DashboardLayout({
   children,
   alerts = [],
-  upcomingMeetings = [],
+  upcomingMeetings,
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const pathname = usePathname();
   const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
+  const activeProject = useProjectStore((s) => s.activeProject);
+  const [autoMeetings, setAutoMeetings] = useState<MeetingListItem[]>([]);
+  const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
+
+  useEffect(() => {
+    if (useExplicit) return;
+    const projectId = activeProject?.id;
+    if (!projectId) {
+      setAutoMeetings([]);
+      return;
+    }
+    let cancelled = false;
+    MeetingsAPI.listMeetingsPaginated(projectId, {
+      ordering: '-created_at',
+      page: 1,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const { incoming } = splitMeetingRowsBySchedule(res.results);
+        setAutoMeetings(incoming);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoMeetings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject?.id, useExplicit]);
+
+  const meetingsForPanel = useExplicit ? upcomingMeetings! : autoMeetings;
 
   return (
     <div className="flex h-screen bg-[#F7F8FA] overflow-hidden">
@@ -104,7 +137,7 @@ export default function DashboardLayout({
         </main>
       </div>
 
-      <UpcomingMeetingsPanel meetings={upcomingMeetings} isOpen={isPanelOpen} />
+      <UpcomingMeetingsPanel meetings={meetingsForPanel} isOpen={isPanelOpen} />
     </div>
   );
 }
