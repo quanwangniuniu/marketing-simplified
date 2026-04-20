@@ -206,7 +206,7 @@ export interface CampaignTemplate {
   sharing_scope: TemplateSharingScope;
   sharing_scope_display: string;
   project?: ProjectSummary;
-  project_id?: string;
+  project_id?: number;
   objective?: CampaignObjective;
   platforms?: CampaignPlatform[];
   hypothesis_framework?: string;
@@ -226,14 +226,14 @@ export interface CreateTemplateData {
   name: string;
   description?: string;
   sharing_scope?: TemplateSharingScope;
-  project_id?: string;
+  project_id?: number;
 }
 
 export interface UpdateTemplateData {
   name?: string;
   description?: string;
   sharing_scope?: TemplateSharingScope;
-  project_id?: string;
+  project_id?: number;
   objective?: CampaignObjective;
   platforms?: CampaignPlatform[];
   hypothesis_framework?: string;
@@ -242,11 +242,11 @@ export interface UpdateTemplateData {
 
 export interface CreateCampaignFromTemplateData {
   name: string;
-  project: string; // UUID
-  owner: string; // UUID
+  project: number;
+  owner: number;
   start_date?: string;
   end_date?: string;
-  assignee?: string;
+  assignee?: number;
   objective?: CampaignObjective;
   platforms?: CampaignPlatform[];
   hypothesis?: string;
@@ -258,6 +258,6 @@ export interface SaveCampaignAsTemplateData {
   name: string;
   description?: string;
   sharing_scope?: TemplateSharingScope;
-  project_id?: string;
+  project_id?: number;
 }
 

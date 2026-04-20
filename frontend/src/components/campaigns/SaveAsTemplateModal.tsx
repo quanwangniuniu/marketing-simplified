@@ -71,7 +71,7 @@ export default function SaveAsTemplateModal({
         name: name.trim(),
         description: description.trim() || undefined,
         sharing_scope: sharingScope,
-        project_id: projectId || undefined,
+        project_id: projectId ? Number(projectId) : undefined,
       };
 
       const response = await CampaignAPI.saveCampaignAsTemplate(campaignId, data);
