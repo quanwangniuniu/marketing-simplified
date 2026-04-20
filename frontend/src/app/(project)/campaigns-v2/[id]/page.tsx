@@ -14,7 +14,7 @@ import CampaignHeader from '@/components/campaigns/CampaignHeader';
 import TimelineSection, { type TimelineSectionHandle } from '@/components/campaigns-v2/sections/TimelineSection';
 import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
 import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns-v2/sections/SnapshotsSection';
-import CampaignStatusHistory from '@/components/campaigns/CampaignStatusHistory';
+import StatusHistorySection, { type StatusHistorySectionHandle } from '@/components/campaigns-v2/sections/StatusHistorySection';
 import TasksSection, { type TasksSectionHandle } from '@/components/campaigns-v2/sections/TasksSection';
 import CampaignFSMActionBar from '@/components/campaigns-v2/detail/CampaignFSMActionBar';
 import CreateCheckInDialog from '@/components/campaigns-v2/modals/CreateCheckInDialog';
@@ -45,7 +45,7 @@ export default function CampaignV2DetailPage() {
   const timelineRef = useRef<TimelineSectionHandle>(null);
   const tasksRef = useRef<TasksSectionHandle>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
-  const [statusRefresh, setStatusRefresh] = useState(0);
+  const statusHistoryRef = useRef<StatusHistorySectionHandle>(null);
 
   useEffect(() => {
     if (!campaignId) return;
@@ -107,7 +107,7 @@ export default function CampaignV2DetailPage() {
   const handleFSMTransitioned = (next: CampaignData) => {
     // optimistic update via direct fetch for related sections
     void fetchCampaign(campaignId);
-    setStatusRefresh((n) => n + 1);
+    statusHistoryRef.current?.refresh();
     timelineRef.current?.refresh();
   };
 
@@ -182,7 +182,7 @@ export default function CampaignV2DetailPage() {
               onCreate={handleCheckInCreate}
               isArchived={isArchived}
             />
-            <CampaignStatusHistory key={statusRefresh} campaignId={campaignId} />
+            <StatusHistorySection ref={statusHistoryRef} campaignId={campaignId} />
           </div>
         </div>
 
