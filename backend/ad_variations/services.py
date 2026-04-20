@@ -8,6 +8,7 @@ from .models import AdVariation, CopyElement, VariationPerformance, VariationSta
 
 class VariationService:
     @staticmethod
+    @transaction.atomic
     def duplicate_variation(variation: AdVariation, name_override: Optional[str] = None) -> AdVariation:
         base_name = name_override or f"{variation.name} Copy"
         duplicate = AdVariation.objects.create(
@@ -40,6 +41,7 @@ class VariationService:
         return duplicate
 
     @staticmethod
+    @transaction.atomic
     def record_status_change(
         variation: AdVariation, to_status: str, reason: Optional[str], user
     ) -> VariationStatusHistory:

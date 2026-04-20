@@ -1,24 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Maximize2,
-  Minimize2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import FacebookFeedPreview from "@/components/facebook_meta/previews/FacebookFeedPreview";
-import TiktokPreview from "@/components/tiktok/TiktokPreview";
-import AdPreviewPanel from "@/components/google_ads/preview/AdPreviewPanel";
-import type { GoogleAd } from "@/lib/api/googleAdsApi";
 import attachmentApi, { validateFile } from "@/lib/api/attachmentApi";
 import { AdVariationAPI } from "@/lib/api/adVariationApi";
 import type {
@@ -26,7 +11,6 @@ import type {
   AdVariation,
   ComparisonResponse,
   CreativeType,
-  VariationPerformanceEntry,
   VariationStatus,
 } from "@/types/adVariation";
 import BrandButton from "@/components/campaigns-v2/BrandButton";
@@ -37,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import BrandSelect from "@/components/ui/BrandSelect";
 import VariationComparisonSection from "@/components/ad-variations-v2/sections/VariationComparisonSection";
 import AdGroupSection from "@/components/ad-variations-v2/sections/AdGroupSection";
+import { CREATIVE_FIELDS } from "@/components/ad-variations-v2/creativeFields";
 
 const STATUS_COLUMNS: VariationStatus[] = [
   "Draft",
@@ -46,31 +31,6 @@ const STATUS_COLUMNS: VariationStatus[] = [
   "Loser",
   "Paused",
 ];
-
-const CREATIVE_FIELDS: Record<CreativeType, { key: string; label: string }[]> = {
-  image: [
-    { key: "headline", label: "Headline" },
-    { key: "primaryText", label: "Primary Text" },
-  ],
-  video: [
-    { key: "headline", label: "Headline" },
-    { key: "primaryText", label: "Primary Text" },
-  ],
-  carousel: [
-    { key: "cardHeadline", label: "Card Headline" },
-    { key: "cardDescription", label: "Card Description" },
-  ],
-  collection: [
-    { key: "headline", label: "Headline" },
-    { key: "primaryText", label: "Primary Text" },
-    { key: "collectionTitle", label: "Collection Title" },
-  ],
-  email: [
-    { key: "subject", label: "Subject" },
-    { key: "preheader", label: "Preheader" },
-    { key: "body", label: "Body" },
-  ],
-};
 
 const statusStyles: Record<
   VariationStatus,
@@ -135,20 +95,13 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
   const [variations, setVariations] = useState<AdVariation[]>([]);
   const [adGroups, setAdGroups] = useState<AdGroup[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [activeVariation, setActiveVariation] = useState<AdVariation | null>(
-    null
-  );
   const [compareData, setCompareData] = useState<ComparisonResponse | null>(
     null
   );
   const [compareIds, setCompareIds] = useState<number[]>([]);
-  const [performanceEntries, setPerformanceEntries] = useState<
-    VariationPerformanceEntry[]
-  >([]);
   const [latestPerformance, setLatestPerformance] = useState<
     Record<number, { recordedAt: string | null; metrics: Record<string, any> } | null>
   >({});
-  const [statusHistory, setStatusHistory] = useState<any[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [orderedVariations, setOrderedVariations] = useState<AdVariation[]>([]);
   const [bulkAction, setBulkAction] = useState<
@@ -170,10 +123,8 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
   const [groupFilter, setGroupFilter] = useState<"all" | "none" | number>("all");
   const [columnSizes, setColumnSizes] = useState({ left: 240, right: 520 });
   const [isDesktop, setIsDesktop] = useState(false);
-  const [previewMode, setPreviewMode] = useState<
-    "native" | "facebook" | "tiktok" | "google"
-  >("native");
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
   const pendingDeleteRef = useRef<
     Map<number, { timer: number; index: number; variation: AdVariation }>
   >(new Map());
@@ -241,12 +192,6 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
     }, 30000);
     return () => clearInterval(interval);
   }, [campaignId]);
-
-  useEffect(() => {
-    if (activeTab !== "board") {
-      setActiveVariation(null);
-    }
-  }, [activeTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -404,22 +349,8 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
     );
   };
 
-  const handleViewDetail = async (variationId: number) => {
-    const variation = variations.find((item) => item.id === variationId);
-    if (!variation) return;
-    setActiveVariation(variation);
-    setPreviewMode("native");
-    try {
-      const [entries, history] = await Promise.all([
-        AdVariationAPI.listPerformance(campaignId, variationId, { limit: 50 }),
-        AdVariationAPI.listStatusHistory(campaignId, variationId, { limit: 20 }),
-      ]);
-      setPerformanceEntries(entries);
-      setStatusHistory(history);
-    } catch {
-      setPerformanceEntries([]);
-      setStatusHistory([]);
-    }
+  const openDetail = (variationId: number) => {
+    router.push(`/variations-v2/${variationId}?cid=${campaignId}`);
   };
 
   const handleDropStatus = async (
@@ -565,9 +496,6 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
           item.id === variation.id ? response.variation : item
         )
       );
-      if (activeVariation?.id === variation.id) {
-        setActiveVariation(response.variation);
-      }
     } catch {
       toast.error("Status update failed");
     }
@@ -581,7 +509,6 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
     setVariations((prev) => prev.filter((item) => item.id !== variationId));
     setSelectedIds((prev) => prev.filter((id) => id !== variationId));
     setCompareData(null);
-    setActiveVariation((prev) => (prev?.id === variationId ? null : prev));
 
     const timer = window.setTimeout(async () => {
       pendingDeleteRef.current.delete(variationId);
@@ -842,11 +769,10 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
                   const impressions = metrics.impressions ?? "—";
                   const costPerResult =
                     metrics.costPerResult ?? metrics.cpa ?? metrics.cpl ?? "—";
-                  const isActive = activeVariation?.id === variation.id;
                   return (
                     <tr
                       key={variation.id}
-                      onClick={() => handleViewDetail(variation.id)}
+                      onClick={() => openDetail(variation.id)}
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => handleGroupDropOnCard(variation.id, event)}
                       draggable
@@ -857,9 +783,7 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
                         );
                         event.dataTransfer.effectAllowed = "move";
                       }}
-                      className={`cursor-pointer border-t border-gray-100 transition hover:bg-gray-50 ${
-                        isActive ? "bg-[#0E8A96]/5" : ""
-                      }`}
+                      className="cursor-pointer border-t border-gray-100 transition hover:bg-gray-50"
                     >
                       <td className="px-3 py-2">
                         <input
@@ -1009,45 +933,6 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
             onApply={handleBulkApply}
           />
         </div>
-      )}
-
-      {/* Right Drawer — 点 row 打开 */}
-      {activeVariation && (
-        <>
-          <div
-            className="fixed inset-0 z-30 bg-black/20"
-            onClick={() => setActiveVariation(null)}
-          />
-          <aside className="fixed right-0 top-0 z-40 h-full w-full max-w-[520px] overflow-y-auto bg-white shadow-2xl ring-1 ring-gray-200">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-              <h3 className="truncate text-sm font-semibold text-gray-900">
-                {activeVariation.name}
-              </h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveVariation(null)}
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="p-4">
-              <VariationSidePanel
-                variation={activeVariation}
-                adGroups={adGroups}
-                campaignId={campaignId}
-                performanceEntries={performanceEntries}
-                statusHistory={statusHistory}
-                previewMode={previewMode}
-                onPreviewModeChange={setPreviewMode}
-                onRefresh={loadData}
-                onDelete={handleDeleteVariation}
-              />
-            </div>
-          </aside>
-        </>
       )}
 
       {activeTab === "compare" && (
@@ -1254,898 +1139,6 @@ function StatusRail({
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function VariationSidePanel({
-  variation,
-  adGroups,
-  campaignId,
-  performanceEntries,
-  statusHistory,
-  previewMode,
-  onPreviewModeChange,
-  onRefresh,
-  onDelete,
-}: {
-  variation: AdVariation | null;
-  adGroups: AdGroup[];
-  campaignId: number;
-  performanceEntries: VariationPerformanceEntry[];
-  statusHistory: any[];
-  previewMode: "native" | "facebook" | "tiktok" | "google";
-  onPreviewModeChange: (mode: "native" | "facebook" | "tiktok" | "google") => void;
-  onRefresh: () => void;
-  onDelete: (variationId: number) => void;
-}) {
-  const [editMode, setEditMode] = useState(false);
-  const [name, setName] = useState("");
-  const [status, setStatus] = useState<VariationStatus>("Draft");
-  const [adGroupId, setAdGroupId] = useState<number | null>(null);
-  const [tags, setTags] = useState("");
-  const [notes, setNotes] = useState("");
-  const [delivery, setDelivery] = useState("");
-  const [bidStrategy, setBidStrategy] = useState("");
-  const [budget, setBudget] = useState("");
-  const [copyDrafts, setCopyDrafts] = useState<Record<string, string>>({});
-  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
-  const [logoFiles, setLogoFiles] = useState<File[]>([]);
-  const [uploadedAssets, setUploadedAssets] = useState<
-    { id: number; fileUrl: string; thumbnailUrl: string | null; fileType: string }[]
-  >([]);
-  const [logoAssets, setLogoAssets] = useState<
-    { id: number; fileUrl: string; thumbnailUrl: string | null; fileType: string }[]
-  >([]);
-  const [localPreviews, setLocalPreviews] = useState<string[]>([]);
-  const [logoPreviews, setLogoPreviews] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [previewExpanded, setPreviewExpanded] = useState(true);
-  const [composerExpanded, setComposerExpanded] = useState(true);
-
-  useEffect(() => {
-    if (!variation) return;
-    setName(variation.name);
-    setStatus(variation.status);
-    setAdGroupId(variation.adGroupId ?? null);
-    setTags((variation.tags || []).join(", "));
-    setNotes(variation.notes || "");
-    setDelivery(variation.delivery || "");
-    setBidStrategy(variation.bidStrategy || "");
-    setBudget(variation.budget ? String(variation.budget) : "");
-    setMediaFiles([]);
-    setLogoFiles([]);
-    setUploadError(null);
-    
-    const existingMediaAssets = (variation.formatPayload as any)?.mediaAssets || [];
-    setUploadedAssets(
-      existingMediaAssets.map((asset: any) => ({
-        id: asset.id,
-        fileUrl: asset.fileUrl || asset.file_url || "",
-        thumbnailUrl: asset.thumbnailUrl || asset.thumbnail_url || null,
-        fileType: asset.fileType || asset.file_type || "",
-      }))
-    );
-    
-    const existingLogoAssets = (variation.formatPayload as any)?.logoAssets || [];
-    setLogoAssets(
-      existingLogoAssets.map((asset: any) => ({
-        id: asset.id,
-        fileUrl: asset.fileUrl || asset.file_url || "",
-        thumbnailUrl: asset.thumbnailUrl || asset.thumbnail_url || null,
-        fileType: asset.fileType || asset.file_type || "",
-      }))
-    );
-    
-    setCopyDrafts(
-      variation.copyElements.reduce<Record<string, string>>((acc, elem) => {
-        acc[elem.elementKey] = elem.value;
-        return acc;
-      }, {})
-    );
-    setEditMode(false);
-  }, [variation]);
-
-  useEffect(() => {
-    if (!mediaFiles.length) {
-      setLocalPreviews([]);
-      return;
-    }
-    const urls = mediaFiles.map((file) => URL.createObjectURL(file));
-    setLocalPreviews(urls);
-    return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [mediaFiles]);
-
-  useEffect(() => {
-    if (!logoFiles.length) {
-      setLogoPreviews([]);
-      return;
-    }
-    const urls = logoFiles.map((file) => URL.createObjectURL(file));
-    setLogoPreviews(urls);
-    return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [logoFiles]);
-
-  const handleRemoveMediaAsset = (index: number) => {
-    setUploadedAssets((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleRemoveLogoAsset = (index: number) => {
-    setLogoAssets((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSave = async () => {
-    if (!variation) return;
-    const existingByKey = variation.copyElements.reduce<
-      Record<string, (typeof variation.copyElements)[number]>
-    >((acc, elem) => {
-      acc[elem.elementKey] = elem;
-      return acc;
-    }, {});
-    const copyElements = CREATIVE_FIELDS[variation.creativeType].map((field, index) => {
-      const existing = existingByKey[field.key];
-      return {
-        id: existing?.id,
-        elementKey: field.key,
-        value: copyDrafts[field.key] ?? existing?.value ?? "",
-        position:
-          variation.creativeType === "carousel" || variation.creativeType === "collection"
-            ? existing?.position ?? index + 1
-            : existing?.position,
-        locale: existing?.locale,
-        meta: existing?.meta,
-      };
-    });
-    await AdVariationAPI.updateVariation(variation.campaignId, variation.id, {
-      name,
-      status,
-      adGroupId: adGroupId ?? null,
-      tags: tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      notes,
-      delivery,
-      bidStrategy,
-      budget: budget || null,
-      copyElements,
-      formatPayload: {
-        ...(variation.formatPayload || {}),
-        mediaFiles: mediaFiles.map((file) => ({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        })),
-        mediaAssets: uploadedAssets.map((asset) => ({
-          id: asset.id,
-          fileUrl: asset.fileUrl,
-          thumbnailUrl: asset.thumbnailUrl,
-          fileType: asset.fileType,
-        })),
-        logoAssets: logoAssets.map((asset) => ({
-          id: asset.id,
-          fileUrl: asset.fileUrl,
-          thumbnailUrl: asset.thumbnailUrl,
-          fileType: asset.fileType,
-        })),
-        previewUrl:
-          uploadedAssets[0]?.thumbnailUrl ||
-          uploadedAssets[0]?.fileUrl ||
-          variation.formatPayload?.previewUrl,
-        logoUrl:
-          logoAssets[0]?.thumbnailUrl ||
-          logoAssets[0]?.fileUrl ||
-          variation.formatPayload?.logoUrl,
-      },
-    });
-    setEditMode(false);
-    onRefresh();
-  };
-
-  if (!variation) {
-    return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
-        Select a variation to preview.
-      </div>
-    );
-  }
-
-  const payloadAsset = (variation.formatPayload as any)?.mediaAssets?.[0];
-  const payloadAssetFile = payloadAsset?.fileUrl || payloadAsset?.file_url || null;
-  const payloadAssetThumb = payloadAsset?.thumbnailUrl || payloadAsset?.thumbnail_url || null;
-  const previewUrl =
-    variation.formatPayload?.previewUrl ||
-    payloadAssetThumb ||
-    variation.formatPayload?.imageUrl ||
-    payloadAssetFile ||
-    variation.formatPayload?.videoUrl ||
-    null;
-  const livePreviewUrl =
-    uploadedAssets[0]?.thumbnailUrl ||
-    uploadedAssets[0]?.fileUrl ||
-    localPreviews[0] ||
-    previewUrl;
-  const livePreviewType =
-    uploadedAssets[0]?.fileType ||
-    payloadAsset?.fileType ||
-    payloadAsset?.file_type ||
-    mediaFiles[0]?.type ||
-    "";
-  const liveVideoSrc =
-    uploadedAssets[0]?.fileUrl ||
-    payloadAssetFile ||
-    variation.formatPayload?.videoUrl ||
-    (livePreviewType.startsWith("video") ? livePreviewUrl : null);
-  const liveVideoPoster =
-    uploadedAssets[0]?.thumbnailUrl ||
-    payloadAssetThumb ||
-    (livePreviewType.startsWith("video") ? null : livePreviewUrl) ||
-    null;
-  const logoUrl =
-    logoAssets[0]?.thumbnailUrl ||
-    logoAssets[0]?.fileUrl ||
-    logoPreviews[0] ||
-    (variation.formatPayload as any)?.logoUrl ||
-    null;
-  const accepts = variation.creativeType === "video" ? "video/*" : "image/*";
-  const headlineText = copyDrafts.headline || copyDrafts.subject || variation.name;
-  const bodyText =
-    copyDrafts.primaryText ||
-    copyDrafts.body ||
-    copyDrafts.cardDescription ||
-    copyDrafts.preheader ||
-    "";
-  const facebookMedia = livePreviewUrl
-    ? {
-        id: 0,
-        type: (livePreviewType.startsWith("video") ? "video" : "photo") as "video" | "photo",
-        url: livePreviewUrl,
-        thumbnail: livePreviewUrl,
-        caption: headlineText,
-      }
-    : null;
-  const tiktokCreative = livePreviewUrl
-    ? {
-        id: 0,
-        type: (livePreviewType.startsWith("video") ? "video" : "image") as "video" | "image",
-        url: livePreviewUrl,
-        previewUrl: livePreviewUrl,
-        fileUrl: livePreviewUrl,
-        title: headlineText,
-      }
-    : null;
-  const googlePreviewAd: GoogleAd = {
-    name: variation.name,
-    type: "RESPONSIVE_DISPLAY_AD",
-    final_urls: ["https://marketingsimplified.com"],
-    responsive_display_ad: {
-      headlines: [{ text: headlineText || variation.name }],
-      long_headline: { text: headlineText || variation.name },
-      descriptions: [{ text: bodyText || "Add ad copy to preview." }],
-      business_name: "Marketing Simplified",
-      marketing_images: livePreviewUrl ? [{ asset: livePreviewUrl, url: livePreviewUrl }] : [],
-      square_marketing_images: livePreviewUrl ? [{ asset: livePreviewUrl, url: livePreviewUrl }] : [],
-      logo_images: logoUrl ? [{ asset: logoUrl, url: logoUrl }] : [],
-      square_logo_images: logoUrl ? [{ asset: logoUrl, url: logoUrl }] : [],
-      allow_flexible_color: true,
-    },
-  };
-
-  const latestEntry = performanceEntries.reduce<VariationPerformanceEntry | null>(
-    (latest, entry) => {
-      if (!latest) return entry;
-      return new Date(entry.recordedAt).getTime() >
-        new Date(latest.recordedAt).getTime()
-        ? entry
-        : latest;
-    },
-    null
-  );
-  const latestMetrics = latestEntry?.metrics || {};
-  const performancePairs = Object.entries(latestMetrics);
-  const summaryMetrics = [
-    { label: "CTR", keys: ["ctr", "clickThroughRate"] },
-    { label: "CPA", keys: ["cpa", "costPerResult"] },
-    { label: "Results", keys: ["results", "conversions", "leads"] },
-    { label: "Spend", keys: ["spend", "cost"] },
-    { label: "Reach", keys: ["reach"] },
-    { label: "Impressions", keys: ["impressions"] },
-  ];
-  const metricValue = (keys: string[]) => {
-    for (const key of keys) {
-      if (latestMetrics[key] !== undefined) {
-        return latestMetrics[key];
-      }
-    }
-    return "/";
-  };
-  const metricColor = (label: string) => {
-    if (label === "CTR") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (label === "CPA") return "border-rose-200 bg-rose-50 text-rose-700";
-    if (label === "Results") return "border-indigo-200 bg-indigo-50 text-indigo-700";
-    if (label === "Spend") return "border-amber-200 bg-amber-50 text-amber-700";
-    return "border-slate-200 bg-slate-50 text-slate-700";
-  };
-
-  return (
-    <div className="space-y-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-gray-400">
-            {creativePreviewLabel[variation.creativeType]}
-          </p>
-          {editMode ? (
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-base font-semibold text-gray-900"
-              placeholder="Ad title"
-            />
-          ) : (
-            <h3 className="text-xl font-semibold text-gray-900">{variation.name}</h3>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            Status: <span className="font-semibold text-gray-700">{variation.status}</span>
-          </p>
-          {!editMode && variation.notes && (
-            <p className="mt-2 text-sm text-gray-600">{variation.notes}</p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(variation.tags || []).map((tag) => (
-              <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {editMode ? (
-            <>
-              <button
-                onClick={handleSave}
-                className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Save
-                <Check className="ml-2 h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setEditMode(false)}
-                className="inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600"
-              >
-                Cancel
-                <X className="ml-2 h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setEditMode(true)}
-                className="inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
-              >
-                Edit
-                <Pencil className="ml-2 h-4 w-4" />
-              </button>
-              <button
-                onClick={() =>
-                  AdVariationAPI.duplicateVariation(variation.campaignId, variation.id).then(onRefresh)
-                }
-                className="inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300"
-              >
-                Duplicate
-                <Copy className="ml-2 h-4 w-4" />
-              </button>
-              <button
-                onClick={() => onDelete(variation.id)}
-                className="inline-flex items-center rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:border-rose-300"
-              >
-                Delete
-                <Trash2 className="ml-2 h-4 w-4" />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className={`rounded-3xl border border-indigo-100 bg-white ${previewExpanded ? "p-4" : "p-2"}`}>
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Preview</p>
-          <button
-            onClick={() => setPreviewExpanded((prev) => !prev)}
-            className="inline-flex items-center rounded-full border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600"
-          >
-            {previewExpanded ? "Collapse preview" : "Expand preview"}
-            {previewExpanded ? <Minimize2 className="ml-2 h-4 w-4" /> : <Maximize2 className="ml-2 h-4 w-4" />}
-          </button>
-        </div>
-        {previewExpanded && (
-          <div className="mt-3">
-            <div className="mb-3 flex flex-wrap gap-2 text-xs">
-              {(["native", "facebook", "tiktok", "google"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => onPreviewModeChange(mode)}
-                  className={`rounded-full px-3 py-1 font-semibold ${
-                    previewMode === mode
-                      ? "bg-indigo-600 text-white"
-                      : "border border-gray-200 text-gray-600"
-                  }`}
-                >
-                  {formatLabel(mode)}
-                </button>
-              ))}
-            </div>
-            <div className="rounded-3xl border border-indigo-100 bg-white p-4">
-              {previewMode === "native" && (
-                <>
-                  <div className="h-60 rounded-2xl border border-gray-100 bg-gray-50">
-                    {livePreviewUrl ? (
-                      livePreviewType.startsWith("video") && liveVideoSrc ? (
-                        <video
-                          src={liveVideoSrc}
-                          poster={liveVideoPoster || undefined}
-                          className="h-full w-full rounded-2xl object-cover"
-                          muted
-                          playsInline
-                          preload="metadata"
-                        />
-                      ) : (
-                        <div
-                          className="h-full w-full rounded-2xl bg-cover bg-center"
-                          style={{ backgroundImage: `url(${livePreviewUrl})` }}
-                        />
-                      )
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-widest text-gray-400">
-                        Media preview
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-xs font-semibold text-gray-800">{headlineText || "Headline"}</p>
-                    <p className="text-[11px] text-gray-400">marketingsimplified.com</p>
-                  </div>
-                </>
-              )}
-              {previewMode === "facebook" && (
-                <div className="flex items-center justify-center">
-                  {facebookMedia ? (
-                    <FacebookFeedPreview mediaToShow={facebookMedia} primaryText={bodyText} scale={75} />
-                  ) : (
-                    <div className="text-xs text-gray-400">
-                      Upload media to preview Facebook feed.
-                    </div>
-                  )}
-                </div>
-              )}
-              {previewMode === "tiktok" && (
-                <div className="flex items-center justify-center">
-                  {tiktokCreative ? (
-                    <TiktokPreview
-                      creative={tiktokCreative}
-                      identity={
-                        logoUrl
-                          ? { avatarUrl: logoUrl, displayName: "Marketing Simplified Ads", sponsored: true }
-                          : undefined
-                      }
-                      text={bodyText}
-                      allowFullscreen={false}
-                      enablePlacementSwitch={false}
-                    />
-                  ) : (
-                    <div className="text-xs text-gray-400">Upload media to preview TikTok.</div>
-                  )}
-                </div>
-              )}
-              {previewMode === "google" && (
-                <div className="max-h-[520px] overflow-y-auto">
-                  <AdPreviewPanel ad={googlePreviewAd} />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-indigo-100 bg-white/90 p-5 shadow-sm backdrop-blur">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Composer</p>
-            <p className="text-lg font-semibold text-gray-900">Post + Preview</p>
-          </div>
-          <button
-            onClick={() => setComposerExpanded((prev) => !prev)}
-            className="inline-flex items-center rounded-full border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600"
-          >
-            {composerExpanded ? "Collapse" : "Expand"}
-            {composerExpanded ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
-          </button>
-        </div>
-        {composerExpanded && (
-          <div className="mt-4 space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-              Post copy
-            </p>
-            {CREATIVE_FIELDS[variation.creativeType].map((field) => (
-              <div key={field.key}>
-                <label className="text-[10px] uppercase tracking-widest text-gray-400">
-                  {field.label}
-                </label>
-                {field.key === "primaryText" ||
-                field.key === "body" ||
-                field.key === "cardDescription" ? (
-                  <textarea
-                    value={copyDrafts[field.key] || ""}
-                    onChange={(event) =>
-                      setCopyDrafts((prev) => ({ ...prev, [field.key]: event.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                    rows={3}
-                    disabled={!editMode}
-                  />
-                ) : (
-                  <input
-                    value={copyDrafts[field.key] || ""}
-                    onChange={(event) =>
-                      setCopyDrafts((prev) => ({ ...prev, [field.key]: event.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                    disabled={!editMode}
-                  />
-                )}
-              </div>
-            ))}
-            {editMode && (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  {uploadedAssets.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
-                      {uploadedAssets.map((asset, index) => {
-                        const isVideoAsset = asset.fileType?.startsWith("video");
-                        const poster = asset.thumbnailUrl || undefined;
-                        return (
-                          <div key={asset.id || index} className="relative group">
-                            {isVideoAsset ? (
-                              <video
-                                src={asset.fileUrl}
-                                poster={poster}
-                                className="h-16 w-full rounded-lg border border-indigo-100 object-cover"
-                                muted
-                                playsInline
-                                preload="metadata"
-                              />
-                            ) : (
-                              <div
-                                className="h-16 w-full rounded-lg border border-indigo-100 bg-white bg-cover bg-center"
-                                style={{
-                                  backgroundImage: `url(${asset.thumbnailUrl || asset.fileUrl})`,
-                                }}
-                              />
-                            )}
-                            <button
-                              onClick={() => handleRemoveMediaAsset(index)}
-                              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                              type="button"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <label className="flex cursor-pointer flex-col gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-3 text-xs text-indigo-600">
-                    <input
-                      type="file"
-                      accept={accepts}
-                      multiple={
-                        variation.creativeType === "carousel" ||
-                        variation.creativeType === "collection"
-                      }
-                      onChange={(event) => {
-                        const files = Array.from(event.target.files || []);
-                        setMediaFiles(files);
-                        setUploadError(null);
-                        if (!files.length) return;
-                        const invalid = files.find((file) => !validateFile(file).isValid);
-                        if (invalid) {
-                          setUploadError("Unsupported file type or size.");
-                          return;
-                        }
-                        setUploading(true);
-                        Promise.all(
-                          files.map((file) =>
-                            attachmentApi.uploadAttachment(file).then((asset) => ({
-                              id: asset.id,
-                              fileUrl: asset.file_url,
-                              thumbnailUrl: asset.thumbnail_url,
-                              fileType: asset.file_type,
-                            }))
-                          )
-                        )
-                          .then((assets) => {
-                            if (
-                              variation.creativeType === "carousel" ||
-                              variation.creativeType === "collection"
-                            ) {
-                              setUploadedAssets((prev) => [...prev, ...assets]);
-                            } else {
-                              setUploadedAssets(assets);
-                            }
-                          })
-                          .catch(() => setUploadError("Upload failed."))
-                          .finally(() => setUploading(false));
-                      }}
-                      className="hidden"
-                    />
-                    <span className="text-[10px] uppercase tracking-widest text-indigo-400">
-                      Upload media
-                    </span>
-                    <span>
-                      {mediaFiles.length
-                        ? mediaFiles.map((file) => file.name).join(", ")
-                        : "Click to upload image/video"}
-                    </span>
-                    {uploading && (
-                      <span className="text-[11px] text-[#0E8A96]">Uploading...</span>
-                    )}
-                    {uploadError && (
-                      <span className="text-[11px] text-rose-500">{uploadError}</span>
-                    )}
-                  </label>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {logoAssets.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2 rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
-                      {logoAssets.map((asset, index) => (
-                        <div key={asset.id || index} className="relative group">
-                          <div
-                            className="h-16 w-full rounded-lg border border-indigo-100 bg-white bg-cover bg-center"
-                            style={{
-                              backgroundImage: `url(${asset.thumbnailUrl || asset.fileUrl})`,
-                            }}
-                          />
-                          <button
-                            onClick={() => handleRemoveLogoAsset(index)}
-                            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                            type="button"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label className="flex cursor-pointer flex-col gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-3 text-xs text-indigo-600">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const files = Array.from(event.target.files || []);
-                        setLogoFiles(files);
-                        setUploadError(null);
-                        if (!files.length) return;
-                        const invalid = files.find((file) => !validateFile(file).isValid);
-                        if (invalid) {
-                          setUploadError("Unsupported file type or size.");
-                          return;
-                        }
-                        setUploading(true);
-                        Promise.all(
-                          files.map((file) =>
-                            attachmentApi.uploadAttachment(file).then((asset) => ({
-                              id: asset.id,
-                              fileUrl: asset.file_url,
-                              thumbnailUrl: asset.thumbnail_url,
-                              fileType: asset.file_type,
-                            }))
-                          )
-                        )
-                          .then((assets) => {
-                            setLogoAssets((prev) => [...prev, ...assets]);
-                          })
-                          .catch(() => setUploadError("Upload failed."))
-                          .finally(() => setUploading(false));
-                      }}
-                      className="hidden"
-                    />
-                    <span className="text-[10px] uppercase tracking-widest text-indigo-400">
-                      Upload logo
-                    </span>
-                    <span>
-                      {logoFiles.length
-                        ? logoFiles.map((file) => file.name).join(", ")
-                        : "Click to upload logo image"}
-                    </span>
-                    {uploading && (
-                      <span className="text-[11px] text-[#0E8A96]">Uploading...</span>
-                    )}
-                    {uploadError && (
-                      <span className="text-[11px] text-rose-500">{uploadError}</span>
-                    )}
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-indigo-100 bg-white/90 p-5 shadow-sm backdrop-blur">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Details</p>
-        <div className="mt-3 space-y-3 text-sm text-gray-600">
-          <div>
-            <p className="text-xs text-gray-400">Delivery</p>
-            {editMode ? (
-              <input
-                value={delivery}
-                onChange={(event) => setDelivery(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-              />
-            ) : (
-              <p>{delivery || "—"}</p>
-            )}
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <div>
-              <p className="text-xs text-gray-400">Bid Strategy</p>
-              {editMode ? (
-                <input
-                  value={bidStrategy}
-                  onChange={(event) => setBidStrategy(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                />
-              ) : (
-                <p>{bidStrategy || "—"}</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Budget</p>
-              {editMode ? (
-                <input
-                  value={budget}
-                  onChange={(event) => setBudget(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                />
-              ) : (
-                <p>{budget || "—"}</p>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Ad Set</p>
-            {editMode ? (
-              <select
-                value={adGroupId ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setAdGroupId(value ? Number(value) : null);
-                }}
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">No ad set</option>
-                {adGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p>{adGroups.find((group) => group.id === variation.adGroupId)?.name || "None"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Tags</p>
-            {editMode ? (
-              <input
-                value={tags}
-                onChange={(event) => setTags(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                placeholder="tag1, tag2"
-              />
-            ) : (
-              <p>{(variation.tags || []).join(", ") || "None"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Description</p>
-            {editMode ? (
-              <textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                placeholder="Add a short description"
-                rows={3}
-              />
-            ) : (
-              <p>{variation.notes || "No description yet."}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-indigo-100 bg-white/90 p-5 shadow-sm backdrop-blur">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Performance
-          </p>
-          <span className="text-xs text-gray-400">
-            {performanceEntries.length ? `${performanceEntries.length} entries` : "/"}
-          </span>
-        </div>
-        <div className="mt-4 grid gap-3 rounded-xl border border-gray-100 bg-white p-3 text-xs text-gray-600 md:grid-cols-3">
-          {summaryMetrics.map((metric) => (
-            <div
-              key={metric.label}
-              className={`flex items-center justify-between rounded-xl border px-3 py-2 shadow-sm ${metricColor(metric.label)}`}
-            >
-              <span className="text-[10px] uppercase tracking-widest text-gray-500">
-                {metric.label}
-              </span>
-              <span className="text-sm font-semibold">{metricValue(metric.keys) as any}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 space-y-3">
-          {performanceEntries.length === 0 && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <div className="flex items-center justify-end text-sm text-gray-600">
-                <span>/</span>
-              </div>
-            </div>
-          )}
-          {performanceEntries.map((entry) => (
-            <div key={entry.id} className="rounded-xl border border-gray-100 bg-white p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-gray-400">Recorded</p>
-                  <p className="text-sm font-semibold text-gray-800">
-                    {new Date(entry.recordedAt).toLocaleString()}
-                  </p>
-                </div>
-                <span className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-500">
-                  {entry.trendIndicator || "/"}
-                </span>
-              </div>
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {Object.entries(entry.metrics || {}).map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs text-gray-600">
-                    <span className="uppercase tracking-widest">{key}</span>
-                    <span className="font-semibold text-gray-800">{value as any}</span>
-                  </div>
-                ))}
-              </div>
-              {entry.observations && (
-                <p className="mt-3 text-xs text-gray-500">{entry.observations}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-indigo-100 bg-white/90 p-5 shadow-sm backdrop-blur">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Status History</p>
-        <div className="mt-3 space-y-2 text-xs text-gray-600">
-          {statusHistory.length === 0 && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-gray-500">/</div>
-          )}
-          {statusHistory.map((entry: any) => (
-            <div key={entry.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-700">
-                  {entry.fromStatus} → {entry.toStatus}
-                </span>
-                <span>{new Date(entry.changedAt).toLocaleString()}</span>
-              </div>
-              {entry.reason && <p className="mt-1 text-[11px] text-gray-500">{entry.reason}</p>}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
