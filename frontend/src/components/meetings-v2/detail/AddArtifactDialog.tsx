@@ -23,6 +23,8 @@ interface Props {
   projectId: number;
   meetingId: number;
   existingArtifacts: { artifact_type: string; artifact_id: number }[];
+  generatedDecisionIds?: number[];
+  generatedTaskIds?: number[];
   onCreated: (link: ArtifactLink) => void;
 }
 
@@ -32,6 +34,8 @@ export default function AddArtifactDialog({
   projectId,
   meetingId,
   existingArtifacts,
+  generatedDecisionIds = [],
+  generatedTaskIds = [],
   onCreated,
 }: Props) {
   const [kind, setKind] = useState<ArtifactKind>('decision');
@@ -98,8 +102,10 @@ export default function AddArtifactDialog({
     for (const a of existingArtifacts) {
       if (a.artifact_type.toLowerCase() === kind) set.add(a.artifact_id);
     }
+    const generated = kind === 'decision' ? generatedDecisionIds : generatedTaskIds;
+    for (const id of generated) set.add(id);
     return set;
-  }, [existingArtifacts, kind]);
+  }, [existingArtifacts, kind, generatedDecisionIds, generatedTaskIds]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

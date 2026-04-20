@@ -296,6 +296,7 @@ export default function MeetingDetailPage() {
                   meetingTitle={meeting.title}
                   generatedDecisions={meeting.generated_decisions || []}
                   generatedTasks={meeting.generated_tasks || []}
+                  readOnly={readOnly}
                   onMutated={bumpRefresh}
                 />
 
@@ -304,6 +305,8 @@ export default function MeetingDetailPage() {
                   meetingId={meeting.id}
                   relatedDecisions={meeting.related_decisions || []}
                   relatedTasks={meeting.related_tasks || []}
+                  generatedDecisions={meeting.generated_decisions || []}
+                  generatedTasks={meeting.generated_tasks || []}
                   artifacts={artifacts}
                   readOnly={readOnly}
                   onMutated={bumpRefresh}

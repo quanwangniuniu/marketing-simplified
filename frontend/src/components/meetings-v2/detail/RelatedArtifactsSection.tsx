@@ -13,6 +13,8 @@ interface Props {
   meetingId: number;
   relatedDecisions: KnowledgeNavigationLink[];
   relatedTasks: KnowledgeNavigationLink[];
+  generatedDecisions: KnowledgeNavigationLink[];
+  generatedTasks: KnowledgeNavigationLink[];
   artifacts: ArtifactLink[];
   readOnly: boolean;
   onMutated: () => void;
@@ -28,6 +30,8 @@ export default function RelatedArtifactsSection({
   meetingId,
   relatedDecisions,
   relatedTasks,
+  generatedDecisions,
+  generatedTasks,
   artifacts,
   readOnly,
   onMutated,
@@ -143,6 +147,8 @@ export default function RelatedArtifactsSection({
           artifact_type: a.artifact_type,
           artifact_id: a.artifact_id,
         }))}
+        generatedDecisionIds={generatedDecisions.map((d) => d.id)}
+        generatedTaskIds={generatedTasks.map((t) => t.id)}
         onCreated={() => onMutated()}
       />
     </section>

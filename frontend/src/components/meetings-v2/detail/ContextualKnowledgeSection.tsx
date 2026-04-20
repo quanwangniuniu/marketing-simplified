@@ -5,7 +5,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { FileSearch, Plus, ExternalLink, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
-import type { KnowledgeNavigationLink, Meeting } from '@/types/meeting';
+import type { KnowledgeNavigationLink } from '@/types/meeting';
 
 interface Props {
   projectId: number;
@@ -13,6 +13,7 @@ interface Props {
   meetingTitle: string;
   generatedDecisions: KnowledgeNavigationLink[];
   generatedTasks: KnowledgeNavigationLink[];
+  readOnly?: boolean;
   onMutated: () => void;
 }
 
@@ -27,19 +28,27 @@ export default function ContextualKnowledgeSection({
   meetingTitle,
   generatedDecisions,
   generatedTasks,
+  readOnly = false,
   onMutated,
 }: Props) {
   const [creatingDecision, setCreatingDecision] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
+  const disabledTitle = readOnly
+    ? 'Meeting is archived; unarchive to spawn new artifacts.'
+    : undefined;
 
   const createDecision = async () => {
     setCreatingDecision(true);
     try {
-      const response = await api.post<{ id: number }>('/api/decisions/drafts/', {
-        project: projectId,
-        origin_meeting_id: meetingId,
-        title: '',
-      });
+      const response = await api.post<{ id: number }>(
+        '/api/decisions/drafts/',
+        {
+          project: projectId,
+          origin_meeting_id: meetingId,
+          title: '',
+        },
+        { headers: { 'X-Project-Id': String(projectId) } },
+      );
       const newId = response.data?.id;
       if (newId) {
         toast.success('Decision draft created');
@@ -115,7 +124,8 @@ export default function ContextualKnowledgeSection({
             <button
               type="button"
               onClick={createDecision}
-              disabled={creatingDecision}
+              disabled={creatingDecision || readOnly}
+              title={disabledTitle}
               className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creatingDecision ? (
@@ -153,7 +163,8 @@ export default function ContextualKnowledgeSection({
             <button
               type="button"
               onClick={createTask}
-              disabled={creatingTask}
+              disabled={creatingTask || readOnly}
+              title={disabledTitle}
               className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creatingTask ? (
