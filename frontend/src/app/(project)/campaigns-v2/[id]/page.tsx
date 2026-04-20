@@ -13,7 +13,7 @@ import type { CampaignCheckIn, CampaignData, PerformanceSnapshot } from '@/types
 import CampaignHeader from '@/components/campaigns/CampaignHeader';
 import ActivityTimeline from '@/components/campaigns/ActivityTimeline';
 import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
-import CampaignSnapshots from '@/components/campaigns/CampaignSnapshots';
+import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns-v2/sections/SnapshotsSection';
 import CampaignStatusHistory from '@/components/campaigns/CampaignStatusHistory';
 import CampaignTasks from '@/components/campaigns/CampaignTasks';
 import CampaignFSMActionBar from '@/components/campaigns-v2/detail/CampaignFSMActionBar';
@@ -41,7 +41,7 @@ export default function CampaignV2DetailPage() {
   const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
   const [editSnapshotOpen, setEditSnapshotOpen] = useState(false);
   const [selectedSnapshot, setSelectedSnapshot] = useState<PerformanceSnapshot | null>(null);
-  const [snapshotsRefresh, setSnapshotsRefresh] = useState(0);
+  const snapshotsRef = useRef<SnapshotsSectionHandle>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
   const [statusRefresh, setStatusRefresh] = useState(0);
 
@@ -161,12 +161,11 @@ export default function CampaignV2DetailPage() {
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <CampaignSnapshots
+            <SnapshotsSection
+              ref={snapshotsRef}
               campaignId={campaignId}
               onEdit={handleSnapshotEdit}
-              onDelete={() => setSnapshotsRefresh((n) => n + 1)}
               onCreate={handleSnapshotCreate}
-              refreshTrigger={snapshotsRefresh}
               isArchived={isArchived}
             />
             <ActivityTimeline campaignId={campaignId} />
@@ -204,7 +203,7 @@ export default function CampaignV2DetailPage() {
           open={createSnapshotOpen}
           onOpenChange={setCreateSnapshotOpen}
           campaignId={campaignId}
-          onSuccess={() => setSnapshotsRefresh((n) => n + 1)}
+          onSuccess={() => snapshotsRef.current?.refresh()}
         />
         <EditSnapshotDialog
           open={editSnapshotOpen}
@@ -214,8 +213,8 @@ export default function CampaignV2DetailPage() {
           }}
           campaignId={campaignId}
           snapshot={selectedSnapshot}
-          onSuccess={() => setSnapshotsRefresh((n) => n + 1)}
-          onDelete={() => setSnapshotsRefresh((n) => n + 1)}
+          onSuccess={() => snapshotsRef.current?.refresh()}
+          onDelete={() => snapshotsRef.current?.refresh()}
         />
         <SaveAsTemplateDialog
           open={saveAsTemplateOpen}
