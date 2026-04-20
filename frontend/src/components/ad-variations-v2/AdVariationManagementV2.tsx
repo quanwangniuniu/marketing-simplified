@@ -35,6 +35,7 @@ import CreativeTypeBadge from "@/components/ad-variations-v2/pills/CreativeTypeB
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import BrandSelect from "@/components/ui/BrandSelect";
+import VariationComparisonSection from "@/components/ad-variations-v2/sections/VariationComparisonSection";
 
 const STATUS_COLUMNS: VariationStatus[] = [
   "Draft",
@@ -1049,14 +1050,14 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
       )}
 
       {activeTab === "compare" && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-white/60 py-16">
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-gray-700">
-            Variation Comparison
-          </p>
-          <p className="text-xs text-gray-500">
-            Coming soon — rebuild tracked in sub-SOP 07.1 VariationComparison.
-          </p>
-        </div>
+        <VariationComparisonSection
+          variations={variations}
+          compareIds={compareIds}
+          compareData={compareData}
+          onSelect={setCompareIds}
+          onCompare={handleCompare}
+          onMarkStatus={handleMarkStatus}
+        />
       )}
 
       {activeTab === "groups" && (
@@ -1254,241 +1255,6 @@ function StatusRail({
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function ComparisonPanel({
-  variations,
-  compareIds,
-  compareData,
-  onSelect,
-  onCompare,
-  onMarkStatus,
-}: {
-  variations: AdVariation[];
-  compareIds: number[];
-  compareData: ComparisonResponse | null;
-  onSelect: (ids: number[]) => void;
-  onCompare: () => void;
-  onMarkStatus: (variation: AdVariation, status: VariationStatus) => void;
-}) {
-  const selected = variations.filter((item) => compareIds.includes(item.id));
-  const rows = compareData?.rows || [];
-
-  return (
-    <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
-      <aside className="rounded-3xl border border-slate-200 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 p-5 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.45)]">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-[0.35em] text-slate-400">
-            Comparison Lab
-          </p>
-          <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
-            {compareIds.length}/4
-          </span>
-        </div>
-        <h3 className="mt-3 text-xl font-semibold text-slate-900">
-          Pick 2–4 variations
-        </h3>
-        <p className="mt-2 text-sm text-slate-500">
-          Build a focused head-to-head view and mark winners instantly.
-        </p>
-        <div className="mt-4 space-y-2">
-          {variations.map((variation) => {
-            const isSelected = compareIds.includes(variation.id);
-            return (
-              <label
-                key={variation.id}
-                className={`flex items-center justify-between rounded-2xl border px-3 py-2 text-sm transition ${
-                  isSelected
-                    ? "border-indigo-200 bg-indigo-50/60 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {
-                      if (isSelected) {
-                        onSelect(compareIds.filter((id) => id !== variation.id));
-                      } else if (compareIds.length < 4) {
-                        onSelect([...compareIds, variation.id]);
-                      }
-                    }}
-                    className="accent-[#0E8A96]"
-                  />
-                  <span className="font-medium">{variation.name}</span>
-                </div>
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500">
-                  {variation.creativeType}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-        <button
-          onClick={onCompare}
-          disabled={compareIds.length < 2}
-          className="mt-5 w-full rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
-        >
-          Run comparison
-        </button>
-      </aside>
-      <section className="space-y-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.25)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.35em] text-slate-400">
-                Snapshot
-              </p>
-              <h3 className="text-2xl font-semibold text-slate-900">
-                Variation comparison
-              </h3>
-            </div>
-            <div className="flex gap-2 text-[11px] text-slate-500">
-              <span className="rounded-full border border-slate-200 px-3 py-1">
-                {rows.length} rows
-              </span>
-              <span className="rounded-full border border-slate-200 px-3 py-1">
-                {compareIds.length} columns
-              </span>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {selected.map((variation) => (
-              <div
-                key={variation.id}
-                className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-slate-100/60 p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-widest text-slate-400">
-                    Variation
-                  </p>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${statusStyles[variation.status].badge}`}>
-                    {variation.status}
-                  </span>
-                </div>
-                <h4 className="mt-2 text-base font-semibold text-slate-900">
-                  {variation.name}
-                </h4>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-                  <span className="rounded-full bg-slate-100 px-2 py-1">
-                    {variation.creativeType}
-                  </span>
-                  <span className="rounded-full bg-white px-2 py-1 shadow-sm">
-                    {variation.tags?.length ? `${variation.tags.length} tags` : "No tags"}
-                  </span>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => onMarkStatus(variation, "Winner")}
-                    className={`flex-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                      variation.status === "Winner"
-                        ? "bg-emerald-600 text-white"
-                        : "border border-emerald-200 text-emerald-700"
-                    }`}
-                  >
-                    {variation.status === "Winner" ? "Unmark Winner" : "Mark Winner"}
-                  </button>
-                  <button
-                    onClick={() => onMarkStatus(variation, "Loser")}
-                    className={`flex-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                      variation.status === "Loser"
-                        ? "bg-rose-600 text-white"
-                        : "border border-rose-200 text-rose-700"
-                    }`}
-                  >
-                    {variation.status === "Loser" ? "Unmark Loser" : "Mark Loser"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.25)]">
-          <table className="min-w-[980px] w-full text-sm">
-            <colgroup>
-              <col className="w-60" />
-              {compareIds.map((id) => (
-                <col key={id} className="w-64" />
-              ))}
-            </colgroup>
-            <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-widest text-slate-400">
-              <tr>
-                <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left">
-                  Attribute
-                </th>
-                {compareIds.map((id, index) => {
-                  const variation = variations.find((item) => item.id === id);
-                  const tone =
-                    index % 3 === 0
-                      ? "bg-indigo-50/60"
-                      : index % 3 === 1
-                      ? "bg-emerald-50/60"
-                      : "bg-amber-50/60";
-                  return (
-                    <th key={id} className={`px-4 py-3 text-left ${tone}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-700">
-                          {variation?.name || id}
-                        </span>
-                        {variation && (
-                          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${statusStyles[variation.status].badge}`}>
-                            {variation.status}
-                          </span>
-                        )}
-                      </div>
-                      {variation && (
-                        <span className="mt-1 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] text-slate-500">
-                          {variation.creativeType}
-                        </span>
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody className="text-slate-700">
-              {rows.map((row, index) => (
-                <tr
-                  key={row.key}
-                  className={`transition ${
-                    index % 2 === 0 ? "bg-white" : "bg-slate-50/60"
-                  } hover:bg-indigo-50/30`}
-                >
-                  <td className="sticky left-0 bg-inherit px-4 py-3 text-xs text-slate-500">
-                    {row.key}
-                  </td>
-                  {compareIds.map((id, colIndex) => {
-                    const tone =
-                      colIndex % 3 === 0
-                        ? "bg-indigo-50/30"
-                        : colIndex % 3 === 1
-                        ? "bg-emerald-50/30"
-                        : "bg-amber-50/30";
-                    return (
-                      <td key={id} className={`px-4 py-3 text-xs text-slate-700 ${tone}`}>
-                        {row.values[id] ?? "/"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={compareIds.length + 1}
-                    className="px-4 py-10 text-center text-sm text-slate-500"
-                  >
-                    Select variations and run a comparison.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }
