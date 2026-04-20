@@ -11,7 +11,7 @@ import { useProjectStore } from '@/lib/projectStore';
 import { useCampaignData } from '@/hooks/useCampaignData';
 import type { CampaignCheckIn, CampaignData, PerformanceSnapshot } from '@/types/campaign';
 import CampaignHeader from '@/components/campaigns/CampaignHeader';
-import ActivityTimeline from '@/components/campaigns/ActivityTimeline';
+import TimelineSection, { type TimelineSectionHandle } from '@/components/campaigns-v2/sections/TimelineSection';
 import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
 import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns-v2/sections/SnapshotsSection';
 import CampaignStatusHistory from '@/components/campaigns/CampaignStatusHistory';
@@ -42,6 +42,7 @@ export default function CampaignV2DetailPage() {
   const [editSnapshotOpen, setEditSnapshotOpen] = useState(false);
   const [selectedSnapshot, setSelectedSnapshot] = useState<PerformanceSnapshot | null>(null);
   const snapshotsRef = useRef<SnapshotsSectionHandle>(null);
+  const timelineRef = useRef<TimelineSectionHandle>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
   const [statusRefresh, setStatusRefresh] = useState(0);
 
@@ -106,6 +107,7 @@ export default function CampaignV2DetailPage() {
     // optimistic update via direct fetch for related sections
     void fetchCampaign(campaignId);
     setStatusRefresh((n) => n + 1);
+    timelineRef.current?.refresh();
   };
 
   if (loading) {
@@ -168,7 +170,7 @@ export default function CampaignV2DetailPage() {
               onCreate={handleSnapshotCreate}
               isArchived={isArchived}
             />
-            <ActivityTimeline campaignId={campaignId} />
+            <TimelineSection ref={timelineRef} campaignId={campaignId} />
             <CampaignTasks campaignId={campaignId} />
           </div>
           <div className="space-y-6 lg:col-span-1">
@@ -187,7 +189,10 @@ export default function CampaignV2DetailPage() {
           open={createCheckInOpen}
           onOpenChange={setCreateCheckInOpen}
           campaignId={campaignId}
-          onSuccess={() => checkInsRef.current?.refresh()}
+          onSuccess={() => {
+            checkInsRef.current?.refresh();
+            timelineRef.current?.refresh();
+          }}
         />
         <EditCheckInDialog
           open={editCheckInOpen}
@@ -197,13 +202,19 @@ export default function CampaignV2DetailPage() {
           }}
           campaignId={campaignId}
           checkIn={selectedCheckIn}
-          onSuccess={() => checkInsRef.current?.refresh()}
+          onSuccess={() => {
+            checkInsRef.current?.refresh();
+            timelineRef.current?.refresh();
+          }}
         />
         <CreateSnapshotDialog
           open={createSnapshotOpen}
           onOpenChange={setCreateSnapshotOpen}
           campaignId={campaignId}
-          onSuccess={() => snapshotsRef.current?.refresh()}
+          onSuccess={() => {
+            snapshotsRef.current?.refresh();
+            timelineRef.current?.refresh();
+          }}
         />
         <EditSnapshotDialog
           open={editSnapshotOpen}
@@ -213,8 +224,14 @@ export default function CampaignV2DetailPage() {
           }}
           campaignId={campaignId}
           snapshot={selectedSnapshot}
-          onSuccess={() => snapshotsRef.current?.refresh()}
-          onDelete={() => snapshotsRef.current?.refresh()}
+          onSuccess={() => {
+            snapshotsRef.current?.refresh();
+            timelineRef.current?.refresh();
+          }}
+          onDelete={() => {
+            snapshotsRef.current?.refresh();
+            timelineRef.current?.refresh();
+          }}
         />
         <SaveAsTemplateDialog
           open={saveAsTemplateOpen}
