@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ArrowLeft, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
 import NotificationBell from './NotificationBell';
@@ -62,6 +62,8 @@ const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } 
   return { root, leaf };
 };
 
+const ROOT_PATHS = new Set(['/overview', '/select-project']);
+
 export default function DashboardLayout({
   children,
   alerts = [],
@@ -69,7 +71,14 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
   const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
+  const showBack = !!pathname && !ROOT_PATHS.has(pathname);
+  const handleBack = () => {
+    const segments = (pathname ?? '').split('/').filter(Boolean);
+    const parent = segments.length > 1 ? '/' + segments.slice(0, -1).join('/') : '/overview';
+    router.push(parent);
+  };
   const activeProject = useProjectStore((s) => s.activeProject);
   const [autoMeetings, setAutoMeetings] = useState<MeetingListItem[]>([]);
   const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
@@ -110,6 +119,17 @@ export default function DashboardLayout({
         {/* Top bar */}
         <header className="flex items-center justify-between px-5 h-12 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center gap-2 text-sm">
+            {showBack && (
+              <button
+                type="button"
+                onClick={handleBack}
+                aria-label="Go back"
+                title="Go back"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             <span className="text-gray-400">{breadcrumb.root}</span>
             <span className="text-gray-300">/</span>
             <span className="font-medium text-gray-900">{breadcrumb.leaf}</span>
