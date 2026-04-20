@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import {
   AlignLeft,
@@ -23,6 +23,8 @@ type EventPanelDialogProps = {
   end: Date | null;
   event: EventDTO | null;
   calendars: CalendarDTO[];
+  /** User's primary calendar from listCalendars; used to default create + merge into options when missing from view. */
+  primaryCalendar?: CalendarDTO | null;
   preferredCalendarId?: string | null;
   onSave: (payload: { action: () => Promise<void> }) => Promise<void>;
   onDelete?: (event: EventDTO) => Promise<void>;
@@ -39,24 +41,42 @@ export function EventPanelDialog({
   end,
   event,
   calendars,
+  primaryCalendar = null,
   preferredCalendarId,
   onSave,
   onDelete,
   onAskAgent,
   position,
 }: EventPanelDialogProps) {
+  const mergedCalendars = useMemo(() => {
+    if (!primaryCalendar) {
+      return calendars;
+    }
+    if (calendars.some((c) => c.id === primaryCalendar.id)) {
+      return calendars;
+    }
+    return [primaryCalendar, ...calendars];
+  }, [calendars, primaryCalendar]);
+
   const resolveDefaultCalendarId = useCallback(
     (eventCalendarId?: string | null) => {
-      const availableIds = new Set(calendars.map((cal) => cal.id));
+      const availableIds = new Set(mergedCalendars.map((cal) => cal.id));
       if (eventCalendarId && availableIds.has(eventCalendarId)) {
         return eventCalendarId;
+      }
+      if (
+        mode === "create" &&
+        primaryCalendar?.id &&
+        availableIds.has(primaryCalendar.id)
+      ) {
+        return primaryCalendar.id;
       }
       if (preferredCalendarId && availableIds.has(preferredCalendarId)) {
         return preferredCalendarId;
       }
-      return calendars[0]?.id || "";
+      return mergedCalendars[0]?.id || "";
     },
-    [calendars, preferredCalendarId],
+    [mergedCalendars, mode, preferredCalendarId, primaryCalendar],
   );
 
   const [title, setTitle] = React.useState(event?.title ?? "");
@@ -90,13 +110,13 @@ export function EventPanelDialog({
     }
 
     setCalendarId((currentCalendarId) => {
-      if (currentCalendarId && calendars.some((cal) => cal.id === currentCalendarId)) {
+      if (currentCalendarId && mergedCalendars.some((cal) => cal.id === currentCalendarId)) {
         return currentCalendarId;
       }
       return defaultCalendarId;
     });
   }, [
-    calendars,
+    mergedCalendars,
     end,
     event,
     formSeedKey,
@@ -119,10 +139,10 @@ export function EventPanelDialog({
 
   if (mode === "view" && event) {
     const calendarName =
-      calendars.find((c) => c.id === event.calendar_id)?.name || "Calendar";
+      mergedCalendars.find((c) => c.id === event.calendar_id)?.name || "Calendar";
     const color =
       event.color ||
-      calendars.find((c) => c.id === event.calendar_id)?.color ||
+      mergedCalendars.find((c) => c.id === event.calendar_id)?.color ||
       "#1E88E5";
 
     return (
@@ -387,7 +407,7 @@ export function EventPanelDialog({
                       value={calendarId}
                       onChange={(e) => setCalendarId(e.target.value)}
                     >
-                      {calendars.map((cal) => (
+                      {mergedCalendars.map((cal) => (
                         <option key={cal.id} value={cal.id}>
                           {cal.name}
                         </option>
@@ -404,11 +424,12 @@ export function EventPanelDialog({
                         className="inline-block h-2.5 w-2.5 rounded-full"
                         style={{
                           backgroundColor:
-                            calendars.find((c) => c.id === event.calendar_id)?.color || "#1E88E5",
+                            mergedCalendars.find((c) => c.id === event.calendar_id)?.color ||
+                            "#1E88E5",
                         }}
                       />
                       <span>
-                        {calendars.find((c) => c.id === event.calendar_id)?.name}
+                        {mergedCalendars.find((c) => c.id === event.calendar_id)?.name}
                       </span>
                     </div>
                   </div>

@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'meetings.apps.MeetingsConfig',
     'zoom_integration.apps.ZoomIntegrationConfig',
     'google_docs_integration.apps.GoogleDocsIntegrationConfig',
+    'google_calendar_integration.apps.GoogleCalendarIntegrationConfig',
 ]
 
 MIDDLEWARE = [
@@ -371,6 +372,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=2, minute=0),  # Run daily at 02:00 UTC (low traffic period)
         'options': {'timezone': 'UTC'}
     },
+    'google-calendar-import-every-15-min': {
+        'task': 'google_calendar_integration.tasks.sync_all_google_calendar_imports',
+        'schedule': timedelta(minutes=15),
+        'options': {'timezone': 'UTC'},
+    },
 }
 
 # Redis Configuration
@@ -518,6 +524,10 @@ def _get_google_env(primary_key, fallback_key):
 GOOGLE_OAUTH_CLIENT_ID = _get_google_env('GOOGLE_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = _get_google_env('GOOGLE_CLIENT_SECRET', 'GOOGLE_OAUTH_CLIENT_SECRET')
 GOOGLE_OAUTH_REDIRECT_URI = _get_google_env('GOOGLE_OAUTH_REDIRECT_URI', 'GOOGLE_REDIRECT_URI')
+GOOGLE_CALENDAR_OAUTH_REDIRECT_URI = config(
+    'GOOGLE_CALENDAR_OAUTH_REDIRECT_URI',
+    default='http://localhost:8000/api/google-calendar/callback/',
+).strip()
 
 # Logging Configuration
 import logging

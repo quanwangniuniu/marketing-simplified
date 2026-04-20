@@ -201,6 +201,7 @@ function CalendarPageStory(props: CalendarPageStoryProps = {}) {
           end={dialogEnd}
           event={dialogEvent}
           calendars={calendars}
+          primaryCalendar={calendars.find((c) => c.is_primary) ?? null}
           preferredCalendarId={calendars[0].id}
           onSave={async () => {}}
           onDelete={async () => {}}

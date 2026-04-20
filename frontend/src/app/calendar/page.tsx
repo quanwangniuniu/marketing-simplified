@@ -7,20 +7,23 @@ import toast from "react-hot-toast";
 import Layout from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CalendarAPI, extractNavigationMetadata } from "@/lib/api/calendarApi";
-import type { CalendarViewType, EventDTO } from "@/lib/api/calendarApi";
+import type { CalendarDTO, CalendarViewType, EventDTO } from "@/lib/api/calendarApi";
 import { useCalendarView } from "@/hooks/useCalendarView";
 import { CalendarToolbar } from "@/components/calendar/CalendarToolbar";
 import { CalendarSidebarContainer } from "@/components/calendar/CalendarSidebarContainer";
 import { CalendarViewRouter } from "@/components/calendar/CalendarViews";
 import { EventDialogContainer } from "@/components/calendar/EventDialogContainer";
 import type { CalendarDialogMode, EventPanelPosition } from "@/components/calendar/types";
-import { List } from "lucide-react";
+import { List, Loader2, RefreshCw } from "lucide-react";
 import {
   CALENDAR_FILTER_STORAGE_KEY,
   VIEW_LABELS,
   extractCalendarIdFromStoredValue,
   sameCalendarIdList,
 } from "@/components/calendar/utils";
+import { googleCalendarApi } from "@/lib/api/googleCalendarApi";
+import type { GoogleCalendarStatus } from "@/lib/api/googleCalendarApi";
+import { GoogleCalendarConnectedBadge } from "@/components/google-calendar/GoogleCalendarConnectedBadge";
 
 function CalendarPageContent() {
   const router = useRouter();
@@ -44,6 +47,16 @@ function CalendarPageContent() {
     new Set(["decision", "task"])
   );
   const viewSwitcherRef = useRef<HTMLDivElement>(null);
+  const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [gcalSyncing, setGcalSyncing] = useState(false);
+  const [primaryCalendar, setPrimaryCalendar] = useState<CalendarDTO | null>(null);
+
+  const refreshGcalStatus = useCallback(() => {
+    googleCalendarApi
+      .getStatus()
+      .then((s) => setGcalStatus(s))
+      .catch(() => setGcalStatus(null));
+  }, []);
 
   const { events, calendars, isLoading, error, refetch } = useCalendarView({
     viewType: currentView,
@@ -51,6 +64,55 @@ function CalendarPageContent() {
     calendarIds: visibleCalendarIds,
     activeEventTypes: Array.from(activeEventTypes),
   });
+
+  const handleGcalSync = useCallback(async () => {
+    setGcalSyncing(true);
+    try {
+      await googleCalendarApi.syncNow();
+      toast.success("Synced with Google Calendar.");
+      refetch();
+      refreshGcalStatus();
+    } catch {
+      toast.error("Sync failed. Check your connection and try again.");
+    } finally {
+      setGcalSyncing(false);
+    }
+  }, [refetch, refreshGcalStatus]);
+
+  useEffect(() => {
+    refreshGcalStatus();
+  }, [refreshGcalStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    CalendarAPI.listCalendars()
+      .then((res) => {
+        const raw = res.data as CalendarDTO[] | { results?: CalendarDTO[] };
+        const list = Array.isArray(raw) ? raw : raw.results ?? [];
+        if (cancelled) {
+          return;
+        }
+        setPrimaryCalendar(list.find((c) => c.is_primary) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrimaryCalendar(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        refreshGcalStatus();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [refreshGcalStatus]);
 
   // Auto-refresh calendar data when:
   // 1. Agent creates/updates a calendar event (custom event + localStorage flag)
@@ -324,6 +386,46 @@ function CalendarPageContent() {
           onAskAgent={handleAskAgentFromCalendar}
         />
 
+        {gcalStatus?.connected && (gcalStatus.needs_reconnect || gcalStatus.last_error_message) ? (
+          <div className="mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
+            <span>
+              {gcalStatus.last_error_message ||
+                "Google Calendar authorization expired or was revoked. Reconnect in Settings."}
+            </span>
+            <button
+              type="button"
+              onClick={() => router.push("/settings")}
+              className="shrink-0 rounded-md bg-amber-700 px-3 py-1 text-xs font-medium text-white hover:bg-amber-800"
+            >
+              Open Settings
+            </button>
+          </div>
+        ) : null}
+
+        {gcalStatus?.connected && !gcalStatus.needs_reconnect && !gcalStatus.last_error_message ? (
+          <div className="mx-4 mt-2 flex flex-wrap items-center gap-2">
+            <GoogleCalendarConnectedBadge googleEmail={gcalStatus.google_email} />
+            <button
+              type="button"
+              onClick={handleGcalSync}
+              disabled={gcalSyncing}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-400 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              {gcalSyncing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Syncing…
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  Sync with Google
+                </>
+              )}
+            </button>
+          </div>
+        ) : null}
+
         {/* SMP-400: Derived event type filter bar
             Bug 2 fix: "Reviews" (decision_review) filter has been removed.
             Only Decision and Task filters are shown. Filtering is pure client-side
@@ -474,6 +576,7 @@ function CalendarPageContent() {
             end={dialogEnd}
             event={editingEvent}
             calendars={calendars}
+            primaryCalendar={primaryCalendar}
             preferredCalendarId={selectedCalendarId}
             position={panelPosition}
             onSave={async (payload) => {
