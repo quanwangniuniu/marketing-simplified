@@ -3,13 +3,16 @@ import type { MetadataRoute } from 'next';
 const getSiteUrl = () => {
 	const raw = process.env.NEXT_PUBLIC_SITE_URL;
 	if (!raw) {
-		throw new Error('Missing NEXT_PUBLIC_SITE_URL for sitemap generation');
+		return null;
 	}
 	return raw.replace(/\/+$/, '');
 };
 
 export default function sitemap(): MetadataRoute.Sitemap {
 	const siteUrl = getSiteUrl();
+	if (!siteUrl) {
+		return [];
+	}
 
 	// put paths in array
 	const paths = [
