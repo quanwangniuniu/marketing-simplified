@@ -15,7 +15,7 @@ import TimelineSection, { type TimelineSectionHandle } from '@/components/campai
 import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
 import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns-v2/sections/SnapshotsSection';
 import CampaignStatusHistory from '@/components/campaigns/CampaignStatusHistory';
-import CampaignTasks from '@/components/campaigns/CampaignTasks';
+import TasksSection, { type TasksSectionHandle } from '@/components/campaigns-v2/sections/TasksSection';
 import CampaignFSMActionBar from '@/components/campaigns-v2/detail/CampaignFSMActionBar';
 import CreateCheckInDialog from '@/components/campaigns-v2/modals/CreateCheckInDialog';
 import EditCheckInDialog from '@/components/campaigns-v2/modals/EditCheckInDialog';
@@ -43,6 +43,7 @@ export default function CampaignV2DetailPage() {
   const [selectedSnapshot, setSelectedSnapshot] = useState<PerformanceSnapshot | null>(null);
   const snapshotsRef = useRef<SnapshotsSectionHandle>(null);
   const timelineRef = useRef<TimelineSectionHandle>(null);
+  const tasksRef = useRef<TasksSectionHandle>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
   const [statusRefresh, setStatusRefresh] = useState(0);
 
@@ -171,7 +172,7 @@ export default function CampaignV2DetailPage() {
               isArchived={isArchived}
             />
             <TimelineSection ref={timelineRef} campaignId={campaignId} />
-            <CampaignTasks campaignId={campaignId} />
+            <TasksSection ref={tasksRef} campaignId={campaignId} />
           </div>
           <div className="space-y-6 lg:col-span-1">
             <CheckInsSection
