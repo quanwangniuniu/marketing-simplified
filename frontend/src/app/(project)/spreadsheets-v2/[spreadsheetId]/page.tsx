@@ -18,7 +18,7 @@ import {
   UpdateSheetRequest,
 } from '@/types/spreadsheet';
 import SpreadsheetGrid, { SpreadsheetGridHandle } from '@/components/spreadsheets/SpreadsheetGrid';
-import PatternAgentPanel from '@/components/spreadsheets/PatternAgentPanel';
+import PatternAgentPanelV2 from '@/components/spreadsheets-v2/PatternAgentPanelV2';
 import { PivotEditorPanel } from '@/components/spreadsheets/PivotEditorPanel';
 import {
   PivotConfig,
@@ -62,7 +62,7 @@ import {
 } from '@/lib/spreadsheets/timelineItems';
 
 import SpreadsheetDetailHeader from '@/components/spreadsheets-v2/detail/SpreadsheetDetailHeader';
-import SheetTabBar from '@/components/spreadsheets-v2/detail/SheetTabBar';
+import SheetTabBarBottom from '@/components/spreadsheets-v2/detail/SheetTabBarBottom';
 import CreateSheetDialog from '@/components/spreadsheets-v2/CreateSheetDialog';
 
 function getNextSheetName(existingSheets: SheetData[]): string {
@@ -867,25 +867,10 @@ export default function SpreadsheetsV2DetailPage() {
           onRename={handleRenameSpreadsheet}
         />
 
-        <div className="rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-gray-100">
-          <SheetTabBar
-            sheets={sheets}
-            activeSheetId={activeSheetId}
-            onSelect={setActiveSheetId}
-            onCreate={() => {
-              setCreateSheetDefaultName(getNextSheetName(sheets));
-              setCreateSheetOpen(true);
-            }}
-            onRename={handleRenameSheet}
-            onRequestDelete={setDeleteConfirmSheet}
-            canDelete={(sheet) => sheets.length > 1 || sheet.id !== activeSheetId}
-            renaming={renaming}
-          />
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
           {activeSheet ? (
-            <div className="flex h-full min-h-0 min-w-0 overflow-hidden">
+            <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
               <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
                 <SpreadsheetGrid
                   ref={gridRef}
@@ -995,7 +980,7 @@ export default function SpreadsheetsV2DetailPage() {
                   onRefresh={handleRefreshPivot}
                 />
               ) : (
-                <PatternAgentPanel
+                <PatternAgentPanelV2
                   items={agentSteps}
                   patterns={patterns}
                   selectedPatternId={selectedPattern?.id ?? null}
@@ -1033,7 +1018,7 @@ export default function SpreadsheetsV2DetailPage() {
               )}
             </div>
           ) : sheets.length === 0 ? (
-            <div className="flex h-full items-center justify-center p-10">
+            <div className="flex h-full w-full items-center justify-center p-10">
               <div className="flex flex-col items-center justify-center text-center">
                 <FileSpreadsheet className="h-10 w-10 text-gray-300" aria-hidden="true" />
                 <p className="mt-3 text-sm font-semibold text-gray-900">No sheets yet</p>
@@ -1048,6 +1033,20 @@ export default function SpreadsheetsV2DetailPage() {
               </div>
             </div>
           ) : null}
+          </div>
+          <SheetTabBarBottom
+            sheets={sheets}
+            activeSheetId={activeSheetId}
+            onSelect={setActiveSheetId}
+            onCreate={() => {
+              setCreateSheetDefaultName(getNextSheetName(sheets));
+              setCreateSheetOpen(true);
+            }}
+            onRename={handleRenameSheet}
+            onRequestDelete={setDeleteConfirmSheet}
+            canDelete={(sheet) => sheets.length > 1 || sheet.id !== activeSheetId}
+            renaming={renaming}
+          />
         </div>
       </div>
 
