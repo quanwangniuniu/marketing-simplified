@@ -295,6 +295,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'Weekly Performance Sync (last week)',
     due_date: '2026-04-19',
+    is_resolved: false,
   },
   {
     id: 602,
@@ -307,6 +308,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'Weekly Performance Sync (last week)',
     due_date: '2026-04-22',
+    is_resolved: false,
   },
   {
     id: 603,
@@ -319,6 +321,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'TikTok Creator Discovery',
     due_date: '2026-04-23',
+    is_resolved: false,
   },
   {
     id: 604,
@@ -331,6 +334,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'TikTok Creator Discovery',
     due_date: null,
+    is_resolved: false,
   },
   {
     id: 605,
@@ -343,6 +347,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'Q2 Kickoff',
     due_date: '2026-04-20',
+    is_resolved: false,
   },
   {
     id: 606,
@@ -355,6 +360,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: 712,
     meeting_title: 'Q2 Kickoff',
     due_date: '2026-04-17',
+    is_resolved: false,
   },
   {
     id: 607,
@@ -367,6 +373,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: 711,
     meeting_title: 'Alert Triage',
     due_date: '2026-04-16',
+    is_resolved: false,
   },
   {
     id: 608,
@@ -379,6 +386,7 @@ const actionItems: ActionItemDisplay[] = [
     converted_task_id: null,
     meeting_title: 'Alert Triage',
     due_date: '2026-04-18',
+    is_resolved: false,
   },
 ];
 
