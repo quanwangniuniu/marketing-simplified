@@ -224,7 +224,7 @@ export default function SummaryView({ projectId }: SummaryViewProps) {
                 <span className="flex-shrink-0 text-[11px] text-gray-400">
                   {item.human_readable ??
                     (item.timestamp
-                      ? new Date(item.timestamp).toLocaleDateString(undefined, {
+                      ? new Date(item.timestamp).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                         })
