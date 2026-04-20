@@ -1,0 +1,1 @@
+export const SKELETON_TEST_DELAY_MS = 2000;

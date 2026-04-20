@@ -5,6 +5,7 @@ import type { Chat } from '@/types/chat';
 import ProjectRail from '@/components/messages/LeftSidebar/ProjectRail';
 import NavRail, { type MessagesNavView } from '@/components/messages/LeftSidebar/NavRail';
 import HomeSidebar from '@/components/messages/LeftSidebar/HomeSidebar';
+import { MessagesChatPanelSkeleton } from '@/components/messages/MessagesPageSkeleton';
 
 interface SlackMessagesLayoutProps {
   selectedProjectId: number | null;
@@ -82,10 +83,9 @@ export default function SlackMessagesLayout({
           ].join(' ')}
           data-testid="messages-chat-panel"
         >
-          {chatPanel}
+          {isLoadingChats ? <MessagesChatPanelSkeleton /> : chatPanel}
         </div>
       </div>
     </div>
   );
 }
-

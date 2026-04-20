@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import type { MessagesNavView } from './NavRail';
 import FilesSidebarView from './FilesSidebarView';
 import ActivitySidebarView from './ActivitySidebarView';
+import { MessagesSidebarSkeleton } from '@/components/messages/MessagesPageSkeleton';
 
 function normalizeChat(c: Chat): Chat {
   const raw = c.project_id ?? (c as { project?: number }).project;
@@ -244,11 +245,7 @@ export default function HomeSidebar({
       return <div className="p-4 text-sm text-gray-500">{emptyState}</div>;
     }
     if (isLoading) {
-      return (
-        <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-        </div>
-      );
+      return <MessagesSidebarSkeleton />;
     }
 
     if (view === 'activity') {

@@ -9,6 +9,12 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import useAuth from "@/hooks/useAuth";
 import { useTaskData } from "@/hooks/useTaskData";
 import TaskDetail from "@/components/tasks/TaskDetail";
+import {
+  TaskDetailContentSkeleton,
+  TaskDetailPageSkeleton,
+} from "@/components/tasks/TaskLoadingSkeletons";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { SKELETON_TEST_DELAY_MS } from "@/lib/skeletonTesting";
 
 const buildIssueKey = (projectName?: string, taskId?: number) => {
   const prefix = (projectName || "TASK")
@@ -24,6 +30,7 @@ export default function TaskPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { currentTask, fetchTask, loading, error } = useTaskData();
+  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
 
   useEffect(() => {
     if (!taskId) return;
@@ -53,7 +60,10 @@ export default function TaskPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      loadingComponent={<TaskDetailPageSkeleton />}
+      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+    >
       <Layout user={layoutUser} onUserAction={handleUserAction} mainScrollMode="page">
         <div className="min-h-screen bg-slate-50">
           <div className="mx-auto max-w-[1680px] px-2 py-8 sm:px-3 lg:px-4">
@@ -96,10 +106,9 @@ export default function TaskPage() {
               </div>
             </div>
 
-            {loading ? (
-              <div data-testid="task-detail-loading" className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600" />
-                <p className="mt-4 text-sm text-slate-500">Loading task...</p>
+            {delayedLoading ? (
+              <div data-testid="task-detail-loading">
+                <TaskDetailContentSkeleton />
               </div>
             ) : error ? (
               <div data-testid="task-detail-error" className="rounded-lg border border-slate-200 bg-white p-10 text-center">

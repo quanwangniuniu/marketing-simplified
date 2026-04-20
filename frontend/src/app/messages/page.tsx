@@ -6,6 +6,8 @@ import Layout from '@/components/layout/Layout';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
 import { useEffect } from 'react';
+import MessagesPageSkeleton from '@/components/messages/MessagesPageSkeleton';
+import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
@@ -27,11 +29,13 @@ export default function MessagesPage() {
     : undefined;
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      loadingComponent={<MessagesPageSkeleton />}
+      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+    >
       <Layout user={layoutUser} showHeader={true} showSidebar={true}>
         <MessagePageContent />
       </Layout>
     </ProtectedRoute>
   );
 }
-

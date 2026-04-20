@@ -56,6 +56,9 @@ import {
   timelineItemsToCreateSteps,
   updateTimelineItemById,
 } from '@/lib/spreadsheets/timelineItems';
+import { SpreadsheetDetailPageSkeleton } from '@/components/spreadsheets/SpreadsheetPageSkeletons';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
+import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 export default function SpreadsheetDetailPage() {
   const params = useParams();
@@ -116,6 +119,7 @@ export default function SpreadsheetDetailPage() {
   const applyHighlightStepsRef = useRef<(steps: WorkflowPatternStepRecord[]) => void>(() => {});
   const isReplayingRef = useRef(false);
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
+  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
 
   useEffect(() => {
     if (activeSheetId == null) return;
@@ -1189,27 +1193,23 @@ export default function SpreadsheetDetailPage() {
     };
   }, [sheetMenuOpenId]);
 
-  if (loading) {
+  if (delayedLoading) {
     return (
-      <ProtectedRoute>
-        <Layout>
-          <div className="min-h-screen bg-gray-50">
-            <div className="mx-auto max-w-7xl px-4 py-10">
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                <p className="mt-3 font-medium text-gray-900">Loading spreadsheet…</p>
-                <p className="text-sm text-gray-600">Fetching spreadsheet details from the backend.</p>
-              </div>
-            </div>
-          </div>
-        </Layout>
+      <ProtectedRoute
+        loadingComponent={<SpreadsheetDetailPageSkeleton />}
+        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+      >
+        <SpreadsheetDetailPageSkeleton />
       </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute
+        loadingComponent={<SpreadsheetDetailPageSkeleton />}
+        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+      >
         <Layout>
           <div className="min-h-screen bg-gray-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
@@ -1262,14 +1262,17 @@ export default function SpreadsheetDetailPage() {
 
   if (!spreadsheet) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute
+        loadingComponent={<SpreadsheetDetailPageSkeleton />}
+        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+      >
         <Layout>
           <div className="min-h-screen bg-gray-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-600">
                 <FileSpreadsheet className="h-7 w-7 text-gray-400" />
                 <p className="mt-3 font-semibold text-gray-900">Spreadsheet not found</p>
-                <p className="text-sm text-gray-500">The spreadsheet you're looking for doesn't exist.</p>
+                <p className="text-sm text-gray-500">The spreadsheet you&apos;re looking for doesn&apos;t exist.</p>
                 <Link
                   href={`/projects/${projectId}/spreadsheets`}
                   className="mt-4 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -1287,7 +1290,10 @@ export default function SpreadsheetDetailPage() {
   const activeSheet = sheets.find(s => s.id === activeSheetId);
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      loadingComponent={<SpreadsheetDetailPageSkeleton />}
+      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+    >
       <Layout mainScrollMode="container">
         {/* Full viewport height, no page scroll: only the grid container scrolls. */}
         <div className="h-full min-h-0 overflow-hidden bg-white flex flex-col">

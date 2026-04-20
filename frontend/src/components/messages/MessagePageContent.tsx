@@ -12,6 +12,8 @@ import ProjectSelector from './ProjectSelector';
 import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
+import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 export default function MessagePageContent() {
   const router = useRouter();
@@ -39,6 +41,10 @@ export default function MessagePageContent() {
     projectId: selectedProjectId || undefined,
     autoFetch: false,
   });
+  const delayedChatLoading = useMinimumLoading(
+    isLoading,
+    SKELETON_TEST_DELAY_MS
+  );
   
   // Connect to WebSocket for real-time updates
   const { connected } = useChatSocket(userId, {
@@ -236,7 +242,7 @@ export default function MessagePageContent() {
         onCreateChat={handleCreateChat}
         onCreateChannel={handleCreateChannel}
         roleByUserId={roleByUserId}
-        isLoadingChats={isLoading}
+        isLoadingChats={delayedChatLoading}
         chatListEmptyState={
           !selectedProjectId ? (
             <div className="flex items-center justify-center p-6 text-center">

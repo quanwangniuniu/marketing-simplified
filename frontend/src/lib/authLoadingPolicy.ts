@@ -3,6 +3,7 @@
 type AuthLoadingRoutePolicy = {
   path?: string;
   prefix?: string;
+  regex?: RegExp;
   deferGlobalAuthBlock?: boolean;
   suppressProtectedRouteLoading?: boolean;
   delegateOnboardingCheckLoadingToRoute?: boolean;
@@ -11,6 +12,9 @@ type AuthLoadingRoutePolicy = {
 const ROUTES_WITH_ROUTE_OWNED_LOADING_UI: AuthLoadingRoutePolicy[] = [
   { prefix: "/agent", suppressProtectedRouteLoading: true },
   { path: "/profile" },
+  { prefix: "/tasks" },
+  { path: "/messages" },
+  { regex: /^\/projects\/[^/]+\/spreadsheets(?:\/[^/]+)?$/ },
 ];
 
 const AUTH_LOADING_ROUTE_POLICIES: AuthLoadingRoutePolicy[] =
@@ -21,6 +25,10 @@ const AUTH_LOADING_ROUTE_POLICIES: AuthLoadingRoutePolicy[] =
   }));
 
 function matchesRoutePolicy(pathname: string, policy: AuthLoadingRoutePolicy) {
+  if (policy.regex) {
+    return policy.regex.test(pathname);
+  }
+
   if (policy.path) {
     return pathname === policy.path;
   }

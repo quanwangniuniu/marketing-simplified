@@ -5,6 +5,7 @@ import { useAuthStore } from '../../lib/authStore';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 // Props for ProtectedRoute component
 interface ProtectedRouteProps {
@@ -13,6 +14,8 @@ interface ProtectedRouteProps {
   requiredRoles?: string[]; // Required roles for access
   fallback?: string; // Redirect path if access is denied
   loadingComponent?: React.ReactNode; // Custom loading component
+  minimumLoadingMs?: number;
+  renderChildrenWhileLoading?: boolean;
 }
 
 // ProtectedRoute component that handles authentication and role-based access control
@@ -21,12 +24,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredAuth = true,
   requiredRoles = [],
   fallback = '/login',
-  loadingComponent
+  loadingComponent,
+  minimumLoadingMs = 0,
+  renderChildrenWhileLoading = false,
 }) => {
   const { isAuthenticated, user, loading, initialized } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const { suppressProtectedRouteLoading } = getAuthLoadingRoutePolicy(pathname);
+  const authIsBooting = !initialized || loading;
+  const shouldShowLoadingState = useMinimumLoading(
+    authIsBooting,
+    minimumLoadingMs
+  );
 
   const hasRequiredRoles =
     requiredRoles.length === 0 ||
@@ -35,7 +45,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Handle authentication and role checks
   useEffect(() => {
     // Wait for authentication to be initialized
-    if (!initialized || loading) return;
+    if (authIsBooting) return;
 
     // If authentication is required but user is not authenticated
     if (requiredAuth && !isAuthenticated) {
@@ -49,10 +59,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       router.push('/unauthorized');
       return;
     }
-  }, [isAuthenticated, initialized, loading, requiredAuth, requiredRoles, router, fallback, hasRequiredRoles]);
+  }, [isAuthenticated, authIsBooting, requiredAuth, requiredRoles, router, fallback, hasRequiredRoles]);
 
   // Show loading while authentication is being initialized
-  if (!initialized || loading) {
+  if (shouldShowLoadingState) {
+    if (renderChildrenWhileLoading) {
+      return <>{children}</>;
+    }
     if (loadingComponent && !suppressProtectedRouteLoading) {
       return <>{loadingComponent}</>;
     }

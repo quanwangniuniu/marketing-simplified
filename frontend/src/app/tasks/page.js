@@ -17,6 +17,7 @@ import { ClientCommunicationAPI } from "@/lib/api/clientCommunicationApi";
 import { DashboardAPI } from "@/lib/api/dashboardApi";
 import Modal from "@/components/ui/Modal";
 import { DecorativeGlow } from "@/components/ui/decorative-glow";
+import { Skeleton } from "@/components/ui/skeleton";
 import NewTaskForm from "@/components/tasks/NewTaskForm";
 import TaskCreatePanel from "@/components/tasks/TaskCreatePanel";
 import TasksWorkspaceSkeleton from "@/components/tasks/TasksWorkspaceSkeleton";
@@ -51,6 +52,8 @@ import {
 } from "@/lib/taskTypeConfigRegistry";
 import { useTaskFilterParams } from "@/hooks/useTaskFilterParams";
 import { TaskFilterPanel } from "@/components/tasks/TaskFilterPanel";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { SKELETON_TEST_DELAY_MS } from "@/lib/skeletonTesting";
 
 const BOARD_TYPE_ORDER = [
   "task",
@@ -173,6 +176,10 @@ function TasksPageContent() {
   // URL-backed filters (including project_id, status, priority, dates, etc.)
   const [filters, setFilters, clearFilters] = useTaskFilterParams();
   const [taskTypeOptions, setTaskTypeOptions] = useState([]);
+  const authBootLoading = useMinimumLoading(
+    userLoading,
+    SKELETON_TEST_DELAY_MS,
+  );
 
   useEffect(() => {
     const loadTypes = async () => {
@@ -207,6 +214,10 @@ function TasksPageContent() {
 
   // Trigger to refresh budget pools list in NewBudgetRequestForm
   const [budgetPoolRefreshTrigger, setBudgetPoolRefreshTrigger] = useState(0);
+  const delayedTasksLoading = useMinimumLoading(
+    tasksLoading,
+    SKELETON_TEST_DELAY_MS,
+  );
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalExpanded, setCreateModalExpanded] = useState(false);
@@ -410,6 +421,10 @@ function TasksPageContent() {
   const [boardData, setBoardData] = useState(null);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardError, setBoardError] = useState(null);
+  const delayedBoardLoading = useMinimumLoading(
+    boardLoading,
+    SKELETON_TEST_DELAY_MS,
+  );
   const [isBoardRecentExpanded, setIsBoardRecentExpanded] = useState(false);
 
   // View mode: 'broad' | 'list'
@@ -449,10 +464,11 @@ function TasksPageContent() {
 
   // When the project_id in the URL changes, fetch the tasks list according to it
   useEffect(() => {
+    if (userLoading) return;
     if (projectOptions.length === 0 && !projectOptionsLoading) {
       loadProjectOptions();
     }
-  }, [projectOptions.length, projectOptionsLoading, loadProjectOptions]);
+  }, [userLoading, projectOptions.length, projectOptionsLoading, loadProjectOptions]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -496,6 +512,7 @@ function TasksPageContent() {
   };
 
   useEffect(() => {
+    if (userLoading) return;
     if (!projectId) return;
     const loadTasks = async () => {
       try {
@@ -506,7 +523,7 @@ function TasksPageContent() {
     };
 
     loadTasks();
-  }, [projectId, fetchTasks, filters]);
+  }, [userLoading, projectId, fetchTasks, filters]);
 
   const selectedProject = useMemo(() => {
     if (!projectId) return null;
@@ -514,6 +531,7 @@ function TasksPageContent() {
   }, [projectId, projectOptions]);
 
   const fetchBoardData = useCallback(async () => {
+    if (userLoading) return;
     if (!projectId) {
       setBoardData(null);
       setBoardError("Project summary requires a project.");
@@ -539,12 +557,13 @@ function TasksPageContent() {
     } finally {
       setBoardLoading(false);
     }
-  }, [projectId]);
+  }, [userLoading, projectId]);
 
   useEffect(() => {
+    if (userLoading) return;
     if (activeTab !== "summary") return;
     fetchBoardData();
-  }, [activeTab, fetchBoardData]);
+  }, [userLoading, activeTab, fetchBoardData]);
 
   // Ensure that the project_id in the form defaults to the project_id in the URL when creating a new task
   useEffect(() => {
@@ -1928,6 +1947,49 @@ function TasksPageContent() {
         role: user.roles && user.roles.length > 0 ? user.roles[0] : undefined,
       }
     : undefined;
+  const showProjectPickerLoading = authBootLoading || projectOptionsLoading;
+  const showSelectedProjectNameSkeleton =
+    authBootLoading || (projectOptionsLoading && !selectedProject);
+  const showSummarySkeleton = authBootLoading || delayedBoardLoading;
+  const showTaskWorkspaceSkeleton = authBootLoading || delayedTasksLoading;
+  const showBoardSkeleton = authBootLoading || delayedTasksLoading;
+  const projectPickerSkeletonRows = [
+    {
+      name: "w-40",
+      description: "w-60",
+      key: "w-12",
+      lead: "w-20",
+      status: "w-16",
+    },
+    {
+      name: "w-48",
+      description: "w-48",
+      key: "w-14",
+      lead: "w-24",
+      status: "w-20",
+    },
+    {
+      name: "w-36",
+      description: "w-64",
+      key: "w-10",
+      lead: "w-24",
+      status: "w-14",
+    },
+    {
+      name: "w-44",
+      description: "w-52",
+      key: "w-12",
+      lead: "w-20",
+      status: "w-16",
+    },
+    {
+      name: "w-52",
+      description: "w-44",
+      key: "w-14",
+      lead: "w-28",
+      status: "w-20",
+    },
+  ];
 
   return (
     <Layout
@@ -1942,7 +2004,13 @@ function TasksPageContent() {
             <div className="flex flex-row gap-4 items-center mb-4">
               {projectId && (
                 <h1 className="text-3xl font-bold text-gray-900">
-                  {`${selectedProject?.name || "Project"} - Tasks`}
+                  {showSelectedProjectNameSkeleton ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Skeleton className="h-9 w-48" />
+                    </span>
+                  ) : (
+                    `${selectedProject?.name || "Project"} - Tasks`
+                  )}
                 </h1>
               )}
               {projectId && activeTab !== "board" && (
@@ -2007,11 +2075,16 @@ function TasksPageContent() {
                       Switch projects to see a different task workspace.
                     </p>
                     <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                      {`Current project: #${projectId} ${
-                        projectOptions.find(
-                          (project) => project.id === projectId,
-                        )?.name || "Unknown"
-                      }`}
+                      Current project:
+                      {showSelectedProjectNameSkeleton ? (
+                        <Skeleton className="h-4 w-40" />
+                      ) : (
+                        `#${projectId} ${
+                          projectOptions.find(
+                            (project) => project.id === projectId,
+                          )?.name || "Unknown"
+                        }`
+                      )}
                     </div>
                   </div>
                   <div className="w-full sm:max-w-xs">
@@ -2068,24 +2141,40 @@ function TasksPageContent() {
                 </div>
 
                 <div className="mt-4">
-                  {projectOptionsLoading && (
-                    <div className="py-8 text-center text-sm text-gray-500">
-                      Loading projects...
+                  {showProjectPickerLoading && (
+                    <div className="space-y-3 py-2">
+                      {projectPickerSkeletonRows.map((row, index) => (
+                        <div
+                          key={`task-project-loading-${index}`}
+                          className="w-full border-b border-gray-200 py-3"
+                        >
+                          <div className="flex flex-col gap-2 sm:grid sm:grid-cols-[24px,minmax(0,2fr),minmax(0,1fr),minmax(0,1fr),minmax(0,0.9fr)] sm:items-center sm:gap-3">
+                            <Skeleton className="h-6 w-6 rounded-md" />
+                            <div className="min-w-0 space-y-2">
+                              <Skeleton className={`h-4 ${row.name}`} />
+                              <Skeleton className={`h-4 ${row.description}`} />
+                            </div>
+                            <Skeleton className={`h-4 ${row.key}`} />
+                            <Skeleton className={`h-4 ${row.lead}`} />
+                            <Skeleton className={`h-6 rounded-full ${row.status}`} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {!projectOptionsLoading && projectOptionsError && (
+                  {!showProjectPickerLoading && projectOptionsError && (
                     <div className="py-8 text-center text-sm text-red-600">
                       {projectOptionsError}
                     </div>
                   )}
-                  {!projectOptionsLoading &&
+                  {!showProjectPickerLoading &&
                     !projectOptionsError &&
                     filteredProjects.length === 0 && (
                       <div className="py-8 text-center text-sm text-gray-500">
                         No projects found.
                       </div>
                     )}
-                  {!projectOptionsLoading &&
+                  {!showProjectPickerLoading &&
                     !projectOptionsError &&
                     filteredProjects.length > 0 && (
                       <div className="mb-3 hidden grid-cols-[24px,minmax(0,2fr),minmax(0,1fr),minmax(0,1fr),minmax(0,0.9fr)] items-center gap-3 border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 sm:grid">
@@ -2096,7 +2185,7 @@ function TasksPageContent() {
                         <span>Status</span>
                       </div>
                     )}
-                  {!projectOptionsLoading &&
+                  {!showProjectPickerLoading &&
                     !projectOptionsError &&
                     pinnedProjects.length > 0 && (
                       <div>
@@ -2177,7 +2266,7 @@ function TasksPageContent() {
                         ))}
                       </div>
                     )}
-                  {!projectOptionsLoading &&
+                  {!showProjectPickerLoading &&
                     !projectOptionsError &&
                     recentProjects.length > 0 && (
                       <div>
@@ -2261,7 +2350,7 @@ function TasksPageContent() {
                         ))}
                       </div>
                     )}
-                  {!projectOptionsLoading &&
+                  {!showProjectPickerLoading &&
                     !projectOptionsError &&
                     otherProjects.length > 0 && (
                       <div>
@@ -2352,9 +2441,9 @@ function TasksPageContent() {
 
           {projectId && activeTab === "summary" && (
             <div data-testid="tab-content-summary" className="mt-6 space-y-6">
-              {boardLoading && <TasksWorkspaceSkeleton mode="summary" />}
+              {showSummarySkeleton && <TasksWorkspaceSkeleton mode="summary" />}
 
-              {!boardLoading && boardError && (
+              {!showSummarySkeleton && boardError && (
                 <div className="text-center py-8">
                   <p className="text-red-600">{boardError}</p>
                   <button
@@ -2366,7 +2455,7 @@ function TasksPageContent() {
                 </div>
               )}
 
-              {!boardLoading && !boardError && (
+              {!showSummarySkeleton && !boardError && (
                 <JiraSummaryView
                   metrics={summaryMetrics}
                   statusOverview={statusOverview}
@@ -2385,32 +2474,36 @@ function TasksPageContent() {
 
           {projectId && activeTab === "board" && (
             <div className="mt-6 space-y-6">
-              <JiraBoardView
-                boardColumns={boardColumns}
-                tasksByType={tasksByType}
-                onCreateTask={openGenericCreateTaskModal}
-                onTaskClick={handleTaskClick}
-                getTicketKey={getTicketKey}
-                getBoardTypeIcon={getBoardTypeIcon}
-                formatBoardDate={formatBoardDate}
-                getDueTone={getDueTone}
-                editingTaskId={editingTaskId}
-                editingSummary={editingSummary}
-                setEditingSummary={setEditingSummary}
-                startBoardEdit={startBoardEdit}
-                cancelBoardEdit={cancelBoardEdit}
-                saveBoardEdit={saveBoardEdit}
-                currentUser={user || undefined}
-                externalFilters={
-                  <TaskFilterPanel
-                    filters={filters}
-                    onChange={setFilters}
-                    onClearAll={clearFilters}
-                    projectOptions={projectOptions}
-                    typeOptions={taskTypeOptions}
-                  />
-                }
-              />
+              {showBoardSkeleton ? (
+                <TasksWorkspaceSkeleton mode="board" />
+              ) : (
+                <JiraBoardView
+                  boardColumns={boardColumns}
+                  tasksByType={tasksByType}
+                  onCreateTask={openGenericCreateTaskModal}
+                  onTaskClick={handleTaskClick}
+                  getTicketKey={getTicketKey}
+                  getBoardTypeIcon={getBoardTypeIcon}
+                  formatBoardDate={formatBoardDate}
+                  getDueTone={getDueTone}
+                  editingTaskId={editingTaskId}
+                  editingSummary={editingSummary}
+                  setEditingSummary={setEditingSummary}
+                  startBoardEdit={startBoardEdit}
+                  cancelBoardEdit={cancelBoardEdit}
+                  saveBoardEdit={saveBoardEdit}
+                  currentUser={user || undefined}
+                  externalFilters={
+                    <TaskFilterPanel
+                      filters={filters}
+                      onChange={setFilters}
+                      onClearAll={clearFilters}
+                      projectOptions={projectOptions}
+                      typeOptions={taskTypeOptions}
+                    />
+                  }
+                />
+              )}
             </div>
           )}
 
@@ -2439,41 +2532,45 @@ function TasksPageContent() {
           {!tasksError && projectId && activeTab === "tasks" && (
             <div className="min-h-screen bg-[#f8f9fb] px-6 py-6">
               <div className="mx-auto max-w-6xl space-y-4">
-                <JiraTasksView
-                  tasks={filteredJiraTasks}
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  searchValue={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  searchPlaceholder="Search tasks..."
-                  rightOfSearch={
-                    <TaskFilterPanel
-                      filters={filters}
-                      onChange={setFilters}
-                      onClearAll={clearFilters}
-                      projectOptions={projectOptions}
-                      typeOptions={taskTypeOptions}
-                    />
-                  }
-                  onTaskClick={handleJiraTaskClick}
-                  onTaskUpdate={reloadTasks}
-                  renderTimeline={() => (
-                    <TimelineViewComponent
-                      tasks={tasksForTimeline}
-                      onTaskClick={handleTaskClick}
-                      reloadTasks={reloadTasks}
-                      onCreateTask={(projectIdOverride) =>
-                        openGenericCreateTaskModal(
-                          projectIdOverride,
-                          undefined,
-                          undefined,
-                          { preserveMeetingOrigin: true },
-                        )
-                      }
-                      currentUser={user || undefined}
-                    />
-                  )}
-                />
+                {showTaskWorkspaceSkeleton ? (
+                  <TasksWorkspaceSkeleton mode="tasks" />
+                ) : (
+                  <JiraTasksView
+                    tasks={filteredJiraTasks}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    searchValue={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder="Search tasks..."
+                    rightOfSearch={
+                      <TaskFilterPanel
+                        filters={filters}
+                        onChange={setFilters}
+                        onClearAll={clearFilters}
+                        projectOptions={projectOptions}
+                        typeOptions={taskTypeOptions}
+                      />
+                    }
+                    onTaskClick={handleJiraTaskClick}
+                    onTaskUpdate={reloadTasks}
+                    renderTimeline={() => (
+                      <TimelineViewComponent
+                        tasks={tasksForTimeline}
+                        onTaskClick={handleTaskClick}
+                        reloadTasks={reloadTasks}
+                        onCreateTask={(projectIdOverride) =>
+                          openGenericCreateTaskModal(
+                            projectIdOverride,
+                            undefined,
+                            undefined,
+                            { preserveMeetingOrigin: true },
+                          )
+                        }
+                        currentUser={user || undefined}
+                      />
+                    )}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -2795,7 +2892,10 @@ function TasksPageContent() {
 
 export default function TasksPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+      renderChildrenWhileLoading
+    >
       <TasksPageContent />
     </ProtectedRoute>
   );

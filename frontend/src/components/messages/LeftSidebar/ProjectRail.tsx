@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
+import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 interface ProjectRailProps {
   selectedProjectId: number | null;
@@ -22,6 +25,7 @@ function getInitials(name: string): string {
 export default function ProjectRail({ selectedProjectId, onSelectProject }: ProjectRailProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const delayedLoading = useMinimumLoading(isLoading, SKELETON_TEST_DELAY_MS);
 
   useEffect(() => {
     let mounted = true;
@@ -56,12 +60,12 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
       </div>
 
       <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-        {isLoading ? (
+        {delayedLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div
+              <Skeleton
                 key={idx}
-                className="w-full h-10 rounded-lg bg-gray-200 animate-pulse"
+                className="w-full h-10 rounded-lg"
               />
             ))}
           </div>
@@ -105,4 +109,3 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
     </div>
   );
 }
-

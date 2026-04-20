@@ -11,6 +11,9 @@ import { SpreadsheetData } from '@/types/spreadsheet';
 import { AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
+import { SpreadsheetsListPageSkeleton } from '@/components/spreadsheets/SpreadsheetPageSkeletons';
+import { useMinimumLoading } from '@/hooks/useMinimumLoading';
+import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 const UNTITLED_BASE = 'Untitled spreadsheet';
 
@@ -37,6 +40,7 @@ export default function SpreadsheetsListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -194,7 +198,7 @@ export default function SpreadsheetsListPage() {
   const hasPrevious = page > 1;
 
   const renderEmptyState = () => {
-    if (loading) {
+    if (delayedLoading) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
           <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -271,10 +275,24 @@ export default function SpreadsheetsListPage() {
     );
   };
 
-  const showTable = !error && (loading || spreadsheets.length > 0);
+  const showTable = !error && (delayedLoading || spreadsheets.length > 0);
+
+  if (delayedLoading && !error) {
+    return (
+      <ProtectedRoute
+        loadingComponent={<SpreadsheetsListPageSkeleton />}
+        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+      >
+        <SpreadsheetsListPageSkeleton />
+      </ProtectedRoute>
+    );
+  }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      loadingComponent={<SpreadsheetsListPageSkeleton />}
+      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
+    >
       <Layout>
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <div className="mx-auto max-w-6xl w-full px-4 py-6 flex flex-col flex-1">
@@ -359,7 +377,7 @@ export default function SpreadsheetsListPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {loading && spreadsheets.length === 0 ? (
+                        {delayedLoading ? (
                           <tr>
                             <td colSpan={3} className="px-4 py-12 text-center text-gray-500">
                               <Loader2 className="inline h-5 w-5 animate-spin text-blue-600" />
