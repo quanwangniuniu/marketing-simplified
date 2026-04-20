@@ -258,7 +258,7 @@ export default function CampaignHeader({ campaign, onUpdate, loading, onChangeSt
             inputType="input"
             className="text-2xl font-bold text-gray-900"
             renderTrigger={(value) => (
-              <h1 className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer">
+              <h1 className="text-2xl font-bold text-gray-900 hover:text-[#0E8A96] transition-colors cursor-pointer">
                 {value}
               </h1>
             )}
@@ -416,7 +416,7 @@ export default function CampaignHeader({ campaign, onUpdate, loading, onChangeSt
             placeholder="Add a hypothesis for this campaign..."
             className="text-sm text-gray-700"
             renderTrigger={(value) => (
-              <p className="text-sm text-gray-700 hover:text-blue-600 transition-colors cursor-pointer min-h-[1.5rem]">
+              <p className="text-sm text-gray-700 hover:text-[#0E8A96] transition-colors cursor-pointer min-h-[1.5rem]">
                 {value || <span className="text-gray-400 italic">Add a hypothesis for this campaign...</span>}
               </p>
             )}

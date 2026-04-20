@@ -15,6 +15,7 @@ import Button from '@/components/button/Button';
 import { ArrowLeft, User, FolderOpen, Trash2, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CreateCampaignFromTemplateModal from '@/components/campaigns/CreateCampaignFromTemplateModal';
+import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
 
 const objectiveLabels: Record<string, string> = {
   AWARENESS: 'Awareness',
@@ -78,6 +79,8 @@ export default function TemplateDetailPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [createCampaignModalOpen, setCreateCampaignModalOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (templateId) {
@@ -115,21 +118,25 @@ export default function TemplateDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!templateId || !template) return;
-    
-    if (!window.confirm(`Are you sure you want to delete template "${template.name}"? This action cannot be undone.`)) {
-      return;
-    }
+    setConfirmDeleteOpen(true);
+  };
 
+  const performDelete = async () => {
+    if (!templateId) return;
+    setDeleting(true);
     try {
       await CampaignAPI.deleteTemplate(templateId);
-      toast.success('Template deleted successfully');
+      toast.success('Template deleted');
+      setConfirmDeleteOpen(false);
       router.push('/campaigns/templates');
     } catch (err: any) {
       console.error('Failed to delete template:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to delete template';
       toast.error(errorMessage);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -419,6 +426,17 @@ export default function TemplateDetailPage() {
               template={template}
             />
           )}
+
+          <BrandConfirmDialog
+            open={confirmDeleteOpen}
+            onOpenChange={setConfirmDeleteOpen}
+            title="Delete Template?"
+            message={`"${template?.name ?? 'This template'}" will be permanently deleted. This cannot be undone.`}
+            confirmLabel="Delete"
+            tone="danger"
+            loading={deleting}
+            onConfirm={performDelete}
+          />
         </div>
       </Layout>
     </ProtectedRoute>
