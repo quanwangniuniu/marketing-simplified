@@ -11,6 +11,9 @@ interface Props {
   subtitle?: string;
   width?: string;
   children: ReactNode;
+  onPointerDownOutside?: (e: Event) => void;
+  onInteractOutside?: (e: Event) => void;
+  onOpenAutoFocus?: (e: Event) => void;
 }
 
 export default function BrandDialog({
@@ -20,12 +23,18 @@ export default function BrandDialog({
   subtitle,
   width = 'max-w-lg',
   children,
+  onPointerDownOutside,
+  onInteractOutside,
+  onOpenAutoFocus,
 }: Props) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
+          onPointerDownOutside={onPointerDownOutside as any}
+          onInteractOutside={onInteractOutside as any}
+          onOpenAutoFocus={onOpenAutoFocus as any}
           className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] ${width} -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-gray-100 outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95`}
         >
           <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
