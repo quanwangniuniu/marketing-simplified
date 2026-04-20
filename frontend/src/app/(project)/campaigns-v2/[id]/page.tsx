@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -12,7 +12,7 @@ import { useCampaignData } from '@/hooks/useCampaignData';
 import type { CampaignCheckIn, CampaignData, PerformanceSnapshot } from '@/types/campaign';
 import CampaignHeader from '@/components/campaigns/CampaignHeader';
 import ActivityTimeline from '@/components/campaigns/ActivityTimeline';
-import CampaignCheckIns from '@/components/campaigns/CampaignCheckIns';
+import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
 import CampaignSnapshots from '@/components/campaigns/CampaignSnapshots';
 import CampaignStatusHistory from '@/components/campaigns/CampaignStatusHistory';
 import CampaignTasks from '@/components/campaigns/CampaignTasks';
@@ -37,7 +37,7 @@ export default function CampaignV2DetailPage() {
   const [createCheckInOpen, setCreateCheckInOpen] = useState(false);
   const [editCheckInOpen, setEditCheckInOpen] = useState(false);
   const [selectedCheckIn, setSelectedCheckIn] = useState<CampaignCheckIn | null>(null);
-  const [checkInsRefresh, setCheckInsRefresh] = useState(0);
+  const checkInsRef = useRef<CheckInsSectionHandle>(null);
   const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
   const [editSnapshotOpen, setEditSnapshotOpen] = useState(false);
   const [selectedSnapshot, setSelectedSnapshot] = useState<PerformanceSnapshot | null>(null);
@@ -173,12 +173,11 @@ export default function CampaignV2DetailPage() {
             <CampaignTasks campaignId={campaignId} />
           </div>
           <div className="space-y-6 lg:col-span-1">
-            <CampaignCheckIns
+            <CheckInsSection
+              ref={checkInsRef}
               campaignId={campaignId}
               onEdit={handleCheckInEdit}
-              onDelete={() => setCheckInsRefresh((n) => n + 1)}
               onCreate={handleCheckInCreate}
-              refreshTrigger={checkInsRefresh}
               isArchived={isArchived}
             />
             <CampaignStatusHistory key={statusRefresh} campaignId={campaignId} />
@@ -189,7 +188,7 @@ export default function CampaignV2DetailPage() {
           open={createCheckInOpen}
           onOpenChange={setCreateCheckInOpen}
           campaignId={campaignId}
-          onSuccess={() => setCheckInsRefresh((n) => n + 1)}
+          onSuccess={() => checkInsRef.current?.refresh()}
         />
         <EditCheckInDialog
           open={editCheckInOpen}
@@ -199,7 +198,7 @@ export default function CampaignV2DetailPage() {
           }}
           campaignId={campaignId}
           checkIn={selectedCheckIn}
-          onSuccess={() => setCheckInsRefresh((n) => n + 1)}
+          onSuccess={() => checkInsRef.current?.refresh()}
         />
         <CreateSnapshotDialog
           open={createSnapshotOpen}
