@@ -203,8 +203,8 @@ export default function CreateCampaignFromTemplateModal({
     try {
       const data: CreateCampaignFromTemplateData = {
         name: name.trim(),
-        project: projectId,
-        owner: String(ownerId),
+        project: Number(projectId),
+        owner: Number(ownerId),
         start_date: startDate,
         end_date: endDate || undefined,
         objective: objective,

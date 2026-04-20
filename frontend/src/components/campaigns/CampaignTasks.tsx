@@ -28,7 +28,7 @@ const getStatusColor = (status?: string) => {
     case 'UNDER_REVIEW':
       return 'bg-yellow-100 text-yellow-800';
     case 'SUBMITTED':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-[#3CCED7]/10 text-[#0E8A96]';
     case 'REJECTED':
       return 'bg-red-100 text-red-800';
     case 'DRAFT':
@@ -107,7 +107,7 @@ export default function CampaignTasks({ campaignId }: CampaignTasksProps) {
           Related Tasks
         </h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
           <span className="ml-3 text-gray-600">Loading tasks...</span>
         </div>
       </div>

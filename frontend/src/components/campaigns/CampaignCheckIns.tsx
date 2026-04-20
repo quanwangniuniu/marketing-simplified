@@ -8,6 +8,7 @@ import Button from '@/components/button/Button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Minus, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
 
 interface CampaignCheckInsProps {
   campaignId: string;
@@ -76,6 +77,8 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
   const [error, setError] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState<string | null>(null);
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<CampaignCheckIn | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchCheckIns = async () => {
@@ -113,21 +116,27 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
     fetchCheckIns();
   }, [campaignId, refreshTrigger]); // refreshTrigger triggers re-fetch
 
-  const handleDelete = async (checkIn: CampaignCheckIn) => {
-    if (!window.confirm('Are you sure you want to delete this check-in?')) {
-      return;
-    }
+  const handleDelete = (checkIn: CampaignCheckIn) => {
+    setConfirmDeleteTarget(checkIn);
+  };
 
+  const performDelete = async () => {
+    if (!confirmDeleteTarget) return;
+    const checkIn = confirmDeleteTarget;
+    setDeleting(true);
     try {
       await CampaignAPI.deleteCheckIn(campaignId, checkIn.id);
       setCheckIns((prev) => prev.filter((item) => item.id !== checkIn.id));
-      toast.success('Check-in deleted successfully');
+      toast.success('Check-in deleted');
+      setConfirmDeleteTarget(null);
       if (onDelete) {
         onDelete(checkIn.id);
       }
     } catch (err: any) {
       console.error('Failed to delete check-in:', err);
       toast.error(err.response?.data?.error || err.message || 'Failed to delete check-in');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -137,7 +146,7 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Check-ins</h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
           <span className="ml-3 text-gray-600">Loading check-ins...</span>
         </div>
       </div>
@@ -171,6 +180,7 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
               }
             }}
             leftIcon={<Plus className="h-4 w-4" />}
+            className="!bg-gradient-to-br !from-[#3CCED7] !to-[#A6E661] !border-transparent hover:!brightness-105 !text-white focus-visible:!ring-[#3CCED7]/30"
           >
             New Check-in
           </Button>
@@ -266,7 +276,7 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
                               onEdit(checkIn);
                             }
                           }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-[#0E8A96] hover:bg-[#3CCED7]/10 rounded transition-colors"
                           title="Edit check-in"
                         >
                           <Edit className="h-4 w-4" />
@@ -287,6 +297,17 @@ export default function CampaignCheckIns({ campaignId, onEdit, onDelete, onCreat
           })}
         </div>
       )}
+
+      <BrandConfirmDialog
+        open={!!confirmDeleteTarget}
+        onOpenChange={(next) => { if (!next) setConfirmDeleteTarget(null); }}
+        title="Delete Check-in?"
+        message="This check-in will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        loading={deleting}
+        onConfirm={performDelete}
+      />
     </div>
   );
 }
