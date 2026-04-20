@@ -66,7 +66,7 @@ const navGroups: NavGroup[] = [
   {
     title: 'CONTENT',
     items: [
-      { label: 'Ad Variations', href: '/variations', icon: Target },
+      { label: 'Ad Variations', href: '/variations-v2', icon: Target },
       {
         label: 'Ads Draft',
         href: '#',
