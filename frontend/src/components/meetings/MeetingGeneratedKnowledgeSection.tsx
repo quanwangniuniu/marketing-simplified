@@ -68,7 +68,7 @@ export function MeetingGeneratedKnowledgeSection({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-900">Generated decisions</h3>
           <Link
-            href={`/decisions/new?project_id=${projectId}&origin_meeting_id=${meetingId}`}
+            href={`/decisions-v2?project_id=${projectId}&origin_meeting_id=${meetingId}`}
             className="text-xs font-medium text-blue-700 hover:underline"
           >
             Create decision from this meeting

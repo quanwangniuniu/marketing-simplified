@@ -107,6 +107,21 @@ export const DecisionAPI = {
     );
     return response.data;
   },
+  archive: async (decisionId: number, projectId?: number | null) => {
+    const response = await api.post<DecisionCommitResponse>(
+      `/api/decisions/${decisionId}/archive/`,
+      {},
+      withProject(projectId)
+    );
+    return response.data;
+  },
+  listReviews: async (decisionId: number, projectId?: number | null) => {
+    const response = await api.get(
+      `/api/decisions/${decisionId}/reviews/`,
+      withProject(projectId)
+    );
+    return response.data as unknown as { items?: any[] } | any[];
+  },
   listDecisions: async (
     projectId: number,
     params?: { status?: string; riskLevel?: string }

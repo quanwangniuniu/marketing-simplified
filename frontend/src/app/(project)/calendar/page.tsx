@@ -400,7 +400,7 @@ function CalendarPageContent() {
                   // Navigate to Decision detail page with project_id for permission
                   if (meta.decision_id) {
                     const query = meta.project_id ? `?project_id=${meta.project_id}` : '';
-                    router.push(`/decisions/${meta.decision_id}${query}`);
+                    router.push(`/decisions-v2/${meta.decision_id}${query}`);
                     return;
                   }
                   // Navigate to Task detail page

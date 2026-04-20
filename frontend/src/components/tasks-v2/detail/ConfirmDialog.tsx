@@ -26,7 +26,7 @@ export default function ConfirmDialog({
   onConfirm,
 }: Props) {
   return (
-    <BrandDialog open={open} onOpenChange={onOpenChange} title={title} description={description}>
+    <BrandDialog open={open} onOpenChange={onOpenChange} title={title} subtitle={description}>
       <div className="flex justify-end gap-2">
         <button
           type="button"

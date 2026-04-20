@@ -193,7 +193,7 @@ const TaskRow = ({
               <span className="shrink-0 text-[10px] text-slate-400" title="From decision">
                 From{' '}
                 <Link
-                  href={`/decisions/${task.object_id}${(task.project?.id ?? task.project_id) ? `?project_id=${task.project?.id ?? task.project_id}` : ''}`}
+                  href={`/decisions-v2/${task.object_id}${(task.project?.id ?? task.project_id) ? `?project_id=${task.project?.id ?? task.project_id}` : ''}`}
                   className="text-indigo-600 hover:text-indigo-800 hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
