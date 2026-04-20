@@ -72,9 +72,9 @@ const navGroups: NavGroup[] = [
         href: '#',
         icon: Megaphone,
         children: [
-          { label: 'Facebook Meta', href: '/facebook_meta', icon: Facebook },
-          { label: 'TikTok', href: '/tiktok', icon: Video },
-          { label: 'Google Ads', href: '/google_ads', icon: Target },
+          { label: 'Facebook Meta', href: '/facebook-meta-v2', icon: Facebook },
+          { label: 'TikTok', href: '/tiktok-v2', icon: Video },
+          { label: 'Google Ads', href: '/google-ads-v2', icon: Target },
         ],
       },
       {
