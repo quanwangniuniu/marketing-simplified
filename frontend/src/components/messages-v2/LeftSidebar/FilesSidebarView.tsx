@@ -93,7 +93,7 @@ export default function FilesSidebarView({ selectedProjectId }: { selectedProjec
               params.set('projectId', String(selectedProjectId));
               params.set('chatId', String(row.chat.id));
               if (row.message_id) params.set('messageId', String(row.message_id));
-              router.push(`/messages-v2?${params.toString()}`);
+              router.push(`/messages?${params.toString()}`);
             }}
             className="w-full text-left px-3 py-2 flex gap-2 hover:bg-gray-50"
           >

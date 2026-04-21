@@ -65,7 +65,7 @@ export default function KlaviyoV2Page() {
   }, [drafts, searchQuery]);
 
   const handleOpen = (row: EmailDraftRow) => {
-    router.push(`/klaviyo-v2/${row.id}`);
+    router.push(`/klaviyo/${row.id}`);
   };
   const handleEdit = handleOpen;
 
@@ -94,7 +94,7 @@ export default function KlaviyoV2Page() {
         status: 'draft',
       });
       if (created?.id) {
-        router.push(`/klaviyo-v2/${created.id}`);
+        router.push(`/klaviyo/${created.id}`);
       } else {
         void loadDrafts();
       }

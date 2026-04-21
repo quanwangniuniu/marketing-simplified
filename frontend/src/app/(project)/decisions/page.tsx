@@ -60,7 +60,7 @@ function DecisionsV2Content() {
 
   const navigateToDecision = (id: number) => {
     const qs = projectId ? `?project_id=${projectId}` : '';
-    router.push(`/decisions-v2/${id}${qs}`);
+    router.push(`/decisions/${id}${qs}`);
   };
 
   return (

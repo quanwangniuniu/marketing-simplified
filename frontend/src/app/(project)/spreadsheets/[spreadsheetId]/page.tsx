@@ -825,7 +825,7 @@ export default function SpreadsheetsV2DetailPage() {
             <p className="mt-3 text-sm font-semibold text-rose-700">Could not load spreadsheet</p>
             <p className="mt-1 text-xs text-rose-600">{error}</p>
             <Link
-              href={`/spreadsheets-v2${projectId ? `?project_id=${projectId}` : ''}`}
+              href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
               className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
             >
               Back to spreadsheets
@@ -845,7 +845,7 @@ export default function SpreadsheetsV2DetailPage() {
             <p className="mt-3 text-sm font-semibold text-gray-900">Spreadsheet not found</p>
             <p className="mt-1 text-xs text-gray-500">The spreadsheet you're looking for doesn't exist.</p>
             <Link
-              href={`/spreadsheets-v2${projectId ? `?project_id=${projectId}` : ''}`}
+              href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
               className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
             >
               Back to spreadsheets

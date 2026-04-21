@@ -17,7 +17,7 @@ export default function TaskCardMini({ task }: TaskCardMiniProps) {
   return (
     <button
       type="button"
-      onClick={() => router.push(`/tasks-v2/${task.id}`)}
+      onClick={() => router.push(`/tasks/${task.id}`)}
       className="group flex w-full flex-col gap-2 rounded-md bg-white p-3 text-left shadow-sm ring-1 ring-gray-100 transition hover:shadow-md hover:ring-gray-200"
     >
       <div className="flex items-start gap-2">

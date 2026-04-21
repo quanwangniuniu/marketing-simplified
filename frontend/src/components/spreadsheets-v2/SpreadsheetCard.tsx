@@ -25,7 +25,7 @@ export default function SpreadsheetCard({ spreadsheet, projectId, onRequestDelet
   return (
     <div className="group relative rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-gray-200">
       <Link
-        href={`/spreadsheets-v2/${spreadsheet.id}?project_id=${projectId}`}
+        href={`/spreadsheets/${spreadsheet.id}?project_id=${projectId}`}
         className="block"
         aria-label={`Open ${spreadsheet.name}`}
       >

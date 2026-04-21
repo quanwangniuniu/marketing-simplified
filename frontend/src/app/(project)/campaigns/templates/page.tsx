@@ -65,7 +65,7 @@ export default function TemplatesListV2Page() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => router.push('/campaigns-v2')}
+          onClick={() => router.push('/campaigns')}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -119,7 +119,7 @@ export default function TemplatesListV2Page() {
           loading={loading}
           errorMessage={errorMessage}
           showArchived={showArchived}
-          onRowClick={(t) => router.push(`/campaigns-v2/templates/${t.id}`)}
+          onRowClick={(t) => router.push(`/campaigns/templates/${t.id}`)}
         />
       </div>
       <ChatFAB />

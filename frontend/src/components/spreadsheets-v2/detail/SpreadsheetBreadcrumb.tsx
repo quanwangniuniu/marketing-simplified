@@ -11,8 +11,8 @@ interface Props {
 
 export default function SpreadsheetBreadcrumb({ projectId, projectName, spreadsheetName }: Props) {
   const listHref = projectId
-    ? `/spreadsheets-v2?project_id=${projectId}`
-    : '/spreadsheets-v2';
+    ? `/spreadsheets?project_id=${projectId}`
+    : '/spreadsheets';
   return (
     <nav
       aria-label="Breadcrumb"

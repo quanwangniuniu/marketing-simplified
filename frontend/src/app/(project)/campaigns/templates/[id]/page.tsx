@@ -90,7 +90,7 @@ export default function TemplateV2DetailPage() {
       await archive();
       toast.success('Template archived');
       setArchiveOpen(false);
-      router.push('/campaigns-v2/templates');
+      router.push('/campaigns/templates');
     } catch (err: any) {
       toast.error(err?.response?.data?.error || err?.message || 'Failed to archive');
     } finally {
@@ -117,7 +117,7 @@ export default function TemplateV2DetailPage() {
       await destroy();
       toast.success('Template deleted');
       setDeleteOpen(false);
-      router.push('/campaigns-v2/templates');
+      router.push('/campaigns/templates');
     } catch (err: any) {
       toast.error(err?.response?.data?.error || err?.message || 'Failed to delete');
     } finally {
@@ -143,7 +143,7 @@ export default function TemplateV2DetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push('/campaigns-v2/templates')}
+            onClick={() => router.push('/campaigns/templates')}
             className="mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -165,7 +165,7 @@ export default function TemplateV2DetailPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => router.push('/campaigns-v2/templates')}
+          onClick={() => router.push('/campaigns/templates')}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />

@@ -108,7 +108,7 @@ function MiroV2ListContent() {
       setBoards(list);
       setIsCreateModalOpen(false);
       toast.success("Board created");
-      if (created?.id) router.push(`/miro-v2/${created.id}`);
+      if (created?.id) router.push(`/miro/${created.id}`);
     } catch (err: any) {
       toast.error(err instanceof Error ? err.message : "Failed to create board");
     } finally {
@@ -270,7 +270,7 @@ function MiroV2ListContent() {
                   >
                     <button
                       type="button"
-                      onClick={() => router.push(`/miro-v2/${board.id}`)}
+                      onClick={() => router.push(`/miro/${board.id}`)}
                       className="block h-32 w-full bg-gradient-to-br from-[#3CCED7]/20 via-white to-[#A6E661]/20 text-left"
                     >
                       <div className="flex h-full items-center justify-center">
@@ -281,7 +281,7 @@ function MiroV2ListContent() {
                       <div className="min-w-0 flex-1">
                         <button
                           type="button"
-                          onClick={() => router.push(`/miro-v2/${board.id}`)}
+                          onClick={() => router.push(`/miro/${board.id}`)}
                           className="block w-full truncate text-left text-sm font-medium text-gray-900 hover:text-[#3CCED7]"
                           title={board.title || "Untitled Board"}
                         >
@@ -317,7 +317,7 @@ function MiroV2ListContent() {
                               type="button"
                               onClick={() => {
                                 setMenuOpenId(null);
-                                router.push(`/miro-v2/${board.id}`);
+                                router.push(`/miro/${board.id}`);
                               }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                             >

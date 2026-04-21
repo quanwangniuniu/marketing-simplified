@@ -60,7 +60,7 @@ export default function DecisionConnectionsAside({ decisionId, projectId, mySeq 
     .filter(Boolean) as Connection[];
 
   const linkHref = (id: number) =>
-    projectId ? `/decisions-v2/${id}?project_id=${projectId}` : `/decisions-v2/${id}`;
+    projectId ? `/decisions/${id}?project_id=${projectId}` : `/decisions/${id}`;
 
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">

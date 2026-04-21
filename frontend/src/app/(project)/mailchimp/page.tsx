@@ -68,7 +68,7 @@ export default function MailchimpV2Page() {
   }, [drafts, searchQuery]);
 
   const handleOpen = (row: EmailDraftRow) => {
-    router.push(`/mailchimp-v2/${row.id}`);
+    router.push(`/mailchimp/${row.id}`);
   };
   const handleEdit = handleOpen;
 
@@ -88,7 +88,7 @@ export default function MailchimpV2Page() {
   };
 
   const handleCreate = () => {
-    router.push('/mailchimp-v2/new');
+    router.push('/mailchimp/new');
   };
 
   return (

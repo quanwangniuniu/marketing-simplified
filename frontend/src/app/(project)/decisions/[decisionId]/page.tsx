@@ -232,7 +232,7 @@ function DecisionDetailContent() {
       await DecisionAPI.deleteDecision(decisionId, projectId);
       toast.success('Decision deleted');
       const qs = projectId ? `?project_id=${projectId}` : '';
-      router.push(`/decisions-v2${qs}`);
+      router.push(`/decisions${qs}`);
     } catch (err) {
       toast.error(extractError(err, 'Delete failed'));
     } finally {
@@ -405,7 +405,7 @@ function DecisionDetailContent() {
                   const q = new URLSearchParams();
                   if (projectId) q.set('project_id', String(projectId));
                   q.set('link_decision_id', String(decisionId));
-                  router.push(`/tasks-v2/new?${q.toString()}`);
+                  router.push(`/tasks/new?${q.toString()}`);
                 }}
               />
               {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (

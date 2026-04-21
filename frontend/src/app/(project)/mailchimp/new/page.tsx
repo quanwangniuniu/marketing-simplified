@@ -67,7 +67,7 @@ export default function MailchimpNewPage() {
   }, [selectedTemplateId, subject, fromName, replyTo]);
 
   const handleCancel = () => {
-    router.push('/mailchimp-v2');
+    router.push('/mailchimp');
   };
 
   const handleSubmit = async () => {
@@ -84,9 +84,9 @@ export default function MailchimpNewPage() {
       });
       toast.success('Draft created');
       if (created?.id) {
-        router.push(`/mailchimp-v2/${created.id}`);
+        router.push(`/mailchimp/${created.id}`);
       } else {
-        router.push('/mailchimp-v2');
+        router.push('/mailchimp');
       }
     } catch (err) {
       setSubmitError(

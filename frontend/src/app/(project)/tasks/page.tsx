@@ -43,7 +43,7 @@ export default function TasksV2Page() {
       if (next === 'tasks') params.delete('tab');
       else params.set('tab', next);
       const qs = params.toString();
-      router.replace(qs ? `/tasks-v2?${qs}` : '/tasks-v2');
+      router.replace(qs ? `/tasks?${qs}` : '/tasks');
     },
     [router, searchParams]
   );
@@ -51,7 +51,7 @@ export default function TasksV2Page() {
   const headerActions = (
     <button
       type="button"
-      onClick={() => router.push('/tasks-v2/new')}
+      onClick={() => router.push('/tasks/new')}
       className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
     >
       <Plus className="h-4 w-4" />

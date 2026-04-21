@@ -70,7 +70,7 @@ function AdForm({ ad, onUpdate, saving }: { ad: GoogleAd; onUpdate: (data: any) 
     default:
       return (
         <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-xs text-gray-500">
-          This ad type ({ad.type || 'unknown'}) is not editable in the v2 workspace.
+          This ad type ({ad.type || 'unknown'}) is not editable in this workspace.
         </div>
       );
   }
@@ -183,7 +183,7 @@ function GoogleAdsDetailContent() {
       // gg-6 DELETE preferred; use GoogleAdsAPI.deleteAd
       await (GoogleAdsAPI as any).deleteAd(ad.id);
       toast.success('Ad deleted');
-      router.push('/google-ads-v2');
+      router.push('/google-ads');
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? 'Failed to delete');
     } finally {
@@ -237,7 +237,7 @@ function GoogleAdsDetailContent() {
           <p className="text-xs text-gray-500">{error ?? 'Not found'}</p>
           <button
             type="button"
-            onClick={() => router.push('/google-ads-v2')}
+            onClick={() => router.push('/google-ads')}
             className="inline-flex rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-95"
           >
             Back to list

@@ -374,7 +374,7 @@ function MiroBoardPage() {
         viewport: { x: 0, y: 0, zoom: 1 },
       });
       setIsCreateModalOpen(false);
-      router.push(`/miro-v2/${created.id}`);
+      router.push(`/miro/${created.id}`);
     } catch (err) {
       console.error("Failed to create board:", err);
     } finally {
@@ -414,9 +414,9 @@ function MiroBoardPage() {
         setProjectBoards(nextProjectBoards);
         if (targetBoardId === boardId) {
           if (nextProjectBoards.length > 0) {
-            router.push(`/miro-v2/${nextProjectBoards[0].id}`);
+            router.push(`/miro/${nextProjectBoards[0].id}`);
           } else {
-            router.push("/miro-v2");
+            router.push("/miro");
           }
         }
       } catch (err: any) {
@@ -1136,7 +1136,7 @@ function MiroBoardPage() {
             {error || "Board not found"}
           </div>
           <button
-            onClick={() => router.push("/miro-v2")}
+            onClick={() => router.push("/miro")}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
           >
             Back to Boards
@@ -1166,7 +1166,7 @@ function MiroBoardPage() {
           canUndo={canUndo}
           canRedo={canRedo}
           onBoardsToggle={() => setIsBoardsSidebarOpen((prev) => !prev)}
-          onBack={() => router.push("/miro-v2")}
+          onBack={() => router.push("/miro")}
         />
 
         <div className="flex flex-1 overflow-hidden min-h-0">

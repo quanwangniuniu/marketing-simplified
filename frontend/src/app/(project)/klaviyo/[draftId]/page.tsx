@@ -76,7 +76,7 @@ export default function KlaviyoDetailV2Page() {
   const safeReturnTo =
     returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
       ? returnTo
-      : '/klaviyo-v2';
+      : '/klaviyo';
 
   // Save state
   const [isSaving, setIsSaving] = useState(false);

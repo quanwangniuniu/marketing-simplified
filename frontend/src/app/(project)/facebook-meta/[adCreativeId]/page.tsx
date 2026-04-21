@@ -316,7 +316,7 @@ function FacebookMetaDetailContent() {
       setDeleting(true);
       await FacebookMetaAPI.deleteAdCreative(adCreativeId);
       toast.success('Ad creative deleted');
-      router.push('/facebook-meta-v2');
+      router.push('/facebook-meta');
     } catch (err: any) {
       toast.error(err?.response?.data?.error ?? 'Failed to delete');
     } finally {
@@ -425,7 +425,7 @@ function FacebookMetaDetailContent() {
           <p className="text-xs text-gray-500">{error ?? 'Not found'}</p>
           <button
             type="button"
-            onClick={() => router.push('/facebook-meta-v2')}
+            onClick={() => router.push('/facebook-meta')}
             className="inline-flex rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-95"
           >
             Back to list

@@ -70,7 +70,7 @@ function GoogleAdsV2Content() {
       const created = await createAd({ name: payload.name, type: payload.type });
       setCreateOpen(false);
       if (created?.id) {
-        router.push(`/google-ads-v2/${created.id}`);
+        router.push(`/google-ads/${created.id}`);
       }
     } catch {
       // useGoogleAdsData shows toast on error; keep modal open
@@ -157,7 +157,7 @@ function GoogleAdsV2Content() {
         <AdTableV2
           ads={ads}
           loading={loading}
-          onRowClick={(id) => router.push(`/google-ads-v2/${id}`)}
+          onRowClick={(id) => router.push(`/google-ads/${id}`)}
           onDelete={(id) => setDeleteTargetId(id)}
         />
 

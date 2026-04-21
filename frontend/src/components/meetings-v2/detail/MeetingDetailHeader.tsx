@@ -67,7 +67,7 @@ export default function MeetingDetailHeader({
     <header className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
       <nav className="flex items-center justify-between gap-2 text-xs text-gray-500">
         <Link
-          href={`/meetings-v2?project_id=${projectId}`}
+          href={`/meetings?project_id=${projectId}`}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <ArrowLeft className="h-3 w-3" aria-hidden="true" />

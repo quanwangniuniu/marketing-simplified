@@ -68,7 +68,7 @@ export default function CampaignV2DetailPage() {
     }
   };
 
-  const handleBack = () => router.push('/campaigns-v2');
+  const handleBack = () => router.push('/campaigns');
 
   const isArchived = currentCampaign?.status === 'ARCHIVED';
 

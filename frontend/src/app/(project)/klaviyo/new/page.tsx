@@ -17,7 +17,7 @@ export default function KlaviyoNewPage() {
   const canSubmit = subject.trim().length > 0 && !submitting;
 
   const handleCancel = () => {
-    router.push('/klaviyo-v2');
+    router.push('/klaviyo');
   };
 
   const handleSubmit = async () => {
@@ -32,9 +32,9 @@ export default function KlaviyoNewPage() {
       });
       toast.success('Template created');
       if (created?.id) {
-        router.push(`/klaviyo-v2/${created.id}`);
+        router.push(`/klaviyo/${created.id}`);
       } else {
-        router.push('/klaviyo-v2');
+        router.push('/klaviyo');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template');

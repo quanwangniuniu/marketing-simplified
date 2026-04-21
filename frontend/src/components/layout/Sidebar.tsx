@@ -96,7 +96,7 @@ const getNavigationItems = (
     },
     {
       name: "Decisions",
-      href: "/decisions-v2",
+      href: "/decisions",
       icon: CheckSquare,
       description: "Decision workbench and history",
     },

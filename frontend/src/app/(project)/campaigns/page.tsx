@@ -104,7 +104,7 @@ export default function CampaignsV2Page() {
           campaigns={filtered}
           loading={loading}
           errorMessage={errorMessage}
-          onRowClick={(c) => router.push(`/campaigns-v2/${c.id}`)}
+          onRowClick={(c) => router.push(`/campaigns/${c.id}`)}
         />
 
         <CreateCampaignDialog

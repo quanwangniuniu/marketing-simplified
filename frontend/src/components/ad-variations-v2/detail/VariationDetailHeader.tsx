@@ -92,7 +92,7 @@ export default function VariationDetailHeader({
     try {
       const copy = await AdVariationAPI.duplicateVariation(campaignId, variation.id);
       toast.success('Variation duplicated');
-      router.push(`/variations-v2/${copy.id}?cid=${campaignId}`);
+      router.push(`/variations/${copy.id}?cid=${campaignId}`);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || 'Duplicate failed');
     }
@@ -103,7 +103,7 @@ export default function VariationDetailHeader({
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-6 py-2">
         <nav className="flex items-center gap-2 text-xs text-gray-500">
           <Link
-            href="/variations-v2"
+            href="/variations"
             title="Back to Variations"
             aria-label="Back to Variations"
             className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
@@ -114,7 +114,7 @@ export default function VariationDetailHeader({
             Overview
           </Link>
           <ChevronRight className="h-3 w-3 text-gray-300" />
-          <Link href="/variations-v2" className="hover:text-gray-900">
+          <Link href="/variations" className="hover:text-gray-900">
             Variations V2
           </Link>
           <ChevronRight className="h-3 w-3 text-gray-300" />

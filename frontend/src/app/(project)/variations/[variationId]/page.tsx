@@ -74,7 +74,7 @@ export default function VariationDetailPage() {
     try {
       await AdVariationAPI.deleteVariation(campaignId, variation.id);
       toast.success('Variation deleted');
-      router.push('/variations-v2');
+      router.push('/variations');
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || 'Delete failed');
     } finally {

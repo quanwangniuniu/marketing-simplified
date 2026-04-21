@@ -66,7 +66,7 @@ export default function TaskSubtasksBlock({ task, readOnly, refreshKey }: Props)
           {items.map((s) => (
             <li key={s.id} className="flex items-center gap-3 py-2">
               <Link
-                href={`/tasks-v2/${s.id}`}
+                href={`/tasks/${s.id}`}
                 className="flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
               >
                 {s.summary}

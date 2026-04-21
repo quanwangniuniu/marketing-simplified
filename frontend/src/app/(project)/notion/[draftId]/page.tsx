@@ -355,7 +355,7 @@ function NotionV2DetailContent() {
       const created = await NotionDraftAPI.duplicateDraft(draftId);
       if (!created?.id) throw new Error('Duplicated draft id missing');
       toast.success('Draft duplicated');
-      router.push(`/notion-v2/${created.id}`);
+      router.push(`/notion/${created.id}`);
     } catch (error: any) {
       console.error('Failed to duplicate draft', error);
       toast.error(error?.response?.data?.detail || 'Failed to duplicate draft');
@@ -389,7 +389,7 @@ function NotionV2DetailContent() {
     try {
       await NotionDraftAPI.deleteDraft(draftId);
       toast.success('Draft deleted');
-      router.push('/notion-v2');
+      router.push('/notion');
     } catch (error: any) {
       console.error('Failed to delete draft', error);
       toast.error(error?.response?.data?.detail || 'Failed to delete draft');
@@ -605,7 +605,7 @@ function NotionV2DetailContent() {
               </p>
               <button
                 type="button"
-                onClick={() => router.push('/notion-v2')}
+                onClick={() => router.push('/notion')}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] hover:opacity-95"
               >
                 Back to list

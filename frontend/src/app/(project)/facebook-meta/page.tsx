@@ -60,7 +60,7 @@ function FacebookMetaV2Content() {
       setCreateOpen(false);
       const newId = result?.data?.id;
       if (newId) {
-        router.push(`/facebook-meta-v2/${newId}`);
+        router.push(`/facebook-meta/${newId}`);
       } else {
         fetchAdCreatives();
       }
@@ -134,7 +134,7 @@ function FacebookMetaV2Content() {
         <AdCreativeTableV2
           creatives={adCreatives as any}
           loading={loading}
-          onRowClick={(id) => router.push(`/facebook-meta-v2/${id}`)}
+          onRowClick={(id) => router.push(`/facebook-meta/${id}`)}
           onDelete={(id) => setDeleteTargetId(id)}
         />
 

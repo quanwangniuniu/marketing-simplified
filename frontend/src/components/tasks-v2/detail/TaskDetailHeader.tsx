@@ -75,7 +75,7 @@ export default function TaskDetailHeader({
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-2">
         <nav className="flex items-center gap-2 text-xs text-gray-500">
           <Link
-            href="/tasks-v2"
+            href="/tasks"
             title="Back to Tasks"
             aria-label="Back to Tasks"
             className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
@@ -83,12 +83,12 @@ export default function TaskDetailHeader({
             <ArrowLeft className="h-3.5 w-3.5" />
           </Link>
           <div className="flex items-center gap-1.5">
-          <Link href="/tasks-v2" className="hover:text-gray-900">
+          <Link href="/tasks" className="hover:text-gray-900">
             Tasks
           </Link>
           <ChevronRight className="h-3 w-3 text-gray-300" />
           <Link
-            href={projectId ? `/tasks-v2?project_id=${projectId}` : '/tasks-v2'}
+            href={projectId ? `/tasks?project_id=${projectId}` : '/tasks'}
             className="hover:text-gray-900"
           >
             {projectName}

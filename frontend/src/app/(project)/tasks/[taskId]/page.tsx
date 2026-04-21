@@ -73,7 +73,7 @@ export default function TaskV2DetailPage() {
     if (!task?.id) return;
     try {
       await TaskAPI.deleteTask(task.id);
-      router.push('/tasks-v2');
+      router.push('/tasks');
     } catch (e) {
       toast.error((e as any)?.response?.data?.detail || 'Delete failed');
     }

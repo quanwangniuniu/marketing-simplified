@@ -123,7 +123,7 @@ export default function TaskRelationsBlock({
                       className="flex items-center gap-3 py-1.5"
                     >
                       <Link
-                        href={`/tasks-v2/${item.task.id}`}
+                        href={`/tasks/${item.task.id}`}
                         className="flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
                       >
                         {item.task.summary}

@@ -236,9 +236,9 @@ export default function CreateTaskPage() {
       toast.success(asDraft ? 'Saved as draft' : 'Task submitted for review');
       if (linkDecisionId) {
         const qs = projectId ? `?project_id=${projectId}` : '';
-        router.push(`/decisions-v2/${linkDecisionId}${qs}`);
+        router.push(`/decisions/${linkDecisionId}${qs}`);
       } else {
-        router.push('/tasks-v2');
+        router.push('/tasks');
       }
     } catch (err: unknown) {
       const e = err as {
@@ -264,9 +264,9 @@ export default function CreateTaskPage() {
           onClick={() => {
             if (linkDecisionId) {
               const qs = projectId ? `?project_id=${projectId}` : '';
-              router.push(`/decisions-v2/${linkDecisionId}${qs}`);
+              router.push(`/decisions/${linkDecisionId}${qs}`);
             } else {
-              router.push('/tasks-v2');
+              router.push('/tasks');
             }
           }}
           className="mb-4 inline-flex items-center gap-1.5 text-xs text-gray-500 transition hover:text-gray-900"
@@ -422,7 +422,7 @@ export default function CreateTaskPage() {
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-8 py-4">
               <button
                 type="button"
-                onClick={() => router.push('/tasks-v2')}
+                onClick={() => router.push('/tasks')}
                 disabled={submitting !== null}
                 className="rounded-md px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 disabled:opacity-60"
               >

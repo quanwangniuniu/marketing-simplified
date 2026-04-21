@@ -40,7 +40,7 @@ export default function DecisionDetailHeader({
     setLocal(title ?? '');
   }, [title]);
 
-  const backHref = projectId ? `/decisions-v2?project_id=${projectId}` : '/decisions-v2';
+  const backHref = projectId ? `/decisions?project_id=${projectId}` : '/decisions';
 
   const handleBlur = async () => {
     const normalized = local.trim();

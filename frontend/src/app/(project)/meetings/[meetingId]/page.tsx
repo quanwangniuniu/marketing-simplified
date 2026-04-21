@@ -182,7 +182,7 @@ export default function MeetingDetailPage() {
 
   const handleDocumentOpen = useCallback(() => {
     if (!projectId || !meeting) return;
-    router.push(`/meetings-v2/${meeting.id}/document?project_id=${projectId}`);
+    router.push(`/meetings/${meeting.id}/document?project_id=${projectId}`);
   }, [router, projectId, meeting]);
 
   const handleCreateZoomMeeting = useCallback(async () => {

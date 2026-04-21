@@ -28,7 +28,7 @@ export function meetingArtifactHref(
   const t = normalizeMeetingArtifactType(artifactType);
   if (!Number.isFinite(artifactId) || artifactId < 1) return null;
   if (t === 'decision') {
-    return `/decisions-v2/${artifactId}?project_id=${projectId}`;
+    return `/decisions/${artifactId}?project_id=${projectId}`;
   }
   if (t === 'task') {
     return `/tasks/${artifactId}`;
