@@ -35,8 +35,8 @@ function TaskDetailValueSkeleton({
 
 function TaskDetailSidebarSkeleton() {
   return (
-    <aside className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
+    <aside className="space-y-5">
+      <div className="py-1">
         <button
           type="button"
           disabled
@@ -146,7 +146,7 @@ function TaskDetailSidebarSkeleton() {
         <button
           type="button"
           disabled
-          className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 opacity-80"
+          className="w-full inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-red-600 opacity-80"
         >
           <Trash2 className="h-4 w-4" />
           Delete Task
@@ -181,7 +181,7 @@ export function TaskSectionSkeleton({
         {rowVariants.map((variant, index) => (
           <div
             key={`${title}-skeleton-${index}`}
-            className="rounded-md border border-slate-200 bg-white px-3 py-3"
+            className="space-y-3 py-1"
           >
             <Skeleton className={`h-4 ${variant.titleWidth}`} />
             <div className="mt-3 space-y-2">
@@ -217,11 +217,11 @@ export function TaskCollectionSkeleton({
         <div className="h-4 w-4 rounded bg-slate-200" />
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
       </div>
-      <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+      <div className="space-y-4">
         {itemVariants.map((variant, index) => (
           <div
             key={`${title}-item-${index}`}
-            className="flex items-center justify-between px-3 py-3"
+            className="flex items-center justify-between py-1"
           >
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className={`h-4 ${variant.titleWidth}`} />
@@ -370,6 +370,66 @@ export function TasksPageLoadingSkeleton() {
   );
 }
 
+export function TaskDetailBodySkeleton() {
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="space-y-6">
+        <section className="space-y-3">
+          <Skeleton className="h-8 w-2/3" />
+          <Skeleton className="h-4 w-36" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-4 w-11/12" />
+          </div>
+        </section>
+
+        <section className="border-t border-slate-200 pt-5">
+          <Skeleton className="h-5 w-36" />
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        </section>
+
+        <TaskSectionSkeleton title="Task-specific details" rows={4} />
+        <TaskCollectionSkeleton title="Attachments" rows={3} />
+        <TaskCollectionSkeleton title="Subtasks" rows={3} />
+        <TaskCollectionSkeleton title="Linked work items" rows={3} />
+
+        <section className="border-t border-slate-200 pt-5">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-4 w-4 rounded bg-slate-200" />
+            <h3 className="text-base font-semibold text-slate-900">
+              Comments
+            </h3>
+          </div>
+          <div className="space-y-4">
+            {commentCardWidths.map((variant, index) => (
+              <div
+                key={`comment-skeleton-${index}`}
+                className="space-y-3 py-1"
+              >
+                <Skeleton className={`h-4 ${variant.title}`} />
+                <div className="mt-3 space-y-2">
+                  {variant.body.map((widthClass, lineIndex) => (
+                    <Skeleton
+                      key={`comment-line-${index}-${lineIndex}`}
+                      className={`h-4 ${widthClass}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <TaskDetailSidebarSkeleton />
+    </div>
+  );
+}
+
 export function TaskDetailContentSkeleton() {
   return (
     <div className="min-h-screen bg-slate-50">
@@ -394,82 +454,7 @@ export function TaskDetailContentSkeleton() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-6 px-5 py-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Skeleton className="h-8 w-2/3" />
-                <div className="flex flex-wrap gap-2">
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                  <Skeleton className="h-6 w-24 rounded-full" />
-                  <Skeleton className="h-6 w-28 rounded-full" />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <Skeleton className="h-4 w-28" />
-                  <div className="mt-4 space-y-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-36" />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <Skeleton className="h-4 w-24" />
-                  <div className="mt-4 space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-4 w-28" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 p-4">
-                <Skeleton className="h-5 w-36" />
-                <div className="mt-4 space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-4/5" />
-                </div>
-              </div>
-
-              <TaskSectionSkeleton title="Task-specific details" rows={4} />
-              <TaskCollectionSkeleton title="Attachments" rows={3} />
-              <TaskCollectionSkeleton title="Subtasks" rows={3} />
-              <TaskCollectionSkeleton title="Linked work items" rows={3} />
-
-              <section className="border-t border-slate-200 pt-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="h-4 w-4 rounded bg-slate-200" />
-                  <h3 className="text-base font-semibold text-slate-900">
-                    Comments
-                  </h3>
-                </div>
-                <div className="space-y-3">
-                  {commentCardWidths.map((variant, index) => (
-                    <div
-                      key={`comment-skeleton-${index}`}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-3"
-                    >
-                      <Skeleton className={`h-4 ${variant.title}`} />
-                      <div className="mt-3 space-y-2">
-                        {variant.body.map((widthClass, lineIndex) => (
-                          <Skeleton
-                            key={`comment-line-${index}-${lineIndex}`}
-                            className={`h-4 ${widthClass}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            <TaskDetailSidebarSkeleton />
-          </div>
-        </div>
+        <TaskDetailBodySkeleton />
       </div>
     </div>
   );

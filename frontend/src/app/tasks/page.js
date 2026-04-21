@@ -20,7 +20,6 @@ import { DecorativeGlow } from "@/components/ui/decorative-glow";
 import { Skeleton } from "@/components/ui/skeleton";
 import NewTaskForm from "@/components/tasks/NewTaskForm";
 import TaskCreatePanel from "@/components/tasks/TaskCreatePanel";
-import TasksWorkspaceSkeleton from "@/components/tasks/TasksWorkspaceSkeleton";
 import NewBudgetRequestForm from "@/components/tasks/NewBudgetRequestForm";
 import NewAssetForm from "@/components/tasks/NewAssetForm";
 import NewRetrospectiveForm from "@/components/tasks/NewRetrospectiveForm";
@@ -53,7 +52,6 @@ import {
 import { useTaskFilterParams } from "@/hooks/useTaskFilterParams";
 import { TaskFilterPanel } from "@/components/tasks/TaskFilterPanel";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
-import { SKELETON_TEST_DELAY_MS } from "@/lib/skeletonTesting";
 
 const BOARD_TYPE_ORDER = [
   "task",
@@ -176,10 +174,7 @@ function TasksPageContent() {
   // URL-backed filters (including project_id, status, priority, dates, etc.)
   const [filters, setFilters, clearFilters] = useTaskFilterParams();
   const [taskTypeOptions, setTaskTypeOptions] = useState([]);
-  const authBootLoading = useMinimumLoading(
-    userLoading,
-    SKELETON_TEST_DELAY_MS,
-  );
+  const authBootLoading = useMinimumLoading(userLoading);
 
   useEffect(() => {
     const loadTypes = async () => {
@@ -214,10 +209,7 @@ function TasksPageContent() {
 
   // Trigger to refresh budget pools list in NewBudgetRequestForm
   const [budgetPoolRefreshTrigger, setBudgetPoolRefreshTrigger] = useState(0);
-  const delayedTasksLoading = useMinimumLoading(
-    tasksLoading,
-    SKELETON_TEST_DELAY_MS,
-  );
+  const delayedTasksLoading = useMinimumLoading(tasksLoading);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalExpanded, setCreateModalExpanded] = useState(false);
@@ -421,19 +413,30 @@ function TasksPageContent() {
   const [boardData, setBoardData] = useState(null);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardError, setBoardError] = useState(null);
-  const delayedBoardLoading = useMinimumLoading(
-    boardLoading,
-    SKELETON_TEST_DELAY_MS,
-  );
+  const delayedBoardLoading = useMinimumLoading(boardLoading);
   const [isBoardRecentExpanded, setIsBoardRecentExpanded] = useState(false);
 
   // View mode: 'broad' | 'list'
   const [viewMode, setViewMode] = useState("broad");
   const hasInitializedViewMode = useRef(false);
+  const [loadedBoardProjectId, setLoadedBoardProjectId] = useState(null);
 
   // Search query
   const [searchQuery, setSearchQuery] = useState("");
-  // Fetch tasks when project_id changes
+
+  const taskFetchKey = useMemo(
+    () =>
+      JSON.stringify({
+        ...filters,
+        project_id: projectId ?? filters.project_id,
+      }),
+    [filters, projectId],
+  );
+
+  const taskFetchRequest = useMemo(
+    () => JSON.parse(taskFetchKey),
+    [taskFetchKey],
+  );
 
   useEffect(() => {
     if (hasInitializedViewMode.current) return;
@@ -516,14 +519,14 @@ function TasksPageContent() {
     if (!projectId) return;
     const loadTasks = async () => {
       try {
-        await fetchTasks({ project_id: projectId });
+        await fetchTasks(taskFetchRequest);
       } catch (error) {
         // error is handled in useTaskData
       }
     };
 
     loadTasks();
-  }, [userLoading, projectId, fetchTasks, filters]);
+  }, [userLoading, projectId, fetchTasks, taskFetchKey, taskFetchRequest]);
 
   const selectedProject = useMemo(() => {
     if (!projectId) return null;
@@ -534,6 +537,7 @@ function TasksPageContent() {
     if (userLoading) return;
     if (!projectId) {
       setBoardData(null);
+      setLoadedBoardProjectId(null);
       setBoardError("Project summary requires a project.");
       return;
     }
@@ -546,6 +550,7 @@ function TasksPageContent() {
         throw new Error("No data received from server");
       }
       setBoardData(response.data);
+      setLoadedBoardProjectId(projectId);
     } catch (error) {
       const message =
         error?.response?.data?.error ||
@@ -560,10 +565,30 @@ function TasksPageContent() {
   }, [userLoading, projectId]);
 
   useEffect(() => {
+    setBoardData(null);
+    setBoardError(null);
+    setLoadedBoardProjectId(null);
+  }, [projectId]);
+
+  useEffect(() => {
     if (userLoading) return;
     if (activeTab !== "summary") return;
     fetchBoardData();
   }, [userLoading, activeTab, fetchBoardData]);
+
+  const handleTabChange = useCallback(
+    (nextTab) => {
+      if (
+        nextTab === "summary" &&
+        projectId &&
+        loadedBoardProjectId !== projectId
+      ) {
+        setBoardLoading(true);
+      }
+      setActiveTab(nextTab);
+    },
+    [loadedBoardProjectId, projectId],
+  );
 
   // Ensure that the project_id in the form defaults to the project_id in the URL when creating a new task
   useEffect(() => {
@@ -1376,12 +1401,12 @@ function TasksPageContent() {
     setDraftEditingTaskId(null);
     setCreateOriginMeetingId(validOrigin);
     setCreateOriginMeetingLabel(null);
-    setActiveTab("tasks");
+    handleTabChange("tasks");
     resetFormData(projectId, "", "");
     clearAllValidationErrors();
     setCreateModalOpen(true);
     setCreateModalExpanded(false);
-  }, [searchParams, projectId]);
+  }, [searchParams, projectId, handleTabChange]);
 
   const buildDraftPayload = useCallback(() => {
     return {
@@ -1950,9 +1975,15 @@ function TasksPageContent() {
   const showProjectPickerLoading = authBootLoading || projectOptionsLoading;
   const showSelectedProjectNameSkeleton =
     authBootLoading || (projectOptionsLoading && !selectedProject);
-  const showSummarySkeleton = authBootLoading || delayedBoardLoading;
-  const showTaskWorkspaceSkeleton = authBootLoading || delayedTasksLoading;
-  const showBoardSkeleton = authBootLoading || delayedTasksLoading;
+  const summaryContentLoading =
+    authBootLoading ||
+    delayedBoardLoading ||
+    (activeTab === "summary" &&
+      projectId != null &&
+      loadedBoardProjectId !== projectId &&
+      !boardError);
+  const taskContentLoading = authBootLoading || delayedTasksLoading;
+  const boardContentLoading = authBootLoading || delayedTasksLoading;
   const projectPickerSkeletonRows = [
     {
       name: "w-40",
@@ -2029,7 +2060,7 @@ function TasksPageContent() {
                 <nav data-testid="workspace-tab-nav" className="flex space-x-8">
                   <button
                     data-testid="tab-summary"
-                    onClick={() => setActiveTab("summary")}
+                    onClick={() => handleTabChange("summary")}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === "summary"
                         ? "border-indigo-600 text-indigo-600"
@@ -2040,7 +2071,7 @@ function TasksPageContent() {
                   </button>
                   <button
                     data-testid="tab-tasks"
-                    onClick={() => setActiveTab("tasks")}
+                    onClick={() => handleTabChange("tasks")}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === "tasks"
                         ? "border-indigo-600 text-indigo-600"
@@ -2051,7 +2082,7 @@ function TasksPageContent() {
                   </button>
                   <button
                     data-testid="tab-board"
-                    onClick={() => setActiveTab("board")}
+                    onClick={() => handleTabChange("board")}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === "board"
                         ? "border-indigo-600 text-indigo-600"
@@ -2441,9 +2472,7 @@ function TasksPageContent() {
 
           {projectId && activeTab === "summary" && (
             <div data-testid="tab-content-summary" className="mt-6 space-y-6">
-              {showSummarySkeleton && <TasksWorkspaceSkeleton mode="summary" />}
-
-              {!showSummarySkeleton && boardError && (
+              {!summaryContentLoading && boardError ? (
                 <div className="text-center py-8">
                   <p className="text-red-600">{boardError}</p>
                   <button
@@ -2453,19 +2482,18 @@ function TasksPageContent() {
                     Retry
                   </button>
                 </div>
-              )}
-
-              {!showSummarySkeleton && !boardError && (
+              ) : (
                 <JiraSummaryView
                   metrics={summaryMetrics}
                   statusOverview={statusOverview}
                   workTypes={workTypes}
+                  loading={summaryContentLoading}
                   onViewWorkItems={() => {
-                    setActiveTab("tasks");
+                    handleTabChange("tasks");
                     setViewMode("list");
                   }}
                   onViewItems={() => {
-                    setActiveTab("board");
+                    handleTabChange("board");
                   }}
                 />
               )}
@@ -2474,52 +2502,45 @@ function TasksPageContent() {
 
           {projectId && activeTab === "board" && (
             <div className="mt-6 space-y-6">
-              {showBoardSkeleton ? (
-                <TasksWorkspaceSkeleton mode="board" />
-              ) : (
-                <JiraBoardView
-                  boardColumns={boardColumns}
-                  tasksByType={tasksByType}
-                  onCreateTask={openGenericCreateTaskModal}
-                  onTaskClick={handleTaskClick}
-                  getTicketKey={getTicketKey}
-                  getBoardTypeIcon={getBoardTypeIcon}
-                  formatBoardDate={formatBoardDate}
-                  getDueTone={getDueTone}
-                  editingTaskId={editingTaskId}
-                  editingSummary={editingSummary}
-                  setEditingSummary={setEditingSummary}
-                  startBoardEdit={startBoardEdit}
-                  cancelBoardEdit={cancelBoardEdit}
-                  saveBoardEdit={saveBoardEdit}
-                  currentUser={user || undefined}
-                  externalFilters={
-                    <TaskFilterPanel
-                      filters={filters}
-                      onChange={setFilters}
-                      onClearAll={clearFilters}
-                      projectOptions={projectOptions}
-                      typeOptions={taskTypeOptions}
-                    />
-                  }
-                />
-              )}
+              <JiraBoardView
+                boardColumns={boardColumns}
+                tasksByType={tasksByType}
+                loading={boardContentLoading}
+                onCreateTask={openGenericCreateTaskModal}
+                onTaskClick={handleTaskClick}
+                getTicketKey={getTicketKey}
+                getBoardTypeIcon={getBoardTypeIcon}
+                formatBoardDate={formatBoardDate}
+                getDueTone={getDueTone}
+                editingTaskId={editingTaskId}
+                editingSummary={editingSummary}
+                setEditingSummary={setEditingSummary}
+                startBoardEdit={startBoardEdit}
+                cancelBoardEdit={cancelBoardEdit}
+                saveBoardEdit={saveBoardEdit}
+                currentUser={user || undefined}
+                externalFilters={
+                  <TaskFilterPanel
+                    filters={filters}
+                    onChange={setFilters}
+                    onClearAll={clearFilters}
+                    projectOptions={projectOptions}
+                    typeOptions={taskTypeOptions}
+                  />
+                }
+              />
             </div>
           )}
 
           {/* Error State */}
-          {projectId && activeTab === "tasks" && tasksError && (
+          {projectId && activeTab === "tasks" && tasksError && !taskContentLoading && (
             <div className="text-center py-8">
               <p className="text-red-600">
                 Error loading tasks: {tasksError.message}
               </p>
               <button
                 onClick={() => {
-                  if (projectId) {
-                    fetchTasks({ ...filters, project_id: projectId });
-                  } else {
-                    fetchTasks(filters);
-                  }
+                  fetchTasks(taskFetchRequest);
                 }}
                 className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
               >
@@ -2529,48 +2550,47 @@ function TasksPageContent() {
           )}
 
           {/* Tasks Display */}
-          {!tasksError && projectId && activeTab === "tasks" && (
+          {projectId &&
+            activeTab === "tasks" &&
+            (taskContentLoading || !tasksError) && (
             <div className="min-h-screen bg-[#f8f9fb] px-6 py-6">
               <div className="mx-auto max-w-6xl space-y-4">
-                {showTaskWorkspaceSkeleton ? (
-                  <TasksWorkspaceSkeleton mode="tasks" />
-                ) : (
-                  <JiraTasksView
-                    tasks={filteredJiraTasks}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    searchValue={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    searchPlaceholder="Search tasks..."
-                    rightOfSearch={
-                      <TaskFilterPanel
-                        filters={filters}
-                        onChange={setFilters}
-                        onClearAll={clearFilters}
-                        projectOptions={projectOptions}
-                        typeOptions={taskTypeOptions}
-                      />
-                    }
-                    onTaskClick={handleJiraTaskClick}
-                    onTaskUpdate={reloadTasks}
-                    renderTimeline={() => (
-                      <TimelineViewComponent
-                        tasks={tasksForTimeline}
-                        onTaskClick={handleTaskClick}
-                        reloadTasks={reloadTasks}
-                        onCreateTask={(projectIdOverride) =>
-                          openGenericCreateTaskModal(
-                            projectIdOverride,
-                            undefined,
-                            undefined,
-                            { preserveMeetingOrigin: true },
-                          )
-                        }
-                        currentUser={user || undefined}
-                      />
-                    )}
-                  />
-                )}
+                <JiraTasksView
+                  tasks={filteredJiraTasks}
+                  loading={taskContentLoading}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Search tasks..."
+                  rightOfSearch={
+                    <TaskFilterPanel
+                      filters={filters}
+                      onChange={setFilters}
+                      onClearAll={clearFilters}
+                      projectOptions={projectOptions}
+                      typeOptions={taskTypeOptions}
+                    />
+                  }
+                  onTaskClick={handleJiraTaskClick}
+                  onTaskUpdate={reloadTasks}
+                  renderTimeline={() => (
+                    <TimelineViewComponent
+                      tasks={tasksForTimeline}
+                      onTaskClick={handleTaskClick}
+                      reloadTasks={reloadTasks}
+                      onCreateTask={(projectIdOverride) =>
+                        openGenericCreateTaskModal(
+                          projectIdOverride,
+                          undefined,
+                          undefined,
+                          { preserveMeetingOrigin: true },
+                        )
+                      }
+                      currentUser={user || undefined}
+                    />
+                  )}
+                />
               </div>
             </div>
           )}
@@ -2892,10 +2912,7 @@ function TasksPageContent() {
 
 export default function TasksPage() {
   return (
-    <ProtectedRoute
-      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-      renderChildrenWhileLoading
-    >
+    <ProtectedRoute renderChildrenWhileLoading>
       <TasksPageContent />
     </ProtectedRoute>
   );

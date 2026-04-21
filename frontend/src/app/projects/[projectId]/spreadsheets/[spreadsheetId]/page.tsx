@@ -6,9 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { SpreadsheetData, SheetData, CreateSheetRequest, UpdateSheetRequest } from '@/types/spreadsheet';
-import { AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Plus, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, FileSpreadsheet, Plus } from 'lucide-react';
 import CreateSheetModal from '@/components/spreadsheets/CreateSheetModal';
 import SpreadsheetGrid, { SpreadsheetGridHandle } from '@/components/spreadsheets/SpreadsheetGrid';
 import PatternAgentPanel from '@/components/spreadsheets/PatternAgentPanel';
@@ -56,9 +57,7 @@ import {
   timelineItemsToCreateSteps,
   updateTimelineItemById,
 } from '@/lib/spreadsheets/timelineItems';
-import { SpreadsheetDetailPageSkeleton } from '@/components/spreadsheets/SpreadsheetPageSkeletons';
 import { useMinimumLoading } from '@/hooks/useMinimumLoading';
-import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 export default function SpreadsheetDetailPage() {
   const params = useParams();
@@ -119,7 +118,7 @@ export default function SpreadsheetDetailPage() {
   const applyHighlightStepsRef = useRef<(steps: WorkflowPatternStepRecord[]) => void>(() => {});
   const isReplayingRef = useRef(false);
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
-  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
+  const delayedLoading = useMinimumLoading(loading);
 
   useEffect(() => {
     if (activeSheetId == null) return;
@@ -1193,23 +1192,9 @@ export default function SpreadsheetDetailPage() {
     };
   }, [sheetMenuOpenId]);
 
-  if (delayedLoading) {
-    return (
-      <ProtectedRoute
-        loadingComponent={<SpreadsheetDetailPageSkeleton />}
-        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-      >
-        <SpreadsheetDetailPageSkeleton />
-      </ProtectedRoute>
-    );
-  }
-
   if (error) {
     return (
-      <ProtectedRoute
-        loadingComponent={<SpreadsheetDetailPageSkeleton />}
-        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-      >
+      <ProtectedRoute renderChildrenWhileLoading>
         <Layout>
           <div className="min-h-screen bg-gray-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
@@ -1260,12 +1245,9 @@ export default function SpreadsheetDetailPage() {
     );
   }
 
-  if (!spreadsheet) {
+  if (!spreadsheet && !delayedLoading) {
     return (
-      <ProtectedRoute
-        loadingComponent={<SpreadsheetDetailPageSkeleton />}
-        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-      >
+      <ProtectedRoute renderChildrenWhileLoading>
         <Layout>
           <div className="min-h-screen bg-gray-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
@@ -1290,10 +1272,7 @@ export default function SpreadsheetDetailPage() {
   const activeSheet = sheets.find(s => s.id === activeSheetId);
 
   return (
-    <ProtectedRoute
-      loadingComponent={<SpreadsheetDetailPageSkeleton />}
-      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-    >
+    <ProtectedRoute renderChildrenWhileLoading>
       <Layout mainScrollMode="container">
         {/* Full viewport height, no page scroll: only the grid container scrolls. */}
         <div className="h-full min-h-0 overflow-hidden bg-white flex flex-col">
@@ -1350,6 +1329,8 @@ export default function SpreadsheetDetailPage() {
                           Cancel
                         </button>
                       </div>
+                    ) : delayedLoading ? (
+                      <Skeleton className="h-7 w-48" />
                     ) : (
                       <h1
                         className="truncate text-lg font-medium text-gray-900 cursor-default select-none"
@@ -1501,164 +1482,194 @@ export default function SpreadsheetDetailPage() {
           <div className="flex-1 min-h-0 overflow-hidden bg-gray-50 flex flex-col">
             {activeSheet ? (
               <div className="flex-1 min-h-0 min-w-0 flex h-full overflow-hidden">
-                {/* Center column: grid container. min-w-0 is critical to prevent it from forcing the flex row wider than the viewport. */}
-                <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
-                  <SpreadsheetGrid
-                    ref={gridRef}
-                    spreadsheetId={Number(spreadsheetId)}
-                    sheetId={activeSheet.id}
-                    spreadsheetName={spreadsheet.name}
-                    sheetName={activeSheet.name}
-                    frozenRowCount={activeSheet.frozen_row_count ?? 0}
-                    onFreezeHeaderChange={(val) => {
-                      setSheets((prev) =>
-                        prev.map((s) =>
-                          s.id === activeSheet.id
-                            ? { ...s, frozen_row_count: val }
-                            : s
-                        )
-                      );
-                    }}
-                    onFormulaCommit={handleFormulaCommit}
-                    onHeaderRenameCommit={handleHeaderRenameCommit}
-                    onHighlightCommit={handleHighlightCommit}
-                    onInsertRowCommit={(payload: InsertRowParams) => {
-                      updateAgentSteps((prev) => [
-                        ...prev,
-                        {
-                          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                            ? crypto.randomUUID()
-                            : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-                          type: 'INSERT_ROW',
-                          params: payload,
-                          disabled: false,
-                          createdAt: new Date().toISOString(),
-                        },
-                      ]);
-                    }}
-                    onInsertColumnCommit={(payload: InsertColumnParams) => {
-                      updateAgentSteps((prev) => [
-                        ...prev,
-                        {
-                          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                            ? crypto.randomUUID()
-                            : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-                          type: 'INSERT_COLUMN',
-                          params: payload,
-                          disabled: false,
-                          createdAt: new Date().toISOString(),
-                        },
-                      ]);
-                    }}
-                    onDeleteColumnCommit={(payload: DeleteColumnParams) => {
-                      updateAgentSteps((prev) => [
-                        ...prev,
-                        {
-                          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                            ? crypto.randomUUID()
-                            : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-                          type: 'DELETE_COLUMN',
-                          params: payload,
-                          disabled: false,
-                          createdAt: new Date().toISOString(),
-                        },
-                      ]);
-                    }}
-                    onFillCommit={(payload: FillSeriesParams) => {
-                      updateAgentSteps((prev) => [
-                        ...prev,
-                        {
-                          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                            ? crypto.randomUUID()
-                            : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-                          type: 'FILL_SERIES',
-                          params: payload,
-                          disabled: false,
-                          createdAt: new Date().toISOString(),
-                        },
-                      ]);
-                    }}
-                    highlightCell={highlightCell}
-                    onHydrationStatusChange={status => setSheetHydrationReady(status === 'ready')}
-                    onOpenPivotBuilder={handleCreatePivotSheet}
-                  />
-                </div>
-                {/* Right column: Show Pivot Editor for pivot sheets, Pattern panel for regular sheets */}
-                {isPivotSheet && showPivotEditor ? (
-                  <PivotEditorPanel
-                    config={pivotConfigsBySheet[activeSheet.id] || createEmptyPivotConfig(pivotSourceDataBySheet[activeSheet.id]?.sourceSheetId || 0)}
-                    sourceSheetName={pivotSourceDataBySheet[activeSheet.id]?.sourceSheetName || 'Unknown'}
-                    sourceColumns={(() => {
-                      const sourceData = pivotSourceDataBySheet[activeSheet.id];
-                      if (!sourceData) return [];
-                      const cols: SourceColumn[] = [];
-                      for (let col = 0; col < sourceData.colCount; col++) {
-                        const cellData = sourceData.cells.get(`0:${col}`);
-                        const header = (cellData?.rawInput ?? '').trim();
-                        if (header) {
-                          cols.push({ index: col, header });
-                        }
-                      }
-                      return cols;
-                    })()}
-                    sourceRowCount={(() => {
-                      const sourceData = pivotSourceDataBySheet[activeSheet.id];
-                      if (!sourceData) return 0;
-                      let count = 0;
-                      for (let row = 1; row < sourceData.rowCount; row++) {
+                  {/* Center column: grid container. min-w-0 is critical to prevent it from forcing the flex row wider than the viewport. */}
+                  <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
+                    <SpreadsheetGrid
+                      ref={gridRef}
+                      spreadsheetId={Number(spreadsheetId)}
+                      sheetId={activeSheet.id}
+                      spreadsheetName={spreadsheet.name}
+                      sheetName={activeSheet.name}
+                      frozenRowCount={activeSheet.frozen_row_count ?? 0}
+                      onFreezeHeaderChange={(val) => {
+                        setSheets((prev) =>
+                          prev.map((s) =>
+                            s.id === activeSheet.id
+                              ? { ...s, frozen_row_count: val }
+                              : s
+                          )
+                        );
+                      }}
+                      onFormulaCommit={handleFormulaCommit}
+                      onHeaderRenameCommit={handleHeaderRenameCommit}
+                      onHighlightCommit={handleHighlightCommit}
+                      onInsertRowCommit={(payload: InsertRowParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                              ? crypto.randomUUID()
+                              : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                            type: 'INSERT_ROW',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onInsertColumnCommit={(payload: InsertColumnParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                              ? crypto.randomUUID()
+                              : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                            type: 'INSERT_COLUMN',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onDeleteColumnCommit={(payload: DeleteColumnParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                              ? crypto.randomUUID()
+                              : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                            type: 'DELETE_COLUMN',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onFillCommit={(payload: FillSeriesParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                              ? crypto.randomUUID()
+                              : `step_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                            type: 'FILL_SERIES',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      highlightCell={highlightCell}
+                      onHydrationStatusChange={status => setSheetHydrationReady(status === 'ready')}
+                      onOpenPivotBuilder={handleCreatePivotSheet}
+                    />
+                  </div>
+                  {/* Right column: Show Pivot Editor for pivot sheets, Pattern panel for regular sheets */}
+                  {isPivotSheet && showPivotEditor ? (
+                    <PivotEditorPanel
+                      config={pivotConfigsBySheet[activeSheet.id] || createEmptyPivotConfig(pivotSourceDataBySheet[activeSheet.id]?.sourceSheetId || 0)}
+                      sourceSheetName={pivotSourceDataBySheet[activeSheet.id]?.sourceSheetName || 'Unknown'}
+                      sourceColumns={(() => {
+                        const sourceData = pivotSourceDataBySheet[activeSheet.id];
+                        if (!sourceData) return [];
+                        const cols: SourceColumn[] = [];
                         for (let col = 0; col < sourceData.colCount; col++) {
-                          const cellData = sourceData.cells.get(`${row}:${col}`);
-                          if ((cellData?.rawInput ?? '').trim()) {
-                            count++;
-                            break;
+                          const cellData = sourceData.cells.get(`0:${col}`);
+                          const header = (cellData?.rawInput ?? '').trim();
+                          if (header) {
+                            cols.push({ index: col, header });
                           }
                         }
+                        return cols;
+                      })()}
+                      sourceRowCount={(() => {
+                        const sourceData = pivotSourceDataBySheet[activeSheet.id];
+                        if (!sourceData) return 0;
+                        let count = 0;
+                        for (let row = 1; row < sourceData.rowCount; row++) {
+                          for (let col = 0; col < sourceData.colCount; col++) {
+                            const cellData = sourceData.cells.get(`${row}:${col}`);
+                            if ((cellData?.rawInput ?? '').trim()) {
+                              count++;
+                              break;
+                            }
+                          }
+                        }
+                        return count;
+                      })()}
+                      onConfigChange={handlePivotConfigChange}
+                      onClose={() => setShowPivotEditor(false)}
+                      onRefresh={handleRefreshPivot}
+                    />
+                  ) : (
+                    <PatternAgentPanel
+                      loading={delayedLoading}
+                      items={agentSteps}
+                      patterns={patterns}
+                      selectedPatternId={selectedPattern?.id ?? null}
+                      applySteps={applySteps}
+                      applyError={applyError}
+                      applyFailedIndex={applyFailedIndex}
+                      isApplying={isApplying}
+                      exporting={exportingPattern}
+                      onReorder={updateAgentSteps}
+                      onUpdateStep={(id, updates) =>
+                        updateAgentSteps((prev) => updateTimelineItemById(prev, id, updates))
                       }
-                      return count;
-                    })()}
-                    onConfigChange={handlePivotConfigChange}
-                    onClose={() => setShowPivotEditor(false)}
-                    onRefresh={handleRefreshPivot}
-                  />
-                ) : (
-                  <PatternAgentPanel
-                    items={agentSteps}
-                    patterns={patterns}
-                    selectedPatternId={selectedPattern?.id ?? null}
-                    applySteps={applySteps}
-                    applyError={applyError}
-                    applyFailedIndex={applyFailedIndex}
-                    isApplying={isApplying}
-                    exporting={exportingPattern}
-                    onReorder={updateAgentSteps}
-                    onUpdateStep={(id, updates) =>
-                      updateAgentSteps((prev) => updateTimelineItemById(prev, id, updates))
-                    }
-                    onDeleteStep={(id) =>
-                      updateAgentSteps((prev) => deleteTimelineItemById(prev, id))
-                    }
-                    onMoveStepOutOfGroup={(groupId, step) =>
-                      updateAgentSteps((prev) => moveStepOutOfGroup(prev, groupId, step))
-                    }
-                    onHoverStep={(step) => {
-                      if (step.type === 'APPLY_FORMULA') {
-                        setHighlightCell({ row: step.target.row - 1, col: step.target.col - 1 });
+                      onDeleteStep={(id) =>
+                        updateAgentSteps((prev) => deleteTimelineItemById(prev, id))
                       }
-                    }}
-                    onClearHover={() => setHighlightCell(null)}
-                    onExportPattern={handleExportPattern}
-                    onSelectPattern={loadPatternDetail}
-                    onDeletePattern={handleDeletePattern}
-                    onApplyPattern={applyPatternSteps}
-                    onRetryApply={applyPatternSteps}
-                    disableApplyPattern={!sheetHydrationReady}
-                    applyJobStatus={patternJobStatus}
-                    applyJobProgress={patternJobProgress}
-                    applyJobError={patternJobError}
-                  />
-                )}
+                      onMoveStepOutOfGroup={(groupId, step) =>
+                        updateAgentSteps((prev) => moveStepOutOfGroup(prev, groupId, step))
+                      }
+                      onHoverStep={(step) => {
+                        if (step.type === 'APPLY_FORMULA') {
+                          setHighlightCell({ row: step.target.row - 1, col: step.target.col - 1 });
+                        }
+                      }}
+                      onClearHover={() => setHighlightCell(null)}
+                      onExportPattern={handleExportPattern}
+                      onSelectPattern={loadPatternDetail}
+                      onDeletePattern={handleDeletePattern}
+                      onApplyPattern={applyPatternSteps}
+                      onRetryApply={applyPatternSteps}
+                      disableApplyPattern={!sheetHydrationReady}
+                      applyJobStatus={patternJobStatus}
+                      applyJobProgress={patternJobProgress}
+                      applyJobError={patternJobError}
+                    />
+                  )}
+                </div>
+            ) : delayedLoading ? (
+              <div className="flex-1 min-h-0 min-w-0 flex h-full overflow-hidden">
+                <div className="flex-1 min-h-0 min-w-0" />
+                <PatternAgentPanel
+                  loading
+                  items={[]}
+                  patterns={[]}
+                  selectedPatternId={null}
+                  applySteps={[]}
+                  applyError={null}
+                  applyFailedIndex={null}
+                  isApplying={false}
+                  exporting={false}
+                  applyJobStatus={null}
+                  applyJobProgress={0}
+                  applyJobError={null}
+                  onReorder={() => {}}
+                  onUpdateStep={() => {}}
+                  onDeleteStep={() => {}}
+                  onHoverStep={() => {}}
+                  onClearHover={() => {}}
+                  onExportPattern={async () => false}
+                  onSelectPattern={() => {}}
+                  onDeletePattern={() => {}}
+                  onApplyPattern={() => {}}
+                  onRetryApply={() => {}}
+                />
               </div>
-            ) : sheets.length === 0 ? (
+            ) : null}
+            {sheets.length === 0 && !delayedLoading ? (
               <div className="flex items-center justify-center flex-1">
                 <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white p-12 text-center">
                   <FileSpreadsheet className="h-12 w-12 text-gray-400 mb-4" />

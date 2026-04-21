@@ -26,11 +26,13 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
+  const [showSwitchLoadingSkeleton, setShowSwitchLoadingSkeleton] = useState(false);
   const { forward, isForwarding } = useForwardMessages();
 
   const {
     messages,
     isLoadingMessages,
+    isLoadingMoreMessages,
     isSending,
     hasMore,
     send,
@@ -43,6 +45,7 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
   const lastMessageCountRef = useRef<number>(0);
   const markAsReadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const jumpInFlightRef = useRef(false);
+  const previousChatIdRef = useRef<number | null>(null);
 
   const chatProjectId = useMemo(() => {
     const rawProjectId = (chat as any).project_id ?? (chat as any).project;
@@ -60,6 +63,20 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
     setSelectedMessageIds([]);
     setIsForwardDialogOpen(false);
   }, [chat.id]);
+
+  useEffect(() => {
+    const previousChatId = previousChatIdRef.current;
+    if (previousChatId !== null && previousChatId !== chat.id) {
+      setShowSwitchLoadingSkeleton(true);
+    }
+    previousChatIdRef.current = chat.id;
+  }, [chat.id]);
+
+  useEffect(() => {
+    if (!isLoadingMessages) {
+      setShowSwitchLoadingSkeleton(false);
+    }
+  }, [isLoadingMessages]);
 
   useEffect(() => {
     // If URL includes a messageId, try to load history until it exists, then scroll + highlight it.
@@ -275,6 +292,8 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
           onLoadMore={loadMoreMessages}
           hasMore={hasMore}
           isLoading={isLoadingMessages}
+          isLoadingMoreMessages={isLoadingMoreMessages}
+          showSwitchLoadingSkeleton={showSwitchLoadingSkeleton}
           roleByUserId={roleByUserId}
           isGroupChat={chat.type === 'group'}
           isSelectMode={isSelectMode}

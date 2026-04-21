@@ -5,9 +5,9 @@ import { FolderOpen } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMinimumLoading } from '@/hooks/useMinimumLoading';
-import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 interface ProjectRailProps {
+  loading?: boolean;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
 }
@@ -22,12 +22,18 @@ function getInitials(name: string): string {
   return `${first}${second}`.toUpperCase();
 }
 
-export default function ProjectRail({ selectedProjectId, onSelectProject }: ProjectRailProps) {
+export default function ProjectRail({
+  loading = false,
+  selectedProjectId,
+  onSelectProject,
+}: ProjectRailProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const delayedLoading = useMinimumLoading(isLoading, SKELETON_TEST_DELAY_MS);
+  const delayedLoading = useMinimumLoading(loading || isLoading);
 
   useEffect(() => {
+    if (loading) return;
+
     let mounted = true;
     (async () => {
       try {
@@ -42,7 +48,7 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loading]);
 
   const selectedIndex = useMemo(() => {
     if (!selectedProjectId) return -1;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2 } from 'lucide-react';
+import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2, Loader2 } from 'lucide-react';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { googleDocsApi } from '@/lib/api/googleDocsApi';
 import toast from 'react-hot-toast';
@@ -611,6 +611,8 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     endCol: Math.min(10, DEFAULT_COLUMNS - 1),
   });
   const [isImporting, setIsImporting] = useState(false);
+  /** Covers the cell canvas until the first viewport range load finishes for this sheet (cache hit = immediate). */
+  const [cellCanvasLoading, setCellCanvasLoading] = useState(true);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [xlsxImport, setXlsxImport] = useState<XLSXParseResult | null>(null);
   const [selectedXlsxSheet, setSelectedXlsxSheet] = useState<string>('');
@@ -1962,6 +1964,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
 
   // Load initial visible range on mount and when sheetId changes
   useEffect(() => {
+    setCellCanvasLoading(true);
+    let cancelled = false;
+
     // Reset scroll position to top when switching sheets (only on sheetId change)
     if (gridRef.current) {
       gridRef.current.scrollTop = 0;
@@ -1970,7 +1975,14 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     
     // Small delay to ensure DOM is ready and table height is calculated
     const timer = setTimeout(() => {
-      if (!gridRef.current) return;
+      if (cancelled) return;
+      const finishLoading = () => {
+        if (!cancelled) setCellCanvasLoading(false);
+      };
+      if (!gridRef.current) {
+        finishLoading();
+        return;
+      }
       // Ensure scroll position is still at top (prevent any auto-scroll)
       if (gridRef.current.scrollTop !== 0) {
         gridRef.current.scrollTop = 0;
@@ -1982,11 +1994,19 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         startCol: range.startColumn,
         endCol: range.endColumn,
       });
-      loadCellRange(range.startRow, range.endRow, range.startColumn, range.endColumn);
+      const maybePromise = loadCellRange(range.startRow, range.endRow, range.startColumn, range.endColumn);
+      if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+        void (maybePromise as Promise<void>).finally(finishLoading);
+      } else {
+        finishLoading();
+      }
     }, 100);
 
-    return () => clearTimeout(timer);
-  }, [sheetId, computeVisibleRange, loadCellRange]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [sheetId, spreadsheetId, computeVisibleRange, loadCellRange]);
 
   // Handle scroll to load more cells (no auto-expand). We schedule work in
   // requestAnimationFrame so we compute the viewport and trigger range loads
@@ -5808,7 +5828,18 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         onCopy={handleCopy}
         onPaste={handlePaste}
         tabIndex={0}
+        aria-busy={cellCanvasLoading}
       >
+        {cellCanvasLoading ? (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 pointer-events-auto"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading spreadsheet cells"
+          >
+            <Loader2 className="h-8 w-8 animate-spin text-gray-500" aria-hidden />
+          </div>
+        ) : null}
         {/* Column headers in separate table to avoid thead/tbody gap with sticky. */}
         <div className="sticky top-0 z-10 shrink-0 bg-gray-200">
           <table

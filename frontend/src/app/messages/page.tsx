@@ -6,12 +6,13 @@ import Layout from '@/components/layout/Layout';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
 import { useEffect } from 'react';
-import MessagesPageSkeleton from '@/components/messages/MessagesPageSkeleton';
-import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
+  const initialized = useAuthStore(state => state.initialized);
+  const authLoading = useAuthStore(state => state.loading);
   const setMessagePageOpen = useChatStore(state => state.setMessagePageOpen);
+  const authBootLoading = !initialized || authLoading;
 
   useEffect(() => {
     setMessagePageOpen(true);
@@ -29,12 +30,9 @@ export default function MessagesPage() {
     : undefined;
 
   return (
-    <ProtectedRoute
-      loadingComponent={<MessagesPageSkeleton />}
-      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-    >
+    <ProtectedRoute renderChildrenWhileLoading>
       <Layout user={layoutUser} showHeader={true} showSidebar={true}>
-        <MessagePageContent />
+        <MessagePageContent loading={authBootLoading} />
       </Layout>
     </ProtectedRoute>
   );

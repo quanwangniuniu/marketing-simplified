@@ -10,11 +10,10 @@ import useAuth from "@/hooks/useAuth";
 import { useTaskData } from "@/hooks/useTaskData";
 import TaskDetail from "@/components/tasks/TaskDetail";
 import {
-  TaskDetailContentSkeleton,
-  TaskDetailPageSkeleton,
+  TaskDetailBodySkeleton,
 } from "@/components/tasks/TaskLoadingSkeletons";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
-import { SKELETON_TEST_DELAY_MS } from "@/lib/skeletonTesting";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const buildIssueKey = (projectName?: string, taskId?: number) => {
   const prefix = (projectName || "TASK")
@@ -30,7 +29,10 @@ export default function TaskPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { currentTask, fetchTask, loading, error } = useTaskData();
-  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
+  const delayedLoading = useMinimumLoading(loading);
+  const taskMatchesRoute = currentTask?.id === taskId;
+  const taskPageLoading =
+    Boolean(taskId) && (delayedLoading || (!taskMatchesRoute && !error));
 
   useEffect(() => {
     if (!taskId) return;
@@ -46,12 +48,12 @@ export default function TaskPage() {
     : undefined;
 
   const breadcrumb = useMemo(() => {
-    if (!currentTask) return null;
+    if (!taskMatchesRoute || !currentTask) return null;
     const projectName = currentTask.project?.name || "Project";
     const projectId = currentTask.project?.id ?? currentTask.project_id;
     const issueKey = buildIssueKey(currentTask.project?.name, currentTask.id);
     return { projectName, projectId, issueKey };
-  }, [currentTask]);
+  }, [currentTask, taskMatchesRoute]);
 
   const handleUserAction = async (action: string) => {
     if (action === "logout") {
@@ -60,11 +62,12 @@ export default function TaskPage() {
   };
 
   return (
-    <ProtectedRoute
-      loadingComponent={<TaskDetailPageSkeleton />}
-      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-    >
-      <Layout user={layoutUser} onUserAction={handleUserAction} mainScrollMode="page">
+    <ProtectedRoute renderChildrenWhileLoading>
+      <Layout
+        user={layoutUser}
+        onUserAction={handleUserAction}
+        mainScrollMode="page"
+      >
         <div className="min-h-screen bg-slate-50">
           <div className="mx-auto max-w-[1680px] px-2 py-8 sm:px-3 lg:px-4">
             <div className="mb-6 flex flex-col gap-3">
@@ -81,11 +84,21 @@ export default function TaskPage() {
                     {breadcrumb.projectName}
                   </Link>
                 ) : (
-                  <span>{breadcrumb?.projectName || "Project"}</span>
+                  <span>
+                    {taskPageLoading ? (
+                      <Skeleton className="h-4 w-24" />
+                    ) : (
+                      breadcrumb?.projectName || "Project"
+                    )}
+                  </span>
                 )}
                 <ChevronRight className="h-3.5 w-3.5" />
                 <span className="font-semibold text-slate-700">
-                  {breadcrumb?.issueKey || "TASK"}
+                  {taskPageLoading ? (
+                    <Skeleton className="h-4 w-16" />
+                  ) : (
+                    breadcrumb?.issueKey || "TASK"
+                  )}
                 </span>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -97,7 +110,9 @@ export default function TaskPage() {
                   >
                     Back to Tasks
                   </Link>
-                  {currentTask ? (
+                  {taskPageLoading ? (
+                    <Skeleton className="h-4 w-20" />
+                  ) : currentTask ? (
                     <span data-testid="task-id-label" className="text-sm text-slate-500">
                       Task #{currentTask.id}
                     </span>
@@ -106,9 +121,9 @@ export default function TaskPage() {
               </div>
             </div>
 
-            {delayedLoading ? (
+            {taskPageLoading ? (
               <div data-testid="task-detail-loading">
-                <TaskDetailContentSkeleton />
+                <TaskDetailBodySkeleton />
               </div>
             ) : error ? (
               <div data-testid="task-detail-error" className="rounded-lg border border-slate-200 bg-white p-10 text-center">

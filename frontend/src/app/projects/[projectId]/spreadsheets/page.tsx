@@ -10,12 +10,19 @@ import { ProjectAPI, ProjectData } from '@/lib/api/projectApi';
 import { SpreadsheetData } from '@/types/spreadsheet';
 import { AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/skeleton';
 import toast from 'react-hot-toast';
-import { SpreadsheetsListPageSkeleton } from '@/components/spreadsheets/SpreadsheetPageSkeletons';
 import { useMinimumLoading } from '@/hooks/useMinimumLoading';
-import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
 const UNTITLED_BASE = 'Untitled spreadsheet';
+const spreadsheetLoadingRows = [
+  { name: 'w-40', updated: 'w-28' },
+  { name: 'w-56', updated: 'w-32' },
+  { name: 'w-44', updated: 'w-24' },
+  { name: 'w-52', updated: 'w-[7.5rem]' },
+  { name: 'w-36', updated: 'w-28' },
+  { name: 'w-48', updated: 'w-32' },
+];
 
 function nextUntitledSpreadsheetName(existing: string[]): string {
   if (!existing.includes(UNTITLED_BASE)) return UNTITLED_BASE;
@@ -40,7 +47,7 @@ export default function SpreadsheetsListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const delayedLoading = useMinimumLoading(loading, SKELETON_TEST_DELAY_MS);
+  const delayedLoading = useMinimumLoading(loading);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -277,22 +284,8 @@ export default function SpreadsheetsListPage() {
 
   const showTable = !error && (delayedLoading || spreadsheets.length > 0);
 
-  if (delayedLoading && !error) {
-    return (
-      <ProtectedRoute
-        loadingComponent={<SpreadsheetsListPageSkeleton />}
-        minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-      >
-        <SpreadsheetsListPageSkeleton />
-      </ProtectedRoute>
-    );
-  }
-
   return (
-    <ProtectedRoute
-      loadingComponent={<SpreadsheetsListPageSkeleton />}
-      minimumLoadingMs={SKELETON_TEST_DELAY_MS}
-    >
+    <ProtectedRoute renderChildrenWhileLoading>
       <Layout>
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <div className="mx-auto max-w-6xl w-full px-4 py-6 flex flex-col flex-1">
@@ -378,11 +371,28 @@ export default function SpreadsheetsListPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {delayedLoading ? (
-                          <tr>
-                            <td colSpan={3} className="px-4 py-12 text-center text-gray-500">
-                              <Loader2 className="inline h-5 w-5 animate-spin text-blue-600" />
-                            </td>
-                          </tr>
+                          spreadsheetLoadingRows.map((row, index) => (
+                            <tr key={`spreadsheet-loading-row-${index}`} className="border-b border-gray-200">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 text-green-700 flex-shrink-0">
+                                    <FileSpreadsheet className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <Skeleton className={`h-4 ${row.name}`} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Skeleton className={`h-4 ${row.updated}`} />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end">
+                                  <Skeleton className="h-9 w-20 rounded-lg" />
+                                </div>
+                              </td>
+                            </tr>
+                          ))
                         ) : (
                           spreadsheets.map(renderSpreadsheetRow)
                         )}

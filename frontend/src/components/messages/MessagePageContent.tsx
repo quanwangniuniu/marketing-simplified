@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageSquare, Plus, Search } from 'lucide-react';
+import { MessageSquare, Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
@@ -13,9 +13,14 @@ import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
 import { useMinimumLoading } from '@/hooks/useMinimumLoading';
-import { SKELETON_TEST_DELAY_MS } from '@/lib/skeletonTesting';
 
-export default function MessagePageContent() {
+interface MessagePageContentProps {
+  loading?: boolean;
+}
+
+export default function MessagePageContent({
+  loading = false,
+}: MessagePageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore(state => state.user);
@@ -34,21 +39,19 @@ export default function MessagePageContent() {
   // Get chats for the selected project only (independent from widget)
   const chats = selectedProjectId ? (chatsByProject[selectedProjectId] || []) : [];
 
-  const { roleByUserId } = useProjectMemberRoles(selectedProjectId);
+  const dataProjectId = loading ? null : selectedProjectId;
+  const { roleByUserId } = useProjectMemberRoles(dataProjectId);
   
   // Fetch chats for selected project
   const { fetchChats, isLoading } = useChatData({
-    projectId: selectedProjectId || undefined,
+    projectId: dataProjectId || undefined,
     autoFetch: false,
   });
-  const delayedChatLoading = useMinimumLoading(
-    isLoading,
-    SKELETON_TEST_DELAY_MS
-  );
+  const delayedChatLoading = useMinimumLoading(isLoading);
   
   // Connect to WebSocket for real-time updates
   const { connected } = useChatSocket(userId, {
-    enabled: true,
+    enabled: !loading,
     onMessage: (message) => {
       console.log('[MessagePage] New message received:', message);
     },
@@ -65,6 +68,8 @@ export default function MessagePageContent() {
   const hasFetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
+
     const projectIdParam = searchParams.get('projectId');
     const chatIdParam = searchParams.get('chatId');
     const projectIdFromQuery = projectIdParam ? Number(projectIdParam) : NaN;
@@ -85,7 +90,7 @@ export default function MessagePageContent() {
     ) {
       setCurrentChat(chatIdFromQuery);
     }
-  }, [searchParams, selectedProjectId, currentChatId, setCurrentChat]);
+  }, [currentChatId, loading, searchParams, selectedProjectId, setCurrentChat]);
 
   const replaceMessagesQuery = useCallback(
     (next: { projectId?: number | null; chatId?: number | null; messageId?: number | null }) => {
@@ -113,16 +118,16 @@ export default function MessagePageContent() {
   );
   
   useEffect(() => {
-    if (selectedProjectId) {
+    if (dataProjectId) {
       // Only fetch if we haven't fetched for this project yet, or if WebSocket just connected
-      const fetchKey = `${selectedProjectId}-${connected}`;
+      const fetchKey = `${dataProjectId}-${connected}`;
       if (hasFetchedRef.current !== fetchKey) {
         hasFetchedRef.current = fetchKey;
-        console.log('[MessagePage] Fetching chats for project:', selectedProjectId, 'connected:', connected);
+        console.log('[MessagePage] Fetching chats for project:', dataProjectId, 'connected:', connected);
         fetchChats();
       }
     }
-  }, [selectedProjectId, connected, fetchChats]);
+  }, [connected, dataProjectId, fetchChats]);
   
   // Get current chat from store
   const currentChat = chats.find(chat => chat.id === currentChatId);
@@ -175,10 +180,12 @@ export default function MessagePageContent() {
   };
   
   const handleCreateChat = () => {
+    if (loading) return;
     setIsCreateDialogOpen(true);
   };
 
   const handleCreateChannel = () => {
+    if (loading) return;
     setIsCreateChannelDialogOpen(true);
   };
   
@@ -197,6 +204,8 @@ export default function MessagePageContent() {
     fetchChats();
   };
 
+  const isShellLoading = loading || delayedChatLoading;
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -213,6 +222,7 @@ export default function MessagePageContent() {
             
             {/* Project Selector */}
             <ProjectSelector
+              loading={loading}
               selectedProjectId={selectedProjectId}
               onSelectProject={handleSelectProject}
             />
@@ -234,6 +244,7 @@ export default function MessagePageContent() {
       </div>
       
       <SlackMessagesLayout
+        loadingProjects={loading}
         selectedProjectId={selectedProjectId}
         onSelectProject={handleSelectProject}
         chats={filteredChats}
@@ -242,7 +253,7 @@ export default function MessagePageContent() {
         onCreateChat={handleCreateChat}
         onCreateChannel={handleCreateChannel}
         roleByUserId={roleByUserId}
-        isLoadingChats={delayedChatLoading}
+        isLoadingChats={isShellLoading}
         chatListEmptyState={
           !selectedProjectId ? (
             <div className="flex items-center justify-center p-6 text-center">
