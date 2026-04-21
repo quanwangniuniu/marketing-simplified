@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import MessagePageContent from '@/components/messages-v2/MessagePageContent';
 import { useChatStore } from '@/lib/chatStore';

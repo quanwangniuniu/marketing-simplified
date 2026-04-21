@@ -1,6 +1,6 @@
 'use client';
 
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import CalendarPageContent from '@/components/calendar-v2/CalendarPageContent';
 

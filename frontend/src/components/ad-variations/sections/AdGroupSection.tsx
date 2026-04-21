@@ -9,7 +9,7 @@ import BrandButton from "@/components/campaigns-v2/BrandButton";
 import BrandConfirmDialog from "@/components/campaigns-v2/BrandConfirmDialog";
 import BrandSelect from "@/components/ui/BrandSelect";
 import { Button } from "@/components/ui/button";
-import VariationSelector from "@/components/ad-variations-v2/VariationSelector";
+import VariationSelector from "@/components/ad-variations/VariationSelector";
 
 interface Props {
   campaignId: number;

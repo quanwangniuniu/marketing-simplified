@@ -7,7 +7,7 @@ import type {
   VariationStatus,
 } from "@/types/adVariation";
 import BrandButton from "@/components/campaigns-v2/BrandButton";
-import AdVariationStatusPill from "@/components/ad-variations-v2/pills/AdVariationStatusPill";
+import AdVariationStatusPill from "@/components/ad-variations/pills/AdVariationStatusPill";
 
 interface Props {
   variations: AdVariation[];

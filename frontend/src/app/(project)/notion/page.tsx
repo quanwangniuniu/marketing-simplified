@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Notebook, Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import NotionDraftCard from '@/components/notion-v2/NotionDraftCard';
 import ConfirmDialog from '@/components/tasks-v2/detail/ConfirmDialog';

@@ -1,7 +1,7 @@
 'use client';
 
 import { Clock } from 'lucide-react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 function ComingSoon() {

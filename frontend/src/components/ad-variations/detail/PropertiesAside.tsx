@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';
-import AdVariationStatusPill from '@/components/ad-variations-v2/pills/AdVariationStatusPill';
+import AdVariationStatusPill from '@/components/ad-variations/pills/AdVariationStatusPill';
 import { AdVariationAPI } from '@/lib/api/adVariationApi';
 import type { AdGroup, AdVariation } from '@/types/adVariation';
 import { buildUpdatePayload } from './variationPayload';

@@ -10,7 +10,7 @@ import {
   Layout as LayoutIcon,
   Loader2,
 } from 'lucide-react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { mailchimpApi, type MailchimpTemplate } from '@/lib/api/mailchimpApi';
 
 export default function MailchimpNewPage() {

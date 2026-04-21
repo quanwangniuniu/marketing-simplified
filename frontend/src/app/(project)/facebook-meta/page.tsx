@@ -12,7 +12,7 @@ import AdCreativeTableV2 from '@/components/ads-draft-v2/facebook_meta/AdCreativ
 import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
 import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
 import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useFacebookMetaData } from '@/hooks/useFacebookMetaData';
 import { FacebookMetaAPI } from '@/lib/api/facebookMetaApi';
 

@@ -27,7 +27,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from 'lucide-react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { EmailDraftStatusPill } from '@/components/email-draft-v2';
 import {
   CanvasBlocks,

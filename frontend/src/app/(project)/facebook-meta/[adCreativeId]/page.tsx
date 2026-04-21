@@ -30,7 +30,7 @@ import SharePreviewModal, {
 import AdDraftStatusPill from '@/components/ads-draft-v2/pills/AdDraftStatusPill';
 import type { FacebookStatus } from '@/components/ads-draft-v2/types';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import FacebookAdPreviews from '@/components/facebook_meta/FacebookAdPreviews';
 import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
 import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';

@@ -1,10 +1,10 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { useProjectStore } from '@/lib/projectStore';
-import AdVariationManagementV2 from '@/components/ad-variations-v2/AdVariationManagementV2';
+import AdVariationManagementV2 from '@/components/ad-variations/AdVariationManagementV2';
 
 export default function VariationsV2Page() {
   const searchParams = useSearchParams();

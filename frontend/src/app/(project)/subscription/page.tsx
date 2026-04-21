@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { Check, Info, Loader2, Sparkles } from 'lucide-react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Skeleton } from '@/components/ui/skeleton';
 import usePlan from '@/hooks/usePlan';
