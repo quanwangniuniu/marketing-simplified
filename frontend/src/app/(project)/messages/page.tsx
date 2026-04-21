@@ -1,15 +1,13 @@
 'use client';
 
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import MessagePageContent from '@/components/messages/MessagePageContent';
-import Layout from '@/components/layout/Layout';
-import { useAuthStore } from '@/lib/authStore';
-import { useChatStore } from '@/lib/chatStore';
 import { useEffect } from 'react';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import MessagePageContent from '@/components/messages-v2/MessagePageContent';
+import { useChatStore } from '@/lib/chatStore';
 
-export default function MessagesPage() {
-  const { user } = useAuthStore();
-  const setMessagePageOpen = useChatStore(state => state.setMessagePageOpen);
+function MessagesV2Content() {
+  const setMessagePageOpen = useChatStore((state) => state.setMessagePageOpen);
 
   useEffect(() => {
     setMessagePageOpen(true);
@@ -18,20 +16,19 @@ export default function MessagesPage() {
     };
   }, [setMessagePageOpen]);
 
-  const layoutUser = user
-    ? {
-        name: user.username || user.email,
-        email: user.email,
-        role: user.roles && user.roles.length > 0 ? user.roles[0] : undefined,
-      }
-    : undefined;
-
   return (
-    <ProtectedRoute>
-      <Layout user={layoutUser} showHeader={true} showSidebar={true}>
+    <DashboardLayout hideRightPanel>
+      <div className="-m-5 h-[calc(100vh-3rem)] flex flex-col bg-white">
         <MessagePageContent />
-      </Layout>
-    </ProtectedRoute>
+      </div>
+    </DashboardLayout>
   );
 }
 
+export default function MessagesV2Page() {
+  return (
+    <ProtectedRoute>
+      <MessagesV2Content />
+    </ProtectedRoute>
+  );
+}

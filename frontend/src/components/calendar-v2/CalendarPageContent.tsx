@@ -354,11 +354,11 @@ export default function CalendarPageContent() {
               if (meta && meta.isDerived) {
                 if (meta.decision_id) {
                   const query = meta.project_id ? `?project_id=${meta.project_id}` : '';
-                  router.push(`/decisions-v2/${meta.decision_id}${query}`);
+                  router.push(`/decisions/${meta.decision_id}${query}`);
                   return;
                 }
                 if (meta.task_id) {
-                  router.push(`/tasks-v2/${meta.task_id}`);
+                  router.push(`/tasks/${meta.task_id}`);
                   return;
                 }
               }

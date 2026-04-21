@@ -69,10 +69,10 @@ export default function DecisionsGraphSection({
             canDelete={canEdit}
             onDelete={onDeleteDecision}
             getDecisionUrl={(id, pid) =>
-              `/decisions-v2/${id}${pid ? `?project_id=${pid}` : ''}`
+              `/decisions/${id}${pid ? `?project_id=${pid}` : ''}`
             }
             getReviewUrl={(id, pid) =>
-              `/decisions-v2/${id}${pid ? `?project_id=${pid}` : ''}`
+              `/decisions/${id}${pid ? `?project_id=${pid}` : ''}`
             }
           />
         </div>

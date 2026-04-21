@@ -21,7 +21,7 @@ interface Props {
 }
 
 function v2Url(link: KnowledgeNavigationLink, kind: 'decision' | 'task', projectId: number): string {
-  const base = kind === 'decision' ? '/decisions-v2' : '/tasks-v2';
+  const base = kind === 'decision' ? '/decisions' : '/tasks';
   return `${base}/${link.id}?project_id=${projectId}`;
 }
 

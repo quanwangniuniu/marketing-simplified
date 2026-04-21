@@ -1,27 +1,24 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Briefcase,
   Building2,
   Check,
-  LogOut,
+  ClipboardList,
   Mail,
   MapPin,
   Network,
+  Pencil,
   X,
-} from "lucide-react";
-import Layout from "@/components/layout/Layout";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import useAuth from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
-import Button from "@/components/button/Button";
-import ProfileHeader from "@/components/stripe_meta/ProfileHeader";
-import DashboardContent from "@/components/stripe_meta/DashboardContent";
-import OrganizationContent from "@/components/stripe_meta/OrganizationContent";
-import PlansSection from "@/components/plans/PlansSection";
-import { TextInput } from "@/components/input/InputPrimitives";
-import { Skeleton } from "@/components/ui/skeleton";
+} from 'lucide-react';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import useAuth from '@/hooks/useAuth';
+import Button from '@/components/button/Button';
+import OrganizationContent from '@/components/stripe_meta/OrganizationContent';
+import { TextInput } from '@/components/input/InputPrimitives';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type ProfileFields = {
   job: string;
@@ -30,209 +27,69 @@ type ProfileFields = {
   location: string;
 };
 
-function ProfileValueSkeleton({
-  width,
-  className = "",
-}: {
-  width: string;
-  className?: string;
-}) {
-  return <Skeleton className={`h-4 ${width} ${className}`.trim()} />;
-}
+type SectionKey = 'dashboard' | 'organization';
 
-function ProfilePageSkeleton() {
+const SECTIONS: Array<{ id: SectionKey; label: string }> = [
+  { id: 'dashboard', label: 'Overview' },
+  { id: 'organization', label: 'Organization' },
+];
+
+const getInitials = (name?: string | null): string => {
+  if (!name) return '?';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+};
+
+function ProfileV2Skeleton() {
   return (
-    <Layout user={{ name: "", email: "" }}>
+    <DashboardLayout>
       <div className="p-6">
-        <div className="space-y-4 profile-header"></div>
-        <div className="profile-content rounded-lg">
-          <div className="profile-content-wrapper pt-12">
-            <div className="profile-content-inner p-6 bg-white rounded-lg shadow-xl border border-gray-200">
-              <div className="flex items-center justify-between border-b border-gray-200 pb-6">
-                <section className="relative rounded-lg border border-gray-200 bg-white flex-1 mr-6 overflow-hidden">
-                  <div className="h-36 w-full bg-gray-100" />
-                  <div className="absolute left-20 top-24">
-                    <Skeleton className="h-24 w-24 rounded-full border-4 border-white" />
-                  </div>
-                  <div className="pb-6 pt-16">
-                    <div className="flex items-start justify-between gap-4 pl-20 pr-6">
-                      <div className="w-24 text-center">
-                        <Skeleton className="mx-auto h-6 w-24" />
-                        <Skeleton className="mx-auto mt-2 h-4 w-32" />
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <div className="mt-6 flex items-start gap-6 w-full">
-                <div className="w-[30%] min-w-[280px] max-w-[420px] flex flex-col gap-4 shrink-0">
-                  <section className="w-full space-y-4 rounded-lg border border-gray-200 bg-white p-4">
-                    <h3 className="text-lg font-semibold text-gray-900">About</h3>
-                    <div className="space-y-3 text-sm text-gray-700">
-                      <div className="flex items-center gap-3 p-2">
-                        <Briefcase className="h-4 w-4 text-gray-500 shrink-0" />
-                        <ProfileValueSkeleton width="w-32" />
-                      </div>
-                      <div className="flex items-center gap-3 p-2">
-                        <Network className="h-4 w-4 text-gray-500 shrink-0" />
-                        <ProfileValueSkeleton width="w-36" />
-                      </div>
-                      <div className="flex items-center gap-3 p-2">
-                        <Building2 className="h-4 w-4 text-gray-500 shrink-0" />
-                        <ProfileValueSkeleton width="w-40" />
-                      </div>
-                      <div className="flex items-center gap-3 p-2">
-                        <MapPin className="h-4 w-4 text-gray-500 shrink-0" />
-                        <ProfileValueSkeleton width="w-28" />
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        Contact
-                      </h4>
-                      <div className="mt-2 flex items-center gap-3 text-sm text-gray-700 p-2">
-                        <Mail className="h-4 w-4 text-gray-500 shrink-0" />
-                        <ProfileValueSkeleton width="w-40" />
-                      </div>
-                    </div>
-                  </section>
-
-                  <button
-                    disabled
-                    className="flex items-center gap-3 w-full p-3 text-sm font-medium text-red-600 rounded-lg border border-gray-200 bg-white opacity-70"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign Out
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-6 flex-1 min-w-0">
-                  <div className="rounded-lg border border-gray-200 bg-white p-4">
-                    <div className="border-b border-gray-200 mb-4">
-                      <nav className="-mb-px flex gap-6">
-                        <button
-                          type="button"
-                          className="pb-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600"
-                        >
-                          Dashboard
-                        </button>
-                        <button
-                          type="button"
-                          className="pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500"
-                        >
-                          My Organization
-                        </button>
-                        <button
-                          type="button"
-                          className="pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500"
-                        >
-                          Subscription
-                        </button>
-                      </nav>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <div className="text-2xl font-bold">Dashboard</div>
-                        <div className="text-sm text-gray-500">
-                          <span className="inline-flex items-center gap-2">
-                            <span>Last updated:</span>
-                            <Skeleton className="h-4 w-20" />
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {Array.from({ length: 3 }).map((_, index) => (
-                          <div
-                            key={`profile-skeleton-card-${index}`}
-                            className="border border-gray-200 rounded-xl p-6"
-                          >
-                            <div className="flex items-center justify-between mb-4">
-                              <Skeleton className="h-6 w-28" />
-                            </div>
-                            <div className="space-y-3">
-                              <Skeleton className="h-10 w-full rounded-lg" />
-                              <Skeleton className="h-10 w-full rounded-lg" />
-                              <Skeleton className="h-10 w-full rounded-lg" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="border border-gray-200 rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="text-lg font-semibold text-gray-800">
-                            Recent Activity
-                          </div>
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" />
-                        </div>
-                        <div className="text-center py-8">
-                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg
-                              className="w-8 h-8 text-gray-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                              />
-                            </svg>
-                          </div>
-                          <p className="text-gray-500 text-sm">
-                            No recent activity to display
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <div className="p-6 bg-white rounded-lg border border-gray-200 space-y-6">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-16 w-16 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
             </div>
+          </div>
+          <div className="flex items-start gap-6 pt-4">
+            <div className="w-[30%] min-w-[280px] space-y-4">
+              <Skeleton className="h-64 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+            <Skeleton className="flex-1 h-80 rounded-lg" />
           </div>
         </div>
       </div>
-    </Layout>
+    </DashboardLayout>
   );
 }
 
-function ProfilePageContent() {
-  const { user, logout, refreshUser } = useAuth();
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState("dashboard");
+function ProfileV2Content() {
+  const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<SectionKey>('dashboard');
 
-  const userAny = user as {
-    job?: string;
-    department?: string;
-    location?: string;
-  } | null;
+  const userAny = user as { job?: string; department?: string; location?: string } | null;
   const [organizationName, setOrganizationName] = useState<string>(
-    user?.organization?.name || "",
+    user?.organization?.name || ''
   );
-  const [activeField, setActiveField] = useState<keyof ProfileFields | null>(
-    null,
-  );
+  const [activeField, setActiveField] = useState<keyof ProfileFields | null>(null);
   const aboutSectionRef = useRef<HTMLDivElement>(null);
   const savedRef = useRef<ProfileFields>({
-    job: userAny?.job ?? "Your job title",
-    department: userAny?.department ?? "Your department",
-    organization:
-      (organizationName || user?.organization?.name) ?? "Your organization",
-    location: userAny?.location ?? "Your location",
+    job: userAny?.job ?? '',
+    department: userAny?.department ?? '',
+    organization: (organizationName || user?.organization?.name) ?? '',
+    location: userAny?.location ?? '',
   });
 
   const initialValues = useMemo<ProfileFields>(
     () => ({
-      job: userAny?.job ?? "Your job title",
-      department: userAny?.department ?? "Your department",
-      organization:
-        (organizationName || user?.organization?.name) ?? "Your organization",
-      location: userAny?.location ?? "Your location",
+      job: userAny?.job ?? '',
+      department: userAny?.department ?? '',
+      organization: (organizationName || user?.organization?.name) ?? '',
+      location: userAny?.location ?? '',
     }),
     [
       organizationName,
@@ -240,14 +97,12 @@ function ProfilePageContent() {
       userAny?.department,
       userAny?.job,
       userAny?.location,
-    ],
+    ]
   );
   const [fields, setFields] = useState<ProfileFields>(initialValues);
 
   useEffect(() => {
-    if (user?.organization?.name) {
-      setOrganizationName(user.organization.name);
-    }
+    if (user?.organization?.name) setOrganizationName(user.organization.name);
   }, [user?.organization?.name]);
 
   useEffect(() => {
@@ -258,30 +113,21 @@ function ProfilePageContent() {
   const saveField = (field: keyof ProfileFields) => {
     savedRef.current = { ...savedRef.current, [field]: fields[field] };
   };
-
   const handleSaveActive = () => {
     if (!activeField) return;
     saveField(activeField);
-    if (activeField === "organization") {
-      setOrganizationName(fields.organization);
-    }
+    if (activeField === 'organization') setOrganizationName(fields.organization);
     setActiveField(null);
   };
-
   const cancelField = (field: keyof ProfileFields) => {
     setFields((prev) => ({ ...prev, [field]: savedRef.current[field] }));
     setActiveField(null);
   };
-
   const handleCancelActive = () => {
-    if (!activeField) return;
-    cancelField(activeField);
+    if (activeField) cancelField(activeField);
   };
-
   const handleSelectField = (field: keyof ProfileFields) => {
-    if (activeField && activeField !== field) {
-      saveField(activeField);
-    }
+    if (activeField && activeField !== field) saveField(activeField);
     setActiveField(field);
   };
 
@@ -292,60 +138,26 @@ function ProfilePageContent() {
       if (aboutSectionRef.current?.contains(target)) return;
       cancelField(activeField);
     };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeField]);
 
-  const layoutUser = user
-    ? {
-        name: user.username || "User",
-        email: user.email || "",
-        roles: user.roles || [],
-        avatar: (user as { avatar?: string }).avatar || undefined,
-        first_name: (user as { first_name?: string }).first_name || "",
-        last_name: (user as { last_name?: string }).last_name || "",
-      }
-    : undefined;
+  const displayName = useMemo(() => {
+    if (!user) return 'User';
+    const full = [user.first_name as string | undefined, user.last_name as string | undefined]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return full || user.username || user.email?.split('@')[0] || 'User';
+  }, [user]);
 
-  const handleUserAction = async (action: string) => {
-    if (action === "settings") {
-      router.push("/profile/settings");
-    } else if (action === "logout") {
-      await logout();
-    }
-  };
+  const primaryRole = useMemo(() => {
+    const roles = Array.isArray(user?.roles) ? (user!.roles as string[]) : [];
+    return roles[0] ?? null;
+  }, [user]);
 
-  const handleEditProfile = () => {
-    // Current implementation uses inline editing for individual fields
-    // This handler can be expanded for a modal-based editing if needed
-    console.log("Edit profile clicked");
-  };
-
-  const handleProfileUpdate = async () => {
-    // Refresh user data after profile update
-    await refreshUser();
-  };
-
-  const transformUserForProfileHeader = () => {
-    if (!user) {
-      return {
-        username: undefined,
-        email: undefined,
-        avatar: undefined,
-        first_name: undefined,
-        last_name: undefined,
-      };
-    }
-    return {
-      username: user.username,
-      email: user.email,
-      avatar: (user as { avatar?: string }).avatar,
-      first_name: (user as { first_name?: string }).first_name,
-      last_name: (user as { last_name?: string }).last_name,
-    };
-  };
-
-  const transformUserForComponents = () => {
+  const transformUserForOrg = () => {
     if (!user) {
       return {
         username: undefined,
@@ -362,284 +174,193 @@ function ProfilePageContent() {
       first_name: (user as { first_name?: string }).first_name,
       last_name: (user as { last_name?: string }).last_name,
       organization: user.organization
-        ? {
-            id: user.organization.id,
-            name: user.organization.name,
-          }
+        ? { id: user.organization.id, name: user.organization.name }
         : null,
       roles: user.roles || [],
     };
   };
 
-  const renderContent = () => {
-    const transformedUser = transformUserForComponents();
-    switch (activeTab) {
-      case "dashboard":
-        return <DashboardContent user={transformedUser} />;
-      case "organization":
-        return <OrganizationContent user={transformedUser} />;
-      case "subscription":
-        return (
-          <div className="bg-white rounded-lg">
-            <PlansSection showHeader={false} />
+  const fieldRows = [
+    { key: 'job' as const, icon: Briefcase, label: 'Role', placeholder: 'Add your role' },
+    { key: 'department' as const, icon: Network, label: 'Department', placeholder: 'Add your department' },
+    { key: 'organization' as const, icon: Building2, label: 'Organization', placeholder: 'Add your organization' },
+    { key: 'location' as const, icon: MapPin, label: 'Location', placeholder: 'Add your location' },
+  ];
+
+  const renderOverview = () => (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Account
+        </h2>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Display name</div>
+            <div className="text-sm text-gray-900">{displayName}</div>
           </div>
-        );
-      default:
-        return <DashboardContent user={transformedUser} />;
-    }
-  };
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Email</div>
+            <div className="text-sm text-gray-900 break-all">{user?.email ?? '—'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Username</div>
+            <div className="text-sm text-gray-900">{user?.username ?? '—'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Primary role</div>
+            <div className="text-sm text-gray-900">{primaryRole ?? '—'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Recent Activity
+        </h2>
+        <div className="mt-3 rounded-lg border border-dashed border-gray-200 py-10 flex flex-col items-center text-center">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+            <ClipboardList className="w-5 h-5 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500">No recent activity yet.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Your recent tasks and decisions will show up here.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <Layout user={layoutUser} onUserAction={handleUserAction}>
+    <DashboardLayout>
       <div className="p-6">
-        <div className="space-y-4 profile-header"></div>
-        <div className="profile-content rounded-lg">
-          <div className="profile-content-wrapper pt-12">
-            <div className="profile-content-inner p-6 bg-white rounded-lg shadow-xl border border-gray-200">
-              {/* Header */}
-              <ProfileHeader
-                user={transformUserForProfileHeader()}
-                onEditClick={handleEditProfile}
-              />
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {/* Brand header strip (slim, brand gradient) */}
+          <div className="h-16 bg-gradient-to-r from-[#3CCED7]/20 via-white to-[#A6E661]/20" />
 
-              {/* Two columns: left sidebar (About + Contact) + right (tabs content) */}
-              <div className="mt-6 flex items-start gap-6 w-full">
-                {/* Left: About + Contact - ~30% */}
-                <div className="w-[30%] min-w-[280px] max-w-[420px] flex flex-col gap-4 shrink-0">
-                  <section className="w-full space-y-4 rounded-lg border border-gray-200 bg-white p-4">
-                    <h3 className="text-lg font-semibold text-gray-900">
+          <div className="px-8 pb-8">
+            {/* Identity header: avatar + name/email, overlaps the strip */}
+            <div className="-mt-8 flex items-end justify-between gap-4 flex-wrap">
+              <div className="flex items-end gap-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shadow-sm ring-4 ring-white">
+                  <span className="text-white text-lg font-semibold">{getInitials(displayName)}</span>
+                </div>
+                <div className="pb-1">
+                  <div className="text-lg font-semibold text-gray-900 leading-tight">{displayName}</div>
+                  <div className="text-sm text-gray-500 mt-0.5">{user?.email ?? ''}</div>
+                </div>
+              </div>
+              {primaryRole && (
+                <span className="inline-flex items-center rounded-full border border-[#3CCED7]/30 bg-[#3CCED7]/5 px-2.5 py-0.5 text-xs font-medium text-[#3CCED7]">
+                  {primaryRole}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-8 flex items-start gap-6 w-full">
+              {/* LEFT: About + Sign Out */}
+              <div className="w-[30%] min-w-[280px] max-w-[380px] flex flex-col gap-3 shrink-0">
+                <section className="w-full rounded-lg border border-gray-200 bg-white p-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                       About
                     </h3>
-                    <div
-                      ref={aboutSectionRef}
-                      className="space-y-3 text-sm text-gray-700"
-                    >
-                      <div className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-gray-100 transition-colors duration-150">
-                        <Briefcase className="h-4 w-4 text-gray-500 shrink-0" />
-                        {activeField === "job" ? (
-                          <div className="flex flex-1 items-center gap-2 min-w-0">
-                            <TextInput
-                              label=""
-                              value={fields.job}
-                              placeholder="Your job title"
-                              onChange={(e) =>
-                                setFields((prev) => ({
-                                  ...prev,
-                                  job: e.target.value,
-                                }))
-                              }
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleSaveActive}
-                              aria-label="Save job title"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleCancelActive}
-                              aria-label="Cancel job title"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectField("job")}
-                            className="rounded-md px-2 py-1 text-left flex-1"
-                            aria-label="Edit job title"
-                          >
-                            {fields.job || "Your job title"}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-gray-100 transition-colors duration-150">
-                        <Network className="h-4 w-4 text-gray-500 shrink-0" />
-                        {activeField === "department" ? (
-                          <div className="flex flex-1 items-center gap-2 min-w-0">
-                            <TextInput
-                              label=""
-                              value={fields.department}
-                              placeholder="Your department"
-                              onChange={(e) =>
-                                setFields((prev) => ({
-                                  ...prev,
-                                  department: e.target.value,
-                                }))
-                              }
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleSaveActive}
-                              aria-label="Save department"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleCancelActive}
-                              aria-label="Cancel department"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectField("department")}
-                            className="rounded-md px-2 py-1 text-left flex-1"
-                            aria-label="Edit department"
-                          >
-                            {fields.department || "Your department"}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-gray-100 transition-colors duration-150">
-                        <Building2 className="h-4 w-4 text-gray-500 shrink-0" />
-                        {activeField === "organization" ? (
-                          <div className="flex flex-1 items-center gap-2 min-w-0">
-                            <TextInput
-                              label=""
-                              value={fields.organization}
-                              placeholder="Your organization"
-                              onChange={(e) =>
-                                setFields((prev) => ({
-                                  ...prev,
-                                  organization: e.target.value,
-                                }))
-                              }
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleSaveActive}
-                              aria-label="Save organization"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleCancelActive}
-                              aria-label="Cancel organization"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectField("organization")}
-                            className="rounded-md px-2 py-1 text-left flex-1"
-                            aria-label="Edit organization"
-                          >
-                            {fields.organization || "Your organization"}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 p-2 -mx-2 rounded-md hover:bg-gray-100 transition-colors duration-150">
-                        <MapPin className="h-4 w-4 text-gray-500 shrink-0" />
-                        {activeField === "location" ? (
-                          <div className="flex flex-1 items-center gap-2 min-w-0">
-                            <TextInput
-                              label=""
-                              value={fields.location}
-                              placeholder="Your location"
-                              onChange={(e) =>
-                                setFields((prev) => ({
-                                  ...prev,
-                                  location: e.target.value,
-                                }))
-                              }
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleSaveActive}
-                              aria-label="Save location"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleCancelActive}
-                              aria-label="Cancel location"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectField("location")}
-                            className="rounded-md px-2 py-1 text-left flex-1"
-                            aria-label="Edit location"
-                          >
-                            {fields.location || "Your location"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        Contact
-                      </h4>
-                      <div className="mt-2 flex items-center gap-3 text-sm text-gray-700 p-2 -mx-2 rounded-md hover:bg-gray-100 transition-colors duration-150">
-                        <Mail className="h-4 w-4 text-gray-500 shrink-0" />
-                        <span>{user?.email ?? "Your email"}</span>
-                      </div>
-                    </div>
-                  </section>
-                  {/* Sign Out Button */}
-                  <button
-                    onClick={async () => {
-                      await logout();
-                      router.push("/login");
-                    }}
-                    className="flex items-center gap-3 w-full p-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg border border-gray-200 bg-white transition-colors duration-200"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign Out
-                  </button>
-                </div>
+                    <Pencil className="w-3.5 h-3.5 text-gray-300" aria-hidden />
+                  </div>
 
-                {/* Right: Tabs + Dashboard / Organization / Subscription - ~70% */}
-                <div className="flex flex-col gap-6 flex-1 min-w-0">
-                  <div className="rounded-lg border border-gray-200 bg-white p-4">
-                    <div className="border-b border-gray-200 mb-4">
-                      <nav className="-mb-px flex gap-6">
-                        {[
-                          { id: "dashboard", label: "Dashboard" },
-                          { id: "organization", label: "My Organization" },
-                          { id: "subscription", label: "Subscription" },
-                        ].map((tab) => (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`pb-3 text-sm font-medium border-b-2 ${
-                              activeTab === tab.id
-                                ? "border-blue-500 text-blue-600"
-                                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                            }`}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </nav>
+                  <div ref={aboutSectionRef} className="mt-4 space-y-1">
+                    {fieldRows.map(({ key, icon: Icon, label, placeholder }) => {
+                      const isActive = activeField === key;
+                      const hasValue = !!fields[key]?.trim();
+                      return (
+                        <div
+                          key={key}
+                          className={`group rounded-md transition-colors ${
+                            isActive ? 'bg-[#3CCED7]/5' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          {isActive ? (
+                            <div className="flex items-center gap-2 p-2">
+                              <Icon className="h-4 w-4 text-[#3CCED7] shrink-0" />
+                              <TextInput
+                                label=""
+                                value={fields[key]}
+                                placeholder={placeholder}
+                                onChange={(e) =>
+                                  setFields((prev) => ({ ...prev, [key]: e.target.value }))
+                                }
+                                className="flex-1"
+                              />
+                              <Button variant="ghost" size="sm" onClick={handleSaveActive} aria-label={`Save ${label}`}>
+                                <Check className="h-4 w-4 text-[#3CCED7]" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={handleCancelActive} aria-label={`Cancel ${label}`}>
+                                <X className="h-4 w-4 text-gray-400" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectField(key)}
+                              className="w-full flex items-center gap-3 px-2 py-2 text-left"
+                              aria-label={`Edit ${label}`}
+                            >
+                              <Icon className="h-4 w-4 text-gray-400 group-hover:text-[#3CCED7] shrink-0 transition-colors" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[11px] uppercase tracking-wider text-gray-400">
+                                  {label}
+                                </div>
+                                <div className={`text-sm truncate ${hasValue ? 'text-gray-900' : 'text-gray-400'}`}>
+                                  {fields[key] || placeholder}
+                                </div>
+                              </div>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 pt-4 border-t border-gray-100">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1">Contact</div>
+                    <div className="flex items-center gap-3 px-2 py-1.5 text-sm text-gray-700">
+                      <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                      <span className="truncate">{user?.email ?? 'Your email'}</span>
                     </div>
-                    {renderContent()}
+                  </div>
+
+                  <p className="mt-4 text-[11px] text-gray-400 italic">
+                    Role / department / location are local-only for now and will not be saved.
+                  </p>
+                </section>
+              </div>
+
+              {/* RIGHT: sections */}
+              <div className="flex-1 min-w-0">
+                <div className="rounded-lg border border-gray-200 bg-white">
+                  <div className="border-b border-gray-200">
+                    <nav className="flex gap-6 px-5" aria-label="Profile sections">
+                      {SECTIONS.map((section) => {
+                        const active = activeSection === section.id;
+                        return (
+                          <button
+                            key={section.id}
+                            type="button"
+                            onClick={() => setActiveSection(section.id)}
+                            className={`py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                              active
+                                ? 'border-[#3CCED7] text-[#3CCED7]'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                            aria-current={active ? 'page' : undefined}
+                          >
+                            {section.label}
+                          </button>
+                        );
+                      })}
+                    </nav>
+                  </div>
+                  <div className="p-6">
+                    {activeSection === 'dashboard' ? renderOverview() : <OrganizationContent user={transformUserForOrg()} />}
                   </div>
                 </div>
               </div>
@@ -647,14 +368,16 @@ function ProfilePageContent() {
           </div>
         </div>
       </div>
-    </Layout>
+    </DashboardLayout>
   );
 }
 
-export default function ProfilePage() {
+export default function ProfileV2Page() {
   return (
-    <ProtectedRoute loadingComponent={<ProfilePageSkeleton />}>
-      <ProfilePageContent />
+    <ProtectedRoute loadingComponent={<ProfileV2Skeleton />}>
+      <Suspense fallback={<ProfileV2Skeleton />}>
+        <ProfileV2Content />
+      </Suspense>
     </ProtectedRoute>
   );
 }

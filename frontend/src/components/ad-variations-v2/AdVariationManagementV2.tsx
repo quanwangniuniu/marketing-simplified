@@ -350,7 +350,7 @@ export default function AdVariationManagement({ campaignId }: AdVariationManagem
   };
 
   const openDetail = (variationId: number) => {
-    router.push(`/variations-v2/${variationId}?cid=${campaignId}`);
+    router.push(`/variations/${variationId}?cid=${campaignId}`);
   };
 
   const handleDropStatus = async (

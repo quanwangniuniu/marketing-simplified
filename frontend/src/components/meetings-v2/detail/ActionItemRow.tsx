@@ -110,7 +110,7 @@ export default function ActionItemRow({
         )}
         {isConverted && (
           <Link
-            href={`/tasks-v2/${item.converted_task_id}?project_id=${projectId}`}
+            href={`/tasks/${item.converted_task_id}?project_id=${projectId}`}
             className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
           >
             <span>Task #{item.converted_task_id}</span>

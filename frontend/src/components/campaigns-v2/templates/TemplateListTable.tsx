@@ -85,7 +85,7 @@ export default function TemplateListTable({
                   onClick={() =>
                     onRowClick
                       ? onRowClick(t)
-                      : router.push(`/campaigns-v2/templates/${t.id}`)
+                      : router.push(`/campaigns/templates/${t.id}`)
                   }
                 >
                   <td className="px-4 py-3">

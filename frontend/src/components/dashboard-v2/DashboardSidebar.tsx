@@ -67,24 +67,24 @@ const navGroups: NavGroup[] = [
   {
     title: 'MANAGE',
     items: [
-      { label: 'Campaigns', href: '/campaigns-v2', icon: Megaphone },
-      { label: 'Tasks', href: '/tasks-v2', icon: CheckSquare },
-      { label: 'Decisions', href: '/decisions-v2', icon: GitBranch },
-      { label: 'Spreadsheets', href: '/spreadsheets-v2', icon: Table2 },
+      { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
+      { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { label: 'Decisions', href: '/decisions', icon: GitBranch },
+      { label: 'Spreadsheets', href: '/spreadsheets', icon: Table2 },
     ],
   },
   {
     title: 'CONTENT',
     items: [
-      { label: 'Ad Variations', href: '/variations-v2', icon: Target },
+      { label: 'Ad Variations', href: '/variations', icon: Target },
       {
         label: 'Ads Draft',
         href: '#',
         icon: Megaphone,
         children: [
-          { label: 'Facebook Meta', href: '/facebook-meta-v2', icon: Facebook },
-          { label: 'TikTok', href: '/tiktok-v2', icon: Video },
-          { label: 'Google Ads', href: '/google-ads-v2', icon: Target },
+          { label: 'Facebook Meta', href: '/facebook-meta', icon: Facebook },
+          { label: 'TikTok', href: '/tiktok', icon: Video },
+          { label: 'Google Ads', href: '/google-ads', icon: Target },
         ],
       },
       {
@@ -92,20 +92,20 @@ const navGroups: NavGroup[] = [
         href: '#',
         icon: Mail,
         children: [
-          { label: 'Mailchimp', href: '/mailchimp-v2', icon: Mail },
-          { label: 'Klaviyo', href: '/klaviyo-v2', icon: Mail },
+          { label: 'Mailchimp', href: '/mailchimp', icon: Mail },
+          { label: 'Klaviyo', href: '/klaviyo', icon: Mail },
         ],
       },
-      { label: 'Notion', href: '/notion-v2', icon: Notebook },
+      { label: 'Notion', href: '/notion', icon: Notebook },
     ],
   },
   {
     title: 'COLLABORATE',
     items: [
-      { label: 'Meetings', href: '/meetings-v2', icon: Users },
-      { label: 'Calendar', href: '/calendar-v2', icon: Calendar },
-      { label: 'Messages', href: '/messages-v2', icon: MessageSquare },
-      { label: 'Miro', href: '/miro-v2', icon: Presentation },
+      { label: 'Meetings', href: '/meetings', icon: Users },
+      { label: 'Calendar', href: '/calendar', icon: Calendar },
+      { label: 'Messages', href: '/messages', icon: MessageSquare },
+      { label: 'Miro', href: '/miro', icon: Presentation },
     ],
   },
   {
@@ -315,21 +315,21 @@ export default function DashboardSidebar() {
           <DropdownMenuSeparator className="my-1" />
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => router.push('/profile-v2')}
+            onSelect={() => router.push('/profile')}
           >
             <UserIcon className="text-gray-500" />
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => router.push('/subscription-v2')}
+            onSelect={() => router.push('/subscription')}
           >
             <CreditCard className="text-gray-500" />
             <span>Subscription</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => router.push('/integrations-v2')}
+            onSelect={() => router.push('/integrations')}
           >
             <Plug className="text-gray-500" />
             <span>Integrations</span>

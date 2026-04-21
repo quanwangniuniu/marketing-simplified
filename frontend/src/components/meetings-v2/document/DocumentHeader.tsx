@@ -70,7 +70,7 @@ export default function DocumentHeader({
   const status = formatStatus(wsState, closeCode, saving, lastSyncedAt);
   const archived = meeting.is_archived || meeting.status === 'archived';
   const noAccess = closeCode === 4003;
-  const detailHref = `/meetings-v2/${meeting.id}?project_id=${projectId}`;
+  const detailHref = `/meetings/${meeting.id}?project_id=${projectId}`;
 
   return (
     <header className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">

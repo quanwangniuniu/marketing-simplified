@@ -29,7 +29,7 @@ export default function MeetingCard({ meeting, projectId }: Props) {
 
   return (
     <Link
-      href={`/meetings-v2/${meeting.id}?project_id=${projectId}`}
+      href={`/meetings/${meeting.id}?project_id=${projectId}`}
       className={`group block rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-gray-200 ${
         meeting.is_archived ? 'opacity-70' : ''
       }`}

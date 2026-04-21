@@ -1,658 +1,541 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useCallback, useMemo, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import Layout from '@/components/layout/Layout';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import DecisionWorkbenchHeader from '@/components/decisions/DecisionWorkbenchHeader';
-import SignalsPanel from '@/components/decisions/SignalsPanel';
-import DecisionWorkspaceEditor from '@/components/decisions/DecisionWorkspaceEditor';
-import DecisionDetailView from '@/components/decisions/DecisionDetailView';
-import DecisionCommitConfirmationModal from '@/components/decisions/DecisionCommitConfirmationModal';
-import DecisionApproveConfirmationModal from '@/components/decisions/DecisionApproveConfirmationModal';
-import ConfirmModal from '@/components/ui/ConfirmModal';
-import { OriginMeetingBlock } from '@/components/meetings/OriginMeetingBlock';
+import { useProjectStore } from '@/lib/projectStore';
 import { DecisionAPI } from '@/lib/api/decisionApi';
-import { ProjectAPI } from '@/lib/api/projectApi';
-import { scrollToFirstError, validateDecisionDraft } from '@/components/decisions/decisionValidation';
-import type { OriginMeetingPayload } from '@/types/meeting';
+
+import DecisionDetailHeader from '@/components/decisions-v2/detail/DecisionDetailHeader';
+import DecisionFSMActionBar from '@/components/decisions-v2/detail/DecisionFSMActionBar';
+import DecisionPropertiesAside from '@/components/decisions-v2/detail/DecisionPropertiesAside';
+import DecisionCommitChecklistAside from '@/components/decisions-v2/detail/DecisionCommitChecklistAside';
+import DecisionContextSection from '@/components/decisions-v2/detail/DecisionContextSection';
+import DecisionReasoningSection from '@/components/decisions-v2/detail/DecisionReasoningSection';
+import DecisionOptionsSection from '@/components/decisions-v2/detail/DecisionOptionsSection';
+import DecisionSignalsSection from '@/components/decisions-v2/detail/DecisionSignalsSection';
+import DecisionReviewsSection from '@/components/decisions-v2/detail/DecisionReviewsSection';
+import DecisionExecutionSummarySection from '@/components/decisions-v2/detail/DecisionExecutionSummarySection';
+import DecisionLinkedTasksSection from '@/components/decisions-v2/detail/DecisionLinkedTasksSection';
+import DecisionOriginMeetingBlock from '@/components/decisions-v2/detail/DecisionOriginMeetingBlock';
+import DecisionConnectionsAside from '@/components/decisions-v2/detail/DecisionConnectionsAside';
+import DecisionActivityAside from '@/components/decisions-v2/detail/DecisionActivityAside';
+import DecisionSnapshotAside from '@/components/decisions-v2/detail/DecisionSnapshotAside';
+import DecisionCommitDialog, { type FieldError } from '@/components/decisions-v2/detail/DecisionCommitDialog';
+import DecisionApproveDialog from '@/components/decisions-v2/detail/DecisionApproveDialog';
+import DecisionArchiveDialog from '@/components/decisions-v2/detail/DecisionArchiveDialog';
+import DecisionReviewDialog from '@/components/decisions-v2/detail/DecisionReviewDialog';
+import DecisionSignalDialog from '@/components/decisions-v2/detail/DecisionSignalDialog';
+import DecisionDeleteDialog from '@/components/decisions-v2/DecisionDeleteDialog';
+import ConfirmDialog from '@/components/tasks-v2/detail/ConfirmDialog';
+import { useDecisionDetail, extractError } from '@/components/decisions-v2/detail/hooks/useDecisionDetail';
+import { useProjectRole } from '@/components/decisions-v2/detail/hooks/useProjectRole';
 import type {
-  DecisionDraftResponse,
   DecisionOptionDraft,
   DecisionRiskLevel,
   DecisionSignal,
-  DecisionStatus,
-  DecisionValidationErrorResponse,
 } from '@/types/decision';
 
-const ensureOptions = (options?: DecisionOptionDraft[]) => {
-  const base = options && options.length > 0 ? options : [];
-  const normalized = base.map((option, index) => ({
-    ...option,
-    text: option.text || '',
-    isSelected: Boolean(option.isSelected),
-    order: Number.isFinite(option.order) ? option.order : index,
-  }));
+const EDITABLE_STATUSES = new Set(['PREDRAFT', 'DRAFT']);
 
-  while (normalized.length < 2) {
-    normalized.push({
-      text: '',
-      isSelected: normalized.length === 0,
-      order: normalized.length,
-    });
-  }
-
-  if (!normalized.some((option) => option.isSelected)) {
-    normalized[0].isSelected = true;
-  }
-
-  return normalized.map((option, index) => ({ ...option, order: index }));
-};
-
-const mapFieldErrors = (errorResponse: DecisionValidationErrorResponse) => {
-  const fieldErrors = errorResponse?.error?.details?.fieldErrors || [];
-  return fieldErrors.reduce<Record<string, string>>((acc, item) => {
-    if (item.field) acc[item.field] = item.message;
-    return acc;
-  }, {});
-};
-
-const DecisionPage = () => {
-  const params = useParams();
-  const searchParams = useSearchParams();
+function DecisionDetailContent() {
   const router = useRouter();
+  const params = useParams<{ decisionId: string }>();
+  const searchParams = useSearchParams();
+  const activeProject = useProjectStore((s) => s.activeProject);
+
   const decisionId = Number(params?.decisionId);
-  const projectId = searchParams.get('project_id');
-  const projectIdValue = projectId ? Number(projectId) : null;
+  const projectIdParam = searchParams?.get('project_id');
+  const projectId = projectIdParam ? Number(projectIdParam) : activeProject?.id ?? null;
 
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<DecisionStatus | null>(null);
-  const [title, setTitle] = useState('');
-  const [contextSummary, setContextSummary] = useState('');
-  const [reasoning, setReasoning] = useState('');
-  const [riskLevel, setRiskLevel] = useState<DecisionRiskLevel | ''>('');
-  const [confidenceScore, setConfidenceScore] = useState<number>(3);
-  const [options, setOptions] = useState<DecisionOptionDraft[]>([]);
-  const [dirty, setDirty] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [committing, setCommitting] = useState(false);
-  const [approving, setApproving] = useState(false);
+  const { canEdit, canApproveOrReview, members } = useProjectRole(projectId);
+
+  const detail = useDecisionDetail(Number.isFinite(decisionId) ? decisionId : null, projectId);
+  const status = detail.status;
+  const base = detail.base;
+
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [signalDialogOpen, setSignalDialogOpen] = useState(false);
+  const [signalEdit, setSignalEdit] = useState<DecisionSignal | null>(null);
+  const [pendingSignalDelete, setPendingSignalDelete] = useState<DecisionSignal | null>(null);
+  const [signalDeleting, setSignalDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [approveModalOpen, setApproveModalOpen] = useState(false);
-  const [approveConfirmations, setApproveConfirmations] = useState<Record<string, boolean>>({
-    reviewed: false,
-    ready: false,
-    accountable: false,
-  });
-  const [commitModalOpen, setCommitModalOpen] = useState(false);
-  const [commitConfirmations, setCommitConfirmations] = useState<Record<string, boolean>>({
-    alternatives: false,
-    risk: false,
-    review: false,
-  });
-  const [commitSignals, setCommitSignals] = useState<DecisionSignal[]>([]);
-  const [loadingCommitDetails, setLoadingCommitDetails] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [focusMode, setFocusMode] = useState(false);
-  const [committedSnapshot, setCommittedSnapshot] = useState<any>(null);
-  const [projectName, setProjectName] = useState<string | null>(null);
-  const [projectSeq, setProjectSeq] = useState<number | null>(null);
-  const [originMeeting, setOriginMeeting] = useState<OriginMeetingPayload | null>(null);
+  const [busy, setBusy] = useState({ commit: false, approve: false, archive: false });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const isDraft = status === 'DRAFT';
-  const incompleteToastId = 'decision-draft-incomplete';
+  const isEditingStatus = status ? EDITABLE_STATUSES.has(status) : false;
+  const editable = isEditingStatus && canEdit;
+  const committed = detail.committed;
+  const title = detail.draft?.title ?? detail.committed?.title ?? '';
+  const contextSummary = detail.draft?.contextSummary ?? committed?.contextSummary ?? '';
+  const reasoning = detail.draft?.reasoning ?? committed?.reasoning ?? '';
+  const riskLevel = (detail.draft?.riskLevel ?? committed?.riskLevel ?? null) as DecisionRiskLevel | null;
+  const confidenceScore = detail.draft?.confidenceScore ?? committed?.confidenceScore ?? null;
+  const options: DecisionOptionDraft[] = (detail.draft?.options as any) ?? (committed?.options as any) ?? [];
+  const signals = detail.signals;
+  const projectSeq = detail.draft?.projectSeq ?? committed?.projectSeq ?? null;
+  const createdByAgent = detail.draft?.createdByAgent ?? committed?.createdByAgent ?? false;
+  const originMeeting = (detail.draft?.origin_meeting ?? committed?.origin_meeting) ?? null;
+  const commitRecord = (committed as any)?.commitRecord ?? null;
+  const stateTransitions = ((committed as any)?.stateTransitions ?? []) as any[];
+  const plannedDecisionDate = (detail.draft as any)?.plannedDecisionDate ?? null;
 
-  const projectLabel = useMemo(() => {
-    if (projectName) return projectName;
-    if (projectIdValue) return `Project ${projectIdValue}`;
-    return 'Project';
-  }, [projectIdValue, projectName]);
-
-  const syncDraftState = useCallback((draft: DecisionDraftResponse) => {
-    setTitle(draft.title || '');
-    setContextSummary(draft.contextSummary || '');
-    setReasoning(draft.reasoning || '');
-    setRiskLevel(draft.riskLevel || '');
-    setConfidenceScore(
-      typeof draft.confidenceScore === 'number' ? draft.confidenceScore : 3
-    );
-    setProjectSeq(typeof draft.projectSeq === 'number' ? draft.projectSeq : null);
-    setOptions(ensureOptions(draft.options));
-    setLastSavedAt(draft.lastEditedAt || draft.createdAt || null);
-    setOriginMeeting(draft.origin_meeting ?? null);
-    setDirty(false);
-  }, []);
-
-  const fetchDecision = useCallback(async () => {
-    if (!decisionId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setErrors({});
-    try {
+  // ---- Load reviews once committed ----
+  const loadReviews = useCallback(async () => {
+    if (!decisionId) return;
+    if (status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') {
       try {
-        const committed = await DecisionAPI.getDecision(decisionId, projectIdValue);
-        setStatus(committed.status);
-        setCommittedSnapshot(committed);
-        setProjectSeq(typeof committed.projectSeq === 'number' ? committed.projectSeq : null);
-        setOriginMeeting(null);
-        setLoading(false);
-        return;
-      } catch (error: any) {
-        const response = error?.response;
-        if (response?.status === 409) {
-          const currentStatus = response?.data?.details?.currentStatus as DecisionStatus;
-          if (currentStatus) {
-            setStatus(currentStatus);
-            if (currentStatus === 'AWAITING_APPROVAL') {
-              const draft = await DecisionAPI.getDraft(decisionId, projectIdValue);
-              setCommittedSnapshot({
-                id: decisionId,
-                status: currentStatus,
-                title: draft.title || '',
-                contextSummary: draft.contextSummary || '',
-                reasoning: draft.reasoning || '',
-                riskLevel: draft.riskLevel || null,
-                confidenceScore: draft.confidenceScore ?? null,
-                options: draft.options || [],
-                signals: draft.signals || [],
-                projectSeq: draft.projectSeq ?? null,
-                origin_meeting: draft.origin_meeting ?? null,
-              });
-              setProjectSeq(
-                typeof draft.projectSeq === 'number' ? draft.projectSeq : null
-              );
-              setOriginMeeting(draft.origin_meeting ?? null);
-              setLoading(false);
-              return;
-            }
-          }
-        } else {
-          throw error;
-        }
+        const res = await DecisionAPI.listReviews(decisionId, projectId);
+        const arr = Array.isArray(res) ? res : res?.items ?? [];
+        setReviews(arr);
+      } catch {
+        // ignore; aside optional
       }
-
-      const draft = await DecisionAPI.getDraft(decisionId, projectIdValue);
-      setStatus((prev) => prev || 'DRAFT');
-      syncDraftState(draft);
-    } catch (error: any) {
-      console.error('Failed to load decision:', error);
-      toast.error('Failed to load decision.');
-    } finally {
-      setLoading(false);
+    } else {
+      setReviews([]);
     }
-  }, [decisionId, projectIdValue, syncDraftState]);
+  }, [decisionId, projectId, status]);
 
-  useEffect(() => {
-    fetchDecision();
-  }, [fetchDecision]);
+  useMemo(() => {
+    loadReviews();
+  }, [loadReviews]);
 
-  useEffect(() => {
-    let mounted = true;
-    const loadProjectName = async () => {
-      if (!projectIdValue) return;
-      try {
-        const project = await ProjectAPI.getProject(projectIdValue);
-        if (mounted) {
-          setProjectName(project?.name || null);
-        }
-      } catch (error) {
-        console.warn('Failed to load project name:', error);
-      }
-    };
-    loadProjectName();
-    return () => {
-      mounted = false;
-    };
-  }, [projectIdValue]);
-
-  const updateField = (field: string, value: any) => {
-    setDirty(true);
-    if (field === 'contextSummary') setContextSummary(value);
-    if (field === 'reasoning') setReasoning(value);
-    if (field === 'riskLevel') setRiskLevel(value);
-    if (field === 'confidenceScore') setConfidenceScore(value);
+  const clearFieldError = (...fields: string[]) => {
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      for (const f of fields) delete next[f];
+      return next;
+    });
   };
 
-  const handleOptionsChange = (nextOptions: DecisionOptionDraft[]) => {
-    setOptions(nextOptions);
-    setDirty(true);
+  // ---- Patch helpers ----
+  const handleTitleSave = async (next: string) => {
+    await detail.patchDraft({ title: next || null });
+    toast.success('Saved');
+  };
+  const handleContextSave = async (next: string) => {
+    await detail.patchDraft({ contextSummary: next });
+    clearFieldError('contextSummary');
+  };
+  const handleReasoningSave = async (next: string) => {
+    await detail.patchDraft({ reasoning: next });
+    clearFieldError('reasoning');
+  };
+  const handleRiskChange = async (next: DecisionRiskLevel | null) => {
+    await detail.patchDraft({ riskLevel: next });
+    clearFieldError('riskLevel');
+  };
+  const handleConfidenceChange = async (next: number | null) => {
+    await detail.patchDraft({ confidenceScore: next });
+    clearFieldError('confidenceScore');
+  };
+  const handlePlannedDateChange = async (next: string | null) => {
+    await detail.patchDraft({ plannedDecisionDate: next } as any);
+  };
+  const handleOptionsSave = async (next: DecisionOptionDraft[]) => {
+    await detail.patchDraft({ options: next });
+    clearFieldError('options', 'selectedOption');
   };
 
-  const handleTitleChange = (nextTitle: string) => {
-    setTitle(nextTitle);
-    setDirty(true);
-  };
-
-  const buildDraftPayload = useCallback(
-    () => ({
-      title: title || null,
-      contextSummary: contextSummary || null,
-      reasoning: reasoning || null,
-      riskLevel: riskLevel || null,
-      confidenceScore: confidenceScore,
-      options: options.map((option, index) => ({
-        ...option,
-        order: index,
-      })),
-    }),
-    [title, contextSummary, reasoning, riskLevel, confidenceScore, options]
-  );
-
-  const validateLocal = useCallback(
-    (signalCount: number) => validateDecisionDraft(
-      { title, contextSummary, reasoning, riskLevel: riskLevel || null, confidenceScore, options },
-      signalCount,
-    ),
-    [confidenceScore, contextSummary, options, reasoning, riskLevel, title]
-  );
-
-  const validateBeforeCommit = useCallback(async () => {
-    if (!decisionId) return false;
+  // ---- FSM actions ----
+  const performCommit = async (): Promise<FieldError[] | null> => {
+    if (!decisionId) return null;
+    setBusy((b) => ({ ...b, commit: true }));
     try {
-      setErrors({});
-      setFocusMode(false);
-
-      // Pull signals first so we can validate them before opening the confirm modal.
-      const signalsResponse = await DecisionAPI.listSignals(decisionId, projectIdValue);
-      const nextCommitSignals = signalsResponse.items || [];
-      setCommitSignals(nextCommitSignals);
-
-      const localErrors = validateLocal(nextCommitSignals.length);
-      if (Object.keys(localErrors).length > 0) {
-        setErrors(localErrors);
-        setFocusMode(true);
-        scrollToFirstError(localErrors);
-        toast.error('Draft is incomplete. Please address the highlighted fields.', {
-          id: incompleteToastId,
+      await DecisionAPI.commit(decisionId, projectId);
+      toast.success('Decision committed');
+      setFieldErrors({});
+      await detail.refetch();
+      return null;
+    } catch (err: any) {
+      const body = err?.response?.data;
+      const field_errors: FieldError[] | undefined = body?.error?.details?.fieldErrors;
+      if (field_errors && field_errors.length > 0) {
+        const mapping: Record<string, string> = {};
+        field_errors.forEach((fe) => {
+          mapping[fe.field] = fe.message;
         });
-        return false;
+        setFieldErrors(mapping);
+        return field_errors;
       }
-
-      // Sync latest edits (best-effort) so the confirm modal reflects what will be committed.
-      setSaving(true);
-      const syncedDraft = await DecisionAPI.patchDraft(decisionId, buildDraftPayload(), projectIdValue);
-      syncDraftState(syncedDraft);
-      return true;
-    } catch (error: any) {
-      const response = error?.response;
-      if (response?.status === 400 && response?.data?.error) {
-        const mapped = mapFieldErrors(response.data as DecisionValidationErrorResponse);
-        setErrors(mapped);
-        setFocusMode(true);
-        scrollToFirstError(mapped);
-        toast.error('Draft is incomplete. Please address the highlighted fields.', { id: incompleteToastId });
-      } else if (response?.status === 403) {
-        toast.error('You do not have permission to commit this decision.', { id: incompleteToastId });
-      } else {
-        console.error('Failed to validate draft before commit:', error);
-        toast.error('Failed to validate draft before commit.', { id: incompleteToastId });
-      }
-      return false;
+      toast.error(extractError(err, 'Commit failed'));
+      return null;
     } finally {
-      setSaving(false);
+      setBusy((b) => ({ ...b, commit: false }));
     }
-  }, [buildDraftPayload, decisionId, incompleteToastId, projectIdValue, syncDraftState, validateLocal]);
+  };
 
-  const handleSaveDraft = async () => {
+  const performApprove = async () => {
     if (!decisionId) return;
-    setSaving(true);
-    setErrors({});
-    setFocusMode(false);
+    setBusy((b) => ({ ...b, approve: true }));
     try {
-      const draft = await DecisionAPI.patchDraft(decisionId, buildDraftPayload(), projectIdValue);
-      syncDraftState(draft);
-      toast.success('Draft saved.');
-    } catch (error: any) {
-      console.error('Failed to save draft:', error);
-      toast.error('Failed to save draft.');
+      await DecisionAPI.approve(decisionId, projectId);
+      toast.success('Decision approved');
+      await detail.refetch();
+    } catch (err) {
+      toast.error(extractError(err, 'Approval failed'));
+      throw err;
     } finally {
-      setSaving(false);
+      setBusy((b) => ({ ...b, approve: false }));
     }
   };
 
-  const handleTitleSave = async (nextTitle: string) => {
+  const performArchive = async () => {
     if (!decisionId) return;
-    setSaving(true);
+    setBusy((b) => ({ ...b, archive: true }));
     try {
-      const draft = await DecisionAPI.patchDraft(
-        decisionId,
-        { title: nextTitle || null },
-        projectIdValue
-      );
-      setTitle(draft.title || '');
-      setLastSavedAt(draft.lastEditedAt || draft.createdAt || null);
-      setOriginMeeting(draft.origin_meeting ?? null);
-      setDirty((prev) => prev || false);
-    } catch (error) {
-      console.error('Failed to save title:', error);
-      toast.error('Failed to save title.');
+      await DecisionAPI.archive(decisionId, projectId);
+      toast.success('Decision archived');
+      await detail.refetch();
+    } catch (err) {
+      toast.error(extractError(err, 'Archive failed'));
+      throw err;
     } finally {
-      setSaving(false);
+      setBusy((b) => ({ ...b, archive: false }));
     }
   };
 
-  const handleCommit = async () => {
-    if (!decisionId) return false;
-    setCommitting(true);
-    setErrors({});
-    setFocusMode(false);
+  const performSaveDraft = async () => {
+    // Save-as-you-type is already live; button provides explicit feedback.
+    toast.success('All changes saved');
+  };
+
+  const performPromoteToDraft = async () => {
+    if (!decisionId) return;
     try {
-      if (dirty) {
-        setSaving(true);
-        try {
-          const syncedDraft = await DecisionAPI.patchDraft(
-            decisionId,
-            buildDraftPayload(),
-            projectIdValue
-          );
-          syncDraftState(syncedDraft);
-        } catch (syncError) {
-          console.error('Failed to sync latest draft before commit:', syncError);
-          toast.error('Failed to sync latest changes before commit.');
-          return false;
-        } finally {
-          setSaving(false);
-        }
-      }
-
-      const response = await DecisionAPI.commit(decisionId, projectIdValue);
-      setStatus(response.status);
-      setCommittedSnapshot(response.decision);
-      setOriginMeeting(null);
-      setDirty(false);
-      toast.success(response.detail || 'Decision committed.');
-      return true;
-    } catch (error: any) {
-      const response = error?.response;
-      if (response?.status === 400 && response?.data?.error) {
-        const mapped = mapFieldErrors(response.data as DecisionValidationErrorResponse);
-        setErrors(mapped);
-        setCommitModalOpen(false);
-        setFocusMode(true);
-        scrollToFirstError(mapped);
-        toast.error('Draft is incomplete. Please address the highlighted fields.', {
-          id: incompleteToastId,
-        });
-      } else if (response?.status === 403) {
-        toast.error('You do not have permission to commit this decision.', { id: incompleteToastId });
-      } else {
-        console.error('Commit failed:', error);
-        toast.error('Commit failed.', { id: incompleteToastId });
-      }
-      return false;
-    } finally {
-      setCommitting(false);
+      await detail.patchDraft({});
+      toast.success('Promoted to draft');
+    } catch {
+      // patchDraft already toasts on error
     }
   };
 
-  const handleOpenCommitModal = async () => {
+  const performAddReview = async (payload: { outcomeText: string; reflectionText: string; decisionQuality: 'GOOD' | 'ACCEPTABLE' | 'POOR' }) => {
     if (!decisionId) return;
-    const ok = await validateBeforeCommit();
-    if (!ok) return;
-    setCommitModalOpen(true);
-    setCommitConfirmations({ alternatives: false, risk: false, review: false });
-    // commitSignals already populated during validateBeforeCommit.
-    setLoadingCommitDetails(false);
+    await DecisionAPI.createReview(decisionId, payload as any, projectId);
+    toast.success('Review submitted');
+    await loadReviews();
+    await detail.refetch();
   };
 
-  const handleConfirmCommit = async () => {
-    const committed = await handleCommit();
-    if (committed) {
-      setCommitModalOpen(false);
-    }
-  };
-
-  const handleApprove = async () => {
+  const performDelete = async () => {
     if (!decisionId) return;
-    setApproving(true);
-    try {
-      const response = await DecisionAPI.approve(decisionId, projectIdValue);
-      setStatus(response.status);
-      setCommittedSnapshot(response.decision);
-      setOriginMeeting(null);
-      toast.success(response.detail || 'Decision approved.');
-    } catch (error: any) {
-      const response = error?.response;
-      if (response?.status === 403) {
-        toast.error('You do not have permission to approve this decision.');
-      } else if (response?.status === 409) {
-        toast.error('Decision is not awaiting approval.');
-      } else {
-        console.error('Approve failed:', error);
-        toast.error('Approve failed.');
-      }
-    } finally {
-      setApproving(false);
-    }
-  };
-
-  const handleOpenApproveModal = () => {
-    setApproveConfirmations({ reviewed: false, ready: false, accountable: false });
-    setApproveModalOpen(true);
-  };
-
-  const handleConfirmApprove = async () => {
-    await handleApprove();
-    setApproveModalOpen(false);
-  };
-
-  const handleDelete = () => {
-    if (!decisionId) return;
-    setDeleteConfirmOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!decisionId || projectIdValue == null) return;
     setDeleting(true);
     try {
-      await DecisionAPI.deleteDecision(decisionId, projectIdValue);
-      toast.success('Decision deleted.');
-      setDeleteConfirmOpen(false);
-      router.push('/decisions');
-    } catch (error: any) {
-      const response = error?.response;
-      if (response?.status === 401) {
-        toast.error('Authentication required. Please log in again.');
-      } else if (response?.status === 403) {
-        toast.error('You do not have permission to delete this decision.');
-      } else if (response?.status === 404) {
-        toast.error('Decision not found.');
-      } else {
-        console.error('Delete failed:', error);
-        toast.error('Failed to delete decision.');
-      }
+      await DecisionAPI.deleteDecision(decisionId, projectId);
+      toast.success('Decision deleted');
+      const qs = projectId ? `?project_id=${projectId}` : '';
+      router.push(`/decisions${qs}`);
+    } catch (err) {
+      toast.error(extractError(err, 'Delete failed'));
     } finally {
       setDeleting(false);
     }
   };
 
+  // ---- Signal CRUD ----
+  const openSignalCreate = () => {
+    setSignalEdit(null);
+    setSignalDialogOpen(true);
+  };
+  const openSignalEdit = (signal: DecisionSignal) => {
+    setSignalEdit(signal);
+    setSignalDialogOpen(true);
+  };
+  const handleSignalSubmit = async (payload: any) => {
+    if (!decisionId) return;
+    try {
+      if (signalEdit?.id) {
+        await DecisionAPI.updateSignal(decisionId, signalEdit.id, payload, projectId);
+      } else {
+        await DecisionAPI.createSignal(decisionId, payload, projectId);
+      }
+      toast.success(signalEdit?.id ? 'Signal updated' : 'Signal added');
+      await detail.refreshSignals();
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to save signal'));
+      throw err;
+    }
+  };
+  const handleSignalDelete = async () => {
+    if (!decisionId || !pendingSignalDelete?.id) return;
+    setSignalDeleting(true);
+    try {
+      await DecisionAPI.deleteSignal(decisionId, pendingSignalDelete.id, projectId);
+      toast.success('Signal deleted');
+      await detail.refreshSignals();
+      setPendingSignalDelete(null);
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to delete signal'));
+    } finally {
+      setSignalDeleting(false);
+    }
+  };
 
-  if (loading) {
+  const handleReviewInPage = (firstField: string | null) => {
+    if (!firstField) return;
+    const anchorMap: Record<string, string> = {
+      contextSummary: 'decision-section-context',
+      reasoning: 'decision-section-reasoning',
+      options: 'decision-section-options',
+      selectedOption: 'decision-section-options',
+      signals: 'decision-section-signals',
+      riskLevel: 'decision-section-properties',
+      confidenceScore: 'decision-section-properties',
+    };
+    const id = anchorMap[firstField];
+    if (id) {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // ---- Loading / error states ----
+  if (!decisionId || !Number.isFinite(decisionId)) {
     return (
-      <Layout>
-        <ProtectedRoute>
-          <div className="flex h-full items-center justify-center">
-            <div className="text-sm text-gray-500">Loading decision...</div>
-          </div>
-        </ProtectedRoute>
-      </Layout>
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+          Invalid decision id.
+        </div>
+      </DashboardLayout>
+    );
+  }
+  if (detail.loading && !base) {
+    return (
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+          Loading decision…
+        </div>
+      </DashboardLayout>
+    );
+  }
+  if (detail.error || !base) {
+    return (
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+          {detail.error || 'Decision not found.'}
+        </div>
+      </DashboardLayout>
     );
   }
 
-  if (!status || !isDraft) {
-    return (
-      <Layout>
-        <ProtectedRoute>
-          <div className="flex h-full flex-col bg-gray-50">
-          <DecisionWorkbenchHeader
-            projectLabel={projectLabel}
-            status={status || '—'}
-            title={committedSnapshot?.title || 'Untitled decision'}
-            dirty={false}
-            lastSavedAt={committedSnapshot?.committedAt || null}
-            saving={false}
-            committing={false}
-            deleting={deleting}
-            onTitleChange={() => null}
-            onSave={() => null}
-            onCommit={() => null}
-            onDelete={handleDelete}
-            mode="readOnly"
-            onBack={() => router.push('/decisions')}
-          />
-            {committedSnapshot ? (
-              <>
-                <DecisionDetailView
-                  decision={committedSnapshot}
-                  projectId={projectIdValue}
-                  onApprove={handleApprove}
-                  onApproveRequest={handleOpenApproveModal}
-                  approving={approving}
-                />
-                <DecisionApproveConfirmationModal
-                  isOpen={approveModalOpen}
-                  onClose={() => setApproveModalOpen(false)}
-                  onConfirm={handleConfirmApprove}
-                  decision={committedSnapshot}
-                  confirmations={approveConfirmations}
-                  onToggleConfirmation={(key) =>
-                    setApproveConfirmations((prev) => ({ ...prev, [key]: !prev[key] }))
-                  }
-                  confirming={approving}
-                />
-                <ConfirmModal
-                  isOpen={deleteConfirmOpen}
-                  onClose={() => setDeleteConfirmOpen(false)}
-                  onConfirm={confirmDelete}
-                  title="Delete decision"
-                  message={`Are you sure you want to delete decision "${title || committedSnapshot?.title || 'Untitled'}"? This action cannot be undone.`}
-                  confirmText="Delete"
-                  cancelText="Cancel"
-                  type="danger"
-                  loading={deleting}
-                />
-              </>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-sm text-gray-500">Decision not available.</div>
-              </div>
-            )}
-          </div>
-        </ProtectedRoute>
-      </Layout>
-    );
-  }
+  const archivedClass = status === 'ARCHIVED' ? 'opacity-60' : '';
+
+  const actionBar = (
+    <DecisionFSMActionBar
+      status={status}
+      canEdit={canEdit}
+      canApproveOrReview={canApproveOrReview}
+      committing={busy.commit}
+      approving={busy.approve}
+      archiving={busy.archive}
+      onDelete={() => setDeleteOpen(true)}
+      onSaveDraft={performSaveDraft}
+      onCommit={() => setCommitOpen(true)}
+      onApprove={() => setApproveOpen(true)}
+      onArchive={() => setArchiveOpen(true)}
+      onAddReview={() => setReviewOpen(true)}
+      onPromoteToDraft={performPromoteToDraft}
+    />
+  );
 
   return (
-    <Layout>
-      <ProtectedRoute>
-        <div className="flex h-full flex-col bg-gray-50 relative">
-          <DecisionWorkbenchHeader
-            projectLabel={projectLabel}
-            status={status}
+    <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+      <div className={`bg-gray-50 ${archivedClass}`}>
+        <div className="mx-auto max-w-[1440px] px-6 py-4">
+          <DecisionDetailHeader
+            projectId={projectId}
+            projectName={activeProject?.name}
+            projectSeq={projectSeq}
             title={title}
-            dirty={dirty}
-            lastSavedAt={lastSavedAt}
-            saving={saving}
-            committing={committing}
-            deleting={deleting}
-            onTitleChange={handleTitleChange}
+            status={status}
+            riskLevel={riskLevel}
+            createdByAgent={createdByAgent}
+            editable={editable}
             onTitleSave={handleTitleSave}
-            onSave={handleSaveDraft}
-            onCommit={handleOpenCommitModal}
-            onDelete={handleDelete}
-            onBack={() => router.push('/decisions')}
-            titleError={errors.title}
-            focusMode={focusMode}
+            actionBar={actionBar}
           />
-          <div className="relative flex min-h-0 flex-1">
-            {focusMode && (
-              <div
-                className="pointer-events-none absolute inset-0 z-[10] bg-black/50"
-                aria-hidden="true"
+
+          {status === 'ARCHIVED' && (
+            <div className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600">
+              This decision has been archived. History, reviews, and snapshot are preserved but no further changes can be made.
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_360px]">
+            <main className="space-y-5">
+              <DecisionContextSection
+                value={contextSummary ?? ''}
+                editable={editable}
+                error={fieldErrors.contextSummary}
+                onSave={handleContextSave}
               />
-            )}
-            <div className="relative z-[11] flex min-h-0 flex-1">
-            <div
-              id="decision-field-signals"
-              className={`h-full w-[24%] min-w-[240px] max-w-[340px] transition-all ${
-                focusMode && errors.signals
-                  ? 'relative z-[20] rounded-lg bg-white ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.45)]'
-                  : ''
-              }`}
-            >
-              <SignalsPanel decisionId={decisionId} projectId={projectIdValue} mode="edit" />
-            </div>
-            <div className={`h-full flex-1 min-w-0 bg-gray-50 ${focusMode ? 'relative z-[20]' : ''}`}>
-              <div className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto px-6 py-6">
-                <div data-testid="decision-draft-origin-meeting">
-                  <OriginMeetingBlock origin={originMeeting} />
-                </div>
-                <div className="min-h-0 flex-1">
-                  <DecisionWorkspaceEditor
-                    contextSummary={contextSummary}
-                    reasoning={reasoning}
-                    riskLevel={riskLevel as any}
-                    confidenceScore={confidenceScore}
-                    options={options}
-                    errors={errors}
-                    onChange={updateField}
-                    onOptionsChange={handleOptionsChange}
-                    focusMode={focusMode}
-                  />
-                </div>
-              </div>
-            </div>
-            </div>
+              <DecisionOptionsSection
+                value={options}
+                editable={editable}
+                error={fieldErrors.options}
+                selectedError={fieldErrors.selectedOption}
+                onSave={handleOptionsSave}
+              />
+              <DecisionReasoningSection
+                value={reasoning ?? ''}
+                editable={editable}
+                error={fieldErrors.reasoning}
+                onSave={handleReasoningSave}
+              />
+              <DecisionSignalsSection
+                signals={signals}
+                editable={editable}
+                topError={fieldErrors.signals}
+                onAdd={openSignalCreate}
+                onEdit={openSignalEdit}
+                onDelete={(s) => setPendingSignalDelete(s)}
+              />
+              <DecisionLinkedTasksSection
+                decisionId={decisionId}
+                projectId={projectId}
+                editable={status !== 'ARCHIVED' && canEdit}
+                onCreateTask={() => {
+                  const q = new URLSearchParams();
+                  if (projectId) q.set('project_id', String(projectId));
+                  q.set('link_decision_id', String(decisionId));
+                  router.push(`/tasks/new?${q.toString()}`);
+                }}
+              />
+              {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (
+                <DecisionExecutionSummarySection signals={signals} />
+              )}
+              {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (
+                <DecisionReviewsSection
+                  reviews={reviews}
+                  canAddReview={status !== 'ARCHIVED' && canApproveOrReview}
+                  onAddReview={() => setReviewOpen(true)}
+                />
+              )}
+            </main>
+
+            <aside className="space-y-5">
+              {editable && (
+                <DecisionCommitChecklistAside
+                  contextSummary={contextSummary ?? ''}
+                  options={options}
+                  reasoning={reasoning ?? ''}
+                  signals={signals}
+                  riskLevel={riskLevel}
+                  confidenceScore={confidenceScore}
+                  onJump={(id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-[#3CCED7]', 'ring-offset-2', 'rounded-md');
+                    setTimeout(() => {
+                      el.classList.remove('ring-2', 'ring-[#3CCED7]', 'ring-offset-2', 'rounded-md');
+                    }, 1500);
+                  }}
+                />
+              )}
+              <div id="decision-section-properties" />
+              <DecisionPropertiesAside
+                status={status}
+                riskLevel={riskLevel}
+                confidenceScore={confidenceScore}
+                plannedDecisionDate={plannedDecisionDate}
+                committedAt={committed?.committedAt ?? null}
+                approvedAt={committed?.approvedAt ?? null}
+                authorId={committed?.createdBy ?? null}
+                approvedById={committed?.approvedBy ?? null}
+                members={members}
+                editable={editable}
+                errors={{
+                  risk: fieldErrors.riskLevel,
+                  confidence: fieldErrors.confidenceScore,
+                }}
+                onRiskChange={handleRiskChange}
+                onConfidenceChange={handleConfidenceChange}
+                onPlannedDateChange={handlePlannedDateChange}
+              />
+              <DecisionOriginMeetingBlock origin={originMeeting as any} projectId={projectId} />
+              <DecisionConnectionsAside
+                decisionId={decisionId}
+                projectId={projectId}
+                mySeq={projectSeq ?? null}
+              />
+              {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (
+                <DecisionActivityAside transitions={stateTransitions} />
+              )}
+              {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (
+                <DecisionSnapshotAside
+                  snapshot={(commitRecord as any)?.validation_snapshot ?? null}
+                  committedAt={(commitRecord as any)?.committedAt ?? committed?.committedAt ?? null}
+                />
+              )}
+            </aside>
           </div>
         </div>
-        <DecisionCommitConfirmationModal
-          isOpen={commitModalOpen}
-          onClose={() => setCommitModalOpen(false)}
-          onConfirm={handleConfirmCommit}
-          loading={loadingCommitDetails}
-          signals={commitSignals}
-          contextSummary={contextSummary}
-          reasoning={reasoning}
-          options={options}
-          riskLevel={riskLevel}
-          confidenceScore={confidenceScore}
-          confirmations={commitConfirmations}
-          onToggleConfirmation={(key) =>
-            setCommitConfirmations((prev) => ({ ...prev, [key]: !prev[key] }))
-          }
-          confirming={committing}
-        />
-        <DecisionApproveConfirmationModal
-          isOpen={approveModalOpen}
-          onClose={() => setApproveModalOpen(false)}
-          onConfirm={handleConfirmApprove}
-          decision={committedSnapshot}
-          confirmations={approveConfirmations}
-          onToggleConfirmation={(key) =>
-            setApproveConfirmations((prev) => ({ ...prev, [key]: !prev[key] }))
-          }
-          confirming={approving}
-        />
-        <ConfirmModal
-          isOpen={deleteConfirmOpen}
-          onClose={() => setDeleteConfirmOpen(false)}
-          onConfirm={confirmDelete}
-          title="Delete decision"
-          message={`Are you sure you want to delete decision "${title || committedSnapshot?.title || 'Untitled'}"? This action cannot be undone.`}
-          confirmText="Delete"
-          cancelText="Cancel"
-          type="danger"
-          loading={deleting}
-        />
-      </ProtectedRoute>
-    </Layout>
-  );
-};
+      </div>
 
-export default DecisionPage;
+      <DecisionCommitDialog
+        open={commitOpen}
+        onOpenChange={setCommitOpen}
+        riskLevel={riskLevel}
+        onConfirm={performCommit}
+        onReviewInPage={handleReviewInPage}
+      />
+      <DecisionApproveDialog
+        open={approveOpen}
+        onOpenChange={setApproveOpen}
+        onConfirm={performApprove}
+      />
+      <DecisionArchiveDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        onConfirm={performArchive}
+      />
+      <DecisionReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        onConfirm={performAddReview}
+      />
+      <DecisionSignalDialog
+        open={signalDialogOpen}
+        mode={signalEdit?.id ? 'edit' : 'create'}
+        initial={signalEdit}
+        onOpenChange={setSignalDialogOpen}
+        onSubmit={handleSignalSubmit}
+      />
+      <ConfirmDialog
+        open={!!pendingSignalDelete}
+        onOpenChange={(v) => {
+          if (!v) setPendingSignalDelete(null);
+        }}
+        title="Delete signal"
+        description="This removes the signal from the decision. This action cannot be undone."
+        destructive
+        busy={signalDeleting}
+        confirmLabel="Delete signal"
+        onConfirm={handleSignalDelete}
+      />
+      <DecisionDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={title}
+        busy={deleting}
+        onConfirm={performDelete}
+      />
+    </DashboardLayout>
+  );
+}
+
+export default function DecisionDetailPage() {
+  return (
+    <ProtectedRoute>
+      <DecisionDetailContent />
+    </ProtectedRoute>
+  );
+}

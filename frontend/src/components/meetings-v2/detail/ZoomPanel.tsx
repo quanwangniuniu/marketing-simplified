@@ -41,7 +41,7 @@ export default function ZoomPanel({
           <p className="text-xs text-gray-500">
             Connect Zoom in{' '}
             <Link
-              href="/integrations-v2"
+              href="/integrations"
               className="inline-flex items-center gap-1 font-medium text-[#3CCED7] hover:underline"
             >
               Integrations

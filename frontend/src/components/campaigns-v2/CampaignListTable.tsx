@@ -102,7 +102,7 @@ export default function CampaignListTable({
                 <tr
                   key={c.id}
                   className="cursor-pointer transition hover:bg-gray-50/80"
-                  onClick={() => (onRowClick ? onRowClick(c) : router.push(`/campaigns-v2/${c.id}`))}
+                  onClick={() => (onRowClick ? onRowClick(c) : router.push(`/campaigns/${c.id}`))}
                 >
                   <td className="px-4 py-3">
                     <span className={`inline-block h-2 w-2 rounded-full ${dot}`} title={c.status} />

@@ -80,7 +80,7 @@ export default function BoardView({ tasks, loading, error }: BoardViewProps) {
 
                 <button
                   type="button"
-                  onClick={() => router.push(`/tasks-v2/new?type=${meta.value}`)}
+                  onClick={() => router.push(`/tasks/new?type=${meta.value}`)}
                   className="mt-1 inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-gray-200 bg-transparent px-3 py-2 text-xs text-gray-400 transition hover:border-[#3CCED7] hover:text-[#3CCED7]"
                 >
                   <Plus className="h-3 w-3" />

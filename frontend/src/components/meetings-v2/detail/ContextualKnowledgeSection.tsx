@@ -18,7 +18,7 @@ interface Props {
 }
 
 function rewriteToV2(link: KnowledgeNavigationLink, kind: 'decision' | 'task', projectId: number): string {
-  const base = kind === 'decision' ? '/decisions-v2' : '/tasks-v2';
+  const base = kind === 'decision' ? '/decisions' : '/tasks';
   return `${base}/${link.id}?project_id=${projectId}`;
 }
 
@@ -53,7 +53,7 @@ export default function ContextualKnowledgeSection({
       if (newId) {
         toast.success('Decision draft created');
         onMutated();
-        window.location.href = `/decisions-v2/${newId}?project_id=${projectId}`;
+        window.location.href = `/decisions/${newId}?project_id=${projectId}`;
       } else {
         toast.error('Decision created but no id returned.');
       }
@@ -84,7 +84,7 @@ export default function ContextualKnowledgeSection({
       if (newId) {
         toast.success('Task draft created');
         onMutated();
-        window.location.href = `/tasks-v2/${newId}?project_id=${projectId}`;
+        window.location.href = `/tasks/${newId}?project_id=${projectId}`;
       } else {
         toast.error('Task created but no id returned.');
       }

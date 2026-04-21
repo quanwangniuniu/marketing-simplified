@@ -87,7 +87,7 @@ export default function ListView({ tasks, loading, error }: ListViewProps) {
                   <tr
                     key={task.id}
                     className="cursor-pointer transition hover:bg-gray-50/80"
-                    onClick={() => router.push(`/tasks-v2/${task.id}`)}
+                    onClick={() => router.push(`/tasks/${task.id}`)}
                   >
                     <td className="px-4 py-3">
                       <span

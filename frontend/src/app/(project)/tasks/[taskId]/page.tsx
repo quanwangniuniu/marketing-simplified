@@ -1,146 +1,170 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { ChevronRight } from "lucide-react";
-import Layout from "@/components/layout/Layout";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import useAuth from "@/hooks/useAuth";
-import { useTaskData } from "@/hooks/useTaskData";
-import TaskDetail from "@/components/tasks/TaskDetail";
+import { useCallback, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { useParams, useRouter } from 'next/navigation';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import ChatFAB from '@/components/global-chat/ChatFAB';
+import { TaskAPI } from '@/lib/api/taskApi';
+import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+import type { TaskData } from '@/types/task';
 
-const buildIssueKey = (projectName?: string, taskId?: number) => {
-  const prefix = (projectName || "TASK")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 4)
-    .toUpperCase();
-  return `${prefix || "TASK"}-${taskId ?? "NEW"}`;
-};
+import TaskDetailHeader from '@/components/tasks-v2/detail/TaskDetailHeader';
+import TaskDescriptionBlock from '@/components/tasks-v2/detail/TaskDescriptionBlock';
+import TaskTypeBlock from '@/components/tasks-v2/detail/TaskTypeBlock';
+import TaskSubtasksBlock from '@/components/tasks-v2/detail/TaskSubtasksBlock';
+import TaskRelationsBlock from '@/components/tasks-v2/detail/TaskRelationsBlock';
+import TaskAttachmentsBlock from '@/components/tasks-v2/detail/TaskAttachmentsBlock';
+import TaskActivityBlock from '@/components/tasks-v2/detail/TaskActivityBlock';
+import PropertiesPanel from '@/components/tasks-v2/detail/PropertiesPanel';
+import ApprovalTimelinePanel from '@/components/tasks-v2/detail/ApprovalTimelinePanel';
 
-export default function TaskPage() {
+export default function TaskV2DetailPage() {
   const params = useParams();
-  const taskId = params?.taskId ? Number(params.taskId) : null;
   const router = useRouter();
-  const { user, logout } = useAuth();
-  const { currentTask, fetchTask, loading, error } = useTaskData();
+  const taskId = params?.taskId ? Number(params.taskId) : null;
+
+  const [task, setTask] = useState<TaskData | null>(null);
+  const [members, setMembers] = useState<ProjectMemberData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      const resp = await TaskAPI.getTask(taskId);
+      setTask(resp.data as TaskData);
+      setError(null);
+    } catch (e) {
+      setError((e as any)?.response?.data?.detail || 'Failed to load task');
+    } finally {
+      setLoading(false);
+    }
+  }, [taskId]);
 
   useEffect(() => {
-    if (!taskId) return;
-    fetchTask(taskId);
-  }, [taskId, fetchTask]);
+    void load();
+  }, [load]);
 
-  const layoutUser = user
-    ? {
-        name: user.username || user.email,
-        email: user.email,
-        role: user.roles && user.roles.length > 0 ? user.roles[0] : undefined,
-      }
-    : undefined;
+  useEffect(() => {
+    const pid = task?.project?.id ?? task?.project_id;
+    if (!pid) return;
+    let cancelled = false;
+    ProjectAPI.getProjectMembers(pid)
+      .then((rows) => {
+        if (!cancelled) setMembers(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [task?.project?.id, task?.project_id]);
 
-  const breadcrumb = useMemo(() => {
-    if (!currentTask) return null;
-    const projectName = currentTask.project?.name || "Project";
-    const projectId = currentTask.project?.id ?? currentTask.project_id;
-    const issueKey = buildIssueKey(currentTask.project?.name, currentTask.id);
-    return { projectName, projectId, issueKey };
-  }, [currentTask]);
+  const onMutated = useCallback(async () => {
+    setRefreshKey((k) => k + 1);
+    await load();
+  }, [load]);
 
-  const handleUserAction = async (action: string) => {
-    if (action === "logout") {
-      await logout();
+  const doDelete = async () => {
+    if (!task?.id) return;
+    try {
+      await TaskAPI.deleteTask(task.id);
+      router.push('/tasks');
+    } catch (e) {
+      toast.error((e as any)?.response?.data?.detail || 'Delete failed');
     }
   };
 
+  const readOnly = task?.status === 'LOCKED';
+
   return (
-    <ProtectedRoute>
-      <Layout user={layoutUser} onUserAction={handleUserAction} mainScrollMode="page">
-        <div className="min-h-screen bg-slate-50">
-          <div className="mx-auto max-w-[1680px] px-2 py-8 sm:px-3 lg:px-4">
-            <div className="mb-6 flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                <Link href="/tasks" className="hover:text-slate-700">
-                  Tasks
-                </Link>
-                <ChevronRight className="h-3.5 w-3.5" />
-                {breadcrumb?.projectId != null ? (
-                  <Link
-                    href={`/tasks?project_id=${breadcrumb.projectId}`}
-                    className="hover:text-slate-700 hover:underline"
-                  >
-                    {breadcrumb.projectName}
-                  </Link>
-                ) : (
-                  <span>{breadcrumb?.projectName || "Project"}</span>
+    <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+      <div className="bg-gray-50">
+        {loading && (
+          <div className="px-6 py-12 text-center text-sm text-gray-400">Loading task…</div>
+        )}
+        {error && !loading && (
+          <div className="px-6 py-12 text-center text-sm text-rose-600">{error}</div>
+        )}
+        {task && !loading && !error && (
+          <div className="mx-auto max-w-[1440px] px-6 py-4">
+            <TaskDetailHeader
+              task={task}
+              members={members}
+              readOnly={readOnly}
+              onUpdated={onMutated}
+              onMutated={onMutated}
+              onDelete={() => setConfirmDelete(true)}
+            />
+
+            <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
+              <div className="min-w-0 space-y-5">
+                <TaskDescriptionBlock task={task} readOnly={readOnly} onUpdated={onMutated} />
+                <TaskTypeBlock task={task} />
+                <TaskSubtasksBlock task={task} readOnly={readOnly} refreshKey={refreshKey} />
+                <TaskRelationsBlock task={task} readOnly={readOnly} />
+                {task.id && (
+                  <TaskAttachmentsBlock taskId={task.id} readOnly={readOnly} />
                 )}
-                <ChevronRight className="h-3.5 w-3.5" />
-                <span className="font-semibold text-slate-700">
-                  {breadcrumb?.issueKey || "TASK"}
-                </span>
+                {task.id && (
+                  <TaskActivityBlock
+                    taskId={task.id}
+                    readOnly={readOnly}
+                    refreshKey={refreshKey}
+                  />
+                )}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <Link
-                    href="/tasks"
-                    data-testid="back-to-tasks"
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+
+              <aside className="space-y-5">
+                <PropertiesPanel
+                  task={task}
+                  members={members}
+                  readOnly={readOnly}
+                  onUpdated={onMutated}
+                />
+                {task.id && (
+                  <ApprovalTimelinePanel taskId={task.id} refreshKey={refreshKey} />
+                )}
+              </aside>
+            </div>
+          </div>
+        )}
+
+        {confirmDelete && task && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+            <div className="w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-gray-100">
+              <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
+              <div className="p-5">
+                <h3 className="text-base font-semibold text-gray-900">Delete this task?</h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  &quot;{task.summary}&quot; will be permanently removed. This cannot be undone.
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 hover:ring-gray-300"
                   >
-                    Back to Tasks
-                  </Link>
-                  {currentTask ? (
-                    <span data-testid="task-id-label" className="text-sm text-slate-500">
-                      Task #{currentTask.id}
-                    </span>
-                  ) : null}
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={doDelete}
+                    className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-sm font-medium text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
-
-            {loading ? (
-              <div data-testid="task-detail-loading" className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600" />
-                <p className="mt-4 text-sm text-slate-500">Loading task...</p>
-              </div>
-            ) : error ? (
-              <div data-testid="task-detail-error" className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-                <p className="text-sm text-red-600">
-                  {error?.response?.data?.detail ||
-                    error?.response?.data?.message ||
-                    error?.message ||
-                    "Failed to load task."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => router.push("/tasks")}
-                  className="mt-4 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                >
-                  Back to Tasks
-                </button>
-              </div>
-            ) : currentTask ? (
-              <TaskDetail
-                task={currentTask}
-                currentUser={user || undefined}
-                onTaskUpdate={() => {
-                  if (taskId) fetchTask(taskId);
-                }}
-                onTaskDeleted={() => router.push("/tasks")}
-              />
-            ) : (
-              <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
-                <p className="text-sm text-slate-600">Task not found.</p>
-                <button
-                  type="button"
-                  onClick={() => router.push("/tasks")}
-                  className="mt-4 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                >
-                  Back to Tasks
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      </Layout>
-    </ProtectedRoute>
+        )}
+      </div>
+      <ChatFAB />
+    </DashboardLayout>
   );
 }

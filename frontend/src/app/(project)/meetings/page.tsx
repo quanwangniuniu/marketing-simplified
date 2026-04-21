@@ -1,173 +1,240 @@
 'use client';
 
-import { useEffect, useRef, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-
-import Layout from '@/components/layout/Layout';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import ChatFAB from '@/components/global-chat/ChatFAB';
 import { useProjectStore } from '@/lib/projectStore';
+import { MeetingsAPI } from '@/lib/api/meetingsApi';
+import type {
+  MeetingListItem,
+  MeetingListQueryParams,
+  PaginatedMeetingsList,
+} from '@/types/meeting';
+import {
+  DEFAULT_MEETING_SORT,
+  type MeetingSortKey,
+} from '@/lib/meetings/meetingSectionSort';
+import { splitMeetingRowsBySchedule } from '@/lib/meetings/meetingScheduleSplit';
+import MeetingsHeader from '@/components/meetings-v2/MeetingsHeader';
+import MeetingsFilterBar from '@/components/meetings-v2/MeetingsFilterBar';
+import MeetingsHubColumns from '@/components/meetings-v2/MeetingsHubColumns';
+import CreateMeetingDialog from '@/components/meetings-v2/CreateMeetingDialog';
+import {
+  EMPTY_ADVANCED_FILTER,
+  advancedFilterToParams,
+  type AdvancedFilterState,
+} from '@/components/meetings-v2/AdvancedFilterDialog';
 
-function parsePositiveProjectId(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.trunc(n);
+const DEFAULT_TYPE_FALLBACKS = [
+  'Planning',
+  'Client Meeting',
+  'Stand-up',
+  'Review & Retrospective',
+  'Deployment Sync',
+];
+
+function dedupeByKey<T>(rows: T[], key: (row: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const k = key(r);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
 }
 
-function MeetingsHubContent() {
-  const router = useRouter();
+export default function MeetingsV2Page() {
   const searchParams = useSearchParams();
-  const zoomToastShownRef = useRef(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasProjects, setHasProjects] = useState<boolean>(true);
+  const projectIdParam = searchParams?.get('project_id');
+  const activeProject = useProjectStore((s) => s.activeProject);
+  const projectId = projectIdParam
+    ? Number(projectIdParam)
+    : activeProject?.id ?? null;
 
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [typeSlug, setTypeSlug] = useState('');
+  const [tagSlug, setTagSlug] = useState('');
+  const [advanced, setAdvanced] = useState<AdvancedFilterState>(EMPTY_ADVANCED_FILTER);
+  const [incomingSort, setIncomingSort] = useState<MeetingSortKey>(DEFAULT_MEETING_SORT);
+  const [completedSort, setCompletedSort] = useState<MeetingSortKey>(DEFAULT_MEETING_SORT);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const [data, setData] = useState<PaginatedMeetingsList | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const searchTimerRef = useRef<number | null>(null);
   useEffect(() => {
-    if (searchParams.get('zoom_connected') === 'true' && !zoomToastShownRef.current) {
-      zoomToastShownRef.current = true;
-      toast.success('Zoom account connected successfully!');
-      const newParams = new URLSearchParams(searchParams.toString());
-      newParams.delete('zoom_connected');
-      const newUrl = newParams.toString()
-        ? `${window.location.pathname}?${newParams.toString()}`
-        : window.location.pathname;
-      router.replace(newUrl, { scroll: false });
-    }
-  }, [searchParams, router]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let redirected = false;
-
-    const redirectToMeetingsHome = async () => {
-      setLoading(true);
-      setError(null);
-      setHasProjects(true);
-
-      // Zustand `persist` rehydrates after first paint; wait briefly so we don't
-      // redirect twice (null → then activeProject) which can 404 / removeChild races.
-      await new Promise((r) => setTimeout(r, 0));
-      await new Promise((r) => requestAnimationFrame(r));
-      if (cancelled) return;
-
-      try {
-        const ap = useProjectStore.getState().activeProject;
-        const fromStore = parsePositiveProjectId(ap?.id);
-        if (fromStore != null) {
-          redirected = true;
-          router.replace(`/projects/${fromStore}/meetings`);
-          return;
-        }
-
-        const list = (await ProjectAPI.getProjects()) as ProjectData[];
-        const projects = Array.isArray(list) ? list : [];
-        if (!projects.length) {
-          setHasProjects(false);
-          return;
-        }
-
-        const firstId = parsePositiveProjectId(projects[0]?.id);
-        if (firstId == null) {
-          setError('Could not resolve a valid project id.');
-          return;
-        }
-
-        redirected = true;
-        router.replace(`/projects/${firstId}/meetings`);
-      } catch (err: unknown) {
-        console.error('Failed to load projects for meetings hub:', err);
-        const message =
-          (err as { response?: { data?: { error?: string; detail?: string } }; message?: string })
-            ?.response?.data?.error ||
-          (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-          (err as { message?: string })?.message ||
-          'Failed to load projects';
-        setError(String(message));
-      } finally {
-        if (!cancelled && !redirected) {
-          setLoading(false);
-        }
-      }
+    if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
     };
+  }, [search]);
 
-    void redirectToMeetingsHome();
+  const queryParams = useMemo<MeetingListQueryParams>(() => {
+    const base: MeetingListQueryParams = {
+      ordering: '-created_at',
+      page: 1,
+    };
+    if (debouncedSearch) base.q = debouncedSearch;
+    if (typeSlug) base.meeting_type = [typeSlug];
+    if (tagSlug) base.tag = tagSlug;
+    const advParams = advancedFilterToParams(advanced);
+    return { ...base, ...advParams };
+  }, [debouncedSearch, typeSlug, tagSlug, advanced]);
 
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    setLoading(true);
+    setErrorMessage(null);
+    MeetingsAPI.listMeetingsPaginated(projectId, queryParams)
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message =
+          (err as { response?: { data?: { detail?: string } }; message?: string })
+            ?.response?.data?.detail ||
+          (err as { message?: string })?.message ||
+          'Could not load meetings.';
+        setErrorMessage(message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [projectId, queryParams, refreshToken]);
 
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          <p className="mt-3 font-medium text-gray-900">Opening Meetings…</p>
-          <p className="text-sm text-gray-600">Redirecting to your project meetings page.</p>
-        </div>
-      );
-    }
+  const rows: MeetingListItem[] = data?.results ?? [];
 
-    if (error) {
-      return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
-          <AlertCircle className="h-6 w-6" />
-          <p className="mt-3 font-semibold">Could not load projects</p>
-          <p className="text-sm text-red-500">{error}</p>
-          <Link href="/projects" className="mt-4 text-sm font-medium text-blue-600 hover:underline">
-            Go to Projects
-          </Link>
-        </div>
-      );
-    }
-
-    if (!hasProjects) {
-      return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <p className="mt-3 font-medium text-gray-900">No projects available</p>
-          <p className="text-sm text-gray-600">Create or join a project to start using Meetings.</p>
-          <Link href="/projects" className="mt-4 text-sm font-medium text-blue-600 hover:underline">
-            Go to Projects
-          </Link>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  return (
-    <ProtectedRoute>
-      <Layout mainScrollMode="page">
-        <div className="mx-auto max-w-5xl px-4 py-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">Meetings</h1>
-              <p className="text-sm text-gray-600">Pick a project to open its Meeting Preparation Workspace.</p>
-            </div>
-          </div>
-
-          {renderContent()}
-        </div>
-      </Layout>
-    </ProtectedRoute>
+  const { incoming, completed } = useMemo(
+    () => splitMeetingRowsBySchedule(rows),
+    [rows],
   );
-}
 
-export default function MeetingsHubPage() {
+  const typeOptions = useMemo(() => {
+    const fromRows = rows
+      .map((r) => ({ slug: r.meeting_type_slug, label: r.meeting_type }))
+      .filter((t) => t.slug && t.label);
+    return dedupeByKey(fromRows, (t) => t.slug).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [rows]);
+
+  const typeSuggestions = useMemo(() => {
+    const labels = typeOptions.map((t) => t.label);
+    const merged = [...new Set([...labels, ...DEFAULT_TYPE_FALLBACKS])];
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [typeOptions]);
+
+  const tagOptions = useMemo(() => {
+    const fromRows = rows.flatMap((r) => r.tags ?? []);
+    return dedupeByKey(fromRows, (t) => t.slug).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [rows]);
+
+  const handleCreated = useCallback(() => {
+    setRefreshToken((n) => n + 1);
+  }, []);
+
+  const incomingLaneTotal = data?.incomingLaneTotal ?? 0;
+  const incomingResultCount = data?.incomingResultCount ?? 0;
+  const completedLaneTotal = data?.completedLaneTotal ?? 0;
+  const completedResultCount = data?.completedResultCount ?? 0;
+
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          <p className="mt-3 font-medium text-gray-900">Loading Meetings…</p>
-          <p className="text-sm text-gray-600">Preparing your meetings workspace.</p>
+    <DashboardLayout alerts={[]} upcomingMeetings={incoming}>
+      <div className="mx-auto w-full max-w-7xl px-6 py-8">
+        <MeetingsHeader
+          projectName={activeProject?.name}
+          onCreate={() => setCreateOpen(true)}
+        />
+
+        <div className="mt-5 space-y-5">
+          <MeetingsFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            typeSlug={typeSlug}
+            onTypeSlugChange={setTypeSlug}
+            typeOptions={typeOptions}
+            tagSlug={tagSlug}
+            onTagSlugChange={setTagSlug}
+            tagOptions={tagOptions}
+            advanced={advanced}
+            onAdvancedChange={setAdvanced}
+          />
+
+          {!projectId && (
+            <div className="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm ring-1 ring-gray-100">
+              Select a project to view meetings.
+            </div>
+          )}
+
+          {projectId && errorMessage && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {errorMessage}
+              <button
+                type="button"
+                onClick={() => setRefreshToken((n) => n + 1)}
+                className="ml-3 text-xs font-medium text-rose-700 underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {projectId && !errorMessage && (
+            <MeetingsHubColumns
+              incoming={incoming}
+              completed={completed}
+              incomingLaneTotal={incomingLaneTotal}
+              incomingResultCount={incomingResultCount}
+              completedLaneTotal={completedLaneTotal}
+              completedResultCount={completedResultCount}
+              incomingSort={incomingSort}
+              onIncomingSortChange={setIncomingSort}
+              completedSort={completedSort}
+              onCompletedSortChange={setCompletedSort}
+              projectId={projectId}
+              onCreate={() => setCreateOpen(true)}
+            />
+          )}
+
+          {projectId && loading && rows.length === 0 && !errorMessage && (
+            <div className="rounded-xl bg-white p-6 text-center text-xs text-gray-400 shadow-sm ring-1 ring-gray-100">
+              Loading meetings…
+            </div>
+          )}
         </div>
-      }
-    >
-      <MeetingsHubContent />
-    </Suspense>
+
+        {projectId && (
+          <CreateMeetingDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            projectId={projectId}
+            typeSuggestions={typeSuggestions}
+            onCreated={() => {
+              handleCreated();
+              toast.dismiss();
+            }}
+          />
+        )}
+      </div>
+      <ChatFAB />
+    </DashboardLayout>
   );
 }

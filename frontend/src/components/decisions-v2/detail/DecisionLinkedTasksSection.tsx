@@ -79,7 +79,7 @@ export default function DecisionLinkedTasksSection({
   }, [decisionId, refreshKey]);
 
   const linkHref = (taskId: number) =>
-    projectId ? `/tasks-v2/${taskId}?project_id=${projectId}` : `/tasks-v2/${taskId}`;
+    projectId ? `/tasks/${taskId}?project_id=${projectId}` : `/tasks/${taskId}`;
 
   return (
     <section

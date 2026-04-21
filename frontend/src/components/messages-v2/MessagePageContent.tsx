@@ -113,7 +113,7 @@ export default function MessagePageContent() {
       }
 
       const query = params.toString();
-      router.replace(query ? `/messages-v2?${query}` : '/messages-v2');
+      router.replace(query ? `/messages?${query}` : '/messages');
     },
     [router, searchParams]
   );
