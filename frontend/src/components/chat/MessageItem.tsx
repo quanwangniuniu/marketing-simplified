@@ -111,7 +111,7 @@ export default function MessageItem({
                 )}
                 {/* Message bubble with content */}
                 {hasContent && (
-                  <div className="inline-block w-fit max-w-full bg-blue-600 text-white rounded-lg px-4 py-2 break-words">
+                  <div className="inline-block w-fit max-w-full bg-[#A6E661] text-gray-900 rounded-lg px-4 py-2 break-words">
                     <p className="text-sm whitespace-pre-wrap">{messageContent}</p>
                   </div>
                 )}
