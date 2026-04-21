@@ -87,7 +87,7 @@ class ZoomCallbackView(APIView):
         state = request.query_params.get("state")
 
         if not state:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=invalid_state")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=invalid_state")
 
         try:
             payload = signing.loads(
@@ -96,17 +96,17 @@ class ZoomCallbackView(APIView):
                 max_age=ZOOM_OAUTH_STATE_MAX_AGE_SECONDS,
             )
         except signing.SignatureExpired:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=state_expired")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=state_expired")
         except signing.BadSignature:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=invalid_state")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=invalid_state")
 
         user_id = payload.get("user_id")
         if not user_id:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=invalid_state")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=invalid_state")
 
         if not code:
             error = request.query_params.get("error", "unknown")
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error={error}")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error={error}")
 
         User = get_user_model()
         try:
@@ -114,9 +114,9 @@ class ZoomCallbackView(APIView):
             token_data = exchange_code_for_token(code)
             save_token_for_user(user, token_data)
         except User.DoesNotExist:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=user_not_found")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=user_not_found")
         except Exception:
-            return redirect(f"{settings.FRONTEND_URL}/settings?zoom_error=token_exchange_failed")
+            return redirect(f"{settings.FRONTEND_URL}/integrations-v2?zoom_error=token_exchange_failed")
 
         return redirect(f"{settings.FRONTEND_URL}/meetings?zoom_connected=true")
 
