@@ -41,10 +41,10 @@ export default function ZoomPanel({
           <p className="text-xs text-gray-500">
             Connect Zoom in{' '}
             <Link
-              href="/settings"
+              href="/integrations-v2"
               className="inline-flex items-center gap-1 font-medium text-[#3CCED7] hover:underline"
             >
-              Settings
+              Integrations
               <SettingsIcon className="h-3 w-3" aria-hidden="true" />
             </Link>{' '}
             to create meetings directly from here.

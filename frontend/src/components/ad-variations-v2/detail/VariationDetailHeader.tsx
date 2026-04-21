@@ -110,8 +110,8 @@ export default function VariationDetailHeader({
           >
             <ArrowLeft className="h-3.5 w-3.5" />
           </Link>
-          <Link href="/dashboard" className="hover:text-gray-900">
-            Dashboard
+          <Link href="/overview" className="hover:text-gray-900">
+            Overview
           </Link>
           <ChevronRight className="h-3 w-3 text-gray-300" />
           <Link href="/variations-v2" className="hover:text-gray-900">

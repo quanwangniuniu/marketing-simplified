@@ -358,7 +358,7 @@ export default function CalendarPageContent() {
                   return;
                 }
                 if (meta.task_id) {
-                  router.push(`/tasks/${meta.task_id}`);
+                  router.push(`/tasks-v2/${meta.task_id}`);
                   return;
                 }
               }
