@@ -82,7 +82,7 @@ export default function RegisterPage() {
       setLoading(false);
       if (loginResult.success) {
         toast.success('Account created! Redirecting...');
-        router.replace('/campaigns');
+        router.replace('/overview');
         return;
       }
       setRegistrationSuccess(true);

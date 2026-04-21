@@ -42,7 +42,7 @@ function LoginPageContent() {
   useEffect(() => {
     if (!initialized || authLoading) return;
     if (isAuthenticated) {
-      router.replace('/campaigns');
+      router.replace('/overview');
     }
   }, [authLoading, initialized, isAuthenticated, router]);
 
