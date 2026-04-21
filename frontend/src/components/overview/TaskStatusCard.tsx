@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckSquare, AlertCircle } from 'lucide-react';
+import { CheckSquare, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { DashboardSummary } from '@/types/dashboard';
 
 interface TaskStatusCardProps {
@@ -27,16 +27,23 @@ export default function TaskStatusCard({ summary }: TaskStatusCardProps) {
       </CardHeader>
 
       <CardContent className="px-4 pb-4 space-y-3">
-        <div className="flex items-center gap-2 px-2 py-2 rounded-md bg-amber-50 border border-amber-100">
-          <AlertCircle className="w-4 h-4 text-amber-600" />
-          <div className="flex-1 text-xs text-gray-700">
-            <span className="font-semibold text-amber-700">{time_metrics.due_soon}</span>
-            <span className="ml-1">due soon</span>
+        {time_metrics.due_soon > 0 ? (
+          <div className="flex items-center gap-2 px-2 py-2 rounded-md bg-amber-50 border border-amber-100">
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+            <div className="flex-1 text-xs text-gray-700">
+              <span className="font-semibold text-amber-700">{time_metrics.due_soon}</span>
+              <span className="ml-1">due soon</span>
+            </div>
+            <button className="text-[11px] text-[#3CCED7] font-medium hover:underline">
+              Review →
+            </button>
           </div>
-          <button className="text-[11px] text-[#3CCED7] font-medium hover:underline">
-            Review →
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2 px-2 py-2 rounded-md bg-emerald-50 border border-emerald-100">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div className="flex-1 text-xs text-emerald-700">No tasks due soon</div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
           {status_overview.breakdown.map((row) => (
