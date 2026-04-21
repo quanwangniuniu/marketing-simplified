@@ -32,6 +32,7 @@ import {
 import { useProjectStore } from '@/lib/projectStore';
 import toast from 'react-hot-toast';
 import { CheckCircle2, Slack, Loader2, Filter } from 'lucide-react';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 interface SlackIntegrationModalProps {
     isOpen: boolean;
@@ -79,6 +80,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
     const [channels, setChannels] = useState<SlackChannel[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<number | 'ALL'>('ALL');
     const [loadingChannels, setLoadingChannels] = useState(false);
+    const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
     const slackContext: SlackRequestContext | undefined = activeProjectId
         ? { projectId: activeProjectId }
         : undefined;
@@ -278,7 +280,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
 
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-10 space-y-3">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                            <Loader2 className="w-8 h-8 animate-spin text-[#3CCED7]" />
                             <p className="text-sm text-gray-500">Loading details...</p>
                         </div>
                     ) : !connection?.can_manage_slack ? (
@@ -409,11 +411,7 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
                                     Team ID: {connection.slack_team_id}
                                 </p>
                                 <button
-                                    onClick={() => {
-                                        if (window.confirm('Are you sure you want to disconnect Slack?')) {
-                                            handleDisconnect();
-                                        }
-                                    }}
+                                    onClick={() => setDisconnectConfirmOpen(true)}
                                     className="text-sm text-red-600 hover:text-red-700 font-medium px-3 py-2 rounded hover:bg-red-50 transition-colors"
                                 >
                                     Disconnect Integration
@@ -423,6 +421,19 @@ export default function SlackIntegrationModal({ isOpen, onClose }: SlackIntegrat
                     )}
                 </DialogContent>
             </Dialog>
+            <ConfirmDialog
+                isOpen={disconnectConfirmOpen}
+                title="Disconnect Slack"
+                message="Are you sure you want to disconnect Slack? Notifications will stop and preferences will be preserved for reconnection."
+                type="danger"
+                confirmText="Disconnect"
+                cancelText="Cancel"
+                onConfirm={() => {
+                    setDisconnectConfirmOpen(false);
+                    handleDisconnect();
+                }}
+                onCancel={() => setDisconnectConfirmOpen(false)}
+            />
         </>
     );
 }

@@ -6,12 +6,22 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Megaphone, CheckSquare, GitBranch, Table2,
-  Calendar, Users, MessageSquare, Workflow, Clock, Settings,
+  Calendar, Users, MessageSquare, Workflow, Clock,
   Bot, ChevronsUpDown, ChevronDown, ChevronRight,
   Target, Mail, Notebook, Facebook, Video, Presentation,
+  User as UserIcon, CreditCard, Plug, LogOut,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/lib/authStore';
+import useAuth from '@/hooks/useAuth';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 const getInitials = (name?: string | null): string => {
   if (!name) return '?';
@@ -103,7 +113,6 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Workflows', href: '/workflows', icon: Workflow },
       { label: 'Timeline', href: '/timeline', icon: Clock },
-      { label: 'Settings', href: '/settings', icon: Settings },
     ],
   },
 ];
@@ -114,6 +123,7 @@ export default function DashboardSidebar() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const { projects, loading, fetchProjects } = useProjects();
   const user = useAuthStore((state) => state.user);
+  const { logout } = useAuth();
 
   const userDisplayName = useMemo(() => {
     if (!user) return null;
@@ -266,28 +276,77 @@ export default function DashboardSidebar() {
         ))}
       </nav>
 
-      {/* User card */}
-      <button
-        onClick={() => router.push('/profile')}
-        className="px-4 py-3 border-t border-gray-100 w-full hover:bg-gray-50 transition-colors text-left"
-        title="View profile"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
-            <span className="text-white text-sm font-semibold">
-              {getInitials(userDisplayName)}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-gray-900 truncate">
-              {userDisplayName || 'Not signed in'}
+      {/* User card — opens account menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="px-4 py-3 border-t border-gray-100 w-full hover:bg-gray-50 transition-colors text-left focus:outline-none focus:bg-gray-50"
+            title="Account menu"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
+                <span className="text-white text-sm font-semibold">
+                  {getInitials(userDisplayName)}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {userDisplayName || 'Not signed in'}
+                </div>
+                <div className="text-xs text-gray-400 truncate">
+                  {userRole || user?.email || 'User'}
+                </div>
+              </div>
+              <ChevronsUpDown className="w-4 h-4 text-gray-400 shrink-0" />
             </div>
-            <div className="text-xs text-gray-400 truncate">
-              {userRole || user?.email || 'User'}
-            </div>
-          </div>
-        </div>
-      </button>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top"
+          align="center"
+          sideOffset={6}
+          className="w-[223px] p-1"
+        >
+          {user?.email && (
+            <DropdownMenuLabel className="px-2 py-1 text-[11px] font-normal text-gray-500 truncate">
+              {user.email}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuSeparator className="my-1" />
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => router.push('/profile-v2')}
+          >
+            <UserIcon className="text-gray-500" />
+            <span>Settings</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => router.push('/subscription-v2')}
+          >
+            <CreditCard className="text-gray-500" />
+            <span>Subscription</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => router.push('/integrations-v2')}
+          >
+            <Plug className="text-gray-500" />
+            <span>Integrations</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator className="my-1" />
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5 text-red-600 focus:text-red-700 focus:bg-red-50"
+            onSelect={async () => {
+              await logout();
+              router.push('/login');
+            }}
+          >
+            <LogOut />
+            <span>Log out</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </aside>
   );
 }

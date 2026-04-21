@@ -57,7 +57,7 @@ export default function ZoomIntegrationModal({ isOpen, onClose }: ZoomIntegratio
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Video className="h-5 w-5 text-blue-600" />
+            <Video className="h-5 w-5 text-[#3CCED7]" />
             Zoom Integration
           </DialogTitle>
           <DialogDescription>
@@ -68,7 +68,7 @@ export default function ZoomIntegrationModal({ isOpen, onClose }: ZoomIntegratio
         <div className="mt-2">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
             </div>
           ) : connected ? (
             <div className="space-y-4">
@@ -104,7 +104,7 @@ export default function ZoomIntegrationModal({ isOpen, onClose }: ZoomIntegratio
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="w-full rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
               >
                 {connecting ? (
                   <span className="flex items-center justify-center gap-2">

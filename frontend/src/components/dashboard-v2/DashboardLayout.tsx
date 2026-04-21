@@ -78,6 +78,9 @@ const ROOT_PATHS = new Set([
   '/klaviyo-v2',
   '/notion-v2',
   '/messages-v2',
+  '/profile-v2',
+  '/subscription-v2',
+  '/integrations-v2',
 ]);
 
 export default function DashboardLayout({
