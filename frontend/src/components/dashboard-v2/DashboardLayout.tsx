@@ -43,6 +43,7 @@ const BREADCRUMB_ROOT: Record<string, string> = {
   klaviyo: 'Content',
   'klaviyo-v2': 'Content',
   notion: 'Content',
+  'notion-v2': 'Content',
   workflows: 'Tools',
   timeline: 'Tools',
   settings: 'Tools',
@@ -56,6 +57,7 @@ const BREADCRUMB_LEAF: Record<string, string> = {
   spreadsheet: 'Spreadsheets',
   'mailchimp-v2': 'Mailchimp',
   'klaviyo-v2': 'Klaviyo',
+  'notion-v2': 'Notion',
 };
 
 const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } => {
@@ -71,6 +73,7 @@ const ROOT_PATHS = new Set([
   '/select-project',
   '/mailchimp-v2',
   '/klaviyo-v2',
+  '/notion-v2',
 ]);
 
 export default function DashboardLayout({

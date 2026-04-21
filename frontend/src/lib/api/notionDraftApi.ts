@@ -89,6 +89,11 @@ export const NotionDraftAPI = {
     return response.data;
   },
 
+  restoreRevision: async (revisionId: number) => {
+    const response = await api.post(toQuery(`/revisions/${revisionId}/restore/`));
+    return response.data;
+  },
+
   // Media upload API
   uploadMedia: async (file: File, mediaType?: string, draftId?: number) => {
     const formData = new FormData();
