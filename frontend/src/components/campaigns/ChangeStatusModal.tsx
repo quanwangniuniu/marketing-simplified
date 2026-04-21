@@ -279,7 +279,7 @@ export default function ChangeStatusModal({
                       key={transition.value}
                       className={`flex items-start gap-3 p-3 border rounded-md cursor-pointer transition-colors ${
                         selectedTransition === transition.value
-                          ? 'border-blue-500 bg-blue-50'
+                          ? 'border-[#3CCED7] bg-[#3CCED7]/10'
                           : 'border-gray-200 hover:border-gray-300'
                       } ${!isValid ? 'opacity-60' : ''}`}
                     >
@@ -323,7 +323,7 @@ export default function ChangeStatusModal({
               value={statusNote}
               onChange={(e) => setStatusNote(e.target.value)}
               placeholder="Add a note explaining the reason for this status change..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] text-sm"
             />
           </div>
 

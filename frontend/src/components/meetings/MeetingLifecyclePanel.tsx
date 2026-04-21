@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-600 border-slate-300',
-  planned: 'bg-blue-100 text-blue-700 border-blue-300',
+  planned: 'bg-[#3CCED7]/15 text-[#1a9ba3] border-blue-300',
   in_progress: 'bg-yellow-100 text-yellow-700 border-yellow-300',
   completed: 'bg-green-100 text-green-700 border-green-300',
   archived: 'bg-gray-100 text-gray-500 border-gray-300',
@@ -83,7 +83,7 @@ export function MeetingLifecyclePanel({
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-gray-500">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+        <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" />
         Loading status...
       </div>
     );

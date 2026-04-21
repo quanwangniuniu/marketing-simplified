@@ -3663,7 +3663,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                           ref={(node) => registerBlockRef(block.id, node)}
                           contentEditable
                           suppressContentEditableWarning
-                          className={`w-full min-h-[1.5rem] focus:outline-none ${getBlockClassName(block.type)} relative z-10 [&_a]:text-[#3CCED7] [&_a]:underline [&_a:hover]:text-blue-800 ${
+                          className={`w-full min-h-[1.5rem] focus:outline-none ${getBlockClassName(block.type)} relative z-10 [&_a]:text-[#3CCED7] [&_a]:underline [&_a:hover]:text-[#1a9ba3] ${
                             block.type === 'table' ? 'border border-gray-200 rounded-md bg-white overflow-x-auto overflow-y-visible' : ''
                           }`}
                           data-block-id={block.id}

@@ -89,15 +89,15 @@ const PermissionCheckbox: React.FC<PermissionCheckboxProps> = ({
         <div className={`
           relative w-5 h-5 rounded border-2 transition-all duration-200
           ${isGranted 
-            ? 'bg-blue-600 border-blue-600' 
+            ? 'bg-[#3CCED7] border-[#3CCED7]' 
             : 'bg-white border-gray-300'
           }
           ${isActuallyDisabled
             ? 'opacity-50 cursor-not-allowed' 
-            : 'hover:border-blue-500 cursor-pointer group-hover:shadow-sm'
+            : 'hover:border-[#3CCED7] cursor-pointer group-hover:shadow-sm'
           }
           ${isChanged ? 'ring-2 ring-yellow-300 ring-offset-1' : ''}
-          peer-focus:ring-2 peer-focus:ring-blue-500 peer-focus:ring-offset-2
+          peer-focus:ring-2 peer-focus:ring-[#3CCED7] peer-focus:ring-offset-2
         `}>
           {/* Checkmark for selected state */}
           {isGranted && (
@@ -294,7 +294,7 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
         };
       case 'VIEW_ONLY':
         return {
-          color: 'bg-blue-100 text-blue-800',
+          color: 'bg-[#3CCED7]/15 text-[#1a9ba3]',
           description: 'View Only - Can only view permissions'
         };
       case 'NONE':
@@ -451,14 +451,14 @@ const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
 
       {/* Permission level warning */}
       {userPermissionLevel === 'VIEW_ONLY' && (
-        <div className="bg-blue-50 border-t border-blue-200 px-6 py-4">
+        <div className="bg-[#3CCED7]/10 border-t border-[#3CCED7]/30 px-6 py-4">
           <div className="flex items-center gap-3">
-            <Info className="h-5 w-5 text-blue-600" />
+            <Info className="h-5 w-5 text-[#3CCED7]" />
             <div>
-              <p className="text-sm font-medium text-blue-800">
+              <p className="text-sm font-medium text-[#1a9ba3]">
                 View Only Mode
               </p>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-sm text-[#1a9ba3] mt-1">
                 You are in view-only mode. You can see permissions but cannot make changes.
               </p>
             </div>

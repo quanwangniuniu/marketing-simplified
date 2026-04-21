@@ -78,14 +78,14 @@ export default function DesignPageLayout({
               <button
                 onClick={onSave}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Draft'}
               </button>
               <button
                 onClick={onPublish}
                 disabled={saving || !isReadyToPublish()}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] border border-transparent rounded-md hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2 disabled:opacity-50"
               >
                 {getPublishButtonText()}
               </button>
@@ -100,8 +100,8 @@ export default function DesignPageLayout({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <div className="w-8 h-8 rounded-full bg-[#3CCED7]/15 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-[#3CCED7]" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -113,10 +113,10 @@ export default function DesignPageLayout({
 
               <div className="flex items-center space-x-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  completenessPercentage > 0 ? 'bg-blue-100' : 'bg-gray-100'
+                  completenessPercentage > 0 ? 'bg-[#3CCED7]/15' : 'bg-gray-100'
                 }`}>
                   <svg className={`w-4 h-4 ${
-                    completenessPercentage > 0 ? 'text-blue-600' : 'text-gray-400'
+                    completenessPercentage > 0 ? 'text-[#3CCED7]' : 'text-gray-400'
                   }`} fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
@@ -150,7 +150,7 @@ export default function DesignPageLayout({
             <div className="flex items-center space-x-2">
               <div className="w-32 bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-[#3CCED7] h-2 rounded-full transition-all duration-300"
                   style={{ width: `${completenessPercentage}%` }}
                 />
               </div>

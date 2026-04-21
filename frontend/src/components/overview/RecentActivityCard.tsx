@@ -24,7 +24,7 @@ const eventIcon: Record<ActivityEvent['event_type'], typeof Plus> = {
 };
 
 const eventColor: Record<ActivityEvent['event_type'], string> = {
-  task_created: 'text-blue-500 bg-blue-50',
+  task_created: 'text-[#3CCED7] bg-[#3CCED7]/10',
   approved: 'text-emerald-500 bg-emerald-50',
   rejected: 'text-red-500 bg-red-50',
   commented: 'text-gray-500 bg-gray-100',

@@ -297,7 +297,7 @@ export default function TikTokSidebar({ onSelectAd, selectedAdId: selectedAdIdPr
     if (type.includes('VIDEO')) {
       return 'bg-purple-100 border-purple-300';
     } else if (type.includes('IMAGE')) {
-      return 'bg-blue-100 border-blue-300';
+      return 'bg-[#3CCED7]/15 border-blue-300';
     }
     return 'bg-gray-100 border-gray-300';
   };
@@ -363,7 +363,7 @@ export default function TikTokSidebar({ onSelectAd, selectedAdId: selectedAdIdPr
                           if (e.key === 'Escape') setRenamingGroup(null);
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="flex-1 px-2 py-1 text-sm border border-blue-500 rounded outline-none"
+                        className="flex-1 px-2 py-1 text-sm border border-[#3CCED7] rounded outline-none"
                         autoFocus
                       />
                     ) : (
@@ -396,7 +396,7 @@ export default function TikTokSidebar({ onSelectAd, selectedAdId: selectedAdIdPr
                         onClick={() => handleSelectAd(ad, group.id)}
                         className={`px-3 py-2 cursor-pointer flex items-center space-x-2 ${
                           selectedAdId === ad.id
-                            ? 'bg-blue-50 border-l-2 border-blue-500'
+                            ? 'bg-[#3CCED7]/10 border-l-2 border-[#3CCED7]'
                             : 'hover:bg-gray-50'
                         }`}
                       >
@@ -407,7 +407,7 @@ export default function TikTokSidebar({ onSelectAd, selectedAdId: selectedAdIdPr
                               V
                             </div>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-blue-600 font-semibold">
+                            <div className="w-full h-full flex items-center justify-center text-xs text-[#3CCED7] font-semibold">
                               I
                             </div>
                           )}

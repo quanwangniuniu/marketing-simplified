@@ -257,7 +257,7 @@ const SnapshotsSection = forwardRef<SnapshotsSectionHandle, SnapshotsSectionProp
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0">
-                        <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800">
+                        <span className="inline-flex items-center rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-2.5 py-1 text-xs font-medium text-[#1a9ba3]">
                           {snapshot.milestone_type_display}
                         </span>
                       </div>

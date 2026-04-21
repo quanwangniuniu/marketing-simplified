@@ -38,7 +38,7 @@ export function MeetingsSortMenu({
           className={cn(
             'inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 transition-colors',
             'hover:bg-slate-100 hover:text-slate-900',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]/30',
             disabled && 'pointer-events-none opacity-50',
           )}
           aria-label={`Sort ${ariaLabelContext}`}

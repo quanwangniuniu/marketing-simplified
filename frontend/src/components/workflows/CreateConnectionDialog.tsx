@@ -173,12 +173,12 @@ export default function CreateConnectionDialog({
         </div>
 
         {/* Info Banner */}
-        <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
+        <div className="px-6 py-3 bg-[#3CCED7]/10 border-b border-[#3CCED7]/20">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center mt-0.5">
+            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-[#3CCED7] flex items-center justify-center mt-0.5">
               <span className="text-white text-xs font-bold">i</span>
             </div>
-            <p className="text-sm text-blue-900">
+            <p className="text-sm text-[#0f757a]">
               To reuse a connection, edit the connection and select additional source nodes.
             </p>
           </div>
@@ -204,7 +204,7 @@ export default function CreateConnectionDialog({
                   <select
                     value={fromNodeId || ""}
                     onChange={(e) => setFromNodeId(Number(e.target.value) || null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   >
                     <option value="">Select source node</option>
                     {sourceNodes.map((node) => (
@@ -238,7 +238,7 @@ export default function CreateConnectionDialog({
                   <select
                     value={toNodeId || ""}
                     onChange={(e) => setToNodeId(Number(e.target.value) || null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   >
                     <option value="">Select destination node</option>
                     {destinationNodes.map((node) => (
@@ -261,7 +261,7 @@ export default function CreateConnectionDialog({
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="e.g., Start Work, Merge, Approve"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   Tip: Name your transition as an action people take to move an issue.
@@ -284,7 +284,7 @@ export default function CreateConnectionDialog({
           <button
             onClick={handleCreate}
             disabled={loading || !fromNodeId || !toNodeId || !customName.trim() || nodes.length === 0}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Creating..." : "Create"}
           </button>

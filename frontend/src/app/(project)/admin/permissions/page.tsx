@@ -261,7 +261,7 @@ const PermissionsPage: React.FC = () => {
       case 'LIMITED':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'VIEW_ONLY':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-[#3CCED7]/15 text-[#1a9ba3] border-[#3CCED7]/30';
       case 'NONE':
         return 'bg-gray-100 text-gray-800 border-gray-200';
       default:
@@ -324,12 +324,12 @@ const PermissionsPage: React.FC = () => {
         <div className="p-8">
           {/* user permission level */}
           {userPermissionLevel && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-[#3CCED7]/30 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-blue-600" />
-                    <h3 className="text-sm font-medium text-blue-900">
+                    <Shield className="h-5 w-5 text-[#3CCED7]" />
+                    <h3 className="text-sm font-medium text-[#0f757a]">
                       Current User Permission Level
                     </h3>
                   </div>
@@ -338,9 +338,9 @@ const PermissionsPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-blue-700">{userPermissionSummary.description}</p>
+                  <p className="text-sm text-[#1a9ba3]">{userPermissionSummary.description}</p>
                   {userPermissionLevel === 'LIMITED' && (
-                    <p className="text-xs text-blue-600 mt-1">
+                    <p className="text-xs text-[#3CCED7] mt-1">
                       Editable: {getEditableModules().join(', ')} modules, {getEditableActions().join(', ')} actions
                     </p>
                   )}
@@ -365,7 +365,7 @@ const PermissionsPage: React.FC = () => {
                   <button
                     onClick={handleSave}
                     disabled={saving || !hasUnsavedChanges}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-[#3CCED7] text-white rounded-lg hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {saving ? (
                       <>
@@ -535,7 +535,7 @@ const PermissionsPage: React.FC = () => {
                   <button
                     onClick={handleCopyPermissions}
                     disabled={!copyFromRole}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 bg-[#3CCED7] text-white rounded-lg hover:bg-[#2AB5BD] disabled:opacity-50"
                   >
                     Copy
                   </button>

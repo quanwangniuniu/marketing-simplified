@@ -32,7 +32,7 @@ export default function TimeMetricsCards({ metrics }: TimeMetricsCardsProps) {
       subtitle: 'in the last 7 days',
       icon: (
         <svg
-          className="w-6 h-6 text-blue-600"
+          className="w-6 h-6 text-[#3CCED7]"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -41,8 +41,8 @@ export default function TimeMetricsCards({ metrics }: TimeMetricsCardsProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       ),
-      bgColor: 'bg-blue-50',
-      textColor: 'text-blue-900',
+      bgColor: 'bg-[#3CCED7]/10',
+      textColor: 'text-[#0f757a]',
     },
     {
       label: 'created',

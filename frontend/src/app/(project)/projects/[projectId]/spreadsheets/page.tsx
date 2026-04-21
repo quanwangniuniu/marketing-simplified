@@ -197,7 +197,7 @@ export default function SpreadsheetsListPage() {
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
           <p className="mt-3 font-medium text-gray-900">Loading spreadsheets…</p>
           <p className="text-sm text-gray-600">Fetching spreadsheets from the backend.</p>
         </div>
@@ -293,8 +293,8 @@ export default function SpreadsheetsListPage() {
                   <h1 className="text-2xl font-semibold text-gray-900">
                     {project?.name ?? 'Project'}
                   </h1>
-                  <div className="mt-1 flex items-center gap-2 text-sm uppercase tracking-wide text-blue-700">
-                    <div className="h-6 w-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <div className="mt-1 flex items-center gap-2 text-sm uppercase tracking-wide text-[#1a9ba3]">
+                    <div className="h-6 w-6 rounded-lg bg-[#3CCED7]/15 text-[#1a9ba3] flex items-center justify-center">
                       <FileSpreadsheet className="h-4 w-4" />
                     </div>
                     Spreadsheets
@@ -333,7 +333,7 @@ export default function SpreadsheetsListPage() {
                   }}
                   placeholder="Search spreadsheets..."
                   disabled={!!error && !loading}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] disabled:bg-gray-100"
                 />
               </div>
             </div>
@@ -362,7 +362,7 @@ export default function SpreadsheetsListPage() {
                         {loading && spreadsheets.length === 0 ? (
                           <tr>
                             <td colSpan={3} className="px-4 py-12 text-center text-gray-500">
-                              <Loader2 className="inline h-5 w-5 animate-spin text-blue-600" />
+                              <Loader2 className="inline h-5 w-5 animate-spin text-[#3CCED7]" />
                             </td>
                           </tr>
                         ) : (

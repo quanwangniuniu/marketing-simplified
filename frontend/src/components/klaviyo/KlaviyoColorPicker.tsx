@@ -113,7 +113,7 @@ const KlaviyoColorPicker: React.FC<KlaviyoColorPickerProps> = ({
       onClick={() => handleSelect(color)}
       className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${
         selected
-          ? "border-blue-600 ring-2 ring-blue-200"
+          ? "border-[#3CCED7] ring-2 ring-blue-200"
           : "border-gray-200 hover:border-gray-300"
       }`}
       style={{ backgroundColor: color }}
@@ -127,7 +127,7 @@ const KlaviyoColorPicker: React.FC<KlaviyoColorPickerProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={onClose}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done
@@ -155,7 +155,7 @@ const KlaviyoColorPicker: React.FC<KlaviyoColorPickerProps> = ({
                 }
               }}
               placeholder="#000000"
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
               maxLength={7}
             />
             <button
@@ -186,7 +186,7 @@ const KlaviyoColorPicker: React.FC<KlaviyoColorPickerProps> = ({
                 }}
                 className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${
                   currentColor === item.color
-                    ? "border-blue-600 ring-2 ring-blue-200"
+                    ? "border-[#3CCED7] ring-2 ring-blue-200"
                     : (item as any).isAdd
                     ? "border-gray-300 bg-gray-50 hover:bg-gray-100"
                     : "border-gray-200 hover:border-gray-300"
@@ -211,7 +211,7 @@ const KlaviyoColorPicker: React.FC<KlaviyoColorPickerProps> = ({
             <span className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Brand kit
             </span>
-            <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            <button className="text-sm text-[#3CCED7] hover:text-[#1a9ba3] font-medium">
               Edit
             </button>
           </div>

@@ -1190,7 +1190,7 @@ const CanvasBlockRenderer: React.FC<CanvasBlockRendererProps> = ({
     case "Survey":
       return (
         <div className="py-4 border border-gray-200 rounded p-4 text-center text-gray-600">
-          <ListChecks className="h-8 w-8 mx-auto mb-2 text-blue-600" />
+          <ListChecks className="h-8 w-8 mx-auto mb-2 text-[#3CCED7]" />
           <p className="text-sm font-medium">{block.label}</p>
         </div>
       );

@@ -19,7 +19,7 @@ const TODO_STATUSES = new Set(['DRAFT', 'REJECTED', 'CANCELLED', 'TODO', 'OPEN',
 
 const TYPE_TONE_CLASSES: Record<string, string> = {
   task: 'bg-slate-100 text-slate-700',
-  budget: 'bg-blue-100 text-blue-700',
+  budget: 'bg-[#3CCED7]/15 text-[#1a9ba3]',
   asset: 'bg-indigo-100 text-indigo-700',
   retrospective: 'bg-purple-100 text-purple-700',
   report: 'bg-slate-100 text-slate-700',
@@ -159,10 +159,10 @@ const TaskRow = ({
       }}
     >
       {hoverPos === 'before' && (
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500 z-10" />
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#3CCED7] z-10" />
       )}
       {hoverPos === 'after' && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10" />
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#3CCED7] z-10" />
       )}
       <div className="flex items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 group">
         <button

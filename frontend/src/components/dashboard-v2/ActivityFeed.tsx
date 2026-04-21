@@ -12,7 +12,7 @@ const typeDot: Record<string, string> = {
   success: 'bg-emerald-500',
   error: 'bg-red-500',
   warning: 'bg-amber-500',
-  info: 'bg-blue-400',
+  info: 'bg-[#3CCED7]',
 };
 
 function formatTime(dateStr: string): string {

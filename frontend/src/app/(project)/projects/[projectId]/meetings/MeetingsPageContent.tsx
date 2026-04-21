@@ -792,7 +792,7 @@ function MeetingsPageInner() {
                         }
                         disabled={pageLoading || projectsForSelect.length === 0}
                         onChange={(e) => handleProjectSelect(e.target.value)}
-                        className="h-9 min-w-[10rem] max-w-[min(100%,20rem)] rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                        className="h-9 min-w-[10rem] max-w-[min(100%,20rem)] rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
                         aria-label="Select project for meetings"
                       >
                         {projectsForSelect.length > 0 ? (
@@ -814,7 +814,7 @@ function MeetingsPageInner() {
                           setRightPanelOpen(false);
                           setSelectedMeetingId(null);
                         }}
-                        className="h-9 rounded-md bg-blue-600 px-3 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+                        className="h-9 rounded-md bg-[#3CCED7] px-3 text-sm font-medium text-white shadow-sm hover:bg-[#2AB5BD]"
                       >
                         Create
                       </button>
@@ -834,7 +834,7 @@ function MeetingsPageInner() {
                         <p className="mt-1 text-sm text-red-700">{error}</p>
                         <Link
                           href="/projects"
-                          className="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline"
+                          className="mt-2 inline-block text-sm font-medium text-[#1a9ba3] hover:underline"
                         >
                           Go to Projects
                         </Link>
@@ -845,7 +845,7 @@ function MeetingsPageInner() {
 
                 {pageLoading ? (
                   <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-slate-500">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
                     <p className="mt-3 font-medium text-slate-900">Loading…</p>
                   </div>
                 ) : null}
@@ -875,7 +875,7 @@ function MeetingsPageInner() {
                             Title
                           </label>
                           <input
-                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/25"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="e.g. Weekly Planning"
@@ -887,7 +887,7 @@ function MeetingsPageInner() {
                             Meeting type
                           </label>
                           <select
-                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/25"
                             value={meetingType}
                             onChange={(e) => setMeetingType(e.target.value)}
                             aria-label="Meeting type"
@@ -907,7 +907,7 @@ function MeetingsPageInner() {
                           </label>
                           <textarea
                             rows={4}
-                            className="min-h-[120px] w-full resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-base leading-relaxed text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="min-h-[120px] w-full resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-base leading-relaxed text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/25"
                             value={objective}
                             onChange={(e) => setObjective(e.target.value)}
                             placeholder="What do you want to achieve in this meeting?"
@@ -945,7 +945,7 @@ function MeetingsPageInner() {
                         <button
                           type="submit"
                           disabled={creating}
-                          className="inline-flex min-h-[44px] min-w-[120px] items-center justify-center rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                          className="inline-flex min-h-[44px] min-w-[120px] items-center justify-center rounded-xl bg-[#3CCED7] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:bg-blue-300"
                         >
                           {creating ? (
                             <>
@@ -964,7 +964,7 @@ function MeetingsPageInner() {
                   </form>
                 ) : listLoading && rows.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 py-14">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-[#3CCED7]" />
                     <p className="mt-3 text-sm font-medium text-slate-700">
                       Loading meetings…
                     </p>
@@ -1137,7 +1137,7 @@ export default function ProjectMeetingsPage() {
         <ProtectedRoute>
           <Layout mainScrollMode="page">
             <div className="flex min-h-[40vh] items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#3CCED7]" />
             </div>
           </Layout>
         </ProtectedRoute>

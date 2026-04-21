@@ -1196,7 +1196,7 @@ export default function SpreadsheetDetailPage() {
           <div className="min-h-screen bg-gray-50">
             <div className="mx-auto max-w-7xl px-4 py-10">
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
                 <p className="mt-3 font-medium text-gray-900">Loading spreadsheet…</p>
                 <p className="text-sm text-gray-600">Fetching spreadsheet details from the backend.</p>
               </div>
@@ -1272,7 +1272,7 @@ export default function SpreadsheetDetailPage() {
                 <p className="text-sm text-gray-500">The spreadsheet you're looking for doesn't exist.</p>
                 <Link
                   href={`/projects/${projectId}/spreadsheets`}
-                  className="mt-4 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="mt-4 rounded-full bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2AB5BD]"
                 >
                   Back to Spreadsheets
                 </Link>
@@ -1323,14 +1323,14 @@ export default function SpreadsheetDetailPage() {
                               cancelRenameSpreadsheetTitle();
                             }
                           }}
-                          className="h-8 min-w-[12rem] max-w-md flex-1 rounded border border-gray-300 px-2 text-lg font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="h-8 min-w-[12rem] max-w-md flex-1 rounded border border-gray-300 px-2 text-lg font-medium text-gray-900 focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
                           autoFocus
                           disabled={renamingSpreadsheetSaving}
                         />
                         <button
                           type="button"
                           onClick={() => void handleRenameSpreadsheet()}
-                          className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                          className="rounded bg-[#3CCED7] px-2 py-1 text-xs font-semibold text-white hover:bg-[#2AB5BD] disabled:opacity-60"
                           disabled={renamingSpreadsheetSaving}
                         >
                           Rename
@@ -1373,7 +1373,7 @@ export default function SpreadsheetDetailPage() {
                       key={sheet.id}
                       className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                         isActive
-                          ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                          ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/10/50'
                           : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                       onClick={() => {
@@ -1398,14 +1398,14 @@ export default function SpreadsheetDetailPage() {
                                 cancelRenameSheet();
                               }
                             }}
-                            className="h-7 w-32 rounded border border-gray-300 px-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="h-7 w-32 rounded border border-gray-300 px-2 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
                             autoFocus
                             disabled={renaming}
                           />
                           <button
                             type="button"
                             onClick={() => handleRenameSheet(sheet.id, { name: renameValue })}
-                            className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            className="rounded bg-[#3CCED7] px-2 py-1 text-xs font-semibold text-white hover:bg-[#2AB5BD] disabled:opacity-60"
                             disabled={renaming}
                           >
                             Rename
@@ -1663,7 +1663,7 @@ export default function SpreadsheetDetailPage() {
                       setCreateSheetDefaultName(getNextSheetName(sheets));
                       setCreateSheetModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#3CCED7] rounded-lg hover:bg-[#2AB5BD] transition"
                   >
                     <Plus className="h-4 w-4" />
                     Create Sheet

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import PriorityIcon, { type PriorityValue } from '@/priority/PriorityIcon';
 
 interface LinkedTask {
   id: number;
@@ -131,7 +132,12 @@ export default function DecisionLinkedTasksSection({
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-500">
                     <span>#{task.id}</span>
                     {task.type && <span>· {task.type}</span>}
-                    {task.priority && <span>· {task.priority}</span>}
+                    {task.priority && (
+                      <span className="inline-flex items-center gap-1">
+                        ·
+                        <PriorityIcon priority={task.priority as PriorityValue} size="xs" showTooltip />
+                      </span>
+                    )}
                   </div>
                 </div>
                 {task.status && (

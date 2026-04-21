@@ -122,7 +122,7 @@ export default function CreateSheetModal({
                 value={formData.name}
                 onChange={handleInputChange}
                 placeholder="Enter sheet name"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] transition-colors ${
                   errors.name ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
                 disabled={loading}
@@ -154,7 +154,7 @@ export default function CreateSheetModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-70 disabled:cursor-not-allowed"
+                className="px-5 py-2 text-sm font-semibold text-white bg-[#3CCED7] rounded-lg hover:bg-[#2AB5BD] transition disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating...' : 'Create Sheet'}
               </button>

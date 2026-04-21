@@ -113,7 +113,7 @@ function SingleLinkPreview({ url, className = '' }: SingleLinkPreviewProps) {
         )}
         
         {/* Link indicator */}
-        <div className="flex items-center gap-1 text-xs text-blue-600 mt-2">
+        <div className="flex items-center gap-1 text-xs text-[#3CCED7] mt-2">
           <ExternalLink className="w-3 h-3" />
           <span className="truncate">{url}</span>
         </div>

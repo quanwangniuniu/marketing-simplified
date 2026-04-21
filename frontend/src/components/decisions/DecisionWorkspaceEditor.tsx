@@ -88,7 +88,7 @@ const DecisionWorkspaceEditor = ({
           value={contextSummary}
           onChange={(event) => onChange('contextSummary', event.target.value)}
           placeholder="Summarize the decision context and constraints."
-          className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+          className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-[#3CCED7] focus:outline-none"
         />
       </section>
 
@@ -120,7 +120,7 @@ const DecisionWorkspaceEditor = ({
                 type="radio"
                 checked={option.isSelected}
                 onChange={() => handleSelectOption(index)}
-                className="mt-1 h-4 w-4 text-blue-600"
+                className="mt-1 h-4 w-4 text-[#3CCED7]"
               />
               <input
                 type="text"
@@ -173,7 +173,7 @@ const DecisionWorkspaceEditor = ({
           value={reasoning}
           onChange={(event) => onChange('reasoning', event.target.value)}
           placeholder="Explain why the selected option is the right call."
-          className="min-h-[140px] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+          className="min-h-[140px] w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-[#3CCED7] focus:outline-none"
         />
       </section>
 

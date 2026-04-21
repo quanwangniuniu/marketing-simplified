@@ -94,13 +94,13 @@ export default function NotionDraftList({
                   }}
                   className={`w-full text-left py-1.5 px-3 transition-colors cursor-pointer flex items-center justify-between gap-2 ${
                     isSelected
-                      ? 'bg-blue-50 border-l-2 border-blue-500'
+                      ? 'bg-[#3CCED7]/10 border-l-2 border-[#3CCED7]'
                       : 'hover:bg-gray-100'
                   }`}
                 >
                   <p
                     className={`text-sm truncate min-w-0 max-w-full ${
-                      isSelected ? 'text-blue-600 font-medium' : 'text-gray-900'
+                      isSelected ? 'text-[#3CCED7] font-medium' : 'text-gray-900'
                     }`}
                   >
                     {draft.title || 'Untitled'}

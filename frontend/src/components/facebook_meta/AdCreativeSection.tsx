@@ -231,7 +231,7 @@ export default function AdCreativeSection({
                             />
                           )
                         ) : media.type === 'photo' ? (
-                          <div className="w-full h-full bg-blue-500 flex items-center justify-center">
+                          <div className="w-full h-full bg-[#3CCED7] flex items-center justify-center">
                             <span className="text-white text-xs font-bold">IMG</span>
                           </div>
                         ) : (
@@ -288,7 +288,7 @@ export default function AdCreativeSection({
           <div className="flex items-start space-x-3">
             <button
               onClick={() => onOptimizeCreativeChange(!optimizeCreative)}
-              className={`relative inline-flex h-6 w-11 items-center flex-shrink-0 rounded-full transition-colors ${optimizeCreative ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-11 items-center flex-shrink-0 rounded-full transition-colors ${optimizeCreative ? 'bg-[#3CCED7]' : 'bg-gray-200'
                 }`}
             >
               <span
@@ -298,11 +298,11 @@ export default function AdCreativeSection({
             </button>
             <div className="space-y-1">
               <span className="text-sm font-medium text-gray-900">
-                Optimise creative for each <span className="text-blue-600">person</span>
+                Optimise creative for each <span className="text-[#3CCED7]">person</span>
               </span>
               <p className="text-xs text-gray-600">
                 Vary your ad creative and destination based on each person's likelihood of responding.{' '}
-                <a href="#" className="text-blue-600 hover:underline">See possible enhancements</a>
+                <a href="#" className="text-[#3CCED7] hover:underline">See possible enhancements</a>
               </p>
             </div>
           </div>
@@ -333,7 +333,7 @@ export default function AdCreativeSection({
             <textarea
               value={primaryText}
               onChange={(e) => onPrimaryTextChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent resize-none"
               rows={3}
             />
           </div>
@@ -345,7 +345,7 @@ export default function AdCreativeSection({
                 type="checkbox"
                 checked={addWebsiteUrl}
                 onChange={(e) => onAddWebsiteUrlChange(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+                className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7] mt-0.5"
               />
               <div>
                 <span className="text-sm font-semibold text-gray-900">Add a website URL</span>
@@ -380,7 +380,7 @@ export default function AdCreativeSection({
               value={headline}
               onChange={(e) => onHeadlineChange(e.target.value)}
               placeholder="Write a short headline"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
             />
           </div>
 
@@ -408,7 +408,7 @@ export default function AdCreativeSection({
               value={description}
               onChange={(e) => onDescriptionChange(e.target.value)}
               placeholder="Include additional details"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
             />
           </div>
 
@@ -435,7 +435,7 @@ export default function AdCreativeSection({
                 value={websiteUrl}
                 onChange={(e) => onWebsiteUrlChange(e.target.value)}
                 placeholder="http://www.example.com/page"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
               />
               <p className="text-xs">Enter the website URL field for your ad.</p>
             </div>
@@ -451,7 +451,7 @@ export default function AdCreativeSection({
                 URL parameters have been moved to <strong>Tracking</strong> so that you can manage them in one place.
               </p>
               <div className="pt-2">
-                <a href="#" className="text-blue-600 hover:underline">Go to Tracking</a>
+                <a href="#" className="text-[#3CCED7] hover:underline">Go to Tracking</a>
               </div>
             </div>
           </div>
@@ -467,7 +467,7 @@ export default function AdCreativeSection({
               value={displayLink}
               onChange={(e) => onDisplayLinkChange(e.target.value)}
               placeholder="Enter the link that you want to show on your ad"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
             />
           </div>
 
@@ -488,7 +488,7 @@ export default function AdCreativeSection({
                 )}
               </div>
             </div>
-            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent">
               <option>Choose app</option>
             </select>
           </div>
@@ -515,7 +515,7 @@ export default function AdCreativeSection({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowCallToActionDropdown(!showCallToActionDropdown)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent flex items-center justify-between"
               >
                 <span className="text-gray-900">{callToAction}</span>
                 <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -546,7 +546,7 @@ export default function AdCreativeSection({
                             onCallToActionChange(e.target.value);
                             setShowCallToActionDropdown(false);
                           }}
-                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-3"
+                          className="w-4 h-4 text-[#3CCED7] border-gray-300 focus:ring-[#3CCED7] mr-3"
                         />
                         <span className={`text-sm ${callToAction === option ? 'text-gray-500' : 'text-gray-900'}`}>
                           {option}
@@ -560,7 +560,7 @@ export default function AdCreativeSection({
           </div>
 
           {/* Add Another Option */}
-          <button className="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+          <button className="flex items-center space-x-2 text-[#3CCED7] hover:text-[#1a9ba3]">
             <CirclePlus className="w-4 h-4" />
             <span className="text-sm">Add Another Option</span>
           </button>

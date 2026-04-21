@@ -267,7 +267,7 @@ export default function HomeSidebar({
     if (isLoading) {
       return (
         <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
         </div>
       );
     }
@@ -298,7 +298,7 @@ export default function HomeSidebar({
               className={[
                 'w-full h-10 rounded-lg border flex items-center justify-center',
                 chat.id === currentChatId
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
+                  ? 'bg-[#3CCED7]/10 border-blue-300 text-[#1a9ba3]'
                   : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50',
               ].join(' ')}
               title={chat.type === 'private' ? getPrivateChatDisplayName(chat) : chat.name || 'Group chat'}

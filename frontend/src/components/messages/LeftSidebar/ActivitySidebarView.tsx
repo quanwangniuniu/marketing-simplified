@@ -123,7 +123,7 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
   if (isLoading) {
     return (
       <div className="p-4">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
       </div>
     );
   }
@@ -171,7 +171,7 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
                           className={[
                             'w-full text-left rounded-lg border border-gray-200 bg-white px-3 py-2',
                             'hover:bg-gray-50 hover:border-gray-300',
-                            'focus:outline-none focus:ring-2 focus:ring-blue-500/40',
+                            'focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40',
                           ].join(' ')}
                           aria-label={`View details for ${ev.title || 'activity'}`}
                         >

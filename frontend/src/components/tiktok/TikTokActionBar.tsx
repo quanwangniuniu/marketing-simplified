@@ -19,7 +19,7 @@ const TikTokActionBar: React.FC<Props> = ({ onSave, isSaving, hasUnsaved, lastSa
           <div className="flex items-center space-x-4">
             {/* text button Save */}
             <button
-              className="px-2 py-1 text-blue-600 hover:text-blue-700 underline-offset-4 hover:underline"
+              className="px-2 py-1 text-[#3CCED7] hover:text-[#1a9ba3] underline-offset-4 hover:underline"
               onClick={onSave}
             >
               Save

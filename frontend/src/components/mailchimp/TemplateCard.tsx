@@ -85,10 +85,10 @@ export function TemplateCard({
       </div>
 
       {/* hover */}
-      <div className="absolute flex items-center justify-center top-0 left-0 h-[340px] w-[248px] rounded-xl border-2 border-blue-700 bg-white opacity-0 group-hover:opacity-90 transition-opacity duration-200">
+      <div className="absolute flex items-center justify-center top-0 left-0 h-[340px] w-[248px] rounded-xl border-2 border-[#2AB5BD] bg-white opacity-0 group-hover:opacity-90 transition-opacity duration-200">
         <div className="flex flex-col space-y-4 items-center">
           <button
-            className="rounded-md w-28 py-2 text-sm bg-blue-700 text-white disabled:bg-blue-400 disabled:cursor-not-allowed"
+            className="rounded-md w-28 py-2 text-sm bg-[#2AB5BD] text-white disabled:bg-[#3CCED7] disabled:cursor-not-allowed"
             onClick={handleApply}
             disabled={disabled}
           >

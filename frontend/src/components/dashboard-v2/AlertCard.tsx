@@ -13,7 +13,7 @@ interface AlertCardProps {
 const severityConfig = {
   critical: { color: 'bg-red-500', label: 'Critical', textColor: 'text-red-700', bgColor: 'bg-red-50' },
   warning: { color: 'bg-amber-500', label: 'Warning', textColor: 'text-amber-700', bgColor: 'bg-amber-50' },
-  info: { color: 'bg-blue-500', label: 'Info', textColor: 'text-blue-600', bgColor: 'bg-blue-50' },
+  info: { color: 'bg-[#3CCED7]', label: 'Info', textColor: 'text-[#3CCED7]', bgColor: 'bg-[#3CCED7]/10' },
 };
 
 export default function AlertCard({ alert, onAction }: AlertCardProps) {

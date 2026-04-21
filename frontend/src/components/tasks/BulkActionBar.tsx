@@ -335,11 +335,11 @@ const BulkActionBar = ({
             {isSubmitting && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-blue-700">Processing...</span>
-                  <span className="text-xs font-medium text-blue-700">{progress}%</span>
+                  <span className="text-xs font-medium text-[#1a9ba3]">Processing...</span>
+                  <span className="text-xs font-medium text-[#1a9ba3]">{progress}%</span>
                 </div>
-                <div className="w-full bg-blue-100 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-200 ease-out" style={{ width: `${progress}%` }} />
+                <div className="w-full bg-[#3CCED7]/15 rounded-full h-2">
+                  <div className="bg-[#3CCED7] h-2 rounded-full transition-all duration-200 ease-out" style={{ width: `${progress}%` }} />
                 </div>
               </div>
             )}

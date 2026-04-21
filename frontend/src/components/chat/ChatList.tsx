@@ -54,7 +54,7 @@ export default function ChatList({
       <div className="p-3 border-t border-gray-200 flex-shrink-0">
         <button
           onClick={onCreateChat}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          className="w-full bg-[#3CCED7] hover:bg-[#2AB5BD] text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
           New Chat

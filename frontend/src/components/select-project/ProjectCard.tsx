@@ -16,7 +16,7 @@ interface ProjectCardProps {
 }
 
 const platformColors: Record<string, string> = {
-  meta: 'bg-blue-500',
+  meta: 'bg-[#3CCED7]',
   google_ads: 'bg-red-500',
   google: 'bg-red-500',
   tiktok: 'bg-gray-900',

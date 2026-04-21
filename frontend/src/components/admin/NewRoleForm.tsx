@@ -88,11 +88,11 @@ const NewRoleForm: React.FC<NewRoleFormProps> = ({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6">
       {/* Organization Info (if provided) */}
       {organizationId && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
+        <div className="p-3 bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-lg">
+          <p className="text-sm text-[#1a9ba3]">
             <span className="font-semibold">Organization ID:</span> {organizationId}
           </p>
-          <p className="text-xs text-blue-600 mt-1">
+          <p className="text-xs text-[#3CCED7] mt-1">
             This role will be associated with the selected organization.
           </p>
         </div>

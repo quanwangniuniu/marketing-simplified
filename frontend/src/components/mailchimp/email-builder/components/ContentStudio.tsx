@@ -109,7 +109,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                     onClick={() => setContentStudioSource(source.key)}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                       isActive
-                        ? "bg-white text-blue-700 border-r-2 border-blue-700"
+                        ? "bg-white text-[#1a9ba3] border-r-2 border-[#2AB5BD]"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -134,18 +134,18 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                   <input
                     type="text"
                     placeholder="Search files"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   />
                 </div>
 
                 {/* Upload Button with Dropdown */}
                 <div className="relative" ref={uploadDropdownRef}>
-                  <div className="inline-flex items-center rounded-lg overflow-hidden bg-blue-600">
+                  <div className="inline-flex items-center rounded-lg overflow-hidden bg-[#3CCED7]">
                     <button
                       onClick={() => {
                         setIsUploadDropdownOpen(false);
                       }}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#3CCED7] text-white text-sm font-medium hover:bg-[#2AB5BD] transition-colors"
                     >
                       <Upload className="h-4 w-4" />
                       Upload
@@ -154,7 +154,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                       onClick={() =>
                         setIsUploadDropdownOpen(!isUploadDropdownOpen)
                       }
-                      className="px-2 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors border-l border-blue-700"
+                      className="px-2 py-2 bg-[#3CCED7] text-white hover:bg-[#2AB5BD] transition-colors border-l border-[#2AB5BD]"
                     >
                       <ChevronDown className="h-4 w-4" />
                     </button>
@@ -178,9 +178,9 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
               </div>
 
               {/* Info Banner */}
-              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-800">
+              <div className="flex items-start gap-2 p-3 bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-lg">
+                <Info className="h-4 w-4 text-[#3CCED7] flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-[#1a9ba3]">
                   Any file uploaded to Mailchimp&apos;s Content Studio can be
                   accessed by anyone with the link. Do not upload sensitive or
                   private information.
@@ -189,15 +189,15 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
 
               {/* Filters and View */}
               <div className="flex items-center gap-4">
-                <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                   <option>Filter</option>
                 </select>
-                <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                   <option>Folder</option>
                 </select>
                 <div className="flex items-center gap-2 ml-auto">
                   <span className="text-sm text-gray-600">Sort by</span>
-                  <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
+                  <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                     <option>Newest first</option>
                     <option>Oldest first</option>
                     <option>Name A-Z</option>
@@ -234,7 +234,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
               {uploadedFiles.length === 0 ? (
                 contentStudioViewMode === "grid" ? (
                   <div className="grid grid-cols-4 gap-4">
-                    <div className="aspect-square bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors">
+                    <div className="aspect-square bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:border-[#3CCED7] transition-colors">
                       <div className="text-center">
                         <div className="h-16 w-16 mx-auto border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center mb-2">
                           <ImageIcon className="h-8 w-8 text-gray-400" />
@@ -299,9 +299,9 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                             setIsContentStudioOpen(false);
                           }
                         }}
-                        className={`aspect-square bg-gray-100 border rounded-lg overflow-hidden cursor-pointer hover:border-blue-500 transition-colors group relative ${
+                        className={`aspect-square bg-gray-100 border rounded-lg overflow-hidden cursor-pointer hover:border-[#3CCED7] transition-colors group relative ${
                           isSelected
-                            ? "border-blue-600 border-2"
+                            ? "border-[#3CCED7] border-2"
                             : "border-gray-200"
                         }`}
                       >
@@ -314,7 +314,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                           onError={() => {}}
                         />
                         {isSelected && (
-                          <div className="absolute top-2 right-2 bg-blue-600 rounded-full p-1">
+                          <div className="absolute top-2 right-2 bg-[#3CCED7] rounded-full p-1">
                             <Check className="h-4 w-4 text-white" />
                           </div>
                         )}
@@ -368,7 +368,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                         }}
                         className={`flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors ${
                           isSelected
-                            ? "border-blue-600 bg-blue-50"
+                            ? "border-[#3CCED7] bg-[#3CCED7]/10"
                             : "border-gray-200"
                         }`}
                       >
@@ -389,7 +389,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({
                           <p className="text-xs text-gray-500">{file.type}</p>
                         </div>
                         {isSelected && (
-                          <Check className="h-5 w-5 text-blue-600" />
+                          <Check className="h-5 w-5 text-[#3CCED7]" />
                         )}
                       </div>
                     );

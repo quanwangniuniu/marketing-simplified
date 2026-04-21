@@ -78,7 +78,7 @@ export default function ProjectMembersSection({
             data-testid="project-member-dm-row"
             data-user-id={String(member.user.id)}
           >
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 text-xs font-medium">
+            <div className="w-6 h-6 rounded-full bg-[#3CCED7]/15 text-[#3CCED7] flex items-center justify-center flex-shrink-0 text-xs font-medium">
               {displayName.charAt(0).toUpperCase()}
             </div>
             <span className="flex-1 min-w-0 truncate">{displayName}</span>

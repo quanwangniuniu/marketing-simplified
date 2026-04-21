@@ -64,7 +64,7 @@ export default function CampaignScoreSection({
                       On a 0-100-point scale, this represents how optimised your campaign is before publishing. Your score is calculated based on the point values of each recommendation that you take.
                     </p>
                     <p className="mb-3">
-                      Campaign score does not directly affect your account's <a href="#" className="text-blue-600 hover:underline">opportunity score</a>.
+                      Campaign score does not directly affect your account's <a href="#" className="text-[#3CCED7] hover:underline">opportunity score</a>.
                     </p>
                     
                     <h4 className="font-semibold mt-4 mb-2 text-gray-900">Points and potential outcomes</h4>
@@ -74,7 +74,7 @@ export default function CampaignScoreSection({
                     <p className="mb-3">
                       Potential outcomes are based on our experimentation and may vary across advertisers.
                     </p>
-                    <a href="#" className="text-blue-600 hover:underline">About campaign score</a>
+                    <a href="#" className="text-[#3CCED7] hover:underline">About campaign score</a>
                   </div>
                 )}
               </div>

@@ -47,7 +47,7 @@ export default function BaseBoardItem({
       return <StickyNoteItem {...commonProps} />;
     case "frame":
       // TODO: Implement FrameItem
-      return <div style={itemStyle} onClick={onSelect} className="border-2 border-blue-500 bg-blue-50" />;
+      return <div style={itemStyle} onClick={onSelect} className="border-2 border-[#3CCED7] bg-[#3CCED7]/10" />;
     case "line":
       // TODO: Implement LineItem
       return <div style={itemStyle} onClick={onSelect} className="border border-gray-400" />;
