@@ -344,7 +344,8 @@ workflow:
               "recommended_tasks": [
                 {
                   "type": "one of: optimization, alert, asset, execution, budget, report, scaling, communication, retrospective, experiment, platform_policy_update",
-                  "summary": "Task description",
+                  "summary": "Short task title (max 255 chars)",
+                  "description": "2-4 sentence actionable description: why this task was created, what specifically needs to be done, and what success looks like",
                   "priority": "one of: HIGH, MEDIUM, LOW"
                 }
               ]
