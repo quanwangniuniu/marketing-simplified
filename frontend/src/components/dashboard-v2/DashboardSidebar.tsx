@@ -82,8 +82,8 @@ const navGroups: NavGroup[] = [
         href: '#',
         icon: Mail,
         children: [
-          { label: 'Mailchimp', href: '/mailchimp', icon: Mail },
-          { label: 'Klaviyo', href: '/klaviyo', icon: Mail },
+          { label: 'Mailchimp', href: '/mailchimp-v2', icon: Mail },
+          { label: 'Klaviyo', href: '/klaviyo-v2', icon: Mail },
         ],
       },
       { label: 'Notion', href: '/notion', icon: Notebook },
