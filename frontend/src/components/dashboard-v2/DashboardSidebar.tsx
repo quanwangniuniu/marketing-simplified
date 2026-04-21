@@ -95,7 +95,7 @@ const navGroups: NavGroup[] = [
       { label: 'Meetings', href: '/meetings', icon: Users },
       { label: 'Calendar', href: '/calendar-v2', icon: Calendar },
       { label: 'Messages', href: '/messages-v2', icon: MessageSquare },
-      { label: 'Miro', href: '/miro', icon: Presentation },
+      { label: 'Miro', href: '/miro-v2', icon: Presentation },
     ],
   },
   {
