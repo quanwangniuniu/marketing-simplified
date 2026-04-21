@@ -67,10 +67,10 @@ const navGroups: NavGroup[] = [
   {
     title: 'MANAGE',
     items: [
-      { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
+      { label: 'Campaigns', href: '/campaigns-v2', icon: Megaphone },
       { label: 'Tasks', href: '/tasks-v2', icon: CheckSquare },
       { label: 'Decisions', href: '/decisions-v2', icon: GitBranch },
-      { label: 'Spreadsheets', href: '/spreadsheet', icon: Table2 },
+      { label: 'Spreadsheets', href: '/spreadsheets-v2', icon: Table2 },
     ],
   },
   {
@@ -102,7 +102,7 @@ const navGroups: NavGroup[] = [
   {
     title: 'COLLABORATE',
     items: [
-      { label: 'Meetings', href: '/meetings', icon: Users },
+      { label: 'Meetings', href: '/meetings-v2', icon: Users },
       { label: 'Calendar', href: '/calendar-v2', icon: Calendar },
       { label: 'Messages', href: '/messages-v2', icon: MessageSquare },
       { label: 'Miro', href: '/miro-v2', icon: Presentation },
