@@ -22,7 +22,7 @@ import DraftEditor, {
 import MediaLibraryDialog from '@/components/ads-draft-v2/tiktok/MediaLibraryDialog';
 import WorkspaceSidebar from '@/components/ads-draft-v2/tiktok/WorkspaceSidebar';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import TiktokPreview from '@/components/tiktok/TiktokPreview';
 import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
 import {

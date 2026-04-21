@@ -8,7 +8,7 @@ import ProjectCard from '@/components/select-project/ProjectCard';
 import CreateProjectCard from '@/components/select-project/CreateProjectCard';
 import QuickCreateProjectModal from '@/components/select-project/QuickCreateProjectModal';
 import ChatFAB from '@/components/global-chat/ChatFAB';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import Modal from '@/components/ui/Modal';
 import { useProjects } from '@/hooks/useProjects';
 import { ProjectAPI, type ProjectInvitationData } from '@/lib/api/projectApi';

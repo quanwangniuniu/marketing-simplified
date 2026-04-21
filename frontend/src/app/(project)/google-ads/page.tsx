@@ -11,7 +11,7 @@ import AdTableV2 from '@/components/ads-draft-v2/google_ads/AdTableV2';
 import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
 import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
 import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useGoogleAdsData } from '@/hooks/useGoogleAdsData';
 import type { AdStatus, AdType } from '@/lib/api/googleAdsApi';
 

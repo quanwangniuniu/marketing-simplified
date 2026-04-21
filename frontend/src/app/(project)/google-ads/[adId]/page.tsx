@@ -12,7 +12,7 @@ import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
 import SharePreviewModal from '@/components/ads-draft-v2/SharePreviewModal';
 import AdDraftStatusPill from '@/components/ads-draft-v2/pills/AdDraftStatusPill';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ResponsiveDisplayAdForm from '@/components/google_ads/design/ResponsiveDisplayAdForm';
 import ResponsiveSearchAdForm from '@/components/google_ads/design/ResponsiveSearchAdForm';
 import VideoResponsiveAdForm from '@/components/google_ads/design/VideoResponsiveAdForm';

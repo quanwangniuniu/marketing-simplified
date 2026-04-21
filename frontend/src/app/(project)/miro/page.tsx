@@ -12,7 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import DashboardLayout from "@/components/dashboard-v2/DashboardLayout";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { miroApi, MiroBoard } from "@/lib/api/miroApi";
 import { ProjectAPI, ProjectData } from "@/lib/api/projectApi";

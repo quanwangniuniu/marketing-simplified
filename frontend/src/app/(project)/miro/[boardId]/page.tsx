@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import DashboardLayout from "@/components/dashboard-v2/DashboardLayout";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { miroApi, MiroBoard, BoardItem, UpdateBoardItemData } from "@/lib/api/miroApi";
 import { useBoardViewport, Viewport } from "@/components/miro-v2/hooks/useBoardViewport";

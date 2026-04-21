@@ -1,10 +1,10 @@
 'use client';
 
 import { Suspense } from 'react';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
-import IntegrationsPanel from '@/components/profile-v2/IntegrationsPanel';
+import IntegrationsPanel from '@/components/profile/IntegrationsPanel';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function IntegrationsV2Skeleton() {

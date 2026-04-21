@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { AlertCircle, FileSpreadsheet, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI } from '@/lib/api/projectApi';

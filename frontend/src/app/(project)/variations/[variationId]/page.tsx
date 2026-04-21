@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
 import { AdVariationAPI } from '@/lib/api/adVariationApi';
@@ -14,12 +14,12 @@ import type {
   VariationPerformanceEntry,
   VariationStatusHistory,
 } from '@/types/adVariation';
-import VariationDetailHeader from '@/components/ad-variations-v2/detail/VariationDetailHeader';
-import PreviewBlock from '@/components/ad-variations-v2/detail/PreviewBlock';
-import ComposerBlock from '@/components/ad-variations-v2/detail/ComposerBlock';
-import PerformanceBlock from '@/components/ad-variations-v2/detail/PerformanceBlock';
-import PropertiesAside from '@/components/ad-variations-v2/detail/PropertiesAside';
-import StatusHistoryAside from '@/components/ad-variations-v2/detail/StatusHistoryAside';
+import VariationDetailHeader from '@/components/ad-variations/detail/VariationDetailHeader';
+import PreviewBlock from '@/components/ad-variations/detail/PreviewBlock';
+import ComposerBlock from '@/components/ad-variations/detail/ComposerBlock';
+import PerformanceBlock from '@/components/ad-variations/detail/PerformanceBlock';
+import PropertiesAside from '@/components/ad-variations/detail/PropertiesAside';
+import StatusHistoryAside from '@/components/ad-variations/detail/StatusHistoryAside';
 
 export default function VariationDetailPage() {
   const params = useParams();
