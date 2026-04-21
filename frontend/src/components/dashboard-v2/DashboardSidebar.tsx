@@ -94,7 +94,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Meetings', href: '/meetings', icon: Users },
       { label: 'Calendar', href: '/calendar', icon: Calendar },
-      { label: 'Messages', href: '/messages', icon: MessageSquare },
+      { label: 'Messages', href: '/messages-v2', icon: MessageSquare },
       { label: 'Miro', href: '/miro', icon: Presentation },
     ],
   },

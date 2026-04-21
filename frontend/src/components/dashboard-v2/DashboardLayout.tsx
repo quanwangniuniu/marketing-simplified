@@ -17,6 +17,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   alerts?: AlertData[];
   upcomingMeetings?: MeetingListItem[];
+  hideRightPanel?: boolean;
 }
 
 const humanize = (value: string): string =>
@@ -33,6 +34,7 @@ const BREADCRUMB_ROOT: Record<string, string> = {
   meetings: 'Collaborate',
   calendar: 'Collaborate',
   messages: 'Collaborate',
+  'messages-v2': 'Collaborate',
   miro: 'Collaborate',
   variations: 'Content',
   facebook_meta: 'Content',
@@ -58,6 +60,7 @@ const BREADCRUMB_LEAF: Record<string, string> = {
   'mailchimp-v2': 'Mailchimp',
   'klaviyo-v2': 'Klaviyo',
   'notion-v2': 'Notion',
+  'messages-v2': 'Messages',
 };
 
 const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } => {
@@ -74,12 +77,14 @@ const ROOT_PATHS = new Set([
   '/mailchimp-v2',
   '/klaviyo-v2',
   '/notion-v2',
+  '/messages-v2',
 ]);
 
 export default function DashboardLayout({
   children,
   alerts = [],
   upcomingMeetings,
+  hideRightPanel = false,
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const pathname = usePathname();
@@ -148,18 +153,20 @@ export default function DashboardLayout({
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell alerts={alerts} />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsPanelOpen(!isPanelOpen)}
-              className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700"
-            >
-              {isPanelOpen ? (
-                <><PanelRightClose className="w-4 h-4 mr-1" /> Hide Panel</>
-              ) : (
-                <><PanelRightOpen className="w-4 h-4 mr-1" /> Show Panel</>
-              )}
-            </Button>
+            {!hideRightPanel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPanelOpen(!isPanelOpen)}
+                className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700"
+              >
+                {isPanelOpen ? (
+                  <><PanelRightClose className="w-4 h-4 mr-1" /> Hide Panel</>
+                ) : (
+                  <><PanelRightOpen className="w-4 h-4 mr-1" /> Show Panel</>
+                )}
+              </Button>
+            )}
           </div>
         </header>
 
@@ -169,7 +176,9 @@ export default function DashboardLayout({
         </main>
       </div>
 
-      <UpcomingMeetingsPanel meetings={meetingsForPanel} isOpen={isPanelOpen} />
+      {!hideRightPanel && (
+        <UpcomingMeetingsPanel meetings={meetingsForPanel} isOpen={isPanelOpen} />
+      )}
     </div>
   );
 }
