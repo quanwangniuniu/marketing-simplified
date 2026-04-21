@@ -126,7 +126,7 @@ export default function SetPasswordPage() {
       }
 
       toast.success('Password set successfully! Redirecting...');
-      router.replace('/campaigns');
+      router.replace('/overview');
     } catch (error: any) {
       console.error('Set password error:', error);
       const errorData = error.response?.data;

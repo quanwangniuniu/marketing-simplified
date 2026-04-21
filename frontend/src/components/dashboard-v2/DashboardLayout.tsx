@@ -81,6 +81,8 @@ const ROOT_PATHS = new Set([
   '/profile-v2',
   '/subscription-v2',
   '/integrations-v2',
+  '/workflows',
+  '/timeline',
 ]);
 
 export default function DashboardLayout({

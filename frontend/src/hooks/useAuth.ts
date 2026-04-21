@@ -24,7 +24,7 @@ export default function useAuth() {
       const result = await storeLogin(credentials.email, credentials.password);
 
       if (result.success) {
-        router.push('/tasks');
+        router.push('/overview');
         return { success: true };
       }
 
@@ -83,7 +83,7 @@ export default function useAuth() {
       const loginResult = await storeLogin(userData.email, userData.password);
 
       if (loginResult.success) {
-        router.push('/campaigns');
+        router.push('/overview');
         return { success: true };
       }
 
