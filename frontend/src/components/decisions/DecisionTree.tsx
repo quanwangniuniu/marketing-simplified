@@ -998,7 +998,7 @@ const DecisionTree = ({
                   role="button"
                   tabIndex={0}
                   aria-label={`Drag to link decision ${node.title || node.id}`}
-                  className="absolute right-1 top-1/2 z-10 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-blue-500 bg-white shadow-sm hover:bg-blue-50"
+                  className="absolute right-1 top-1/2 z-10 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#3CCED7] bg-white shadow-sm hover:bg-[#3CCED7]/10"
                   style={{ right: 4 }}
                   onPointerDown={(e) => handleLinkHandlePointerDown(e, node)}
                   onPointerMove={handleLinkHandlePointerMove}
@@ -1191,7 +1191,7 @@ const DecisionTree = ({
                   href={(getReviewUrl ?? defaultGetReviewUrl)(popover.node.id, projectId)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex w-[80px] items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:border-blue-300"
+                  className="inline-flex w-[80px] items-center justify-center gap-1.5 rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-1.5 text-xs font-semibold text-[#1a9ba3] hover:border-blue-300"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Review

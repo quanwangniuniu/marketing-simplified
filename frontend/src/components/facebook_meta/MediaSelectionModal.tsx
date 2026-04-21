@@ -463,7 +463,7 @@ export default function MediaSelectionModal({
                 <span className="text-xs text-gray-500">Showing first {filteredPhotos.length} images</span>
                 <a
                   href="#"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-[#3CCED7] hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
                     handleTabChange('account');
@@ -512,7 +512,7 @@ export default function MediaSelectionModal({
                 <span className="text-xs text-gray-500">Showing first {filteredPhotos.filter(p => !p.isUploading).length} images</span>
                 <a
                   href="#"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-[#3CCED7] hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
                     handleTabChange('recommended');
@@ -664,7 +664,7 @@ export default function MediaSelectionModal({
               value={mediaUrl}
               onChange={(e) => setMediaUrl(e.target.value)}
               placeholder={`Paste the link of your ${mediaType} file`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
             />
           </div>
 
@@ -680,7 +680,7 @@ export default function MediaSelectionModal({
                 onChange={(e) => setMediaTitle(e.target.value)}
                 placeholder={`Name your ${mediaType} file`}
                 maxLength={50}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
               />
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
                 {mediaTitle.length}/50
@@ -690,7 +690,7 @@ export default function MediaSelectionModal({
 
           <button
             className={`w-full py-2 px-4 rounded-md text-sm font-medium transition-colors ${mediaUrl.trim()
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             disabled={!mediaUrl.trim()}
@@ -822,7 +822,7 @@ export default function MediaSelectionModal({
                 <button
                   onClick={() => handleTabChange('account')}
                   className={`flex items-center px-3 py-2 rounded-sm text-sm font-medium transition-colors relative ${activeTab === 'account'
-                    ? 'border-blue-600 text-blue-600 bg-blue-100 hover:bg-blue-200 font-semibold'
+                    ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/15 hover:bg-blue-200 font-semibold'
                     : 'border-transparent hover:bg-gray-100'
                     }`}
                 >
@@ -832,7 +832,7 @@ export default function MediaSelectionModal({
                 <button
                   onClick={() => handleTabChange('video-url')}
                   className={`flex items-center px-3 py-2 rounded-sm text-sm font-medium transition-colors ${activeTab === 'video-url'
-                    ? 'border-blue-600 text-blue-600 bg-blue-100 hover:bg-blue-200 font-semibold'
+                    ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/15 hover:bg-blue-200 font-semibold'
                     : 'border-transparent hover:bg-gray-100'
                     }`}
                 >
@@ -845,7 +845,7 @@ export default function MediaSelectionModal({
                 <button
                   onClick={() => handleTabChange('all')}
                   className={`flex items-center px-3 py-2 rounded-sm text-sm font-medium transition-colors relative ${activeTab === 'all'
-                    ? 'border-blue-600 text-blue-600 bg-blue-100 hover:bg-blue-200 font-semibold'
+                    ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/15 hover:bg-blue-200 font-semibold'
                     : 'border-transparent hover:bg-gray-100'
                     }`}
                 >
@@ -855,7 +855,7 @@ export default function MediaSelectionModal({
                 <button
                   onClick={() => handleTabChange('account')}
                   className={`flex items-center px-3 py-2 rounded-sm text-sm font-medium transition-colors ${activeTab === 'account'
-                    ? 'border-blue-600 text-blue-600 bg-blue-100 hover:bg-blue-200 font-semibold'
+                    ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/15 hover:bg-blue-200 font-semibold'
                     : 'border-transparent hover:bg-gray-100'
                     }`}
                 >
@@ -865,7 +865,7 @@ export default function MediaSelectionModal({
                 <button
                   onClick={() => handleTabChange('recommended')}
                   className={`flex items-center px-3 py-2 rounded-sm text-sm font-medium transition-colors ${activeTab === 'recommended'
-                    ? 'border-blue-600 text-blue-600 bg-blue-100 hover:bg-blue-200 font-semibold'
+                    ? 'border-[#3CCED7] text-[#3CCED7] bg-[#3CCED7]/15 hover:bg-blue-200 font-semibold'
                     : 'border-transparent hover:bg-gray-100'
                     }`}
                 >
@@ -890,7 +890,7 @@ export default function MediaSelectionModal({
                 disabled={disableTopControls || isUploading}
                 className={`w-full pl-10 ${searchQuery ? 'pr-10' : 'pr-4'} py-2 border border-gray-300 rounded-md text-sm ${(disableTopControls || isUploading)
                     ? 'bg-gray-100 cursor-not-allowed text-gray-400'
-                    : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                    : 'focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent'
                   }`}
               />
               {searchQuery && !disableTopControls && !isUploading && (
@@ -972,7 +972,7 @@ export default function MediaSelectionModal({
                 return (
                   <div
                     key={photoId}
-                    className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-500 flex-shrink-0"
+                    className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-[#3CCED7] flex-shrink-0"
                   >
                     <img
                       src={photo.url}
@@ -1002,7 +1002,7 @@ export default function MediaSelectionModal({
                 return (
                   <div
                     key={videoId}
-                    className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-500 flex-shrink-0"
+                    className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-[#3CCED7] flex-shrink-0"
                   >
                     <video
                       src={video.url}
@@ -1035,7 +1035,7 @@ export default function MediaSelectionModal({
               }
             }}
             disabled={selectedMedia.size === 0 || isUploading}
-            className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md transition-colors ${(selectedMedia.size === 0 || isUploading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+            className={`px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md transition-colors ${(selectedMedia.size === 0 || isUploading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2AB5BD]'}`}
           >
             Continue
           </button>

@@ -245,12 +245,12 @@ export default function PreviewModal({
                   key={s.value}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     surface === s.value
-                      ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                      ? 'text-[#3CCED7] border-b-2 border-[#3CCED7] pb-1'
                       : 'text-gray-700 hover:text-gray-900'
                   }`}
                   onClick={() => onSurfaceChange(s.value)}
                 >
-                  <span className={surface === s.value ? 'text-blue-600' : 'text-gray-400'}>
+                  <span className={surface === s.value ? 'text-[#3CCED7]' : 'text-gray-400'}>
                     {s.icon}
                   </span>
                   <span>{s.label}</span>

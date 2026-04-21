@@ -327,7 +327,7 @@ const TiktokCropImageDrawer: React.FC<TiktokCropImageDrawerProps> = ({
 
               {/* 裁剪框 */}
               <div
-                className="absolute border-2 border-blue-500 cursor-move"
+                className="absolute border-2 border-[#3CCED7] cursor-move"
                 style={{ left: cropRect.x, top: cropRect.y, width: cropRect.w, height: cropRect.h }}
                 onMouseDown={onMoveStart}
               >
@@ -335,10 +335,10 @@ const TiktokCropImageDrawer: React.FC<TiktokCropImageDrawerProps> = ({
                   {Array.from({length:9}).map((_,i)=>(<div key={i} className="border border-white/30"/>))}
                 </div>
                 {/* 拖拽手柄 */}
-                <div onMouseDown={onResizeStart('nw')} className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-blue-500 rounded-sm cursor-nwse-resize" />
-                <div onMouseDown={onResizeStart('ne')} className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-blue-500 rounded-sm cursor-nesw-resize" />
-                <div onMouseDown={onResizeStart('sw')} className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-blue-500 rounded-sm cursor-nesw-resize" />
-                <div onMouseDown={onResizeStart('se')} className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-blue-500 rounded-sm cursor-nwse-resize" />
+                <div onMouseDown={onResizeStart('nw')} className="absolute -top-1 -left-1 w-3 h-3 bg-white border border-[#3CCED7] rounded-sm cursor-nwse-resize" />
+                <div onMouseDown={onResizeStart('ne')} className="absolute -top-1 -right-1 w-3 h-3 bg-white border border-[#3CCED7] rounded-sm cursor-nesw-resize" />
+                <div onMouseDown={onResizeStart('sw')} className="absolute -bottom-1 -left-1 w-3 h-3 bg-white border border-[#3CCED7] rounded-sm cursor-nesw-resize" />
+                <div onMouseDown={onResizeStart('se')} className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border border-[#3CCED7] rounded-sm cursor-nwse-resize" />
               </div>
 
               {/* 遮罩（裁剪框外区域） */}

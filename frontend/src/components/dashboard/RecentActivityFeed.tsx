@@ -51,8 +51,8 @@ export default function RecentActivityFeed({ activities }: RecentActivityFeedPro
               <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
             </svg>
           ),
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-100',
+          color: 'text-[#3CCED7]',
+          bgColor: 'bg-[#3CCED7]/15',
           action: 'commented on',
         };
       case 'task_updated':
@@ -89,7 +89,7 @@ export default function RecentActivityFeed({ activities }: RecentActivityFeedPro
         return 'bg-green-100 text-green-800';
       case 'IN_PROGRESS':
       case 'UNDER_REVIEW':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-[#3CCED7]/15 text-[#1a9ba3]';
       case 'TO_DO':
       case 'DRAFT':
       case 'SUBMITTED':
@@ -122,7 +122,7 @@ export default function RecentActivityFeed({ activities }: RecentActivityFeedPro
   // Generate consistent color for user avatar
   const getUserColor = (username: string) => {
     const colors = [
-      'bg-blue-500',
+      'bg-[#3CCED7]',
       'bg-green-500',
       'bg-purple-500',
       'bg-pink-500',
@@ -163,7 +163,7 @@ export default function RecentActivityFeed({ activities }: RecentActivityFeedPro
                   <p className="text-sm leading-relaxed">
                     <Link
                       href={`/users/${activity.user.id}`}
-                      className="font-medium text-blue-600 hover:underline"
+                      className="font-medium text-[#3CCED7] hover:underline"
                     >
                       {activity.user.username}
                     </Link>
@@ -178,7 +178,7 @@ export default function RecentActivityFeed({ activities }: RecentActivityFeedPro
                     )}
                     <Link
                       href={`/tasks/${activity.task.id}`}
-                      className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                      className="text-[#3CCED7] hover:underline inline-flex items-center gap-1"
                     >
                       <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

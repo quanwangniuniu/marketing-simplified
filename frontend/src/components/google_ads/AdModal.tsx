@@ -163,7 +163,7 @@ const AdModal: React.FC<AdModalProps> = ({
                 id="name"
                 value={formData.name || ''}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] sm:text-sm ${
                   errors.name ? 'border-red-300' : 'border-gray-300'
                 }`}
                 placeholder="Enter ad name"
@@ -182,7 +182,7 @@ const AdModal: React.FC<AdModalProps> = ({
                 id="type"
                 value={formData.type || ''}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as AdType })}
-                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] sm:text-sm ${
                   errors.type ? 'border-red-300' : 'border-gray-300'
                 }`}
               >
@@ -205,7 +205,7 @@ const AdModal: React.FC<AdModalProps> = ({
                   id="status"
                   value={formData.status || 'DRAFT'}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] sm:text-sm"
                 >
                   <option value="DRAFT">Draft</option>
                   <option value="PENDING_REVIEW">Pending Review</option>
@@ -229,7 +229,7 @@ const AdModal: React.FC<AdModalProps> = ({
                   ...formData, 
                   final_urls: e.target.value.split(',').map(url => url.trim()).filter(url => url)
                 })}
-                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] sm:text-sm ${
                   errors.final_urls ? 'border-red-300' : 'border-gray-300'
                 }`}
                 placeholder="https://example.com/page"
@@ -245,14 +245,14 @@ const AdModal: React.FC<AdModalProps> = ({
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3CCED7]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] border border-transparent rounded-md hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3CCED7] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Saving...' : mode === 'create' ? 'Next' : 'Save Changes'}
               </button>

@@ -172,7 +172,7 @@ const SYSTEM_TEMPLATE_SIDEBAR: Record<
   MeetingTypeOptionValue,
   { Icon: typeof CalendarDays; tint: string }
 > = {
-  Planning: { Icon: CalendarDays, tint: 'bg-blue-100 text-blue-600' },
+  Planning: { Icon: CalendarDays, tint: 'bg-[#3CCED7]/15 text-[#3CCED7]' },
   'Client Meeting': { Icon: Handshake, tint: 'bg-amber-100 text-amber-800' },
   'Stand-up': { Icon: Sunrise, tint: 'bg-orange-100 text-orange-700' },
   'Review & Retrospective': { Icon: RefreshCw, tint: 'bg-violet-100 text-violet-700' },
@@ -181,7 +181,7 @@ const SYSTEM_TEMPLATE_SIDEBAR: Record<
 
 const PARTICIPANT_ROLE_OPTIONS = [
   { value: 'Meeting Owner', label: 'Meeting Owner', className: 'bg-purple-100 text-purple-800' },
-  { value: 'Participant', label: 'Participant', className: 'bg-blue-100 text-blue-800' },
+  { value: 'Participant', label: 'Participant', className: 'bg-[#3CCED7]/15 text-[#1a9ba3]' },
   { value: 'Reviewer', label: 'Reviewer', className: 'bg-orange-100 text-orange-800' },
   { value: 'Observer', label: 'Observer', className: 'bg-slate-100 text-slate-700' },
 ] as const;
@@ -204,7 +204,7 @@ function artifactModuleBadge(kind: ArtifactKind): { label: string; className: st
     case 'decision':
       return { label: 'Decision', className: 'bg-amber-100 text-amber-800' };
     case 'task':
-      return { label: 'Task', className: 'bg-blue-100 text-blue-800' };
+      return { label: 'Task', className: 'bg-[#3CCED7]/15 text-[#1a9ba3]' };
   }
 }
 
@@ -2068,7 +2068,7 @@ export default function MeetingWorkspacePage() {
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
           <p className="mt-3 font-medium text-gray-900">Loading meeting…</p>
           <p className="text-sm text-gray-600">Preparing workspace.</p>
         </div>
@@ -2085,7 +2085,7 @@ export default function MeetingWorkspacePage() {
             <button
               type="button"
               onClick={() => router.push(`/projects/${projectId}/meetings`)}
-              className="mt-4 text-sm font-medium text-blue-600 hover:underline"
+              className="mt-4 text-sm font-medium text-[#3CCED7] hover:underline"
             >
               Back to meetings
             </button>
@@ -2133,7 +2133,7 @@ export default function MeetingWorkspacePage() {
         >
           <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-12 text-left">
-              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+              <div className="rounded-xl border border-[#3CCED7]/20 bg-[#3CCED7]/10/50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-800">Meeting document</p>
@@ -2157,7 +2157,7 @@ export default function MeetingWorkspacePage() {
                 </div>
                 {hasVisibleText(documentPreviewHtml) ? (
                   <div
-                    className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-blue-100 bg-white p-3 text-xs text-gray-700 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+                    className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-[#3CCED7]/20 bg-white p-3 text-xs text-gray-700 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
                     dangerouslySetInnerHTML={{ __html: documentPreviewHtml }}
                   />
                 ) : null}
@@ -2453,7 +2453,7 @@ export default function MeetingWorkspacePage() {
                                 value={participantSearchText}
                                 onChange={(e) => setParticipantSearchText(e.currentTarget.value)}
                                 placeholder="Search by email"
-                                className="h-10 rounded-xl border border-transparent bg-slate-50 pl-9 pr-3 text-sm focus-visible:border-blue-400 focus-visible:bg-white"
+                                className="h-10 rounded-xl border border-transparent bg-slate-50 pl-9 pr-3 text-sm focus-visible:border-[#3CCED7] focus-visible:bg-white"
                               />
                             </div>
                             <div className="mt-2">
@@ -2724,7 +2724,7 @@ export default function MeetingWorkspacePage() {
                                 value={artifactSearchText}
                                 onChange={(e) => setArtifactSearchText(e.currentTarget.value)}
                                 placeholder="Search by name or description"
-                                className="h-10 rounded-xl border border-transparent bg-slate-50 pl-9 pr-3 text-sm focus-visible:border-blue-400 focus-visible:bg-white"
+                                className="h-10 rounded-xl border border-transparent bg-slate-50 pl-9 pr-3 text-sm focus-visible:border-[#3CCED7] focus-visible:bg-white"
                               />
                             </div>
                             <div className="mt-2">
@@ -2797,7 +2797,7 @@ export default function MeetingWorkspacePage() {
                                   {href ? (
                                     <Link
                                       href={href}
-                                      className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                                      className="mt-1 inline-flex items-center gap-1 text-xs text-[#3CCED7] hover:underline"
                                     >
                                       Open <ExternalLink className="h-3 w-3" />
                                     </Link>
@@ -2953,7 +2953,7 @@ export default function MeetingWorkspacePage() {
                   </button>
                 </div>
               ) : null}
-              <Link href={`/projects/${projectId}`} className="text-sm text-blue-600 hover:underline">
+              <Link href={`/projects/${projectId}`} className="text-sm text-[#3CCED7] hover:underline">
                 Back to project
               </Link>
             </div>

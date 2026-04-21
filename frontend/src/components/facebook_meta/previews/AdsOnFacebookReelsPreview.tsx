@@ -120,7 +120,7 @@ const AdsOnFacebookReelsPreviewContent: React.FC<AdsOnFacebookReelsPreviewProps>
                     {[0, 1].map((_, index) => (
                       <div
                         key={index}
-                        className={`w-1 h-1 rounded-full cursor-pointer ${index === currentSlide ? 'bg-blue-600' : 'bg-gray-400'
+                        className={`w-1 h-1 rounded-full cursor-pointer ${index === currentSlide ? 'bg-[#3CCED7]' : 'bg-gray-400'
                           }`}
                         onClick={() => setCurrentSlide(index)}
                       />

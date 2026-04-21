@@ -56,7 +56,7 @@ const InstagramStoriesPreview: React.FC<InstagramStoriesPreviewProps> = ({
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-4 z-20">
         <p className="text-white text-sm mb-3">im am dumb</p>
-        <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium">
+        <button className="w-full bg-[#3CCED7] text-white py-2 px-4 rounded-lg text-sm font-medium">
           Download
         </button>
       </div>

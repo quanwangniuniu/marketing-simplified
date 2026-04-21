@@ -136,7 +136,7 @@ export default function ProjectMiroPage() {
           </div>
           {error?.includes("No boards found") && (
             <button
-              className="bg-blue-600 text-white rounded-md px-4 py-2 text-sm hover:bg-blue-700 disabled:bg-blue-400"
+              className="bg-[#3CCED7] text-white rounded-md px-4 py-2 text-sm hover:bg-[#2AB5BD] disabled:bg-[#3CCED7]"
               onClick={handleCreateBoard}
             >
               Create First Board

@@ -19,7 +19,7 @@ interface AssetDetailProps {
 const STATUS_COLORS: Record<string, string> = {
   NotSubmitted: 'bg-gray-100 text-gray-800',
   PendingReview: 'bg-yellow-100 text-yellow-800',
-  UnderReview: 'bg-blue-100 text-blue-800',
+  UnderReview: 'bg-[#3CCED7]/15 text-[#1a9ba3]',
   Approved: 'bg-green-100 text-green-800',
   RevisionRequired: 'bg-red-100 text-red-800',
   Archived: 'bg-gray-200 text-gray-700',

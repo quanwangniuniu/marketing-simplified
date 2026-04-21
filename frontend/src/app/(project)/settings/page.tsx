@@ -181,7 +181,7 @@ function SettingsPageContent() {
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex items-center gap-3">
-                            <SettingsIcon className="w-6 h-6 text-blue-600" />
+                            <SettingsIcon className="w-6 h-6 text-[#3CCED7]" />
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
                                 <p className="text-sm text-gray-500">Manage your workspace preferences and integrations</p>
@@ -227,7 +227,7 @@ function SettingsPageContent() {
                                             }
                                         }}
                                         disabled={isSlackCardDisabled}
-                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors shadow-sm disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-blue-700"
+                                        className="w-full px-4 py-2 bg-[#3CCED7] text-white rounded-lg text-sm font-medium transition-colors shadow-sm disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-[#2AB5BD]"
                                     >
                                         {slackStatusLoading ? 'Loading...' : 'Configure'}
                                     </button>
@@ -253,7 +253,7 @@ function SettingsPageContent() {
                                     </p>
                                     <button
                                         onClick={() => setIsZoomModalOpen(true)}
-                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                        className="w-full px-4 py-2 bg-[#3CCED7] text-white rounded-lg text-sm font-medium hover:bg-[#2AB5BD] transition-colors shadow-sm"
                                     >
                                         Configure
                                     </button>
@@ -279,7 +279,7 @@ function SettingsPageContent() {
                                     </p>
                                     <button
                                         onClick={() => setIsGoogleDocsModalOpen(true)}
-                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                        className="w-full px-4 py-2 bg-[#3CCED7] text-white rounded-lg text-sm font-medium hover:bg-[#2AB5BD] transition-colors shadow-sm"
                                     >
                                         Configure
                                     </button>

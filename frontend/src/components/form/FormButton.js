@@ -17,12 +17,12 @@ export default function FormButton({
 
   const variantClasses = {
     primary: `
-      border-transparent text-white bg-blue-600 hover:bg-blue-700 
-      focus:ring-blue-500 disabled:hover:bg-blue-600
+      border-transparent text-white bg-[#3CCED7] hover:bg-[#2AB5BD] 
+      focus:ring-[#3CCED7] disabled:hover:bg-[#3CCED7]
     `,
     secondary: `
       border-gray-300 text-gray-700 bg-white hover:bg-gray-50 
-      focus:ring-blue-500 disabled:hover:bg-white
+      focus:ring-[#3CCED7] disabled:hover:bg-white
     `
   };
 

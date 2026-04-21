@@ -77,14 +77,14 @@ export default function ProjectHubPage() {
       <Layout mainScrollMode="page">
         <div className="mx-auto max-w-3xl px-4 py-8">
           <div className="mb-6">
-            <Link href="/projects" className="text-sm text-blue-600 hover:underline">
+            <Link href="/projects" className="text-sm text-[#3CCED7] hover:underline">
               ← All projects
             </Link>
           </div>
 
           {loading && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-gray-500">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#3CCED7]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Loading project…</p>
             </div>
           )}
@@ -111,7 +111,7 @@ export default function ProjectHubPage() {
                 <li>
                   <Link
                     href={`/projects/${pid}/meetings`}
-                    className="font-medium text-blue-600 hover:underline"
+                    className="font-medium text-[#3CCED7] hover:underline"
                   >
                     Meetings
                   </Link>
@@ -119,7 +119,7 @@ export default function ProjectHubPage() {
                 <li>
                   <Link
                     href={`/projects/${pid}/spreadsheets`}
-                    className="font-medium text-blue-600 hover:underline"
+                    className="font-medium text-[#3CCED7] hover:underline"
                   >
                     Spreadsheets
                   </Link>
@@ -127,7 +127,7 @@ export default function ProjectHubPage() {
                 <li>
                   <Link
                     href={`/projects/${pid}/miro`}
-                    className="font-medium text-blue-600 hover:underline"
+                    className="font-medium text-[#3CCED7] hover:underline"
                   >
                     Miro
                   </Link>

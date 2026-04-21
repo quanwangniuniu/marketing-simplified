@@ -70,7 +70,7 @@ export default function FilesSidebarView({ selectedProjectId }: { selectedProjec
     if (isLoading) {
       return (
         <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
         </div>
       );
     }

@@ -4413,7 +4413,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline text-blue-600"
+              className="underline text-[#3CCED7]"
               onClick={() => toast.dismiss(t.id)}
             >
               Open in Google Sheets
@@ -5059,7 +5059,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         </div>
       )}
       {isSaving && pendingOps.size > 0 && (
-        <div className="absolute top-2 right-2 z-30 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded text-xs">
+        <div className="absolute top-2 right-2 z-30 bg-[#3CCED7]/10 border border-[#3CCED7]/30 text-[#1a9ba3] px-3 py-1 rounded text-xs">
           Saving...
         </div>
       )}
@@ -5659,14 +5659,14 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             <div className="px-3 py-2 border-b border-gray-100">
               <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-gray-600">
                 <span>Filter</span>
-                {hasColumnFilter(sortMenu.colIndex) ? <Check className="h-3 w-3 text-blue-600" /> : null}
+                {hasColumnFilter(sortMenu.colIndex) ? <Check className="h-3 w-3 text-[#3CCED7]" /> : null}
               </div>
               <input
                 type="text"
                 value={getActiveFilterExpression(sortMenu.colIndex)}
                 onChange={(e) => handleColumnFilterChange(sortMenu.colIndex, e.target.value)}
                 placeholder="e.g. >= 7, = abc"
-                className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+                className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                 aria-label={`Filter column ${columnIndexToLabel(sortMenu.colIndex)}`}
               />
             </div>
@@ -5678,7 +5678,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               role="menuitem"
             >
               <span>Sort A → Z</span>
-              {getActiveSortDirection(sortMenu.colIndex) === 'asc' ? <Check className="h-3.5 w-3.5 text-blue-600" /> : null}
+              {getActiveSortDirection(sortMenu.colIndex) === 'asc' ? <Check className="h-3.5 w-3.5 text-[#3CCED7]" /> : null}
             </button>
             <button
               type="button"
@@ -5688,7 +5688,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               role="menuitem"
             >
               <span>Sort Z → A</span>
-              {getActiveSortDirection(sortMenu.colIndex) === 'desc' ? <Check className="h-3.5 w-3.5 text-blue-600" /> : null}
+              {getActiveSortDirection(sortMenu.colIndex) === 'desc' ? <Check className="h-3.5 w-3.5 text-[#3CCED7]" /> : null}
             </button>
           </div>,
           document.body
@@ -5712,7 +5712,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             e.stopPropagation();
             handleFormulaBarKeyDown(e);
           }}
-          className="w-full rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+          className="w-full rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
           disabled={!activeCell}
         />
       </div>
@@ -5731,7 +5731,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   value={sheetsImportUrl}
                   onChange={(e) => setSheetsImportUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                   disabled={sheetsImportLoading}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleImportGoogleSheets(); }}
                   autoFocus
@@ -5774,7 +5774,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 <select
                   value={selectedXlsxSheet}
                   onChange={(e) => setSelectedXlsxSheet(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   disabled={isImporting}
                 >
                   {xlsxImport.sheetNames.map((name) => (
@@ -5794,7 +5794,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   <button
                     type="button"
                     onClick={handleConfirmXlsxImport}
-                    className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="rounded bg-[#3CCED7] px-3 py-1 text-xs font-semibold text-white hover:bg-[#2AB5BD] disabled:opacity-60"
                     disabled={isImporting || !selectedXlsxSheet}
                   >
                     Import
@@ -5868,7 +5868,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 <th
                   key={colIndex}
                   className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center relative overflow-visible ${
-                    isColumnHeaderSelected(colIndex) ? 'bg-blue-100' : 'bg-gray-200'
+                    isColumnHeaderSelected(colIndex) ? 'bg-[#3CCED7]/15' : 'bg-gray-200'
                   }`}
                   style={{ width: `${colWidth}px`, minWidth: `${colWidth}px`, ...headerCellStyle }}
                   onClick={() => handleColumnHeaderClick(colIndex)}
@@ -5892,7 +5892,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     >
                       <ChevronDown className="h-3 w-3" />
                       {hasColumnFilter(colIndex) ? (
-                        <Check className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-white text-blue-600" />
+                        <Check className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-white text-[#3CCED7]" />
                       ) : null}
                     </button>
                   </div>
@@ -5976,7 +5976,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   {/* Row Number */}
                   <td
                     className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center sticky left-0 z-10 relative overflow-visible ${
-                      isRowHeaderSelected(row) ? 'bg-blue-100' : 'bg-gray-100'
+                      isRowHeaderSelected(row) ? 'bg-[#3CCED7]/15' : 'bg-gray-100'
                     }`}
                     style={{ ...rowBaseStyle, ...frozenStickyStyle }}
                     data-testid={`row-header-${row}`}
@@ -6037,25 +6037,25 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     // Determine cell styling based on selection state
                     let cellClassName = 'border border-gray-300 p-0 relative align-top';
                     if (isEditing) {
-                      cellClassName += ' ring-2 ring-blue-600 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isActive && isInSelection) {
                       // Active cell within selection: thicker border
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     } else if (isActive) {
                       // Active cell without selection
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isInSelection) {
                       // Cell in selection range (but not active)
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-100';
+                        cellClassName += ' bg-[#3CCED7]/15';
                       }
                     }
                     if (isCellInFillPreview(row, col)) {
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     }
                     if (isHighlighted) {
@@ -6124,7 +6124,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                         )}
                         {showFillHandle && (
                           <div
-                            className="absolute bottom-0 right-0 h-2 w-2 bg-blue-600 border border-white cursor-crosshair"
+                            className="absolute bottom-0 right-0 h-2 w-2 bg-[#3CCED7] border border-white cursor-crosshair"
                             onPointerDown={(e) => handleFillHandlePointerDown(e, row, col)}
                           />
                         )}
@@ -6180,7 +6180,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   {/* Row Number */}
                   <td
                     className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center sticky left-0 z-10 relative overflow-visible ${
-                      isRowHeaderSelected(row) ? 'bg-blue-100' : 'bg-gray-100'
+                      isRowHeaderSelected(row) ? 'bg-[#3CCED7]/15' : 'bg-gray-100'
                     }`}
                     style={{ ...rowBaseStyle, ...frozenStickyStyle }}
                     data-testid={`row-header-${row}`}
@@ -6241,25 +6241,25 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     // Determine cell styling based on selection state
                     let cellClassName = 'border border-gray-300 p-0 relative align-top';
                     if (isEditing) {
-                      cellClassName += ' ring-2 ring-blue-600 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isActive && isInSelection) {
                       // Active cell within selection: thicker border
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     } else if (isActive) {
                       // Active cell without selection
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isInSelection) {
                       // Cell in selection range (but not active)
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-100';
+                        cellClassName += ' bg-[#3CCED7]/15';
                       }
                     }
                     if (isCellInFillPreview(row, col)) {
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     }
                     if (isHighlighted) {
@@ -6328,7 +6328,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                         )}
                         {showFillHandle && (
                           <div
-                            className="absolute bottom-0 right-0 h-2 w-2 bg-blue-600 border border-white cursor-crosshair"
+                            className="absolute bottom-0 right-0 h-2 w-2 bg-[#3CCED7] border border-white cursor-crosshair"
                             onPointerDown={(e) => handleFillHandlePointerDown(e, row, col)}
                           />
                         )}
@@ -6379,13 +6379,13 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     setShowAddRowsUI(false);
                   }
                 }}
-                className="w-24 rounded border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+                className="w-24 rounded border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                 autoFocus
               />
               <button
                 type="button"
                 onClick={handleAddRows}
-                className="rounded bg-blue-600 px-3 py-1 text-sm font-semibold text-white hover:bg-blue-700"
+                className="rounded bg-[#3CCED7] px-3 py-1 text-sm font-semibold text-white hover:bg-[#2AB5BD]"
               >
                 Add
               </button>

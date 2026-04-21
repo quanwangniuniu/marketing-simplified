@@ -15,7 +15,7 @@ interface CampaignTableProps {
 type SortKey = 'spend' | 'roas' | 'change';
 
 const platformIcons: Record<string, { label: string; color: string }> = {
-  meta: { label: 'M', color: 'bg-blue-500' },
+  meta: { label: 'M', color: 'bg-[#3CCED7]' },
   google: { label: 'G', color: 'bg-red-500' },
   tiktok: { label: 'T', color: 'bg-gray-900' },
 };

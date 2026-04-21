@@ -59,7 +59,7 @@ const getRoleBadgeClasses = (role?: string) => {
     case "Budget Controller":
       return "bg-rose-100 text-rose-800";
     case "Data Analyst":
-      return "bg-blue-100 text-blue-800";
+      return "bg-[#3CCED7]/15 text-[#1a9ba3]";
     case "Senior Media Buyer":
       return "bg-indigo-100 text-indigo-800";
     case "Specialist Media Buyer":
@@ -531,7 +531,7 @@ export default function ProjectMembersModal({
     <div className={`w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)] ${variant === "panel" ? "max-w-none" : "max-w-2xl"}`}>
       <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-white via-slate-50 to-blue-50 px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 text-white shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#3CCED7] to-indigo-500 text-white shadow-sm">
               <Users className="h-4 w-4" />
             </div>
             <div>
@@ -623,7 +623,7 @@ export default function ProjectMembersModal({
               <span className="inline-flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5" />
                 Your invites
-                <span className="rounded-full bg-blue-100 px-1.5 text-[10px] font-semibold text-blue-800">
+                <span className="rounded-full bg-[#3CCED7]/15 px-1.5 text-[10px] font-semibold text-[#1a9ba3]">
                   {myInvites.length}
                 </span>
               </span>
@@ -647,7 +647,7 @@ export default function ProjectMembersModal({
                       Project roles control project access and can align with RBAC roles.
                     </p>
                   </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-1.5 text-xs font-semibold text-[#1a9ba3]">
                     <ShieldCheck className="h-4 w-4" />
                     Privileged controls
                   </div>
@@ -660,7 +660,7 @@ export default function ProjectMembersModal({
                       value={inviteEmail}
                       onChange={(event) => setInviteEmail(event.target.value)}
                       placeholder="name@company.com"
-                      className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
                   </div>
                   <div className="flex flex-col">
@@ -668,7 +668,7 @@ export default function ProjectMembersModal({
                       value={inviteRole}
                       onChange={(event) => setInviteRole(event.target.value)}
                       disabled={rolesLoading || roleOptions.length === 0}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     >
                       {rolesLoading ? (
                         <option value="" disabled>
@@ -689,7 +689,7 @@ export default function ProjectMembersModal({
                   <button
                     type="submit"
                     disabled={inviting}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#3CCED7] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {inviting && <Loader2 className="h-4 w-4 animate-spin" />}
                     Invite
@@ -711,7 +711,7 @@ export default function ProjectMembersModal({
                   type="button"
                   onClick={loadMembers}
                   disabled={loading}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
                 >
                   Refresh
                 </button>
@@ -744,7 +744,7 @@ export default function ProjectMembersModal({
                       key={member.id}
                       className={`flex items-center justify-between rounded-2xl border px-4 py-3 shadow-sm ${
                         isCurrentUser
-                          ? "border-blue-200 bg-blue-50"
+                          ? "border-[#3CCED7]/30 bg-[#3CCED7]/10"
                           : "border-gray-200 bg-white"
                       }`}
                     >
@@ -768,7 +768,7 @@ export default function ProjectMembersModal({
                                 )
                               }
                               disabled={updatingId === member.id}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70"
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70"
                             >
                               {roleOptions.map((role) => (
                                 <option key={role.value} value={role.value}>
@@ -838,7 +838,7 @@ export default function ProjectMembersModal({
                     type="button"
                     onClick={loadPendingApprovals}
                     disabled={approvalsLoading}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
                   >
                     Refresh
                   </button>
@@ -917,7 +917,7 @@ export default function ProjectMembersModal({
                     type="button"
                     onClick={loadPendingInvites}
                     disabled={invitesLoading}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
                   >
                     Refresh
                   </button>
@@ -981,7 +981,7 @@ export default function ProjectMembersModal({
                     type="button"
                     onClick={loadMyInvites}
                     disabled={myInvitesLoading}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
                   >
                     Refresh
                   </button>

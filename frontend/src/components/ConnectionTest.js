@@ -121,15 +121,15 @@ const ConnectionTest = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Connection Test Section */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4 text-blue-800">
+        <div className="bg-[#3CCED7]/10 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-4 text-[#1a9ba3]">
             Connection Status
           </h3>
           
           <button
             onClick={testConnection}
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 mb-4"
+            className="w-full bg-[#3CCED7] text-white py-2 px-4 rounded hover:bg-[#2AB5BD] disabled:opacity-50 mb-4"
           >
             {loading ? 'Testing...' : 'Test Connection'}
           </button>

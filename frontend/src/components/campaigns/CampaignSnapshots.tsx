@@ -255,7 +255,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
                   <div className="flex items-start gap-4">
                     {/* Milestone Badge */}
                     <div className="flex-shrink-0">
-                      <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
+                      <Badge variant="outline" className="bg-[#3CCED7]/10 text-[#1a9ba3] border-[#3CCED7]/30">
                         {snapshot.milestone_type_display}
                       </Badge>
                     </div>

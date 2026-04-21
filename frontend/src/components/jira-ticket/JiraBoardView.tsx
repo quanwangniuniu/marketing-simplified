@@ -133,7 +133,7 @@ const BoardFilterPanel = ({
         <select
           value={filters.assignee}
           onChange={(event) => onFilterChange({ assignee: event.target.value })}
-          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
         >
           <option value="all">All assignees</option>
           {assigneeOptions.map((option) => (
@@ -150,7 +150,7 @@ const BoardFilterPanel = ({
         <select
           value={filters.workType}
           onChange={(event) => onFilterChange({ workType: event.target.value })}
-          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
         >
           <option value="all">All work types</option>
           {workTypeOptions.map((option) => (
@@ -339,7 +339,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
             value={boardSearchQuery}
             onChange={(event) => setBoardSearchQuery(event.target.value)}
             aria-label="Search board"
-            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
           />
           </div>
           <div className="flex items-center gap-2">
@@ -367,7 +367,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
                     <Filter className="h-4 w-4 text-slate-500" />
                     Filter
                     {activeFilterCount > 0 ? (
-                      <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold text-white">
+                      <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#3CCED7] px-1.5 text-[10px] font-semibold text-white">
                         {activeFilterCount}
                       </span>
                     ) : null}
@@ -392,7 +392,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
         <button
           type="button"
           onClick={() => onCreateTask()}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-md bg-[#3CCED7] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2AB5BD]"
         >
           <Plus className="h-4 w-4" />
           Create
@@ -445,7 +445,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
                               }
                             }}
                             onBlur={() => saveBoardEdit(task)}
-                            className="w-full max-w-full rounded border border-slate-300 px-2 py-1 text-[13px] text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            className="w-full max-w-full rounded border border-slate-300 px-2 py-1 text-[13px] text-slate-900 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                           />
                         ) : (
                           <button

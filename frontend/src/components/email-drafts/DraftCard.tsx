@@ -25,7 +25,7 @@ export type DraftCardProps = {
 // Shared badge styles for common states.
 const statusStyles: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
-  scheduled: "bg-blue-100 text-blue-700",
+  scheduled: "bg-[#3CCED7]/15 text-[#1a9ba3]",
   sent: "bg-green-100 text-green-700",
   error: "bg-red-100 text-red-700",
 };
@@ -106,12 +106,12 @@ export function DraftCard({
                   <button
                     type="button"
                     onClick={onSubjectClick}
-                    className="min-w-0 flex-1 truncate text-left text-base font-semibold text-blue-700 hover:underline"
+                    className="min-w-0 flex-1 truncate text-left text-base font-semibold text-[#1a9ba3] hover:underline"
                   >
                     {subject}
                   </button>
                 ) : (
-                  <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-blue-700">
+                  <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[#1a9ba3]">
                     {subject}
                   </h3>
                 )}

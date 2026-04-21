@@ -349,7 +349,7 @@ const Sidebar: FC<SidebarProps> = ({
                       w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200
                       ${
                         isItemActive || hasActiveChildItem
-                          ? "bg-blue-100 text-blue-700 border-r-2 border-blue-500"
+                          ? "bg-[#3CCED7]/15 text-[#1a9ba3] border-r-2 border-[#3CCED7]"
                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       }
                       ${collapsed ? "justify-center" : "justify-between"}
@@ -386,7 +386,7 @@ const Sidebar: FC<SidebarProps> = ({
                       flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200
                       ${
                         isItemActive
-                          ? "bg-blue-100 text-blue-700 border-r-2 border-blue-500"
+                          ? "bg-[#3CCED7]/15 text-[#1a9ba3] border-r-2 border-[#3CCED7]"
                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       }
                       ${collapsed ? "justify-center" : ""}
@@ -438,7 +438,7 @@ const Sidebar: FC<SidebarProps> = ({
                           flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200
                           ${
                             isChildActive
-                              ? "bg-blue-50 text-blue-700 font-medium"
+                              ? "bg-[#3CCED7]/10 text-[#1a9ba3] font-medium"
                               : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                           }
                         `}
@@ -470,8 +470,8 @@ const Sidebar: FC<SidebarProps> = ({
             flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
             ${
               isActive("/agent")
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                : "bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 hover:from-blue-100 hover:to-purple-100 hover:shadow-sm"
+                ? "bg-gradient-to-r from-[#3CCED7] to-purple-600 text-white shadow-md"
+                : "bg-gradient-to-r from-blue-50 to-purple-50 text-[#1a9ba3] hover:from-blue-100 hover:to-purple-100 hover:shadow-sm"
             }
             ${collapsed ? "justify-center" : ""}
           `}
@@ -483,7 +483,7 @@ const Sidebar: FC<SidebarProps> = ({
                 <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                   isActive("/agent")
                     ? "bg-white/20 text-white"
-                    : "bg-blue-100 text-blue-600"
+                    : "bg-[#3CCED7]/15 text-[#3CCED7]"
                 }`}>
                   AI
                 </span>

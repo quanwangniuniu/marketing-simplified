@@ -433,7 +433,7 @@ export default function KlaviyoDetailV2Page() {
   }, [canvasBlocks, saveSnapshot, getCurrentSnapshot]);
 
   const contentBlocks = [
-    { icon: Type, label: 'Text', color: 'text-blue-600', type: 'Text' },
+    { icon: Type, label: 'Text', color: 'text-[#3CCED7]', type: 'Text' },
     {
       icon: ImageIcon,
       label: 'Image',

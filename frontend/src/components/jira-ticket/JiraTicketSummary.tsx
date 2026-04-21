@@ -84,9 +84,9 @@ const JiraTicketSummary: React.FC<JiraTicketSummaryProps> = ({
           onBlur={() => void saveEditing()}
           aria-label="Edit summary"
           className={cn(
-            "w-full resize-none rounded-md border border-blue-500 bg-white px-3 py-2",
+            "w-full resize-none rounded-md border border-[#3CCED7] bg-white px-3 py-2",
             "text-[20px] font-semibold leading-tight text-slate-900",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
           )}
         />
       </div>
@@ -114,7 +114,7 @@ const JiraTicketSummary: React.FC<JiraTicketSummaryProps> = ({
         className={cn(
           "w-full rounded-md px-3 py-2 text-left transition-colors",
           "hover:bg-slate-100 focus-visible:bg-slate-100",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
         )}
         aria-label="Edit summary"
       >
