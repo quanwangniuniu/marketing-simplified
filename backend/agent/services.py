@@ -247,11 +247,11 @@ def _call_gemini_analysis(spreadsheet_data, user_id=None, success_criteria=None)
     )
 
     criteria_block = (
-        _CRITERIA_WITH_BLOCK.format(criteria_text=criteria_text)
+        _CRITERIA_WITH_BLOCK.replace("{criteria_text}", criteria_text)
         if criteria_text
         else _NO_CRITERIA_BLOCK
     )
-    system_prompt = _ANALYSIS_SYSTEM_PROMPT.format(criteria_block=criteria_block)
+    system_prompt = _ANALYSIS_SYSTEM_PROMPT.replace("{criteria_block}", criteria_block)
     user_prompt = (
         f"Data summary: {column_summary}\n\n"
         f"Analyze the following data and identify anomalies:\n\n{cleaned_data}"
