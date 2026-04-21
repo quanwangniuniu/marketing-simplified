@@ -6,7 +6,7 @@ from typing import Any
 
 from django.conf import settings
 
-from .dify_workflows import json_input, run_dify_workflow
+from .dify_workflows import json_input
 
 import logging
 
@@ -400,39 +400,81 @@ def validate_miro_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _get_board_dify_config() -> dict[str, str]:
-    api_url = getattr(settings, "DIFY_API_URL", "") or os.environ.get("DIFY_API_URL", "")
-    api_key = getattr(settings, "DIFY_MIRO_API_KEY", "") or os.environ.get("DIFY_MIRO_API_KEY", "")
-    if not api_url or not api_key:
-        raise RuntimeError("Dify Miro generation is not configured")
-    return {"url": api_url.rstrip("/"), "key": api_key}
+_MIRO_SYSTEM_PROMPT = """\
+You are generating a board snapshot for MediaJira's built-in Miro module.
+
+Return exactly one valid board snapshot JSON object.
+
+Requirements:
+1. Output JSON only.
+2. No markdown fences.
+3. Follow miro_snapshot_rules.
+4. Use only allowed item types.
+5. Keep text short and readable.
+6. Prefer human-readable summaries.
+7. Raw campaign names may appear only as short secondary text.
+8. Use a simple left-to-right layout with frames.
+9. Use only sections supported by the input.
+10. If decision options exist, show them clearly.
+11. Every item must have positive width and height.
+12. Keep the total item count within the schema limit.
+13. Keep all child items fully inside their parent frame bounds.
+14. When information is dense, compress content instead of creating too many separate items.
+15. Prefer fewer, higher-signal items over exhaustive one-to-one rendering.
+
+Focus only on:
+- anomalies
+- suggested_decision
+- recommended_tasks
+
+Compression rules:
+- Do not try to render every input entry as its own shape or sticky note when that would make the board overcrowded.
+- When anomalies are numerous, group related anomalies into concise summary notes.
+- When recommended tasks are numerous, prioritize the highest-signal tasks and merge similar tasks into short grouped items.
+- When decision reasoning or context is long, summarize it into one compact text or shape block.
+- When decision options are numerous, always include the selected option and the most important alternatives first.
+- If space is tight, reduce the number of sections or items before reducing readability.
+
+Layout rules:
+- Frames are containers and should be large enough for all of their child items.
+- Child items must not overflow outside their frame.
+- Keep a clean reading order from left to right and top to bottom.
+- Use concise section titles and avoid oversized text blocks.
+- Prefer one summary block plus a few focused detail items rather than many small fragmented blocks.
+
+Create a practical draft board with concise labels and reasonable initial positions.\
+"""
 
 
-def call_dify_miro_generator(
+def call_gemini_miro_generator(
     context: dict[str, Any],
     *,
     user_id: str | int | None = None,
 ) -> dict[str, Any]:
-    config = _get_board_dify_config()
+    from .gemini_client import call_gemini_json
+
     context_json = json_input(context)
     rules_json = json_input(load_miro_snapshot_rules())
     logger.info(
-        "Calling Dify Miro generator user_id=%s context_chars=%s rules_chars=%s",
+        "Calling Gemini Miro generator user_id=%s context_chars=%s rules_chars=%s",
         user_id,
         len(context_json),
         len(rules_json),
     )
-    outputs = run_dify_workflow(
-        api_url=config["url"],
-        api_key=config["key"],
-        inputs={
-            "board_generation_context": context_json,
-            "miro_snapshot_rules": rules_json,
-        },
-        user_id=user_id,
+    outputs = call_gemini_json(
+        system_prompt=_MIRO_SYSTEM_PROMPT,
+        user_prompt=(
+            f"board_generation_context:\n{context_json}\n\n"
+            f"miro_snapshot_rules:\n{rules_json}\n\n"
+            f"Return the final board snapshot JSON now."
+        ),
+        temperature=0.5,
         timeout=300,
-        response_mode="streaming",
     )
     snapshot = _extract_snapshot_candidate(outputs)
     snapshot = normalize_miro_snapshot_layout(snapshot)
     return validate_miro_snapshot(snapshot)
+
+
+# Keep old name as alias for any callers that haven't been updated yet
+call_dify_miro_generator = call_gemini_miro_generator

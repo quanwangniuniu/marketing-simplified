@@ -538,56 +538,59 @@ Rules:
 _LLM_SAMPLE_ROW_LIMIT = 3
 
 
+_COLUMN_DETECTION_SYSTEM_PROMPT = """\
+You are a spreadsheet schema expert. Given a list of column headers and optional sample rows, \
+identify what each column represents.
+
+Return ONLY valid JSON (no markdown, no explanation) with this structure:
+{
+  "schema_name": "brief name for this dataset type (e.g. Meta Ads Performance)",
+  "confidence": 0.85,
+  "columns": [
+    {
+      "original": "exact column name from input",
+      "canonical": "canonical field name (snake_case) or 'unknown'",
+      "category": "one of: metric, dimension, date, identifier, text, unknown",
+      "confidence": 0.9
+    }
+  ]
+}
+
+Rules:
+- Include every column from the input in the output.
+- Use 'unknown' for canonical/category when the column cannot be identified.
+- confidence values must be between 0.0 and 1.0.\
+"""
+
+
 def _try_llm_fallback(headers: list, sample_rows: list = None) -> ColumnDetectionResult:
     """
-    Use Dify (Gemini) workflow to identify unknown columns.
+    Use Gemini to identify unknown columns.
 
     Args:
         headers:     list of column header strings.
-        sample_rows: optional list of row dicts (keyed by header) to help the
-                     LLM identify column types from actual values.  At most
-                     _LLM_SAMPLE_ROW_LIMIT rows are sent to keep prompt size small.
+        sample_rows: optional list of row dicts to help the LLM identify column types
+                     from actual values. At most _LLM_SAMPLE_ROW_LIMIT rows are sent.
 
     Falls back to a full-unknown result if the LLM call fails.
     """
-    from django.conf import settings
-    from .dify_workflows import run_dify_workflow
+    from .gemini_client import call_gemini_json, strip_json_fences, _get_api_key as _gemini_key
 
-    api_key = getattr(settings, "DIFY_COLUMN_DETECTION_API_KEY", "") or os.environ.get("DIFY_COLUMN_DETECTION_API_KEY", "")
-    api_url = getattr(settings, "DIFY_API_URL", "") or os.environ.get("DIFY_API_URL", "")
-
-    if not api_key:
-        logger.warning("DIFY_COLUMN_DETECTION_API_KEY not set; skipping LLM column detection")
-        return _unknown_result(headers)
-    if not api_url:
-        logger.warning("DIFY_API_URL not set; skipping LLM column detection")
+    if not _gemini_key():
+        logger.warning("GEMINI_API_KEY not set; skipping LLM column detection")
         return _unknown_result(headers)
 
     try:
         rows_to_send = (sample_rows or [])[:_LLM_SAMPLE_ROW_LIMIT]
-        outputs = run_dify_workflow(
-            api_url=api_url,
-            api_key=api_key,
-            inputs={
-                "column_headers": ", ".join(headers),
-                "sample_rows": json.dumps(rows_to_send, default=str),
-            },
+        parsed = call_gemini_json(
+            system_prompt=_COLUMN_DETECTION_SYSTEM_PROMPT,
+            user_prompt=(
+                f"Column headers: {', '.join(headers)}\n"
+                f"Sample rows:\n{json.dumps(rows_to_send, default=str)}"
+            ),
+            temperature=0.2,
             timeout=60,
         )
-
-        # The output variable from the Dify workflow end node
-        raw = outputs.get("text") or outputs.get("result") or ""
-        if not raw:
-            logger.warning("Dify column detection returned empty output: %s", outputs)
-            return _unknown_result(headers)
-
-        raw = raw.strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-
-        parsed = json.loads(raw)
         return _parse_llm_response(headers, parsed)
 
     except Exception:

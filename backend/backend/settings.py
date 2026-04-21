@@ -248,11 +248,12 @@ AGENT_CSV_DIR = config(
     default=os.path.join(BASE_DIR, 'agent_data')
 )
 
-# Dify LLM Platform integration (optional)
-# Base config
+# Gemini API (replaces Dify for all LLM workflow calls)
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+
+# Dify LLM Platform integration (kept for reference / backward compat)
 DIFY_API_URL = config('DIFY_API_URL', default='')
 DIFY_API_KEY = config('DIFY_API_KEY', default='')
-# Per-workflow keys
 DIFY_CHAT_API_KEY = config('DIFY_CHAT_API_KEY', default='')
 DIFY_MIRO_API_KEY = config('DIFY_MIRO_API_KEY', default='')
 DIFY_CALENDAR_API_KEY = config('DIFY_CALENDAR_API_KEY', default='')
