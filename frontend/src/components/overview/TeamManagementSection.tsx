@@ -56,11 +56,18 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
   const [busyMember, setBusyMember] = useState<number | null>(null);
   const [busyInvite, setBusyInvite] = useState<number | null>(null);
 
+  const currentUserId = useMemo(() => {
+    const raw = currentUser?.id;
+    if (raw === null || raw === undefined) return null;
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }, [currentUser?.id]);
+
   const isOwner = useMemo(() => {
-    if (!currentUser?.id) return false;
-    const self = members.find((m) => m.user?.id === currentUser.id);
+    if (currentUserId === null) return false;
+    const self = members.find((m) => m.user?.id === currentUserId);
     return self?.role === 'owner';
-  }, [members, currentUser?.id]);
+  }, [members, currentUserId]);
 
   const loadAll = useCallback(async () => {
     if (!projectId) return;
@@ -266,7 +273,7 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
           <MembersList
             members={members}
             roleOptions={roleOptions}
-            currentUserId={currentUser?.id}
+            currentUserId={currentUserId ?? undefined}
             isOwner={isOwner}
             busyId={busyMember}
             onRoleChange={handleRoleChange}
