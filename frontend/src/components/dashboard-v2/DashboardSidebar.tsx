@@ -86,7 +86,7 @@ const navGroups: NavGroup[] = [
           { label: 'Klaviyo', href: '/klaviyo-v2', icon: Mail },
         ],
       },
-      { label: 'Notion', href: '/notion', icon: Notebook },
+      { label: 'Notion', href: '/notion-v2', icon: Notebook },
     ],
   },
   {
