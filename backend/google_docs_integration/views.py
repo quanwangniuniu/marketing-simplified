@@ -48,12 +48,12 @@ def _google_api_error_response(exc: requests.HTTPError) -> Response:
     status_code = exc.response.status_code if exc.response is not None else None
     if status_code == 401:
         return Response(
-            {"error": "Google session expired. Please reconnect Google Docs in Settings > Integrations."},
+            {"error": "Google session expired. Please reconnect Google Docs in your account Integrations tab."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     if status_code == 403:
         return Response(
-            {"error": "Google denied access. If importing an external doc, please reconnect Google Docs in Settings > Integrations to grant updated permissions."},
+            {"error": "Google denied access. If importing an external doc, please reconnect Google Docs in your account Integrations tab to grant updated permissions."},
             status=status.HTTP_403_FORBIDDEN,
         )
     if status_code == 404:
@@ -125,7 +125,7 @@ class GoogleDocsCallbackView(APIView):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_docs_error=missing_code")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?google_docs_error=missing_code")
 
         try:
             payload = signing.loads(
@@ -134,13 +134,13 @@ class GoogleDocsCallbackView(APIView):
                 max_age=GOOGLE_DOCS_STATE_MAX_AGE_SECONDS,
             )
         except signing.SignatureExpired:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_docs_error=state_expired")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?google_docs_error=state_expired")
         except signing.BadSignature:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_docs_error=invalid_state")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?google_docs_error=invalid_state")
 
         user_id = payload.get("user_id")
         if not user_id:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_docs_error=invalid_state")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?google_docs_error=invalid_state")
 
         try:
             token_data = exchange_code_for_token(code)
@@ -156,9 +156,9 @@ class GoogleDocsCallbackView(APIView):
             connection.is_active = True
             connection.save()
         except Exception:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_docs_error=token_exchange_failed")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?google_docs_error=token_exchange_failed")
 
-        return redirect(f"{settings.FRONTEND_URL}/settings?open_google_docs=1")
+        return redirect(f"{settings.FRONTEND_URL}/integrations?open_google_docs=1")
 
 
 class GoogleDocsDisconnectView(APIView):

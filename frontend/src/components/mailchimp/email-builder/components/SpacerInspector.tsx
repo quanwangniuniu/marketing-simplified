@@ -135,7 +135,7 @@ const SpacerInspector: React.FC<SpacerInspectorProps> = ({
                 />
                 <span
                   className={`w-11 h-6 flex items-center rounded-full p-1 transition ${
-                    linkDeviceStyles ? "bg-blue-600" : "bg-gray-300"
+                    linkDeviceStyles ? "bg-[#3CCED7]" : "bg-gray-300"
                   }`}
                 >
                   <span
@@ -189,13 +189,13 @@ const SpacerInspector: React.FC<SpacerInspectorProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => setSelectedBlock(null)}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done
         </button>
         <span className="text-base font-semibold text-gray-900">Spacer</span>
-        <button className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1">
+        <button className="text-[#3CCED7] hover:text-[#1a9ba3] text-xs flex items-center gap-1">
           {/* <HelpCircle className="h-4 w-4" />
           How to use spacer blocks */}
         </button>
@@ -208,7 +208,7 @@ const SpacerInspector: React.FC<SpacerInspectorProps> = ({
             onClick={() => setActiveBlockTab(tab)}
             className={`flex-1 text-sm font-medium py-3 ${
               activeBlockTab === tab
-                ? "text-blue-700 border-b-2 border-blue-700 bg-gray-50"
+                ? "text-[#1a9ba3] border-b-2 border-[#2AB5BD] bg-gray-50"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -235,7 +235,7 @@ const SpacerInspector: React.FC<SpacerInspectorProps> = ({
           >
             Clear styles
           </button>
-          <button className="flex-1 bg-blue-700 text-white rounded-md px-3 py-2 text-sm hover:bg-blue-800">
+          <button className="flex-1 bg-[#2AB5BD] text-white rounded-md px-3 py-2 text-sm hover:bg-[#1a9ba3]">
             Apply to all
           </button>
         </div>

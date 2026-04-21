@@ -71,7 +71,7 @@ const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
                 setImportError(null);
               }}
               placeholder="https://example.com/image.jpg"
-              className={`w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent ${
+              className={`w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent ${
                 importError ? "border-red-300" : "border-gray-300"
               }`}
               autoFocus
@@ -173,7 +173,7 @@ const ImportUrlModal: React.FC<ImportUrlModalProps> = ({
                 setIsImporting(false);
               }
             }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-lg hover:bg-[#2AB5BD] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!importUrl.trim() || isImporting}
           >
             {isImporting ? "Importing..." : "Import"}

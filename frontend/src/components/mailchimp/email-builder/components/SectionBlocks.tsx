@@ -74,8 +74,8 @@ const SectionBlocks: React.FC<SectionBlocksProps> = ({
         key={`dropzone-${section}-${index}`}
         className={`drop-zone transition-all ${
           isActive
-            ? "h-8 bg-blue-500 border-2 border-blue-600"
-            : "h-0 bg-transparent hover:h-4 hover:bg-blue-100 border-2 border-transparent"
+            ? "h-8 bg-[#3CCED7] border-2 border-[#3CCED7]"
+            : "h-0 bg-transparent hover:h-4 hover:bg-[#3CCED7]/15 border-2 border-transparent"
         } -mx-4`}
         onDragOver={(e) => handleDragOverDropZone(e, section, index)}
         onDragLeave={(e) => handleDragLeaveDropZone(e)}
@@ -89,7 +89,7 @@ const SectionBlocks: React.FC<SectionBlocksProps> = ({
       <div
         className={`flex-1 flex justify-center drop-zone py-8 text-center text-sm transition-all ${
           dragOverIndex?.section === section && dragOverIndex?.index === 0
-            ? "bg-blue-100 text-blue-700 border-2 border-dashed border-blue-500 rounded"
+            ? "bg-[#3CCED7]/15 text-[#1a9ba3] border-2 border-dashed border-[#3CCED7] rounded"
             : "text-gray-400"
         }`}
         onDragOver={(e) => handleDragOverDropZone(e, section, 0)}
@@ -123,8 +123,8 @@ const SectionBlocks: React.FC<SectionBlocksProps> = ({
             className={`relative border transition-all ${
               selectedBlock?.section === section &&
               selectedBlock?.id === block.id
-                ? "border-blue-700"
-                : "border-transparent hover:border-blue-700"
+                ? "border-[#2AB5BD]"
+                : "border-transparent hover:border-[#2AB5BD]"
             } ${handleBlockDragStart ? "cursor-move" : ""}`}
             onClick={(e) => {
               // Don't select if clicking on layout resize handle
@@ -145,7 +145,7 @@ const SectionBlocks: React.FC<SectionBlocksProps> = ({
           >
             {/* label badge */}
             <div
-              className={`absolute left-0 top-0 text-[10px] px-2 py-0.5 rounded-br bg-blue-700 text-white transition-opacity pointer-events-none ${
+              className={`absolute left-0 top-0 text-[10px] px-2 py-0.5 rounded-br bg-[#2AB5BD] text-white transition-opacity pointer-events-none ${
                 (selectedBlock?.section === section &&
                   selectedBlock?.id === block.id) ||
                 (hoveredBlock?.section === section &&

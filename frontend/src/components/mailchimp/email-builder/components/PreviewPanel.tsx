@@ -1448,14 +1448,14 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
               onClick={() => setPreviewTab(tab)}
               className={`pb-2 border-b-2 ${
                 previewTab === tab
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-[#3CCED7] text-[#1a9ba3]"
                   : "border-transparent hover:text-gray-800"
               }`}
             >
               {tab}
             </button>
           ))}
-          <button className="ml-auto inline-flex items-center gap-2 text-blue-700 hover:text-blue-800">
+          <button className="ml-auto inline-flex items-center gap-2 text-[#1a9ba3] hover:text-[#1a9ba3]">
             <Play className="h-4 w-4" />
             Send a Test Email
           </button>

@@ -21,7 +21,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             onClick={() => onTabChange(item.id)}
             className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 ${
               activeTab === item.id
-                ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-500 font-medium shadow-sm border border-blue-200'
+                ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-[#3CCED7] font-medium shadow-sm border border-[#3CCED7]/30'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
             }`}
           >

@@ -306,7 +306,7 @@ export default function VideoAdPreviewShell({ ad }: VideoAdPreviewShellProps) {
 
       <div className="sticky top-0 bg-white z-10 border-b border-gray-200">
         {banner && (
-          <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 text-sm text-gray-700">
+          <div className="px-4 py-2 bg-[#3CCED7]/10 border-b border-[#3CCED7]/30 text-sm text-gray-700">
             {banner}
           </div>
         )}
@@ -318,7 +318,7 @@ export default function VideoAdPreviewShell({ ad }: VideoAdPreviewShellProps) {
               className={`text-sm font-medium cursor-pointer ${
                 viewOnly
                   ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-blue-600 hover:text-blue-700'
+                  : 'text-[#3CCED7] hover:text-[#1a9ba3]'
               }`}
               onClick={handleShare}
               disabled={viewOnly}
@@ -328,7 +328,7 @@ export default function VideoAdPreviewShell({ ad }: VideoAdPreviewShellProps) {
             <button
               className={`px-3 py-1.5 rounded-md text-sm font-medium cursor-pointer ${
                 showCanvas
-                  ? 'bg-blue-100 text-gray-900'
+                  ? 'bg-[#3CCED7]/15 text-gray-900'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={() => setShowCanvas(true)}
@@ -396,7 +396,7 @@ export default function VideoAdPreviewShell({ ad }: VideoAdPreviewShellProps) {
                 }}
                 className={`w-2 h-2 rounded-full transition-all ${
                   index === currentIndex
-                    ? 'bg-blue-600 w-6'
+                    ? 'bg-[#3CCED7] w-6'
                     : 'bg-gray-300 hover:bg-gray-400'
                 }`}
                 aria-label={`Go to card ${index + 1}`}

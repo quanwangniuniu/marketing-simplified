@@ -66,7 +66,7 @@ const getRoleBadgeClasses = (role?: string) => {
     case 'Budget Controller':
       return 'bg-rose-100 text-rose-800';
     case 'Data Analyst':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-[#3CCED7]/15 text-[#1a9ba3]';
     case 'Senior Media Buyer':
       return 'bg-indigo-100 text-indigo-800';
     case 'Specialist Media Buyer':
@@ -104,7 +104,7 @@ const ProjectCard = ({
       <DecorativeGlow variant="subtle" />
       <div className="relative flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#3CCED7]/10 text-[#1a9ba3]">
             <FolderOpen className="h-5 w-5" />
           </div>
           <div>
@@ -164,7 +164,7 @@ const ProjectCard = ({
         <div className="flex items-center gap-2">
           <a
             href={`/tasks?project_id=${project.id}`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
+            className="inline-flex items-center justify-center rounded-full p-2 text-[#1a9ba3] transition hover:bg-[#3CCED7]/10"
             aria-label="View tasks"
             title="View tasks"
           >
@@ -172,7 +172,7 @@ const ProjectCard = ({
           </a>
           <a
             href={`/projects/${project.id}/miro`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
+            className="inline-flex items-center justify-center rounded-full p-2 text-[#1a9ba3] transition hover:bg-[#3CCED7]/10"
             aria-label="Miro Boards"
             title="Miro Boards"
           >
@@ -180,7 +180,7 @@ const ProjectCard = ({
           </a>
           <a
             href={`/projects/${project.id}/spreadsheets`}
-            className="inline-flex items-center justify-center rounded-full p-2 text-blue-700 transition hover:bg-blue-50"
+            className="inline-flex items-center justify-center rounded-full p-2 text-[#1a9ba3] transition hover:bg-[#3CCED7]/10"
             aria-label="Spreadsheets"
             title="Spreadsheets"
           >
@@ -200,7 +200,7 @@ const ProjectCard = ({
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
               project.isActiveResolved
                 ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
-                : 'bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70'
+                : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70'
             }`}
           >
             {updating && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -354,7 +354,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
     if (invitesLoading) {
       return (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm text-gray-500 shadow-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+          <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" />
           Loading invitations...
         </div>
       );
@@ -387,7 +387,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
           </div>
           <button
             onClick={loadPendingInvites}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700"
+            className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
           >
             Refresh
           </button>
@@ -440,7 +440,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
     if (loading) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
           <p className="mt-3 font-medium text-gray-900">Loading projects…</p>
           <p className="text-sm text-gray-600">Fetching your projects from the backend.</p>
         </div>
@@ -490,8 +490,8 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         <div className="min-h-screen bg-gray-50">
           <div className="mx-auto max-w-6xl px-4 py-10">
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 text-sm uppercase tracking-wide text-blue-700">
-                <div className="h-6 w-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+              <div className="flex items-center gap-3 text-sm uppercase tracking-wide text-[#1a9ba3]">
+                <div className="h-6 w-6 rounded-lg bg-[#3CCED7]/15 text-[#1a9ba3] flex items-center justify-center">
                   <FolderOpen className="h-4 w-4" />
                 </div>
                 Projects
@@ -543,7 +543,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
                   onClick={() => fetchProjects()}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
-                  <Loader2 className={`h-4 w-4 ${loading ? 'animate-spin text-blue-600' : 'text-gray-400'}`} />
+                  <Loader2 className={`h-4 w-4 ${loading ? 'animate-spin text-[#3CCED7]' : 'text-gray-400'}`} />
                   Refresh
                 </button>
               </div>

@@ -102,7 +102,7 @@ const DecisionReviewPanel = ({
               onChange={(event) => setOutcomeText(event.target.value)}
               rows={4}
               disabled={!canReview}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-[#3CCED7] focus:outline-none"
               placeholder="What happened after the decision?"
             />
             {errors.outcomeText ? (
@@ -117,7 +117,7 @@ const DecisionReviewPanel = ({
               onChange={(event) => setReflectionText(event.target.value)}
               rows={4}
               disabled={!canReview}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-[#3CCED7] focus:outline-none"
               placeholder="What would you do differently next time?"
             />
             {errors.reflectionText ? (

@@ -24,7 +24,7 @@ export default function Toolbar({
   return (
     <div className="sticky top-0 bg-white z-10 border-b border-gray-200">
       {banner && (
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200 text-sm text-gray-700">
+        <div className="px-4 py-2 bg-[#3CCED7]/10 border-b border-[#3CCED7]/30 text-sm text-gray-700">
           {banner}
         </div>
       )}
@@ -36,7 +36,7 @@ export default function Toolbar({
             className={`text-sm font-medium cursor-pointer ${
               disabled
                 ? 'text-gray-400 cursor-not-allowed'
-                : 'text-blue-600 hover:text-blue-700'
+                : 'text-[#3CCED7] hover:text-[#1a9ba3]'
             }`}
             onClick={onShare}
             disabled={disabled}
@@ -46,7 +46,7 @@ export default function Toolbar({
           <button
             className={`px-3 py-1.5 rounded-md text-sm font-medium cursor-pointer ${
               showCanvas
-                ? 'bg-blue-100 text-gray-900'
+                ? 'bg-[#3CCED7]/15 text-gray-900'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={onPreviewAds}
@@ -73,7 +73,7 @@ export default function Toolbar({
           <span
             className={`text-sm ${
               surface === 'ALL'
-                ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7] pb-1'
                 : 'text-gray-700'
             }`}
           >
@@ -109,7 +109,7 @@ export default function Toolbar({
           <span
             className={`text-sm ${
               surface === 'DISPLAY'
-                ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7] pb-1'
                 : 'text-gray-700'
             }`}
           >
@@ -132,14 +132,14 @@ export default function Toolbar({
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className={surface === 'GMAIL' ? 'text-blue-600' : 'text-gray-400'}
+                className={surface === 'GMAIL' ? 'text-[#3CCED7]' : 'text-gray-400'}
               />
             </svg>
           </div>
           <span
             className={`text-sm ${
               surface === 'GMAIL'
-                ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7] pb-1'
                 : 'text-gray-700'
             }`}
           >
@@ -173,7 +173,7 @@ export default function Toolbar({
           <span
             className={`text-sm ${
               surface === 'YOUTUBE'
-                ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7] pb-1'
                 : 'text-gray-700'
             }`}
           >

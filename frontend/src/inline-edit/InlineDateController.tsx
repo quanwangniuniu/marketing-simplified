@@ -229,7 +229,7 @@ function InlineDateController({
   return (
     <div
       onClick={startEdit}
-      className={`cursor-pointer hover:text-blue-600 transition-colors inline-flex items-center gap-1 ${className}`}
+      className={`cursor-pointer hover:text-[#0E8A96] transition-colors inline-flex items-center gap-1 ${className}`}
       title="Click to edit"
     >
       <Calendar className="h-4 w-4 text-gray-400" />

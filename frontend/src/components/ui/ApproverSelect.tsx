@@ -80,7 +80,7 @@ const ApproverSelect: React.FC<ApproverSelectProps> = ({
               <li
                 key={user.id}
                 className={`relative cursor-pointer select-none py-2 pl-10 pr-4 ${
-                  value.some(u => u.id === user.id) ? 'bg-blue-100 text-blue-900' : 'text-gray-900'
+                  value.some(u => u.id === user.id) ? 'bg-[#3CCED7]/15 text-[#0f757a]' : 'text-gray-900'
                 }`}
                 onMouseDown={e => {
                   e.preventDefault();
@@ -94,7 +94,7 @@ const ApproverSelect: React.FC<ApproverSelectProps> = ({
                   </span>
                 </span>
                 {value.some(u => u.id === user.id) && (
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[#3CCED7]">
                     <Check className="h-5 w-5" aria-hidden="true" />
                   </span>
                 )}
@@ -112,11 +112,11 @@ const ApproverSelect: React.FC<ApproverSelectProps> = ({
         )}
         <div className="flex flex-wrap gap-2">
           {value.map(user => (
-            <span key={user.id} className="inline-flex items-center rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+            <span key={user.id} className="inline-flex items-center rounded bg-[#3CCED7]/15 px-2 py-1 text-xs text-[#1a9ba3]">
               {user.username || 'Unknown'}
               <button
                 type="button"
-                className="ml-1 text-blue-500 hover:text-blue-700"
+                className="ml-1 text-[#3CCED7] hover:text-[#1a9ba3]"
                 onClick={() => handleRemove(user.id)}
                 disabled={disabled}
               >

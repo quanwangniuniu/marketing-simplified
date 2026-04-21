@@ -91,7 +91,7 @@ export default function ShareTaskDialog({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search chats..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
               />
               <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200">
                 {filteredChats.length === 0 ? (
@@ -111,7 +111,7 @@ export default function ShareTaskDialog({
                             type="checkbox"
                             checked={selectedChatIds.includes(chat.id)}
                             onChange={() => toggleChat(chat.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-gray-300 text-[#3CCED7] focus:ring-[#3CCED7]"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-gray-900">
@@ -161,7 +161,7 @@ export default function ShareTaskDialog({
           <button
             onClick={handleSubmit}
             disabled={isSharing || (selectedChatIds.length === 0 && selectedUserIds.length === 0)}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#3CCED7] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSharing ? 'Sharing...' : 'Share'}
           </button>

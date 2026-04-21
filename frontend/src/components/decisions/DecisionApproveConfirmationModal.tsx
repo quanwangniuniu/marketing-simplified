@@ -102,7 +102,7 @@ const DecisionApproveConfirmationModal = ({
             </div>
           )}
 
-          <div className="mt-6 space-y-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <div className="mt-6 space-y-3 rounded-lg border border-[#3CCED7]/20 bg-[#3CCED7]/10 px-4 py-3 text-sm text-[#0f757a]">
             <p className="font-semibold">Please confirm:</p>
             <label className="flex items-start gap-2">
               <input
@@ -149,7 +149,7 @@ const DecisionApproveConfirmationModal = ({
             className={`rounded-md px-4 py-2 text-sm font-semibold ${
               confirmDisabled
                 ? 'cursor-not-allowed bg-gray-200 text-gray-500'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
             }`}
           >
             {confirming ? 'Approving...' : 'Confirm approval'}

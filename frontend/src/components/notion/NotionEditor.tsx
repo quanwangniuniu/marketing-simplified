@@ -333,7 +333,7 @@ const getBlockClassName = (type: NotionBlockType | string) => {
     case 'code':
       return 'font-mono text-sm bg-gray-900 rounded-md px-4 py-4 overflow-x-auto';
     case 'table':
-      return 'text-base leading-7 [&_table]:border-collapse [&_table]:table-fixed [&_table]:rounded-md [&_table]:w-full [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_td]:align-top [&_td]:min-w-[200px] [&_td]:relative [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_th]:relative [&_td:hover_.column-resize-handle]:bg-blue-500 [&_td:hover_.column-resize-handle]:opacity-60';
+      return 'text-base leading-7 [&_table]:border-collapse [&_table]:table-fixed [&_table]:rounded-md [&_table]:w-full [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_td]:align-top [&_td]:min-w-[200px] [&_td]:relative [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_th]:relative [&_td:hover_.column-resize-handle]:bg-[#3CCED7] [&_td:hover_.column-resize-handle]:opacity-60';
     case 'list':
     case 'numbered_list':
     case 'todo_list':
@@ -3104,7 +3104,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                 <div
                   key={block.id}
                   className={`group relative flex items-center ${
-                    isSelected ? 'bg-blue-50' : ''
+                    isSelected ? 'bg-[#3CCED7]/10' : ''
                   }`}
                   onMouseEnter={() => setHoveredBlockId(block.id)}
                   onMouseLeave={() => setHoveredBlockId(null)}
@@ -3115,7 +3115,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                 >
                   {/* Drag indicator line above */}
                   {showDragIndicator && dragPosition === 'before' && (
-                    <div className="absolute -top-2 left-0 right-0 h-0.5 bg-blue-500 z-10" />
+                    <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
                   )}
 
                   <div className="flex items-center justify-between group w-full">
@@ -3176,7 +3176,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
 
                   {/* Drag indicator line below */}
                   {showDragIndicator && dragPosition === 'after' && (
-                    <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-blue-500 z-10" />
+                    <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
                   )}
                 </div>
               );
@@ -3187,7 +3187,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
               <div
                 key={block.id}
                 className={`group relative ${isDragged ? 'opacity-50' : ''} ${
-                  isSelected ? 'bg-blue-50' : ''
+                  isSelected ? 'bg-[#3CCED7]/10' : ''
                 } ${block.type === 'table' ? 'mb-10 pb-10' : ''}`}
                 onMouseEnter={() => setHoveredBlockId(block.id)}
                 onMouseLeave={() => setHoveredBlockId(null)}
@@ -3202,7 +3202,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
               >
                 {/* Drag indicator line above */}
                 {showDragIndicator && dragPosition === 'before' && (
-                  <div className="absolute -top-2 left-0 right-0 h-0.5 bg-blue-500 z-10" />
+                  <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
                 )}
                 
                 <div className="flex items-center justify-between group w-full">
@@ -3250,7 +3250,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                               toggleTodoState(block.id);
                             }}
                             className={`w-4 h-4 flex items-center justify-center border rounded ${
-                              todoChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
+                              todoChecked ? 'bg-[#3CCED7] border-[#3CCED7]' : 'border-gray-400'
                             }`}
                             aria-label={todoChecked ? 'Mark to-do incomplete' : 'Mark to-do complete'}
                           >
@@ -3351,7 +3351,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                                     updateBlockLanguage(block.id, lang.value);
                                   }}
                                   className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
-                                    (block.language || 'plain') === lang.value ? 'bg-blue-50 text-blue-600' : ''
+                                    (block.language || 'plain') === lang.value ? 'bg-[#3CCED7]/10 text-[#3CCED7]' : ''
                                   }`}
                                 >
                                   {lang.label}
@@ -3623,7 +3623,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                           ref={(node) => registerBlockRef(block.id, node)}
                           contentEditable
                           suppressContentEditableWarning
-                          className={`w-full min-h-[1.5rem] focus:outline-none ${getBlockClassName(block.type)} relative z-10 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800 ${
+                          className={`w-full min-h-[1.5rem] focus:outline-none ${getBlockClassName(block.type)} relative z-10 [&_a]:text-[#3CCED7] [&_a]:underline [&_a:hover]:text-[#1a9ba3] ${
                             block.type === 'table' ? 'border border-gray-200 rounded-md bg-white overflow-x-auto overflow-y-visible' : ''
                           }`}
                           data-block-id={block.id}
@@ -3728,7 +3728,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                 
                 {/* Drag indicator line below */}
                 {showDragIndicator && dragPosition === 'after' && (
-                  <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-blue-500 z-10" />
+                  <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
                 )}
               </div>
             );

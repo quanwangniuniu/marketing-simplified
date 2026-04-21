@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function Modal({ isOpen, onClose, children }) {
+export default function Modal({ isOpen, onClose, children, disableBackdropClose = false }) {
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
@@ -27,11 +27,11 @@ export default function Modal({ isOpen, onClose, children }) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={onClose}
+        onClick={disableBackdropClose ? undefined : onClose}
       />
-      
+
       {/* Modal Content */}
       <div className="relative z-10 mx-auto">
         {children}
@@ -39,4 +39,4 @@ export default function Modal({ isOpen, onClose, children }) {
     </div>,
     document.body
   );
-} 
+}

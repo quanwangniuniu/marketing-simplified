@@ -66,7 +66,7 @@ export function WorkflowToolbar({
         >
           <RefreshCw
             className={`h-4 w-4 ${
-              loading ? "animate-spin text-blue-600" : "text-gray-400"
+              loading ? "animate-spin text-[#3CCED7]" : "text-gray-400"
             }`}
           />
           Refresh

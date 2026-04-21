@@ -357,30 +357,6 @@ class ParticipantLinkViewSet(viewsets.ModelViewSet):
         serializer.save(meeting=meeting)
 
 
-class ActionItemViewSet(viewsets.ModelViewSet):
-    serializer_class = MeetingActionItemSerializer 
-    permission_classes = [IsAuthenticated]
-
-    def get_meeting(self) -> Meeting:
-        project_id = self.kwargs.get("project_id")
-        meeting_id = self.kwargs.get("meeting_id")
-        meeting = get_object_or_404(
-            Meeting.objects.select_related("project"),
-            id=meeting_id,
-            project_id=project_id,
-        )
-        _ensure_project_membership(self.request.user, meeting.project)
-        return meeting
-
-    def get_queryset(self):
-        meeting = self.get_meeting()
-        return meeting.action_items.all().order_by("id")
-
-    def perform_create(self, serializer):
-        meeting = self.get_meeting()
-        serializer.save(meeting=meeting)
-
-
 class ArtifactLinkViewSet(viewsets.ModelViewSet):
     serializer_class = ArtifactLinkSerializer
     permission_classes = [IsAuthenticated]

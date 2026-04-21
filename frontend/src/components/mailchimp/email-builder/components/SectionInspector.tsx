@@ -23,7 +23,7 @@ const SectionInspector: React.FC<SectionInspectorProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => setSelectedSection(null)}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done

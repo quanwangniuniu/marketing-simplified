@@ -68,8 +68,8 @@ export function MeetingGeneratedKnowledgeSection({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-900">Generated decisions</h3>
           <Link
-            href={`/decisions/new?project_id=${projectId}&origin_meeting_id=${meetingId}`}
-            className="text-xs font-medium text-blue-700 hover:underline"
+            href={`/decisions?project_id=${projectId}&origin_meeting_id=${meetingId}`}
+            className="text-xs font-medium text-[#1a9ba3] hover:underline"
           >
             Create decision from this meeting
           </Link>
@@ -82,7 +82,7 @@ export function MeetingGeneratedKnowledgeSection({
               <li key={d.id}>
                 <Link
                   href={d.detail_url ?? d.url}
-                  className="block rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm font-medium text-blue-800 hover:bg-blue-50/60 hover:underline"
+                  className="block rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm font-medium text-[#1a9ba3] hover:bg-[#3CCED7]/10/60 hover:underline"
                 >
                   {d.title}
                   {d.status ? <MetaLine>Status: {d.status}</MetaLine> : null}

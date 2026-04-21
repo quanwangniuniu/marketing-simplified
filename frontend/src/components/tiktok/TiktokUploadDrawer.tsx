@@ -162,7 +162,7 @@ const TiktokUploadDrawer: React.FC<TiktokUploadDrawerProps> = ({ isOpen, onClose
             onClick={handleSelectFiles}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectFiles(); } }}
             className={`border-2 border-dashed rounded-lg h-72 flex flex-col items-center justify-center text-gray-600 ${
-              isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+              isDragging ? 'border-[#3CCED7] bg-[#3CCED7]/10' : 'border-gray-300'
             } cursor-pointer select-none`}
             role="button"
             tabIndex={0}
@@ -259,7 +259,7 @@ const TiktokUploadDrawer: React.FC<TiktokUploadDrawerProps> = ({ isOpen, onClose
                 <div>
                   <span className="font-medium">Aspect ratio requirements for all placements:</span> Horizontal(16:9) / Square(1:1) / Vertical(9:16)
                 </div>
-                <button className="text-blue-600 text-sm hover:underline" type="button">
+                <button className="text-[#3CCED7] text-sm hover:underline" type="button">
                   View recommended video specs
                 </button>
               </div>
@@ -270,7 +270,7 @@ const TiktokUploadDrawer: React.FC<TiktokUploadDrawerProps> = ({ isOpen, onClose
                 <div>
                   <span className="font-medium">File format:</span> .jpg, .jpeg, .png, or .webp
                 </div>
-                <button className="text-blue-600 text-sm hover:underline" type="button">
+                <button className="text-[#3CCED7] text-sm hover:underline" type="button">
                   View recommended image specs
                 </button>
               </div>
@@ -314,7 +314,7 @@ const TiktokUploadDrawer: React.FC<TiktokUploadDrawerProps> = ({ isOpen, onClose
               }
               onClose();
             }}
-            className={`px-4 py-2 rounded-md ${canUpload ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            className={`px-4 py-2 rounded-md ${canUpload ? 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
           >
             Upload
           </button>
