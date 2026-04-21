@@ -93,7 +93,7 @@ const navGroups: NavGroup[] = [
     title: 'COLLABORATE',
     items: [
       { label: 'Meetings', href: '/meetings', icon: Users },
-      { label: 'Calendar', href: '/calendar', icon: Calendar },
+      { label: 'Calendar', href: '/calendar-v2', icon: Calendar },
       { label: 'Messages', href: '/messages-v2', icon: MessageSquare },
       { label: 'Miro', href: '/miro', icon: Presentation },
     ],
