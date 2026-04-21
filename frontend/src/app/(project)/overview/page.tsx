@@ -5,7 +5,6 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import OverviewContent from '@/components/overview/OverviewContent';
 import { useOverviewData } from '@/hooks/useOverviewData';
 import { useProjectStore } from '@/lib/projectStore';
-import { useAuthStore } from '@/lib/authStore';
 
 function OverviewSkeleton() {
   return (
@@ -38,21 +37,10 @@ function ErrorBanner({ errors }: { errors: Record<string, string> }) {
   );
 }
 
-function hasAdminRole(roles: unknown): boolean {
-  if (!Array.isArray(roles)) return false;
-  return roles.some((r) => {
-    if (typeof r !== 'string') return false;
-    const lower = r.toLowerCase();
-    return lower.includes('admin') || lower.includes('owner');
-  });
-}
-
 export default function OverviewPage() {
   const activeProject = useProjectStore((s) => s.activeProject);
-  const user = useAuthStore((s) => s.user);
   const projectId = activeProject?.id ?? null;
   const { data, alerts, loading, errors } = useOverviewData(projectId);
-  const canAdminister = hasAdminRole(user?.roles);
 
   return (
     <DashboardLayout alerts={alerts} upcomingMeetings={data.upcomingMeetings}>
@@ -60,7 +48,11 @@ export default function OverviewPage() {
       {loading ? (
         <OverviewSkeleton />
       ) : (
-        <OverviewContent data={data} canAdminister={canAdminister} />
+        <OverviewContent
+          data={data}
+          projectId={projectId}
+          projectName={activeProject?.name}
+        />
       )}
       <ChatFAB />
     </DashboardLayout>
