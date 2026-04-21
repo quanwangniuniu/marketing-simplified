@@ -1,10 +1,11 @@
 'use client';
 
 import ChatFAB from '@/components/global-chat/ChatFAB';
-import DashboardLayout from '@/components/dashboard-v2/DashboardLayout';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import OverviewContent from '@/components/overview/OverviewContent';
 import { useOverviewData } from '@/hooks/useOverviewData';
 import { useProjectStore } from '@/lib/projectStore';
+import { useAuthStore } from '@/lib/authStore';
 
 function OverviewSkeleton() {
   return (
@@ -37,15 +38,30 @@ function ErrorBanner({ errors }: { errors: Record<string, string> }) {
   );
 }
 
+function hasAdminRole(roles: unknown): boolean {
+  if (!Array.isArray(roles)) return false;
+  return roles.some((r) => {
+    if (typeof r !== 'string') return false;
+    const lower = r.toLowerCase();
+    return lower.includes('admin') || lower.includes('owner');
+  });
+}
+
 export default function OverviewPage() {
   const activeProject = useProjectStore((s) => s.activeProject);
+  const user = useAuthStore((s) => s.user);
   const projectId = activeProject?.id ?? null;
   const { data, alerts, loading, errors } = useOverviewData(projectId);
+  const canAdminister = hasAdminRole(user?.roles);
 
   return (
     <DashboardLayout alerts={alerts} upcomingMeetings={data.upcomingMeetings}>
       <ErrorBanner errors={errors} />
-      {loading ? <OverviewSkeleton /> : <OverviewContent data={data} />}
+      {loading ? (
+        <OverviewSkeleton />
+      ) : (
+        <OverviewContent data={data} canAdminister={canAdminister} />
+      )}
       <ChatFAB />
     </DashboardLayout>
   );
