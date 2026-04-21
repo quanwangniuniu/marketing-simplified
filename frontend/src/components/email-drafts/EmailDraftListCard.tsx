@@ -25,7 +25,7 @@ export type EmailDraftListCardProps = {
 
 const statusStyles: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
-  scheduled: "bg-blue-100 text-blue-700",
+  scheduled: "bg-[#3CCED7]/15 text-[#1a9ba3]",
   sent: "bg-green-100 text-green-700",
   error: "bg-red-100 text-red-700",
   locked: "bg-gray-200 text-gray-700",
@@ -90,7 +90,7 @@ export function EmailDraftListCard({
 
       <td className="py-1 px-3 w-[90%]">
         <div
-          className={`font-medium text-blue-700 ${
+          className={`font-medium text-[#1a9ba3] ${
             onTitleClick ? "hover:underline cursor-pointer" : ""
           }`}
           onClick={onTitleClick}

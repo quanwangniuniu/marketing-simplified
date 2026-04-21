@@ -3,7 +3,7 @@ import Link from "next/link"
 const footerLinks: Record<string, { label: string; href: string }[]> = {
   Product: [
     { label: "AI Agent", href: "/agent" },
-    { label: "Spreadsheets", href: "/spreadsheet" },
+    { label: "Spreadsheets", href: "/spreadsheets" },
     { label: "Campaigns", href: "/campaigns" },
     { label: "Meetings", href: "/meetings" },
     { label: "Tasks", href: "/tasks" },

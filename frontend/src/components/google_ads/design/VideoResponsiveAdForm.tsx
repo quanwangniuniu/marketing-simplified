@@ -314,7 +314,7 @@ export default function VideoResponsiveAdForm({
                   value={headline}
                   onChange={(e) => handleLongHeadlineChange(index, e.target.value)}
                   placeholder="Long headline"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                   maxLength={90}
                 />
                 <div className={`text-xs mt-1 ${getCharacterCountColor(headline.length, 90)}`}>
@@ -348,7 +348,7 @@ export default function VideoResponsiveAdForm({
                   onChange={(e) => handleDescriptionChange(index, e.target.value)}
                   placeholder="Description"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] resize-none"
                   maxLength={90}
                 />
                 <div className={`text-xs mt-1 ${getCharacterCountColor(description.length, 90)}`}>
@@ -377,7 +377,7 @@ export default function VideoResponsiveAdForm({
                 setCallToActionsEnabled(e.target.checked);
                 handleUpdate();
               }}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+              className="rounded border-gray-300 text-[#3CCED7] shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
             />
             <span className="ml-2 text-sm text-gray-700">Enable call to action</span>
           </label>
@@ -393,7 +393,7 @@ export default function VideoResponsiveAdForm({
                     value={cta}
                     onChange={(e) => handleCallToActionChange(index, e.target.value)}
                     placeholder="Call to action text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                     maxLength={10}
                   />
                   <div className="flex justify-between items-center mt-1">
@@ -413,7 +413,7 @@ export default function VideoResponsiveAdForm({
             {callToActions.length < 1 && (
               <button
                 onClick={addCallToAction}
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                className="text-[#3CCED7] hover:text-[#1a9ba3] text-sm font-medium"
               >
                 + Add Call to Action
               </button>
@@ -442,7 +442,7 @@ export default function VideoResponsiveAdForm({
                 handleUpdate(undefined, undefined, undefined, newValue);
               }}
               placeholder="e.g., Home"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               maxLength={15}
             />
             <div className={`text-xs mt-1 ${getCharacterCountColor(breadcrumb1.length, 15)}`}>
@@ -462,7 +462,7 @@ export default function VideoResponsiveAdForm({
                 handleUpdate(undefined, undefined, undefined, undefined, newValue);
               }}
               placeholder="e.g., Products"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               maxLength={15}
             />
             <div className={`text-xs mt-1 ${getCharacterCountColor(breadcrumb2.length, 15)}`}>

@@ -45,7 +45,7 @@ export default function MessageStatus({ message }: MessageStatusProps) {
     case 'read':
       return (
         <CheckCheck
-          className="w-3 h-3 text-blue-500"
+          className="w-3 h-3 text-[#3CCED7]"
           aria-label="Read"
         />
       );

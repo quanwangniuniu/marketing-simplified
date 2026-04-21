@@ -133,7 +133,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
     <>
       <div className="bg-white rounded-lg shadow-2xl w-[380px] h-[600px] flex flex-col overflow-hidden border border-gray-200">
         {/* Header */}
-        <div className="bg-blue-600 text-white px-4 py-3 flex flex-col gap-2 flex-shrink-0">
+        <div className="bg-[#3CCED7] text-white px-4 py-3 flex flex-col gap-2 flex-shrink-0">
           {/* Top row: Title and controls */}
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg">
@@ -143,7 +143,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
               {/* Expand to Messages Page Button */}
               <button
                 onClick={handleOpenMessagesPage}
-                className="hover:bg-blue-700 rounded p-1.5 transition-colors"
+                className="hover:bg-[#2AB5BD] rounded p-1.5 transition-colors"
                 aria-label="Open in Messages page"
                 title="Open full Messages page"
               >
@@ -152,7 +152,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
               {/* Minimize Button */}
               <button
                 onClick={closeWidget}
-                className="hover:bg-blue-700 rounded p-1.5 transition-colors"
+                className="hover:bg-[#2AB5BD] rounded p-1.5 transition-colors"
                 aria-label="Minimize"
                 title="Minimize"
               >
@@ -161,7 +161,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
               {/* Close Button */}
               <button
                 onClick={closeWidget}
-                className="hover:bg-blue-700 rounded p-1.5 transition-colors"
+                className="hover:bg-[#2AB5BD] rounded p-1.5 transition-colors"
                 aria-label="Close"
                 title="Close"
               >
@@ -174,7 +174,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-              className="flex items-center gap-2 w-full px-2 py-1.5 bg-blue-700 hover:bg-blue-800 rounded text-sm transition-colors"
+              className="flex items-center gap-2 w-full px-2 py-1.5 bg-[#2AB5BD] hover:bg-[#1a9ba3] rounded text-sm transition-colors"
             >
               <FolderOpen className="w-4 h-4 flex-shrink-0" />
               <span className="truncate flex-1 text-left">{currentProjectName}</span>
@@ -192,7 +192,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
                       key={project.id}
                       onClick={() => handleProjectSelect(project)}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center gap-2 ${
-                        project.id === widgetProjectId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                        project.id === widgetProjectId ? 'bg-[#3CCED7]/10 text-[#1a9ba3]' : 'text-gray-700'
                       }`}
                     >
                       <FolderOpen className="w-4 h-4 flex-shrink-0" />

@@ -5,6 +5,7 @@ import { AlertTriangle, AlertCircle, ChevronDown, ChevronUp, X } from "lucide-re
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 // AgentAPI removed — analysis results come from pipeline SSE
+import { AgentAnalysisCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface AnomalyCard {
   id: number
@@ -28,9 +29,10 @@ function mapSeverity(s: string): "critical" | "warning" | "info" {
 
 interface AnalysisResultsProps {
   filename: string
+  loading?: boolean
 }
 
-export function AnalysisResults({ filename }: AnalysisResultsProps) {
+export function AnalysisResults({ filename, loading: loadingOverride = false }: AnalysisResultsProps) {
   const [expanded, setExpanded] = useState(true)
   const [anomalies, setAnomalies] = useState<AnomalyCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,6 +53,11 @@ export function AnalysisResults({ filename }: AnalysisResultsProps) {
   }
 
   const selectedCount = anomalies.filter((a) => a.selected).length
+  const isLoading = loadingOverride || loading
+
+  if (expanded && isLoading) {
+    return <AgentAnalysisCardSkeleton />
+  }
 
   return (
     <Card className="bg-card border-border">
@@ -59,12 +66,12 @@ export function AnalysisResults({ filename }: AnalysisResultsProps) {
           onClick={() => setExpanded(!expanded)}
           className="flex items-center justify-between w-full"
         >
-          <CardTitle className="text-sm font-medium text-card-foreground">
-            AI Analysis Results
-          </CardTitle>
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              AI Analysis Results
+            </CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {loading ? "Loading..." : `${anomalies.length} findings`}
+              {isLoading ? "Loading..." : `${anomalies.length} findings`}
             </span>
             {expanded ? (
               <ChevronUp className="w-4 h-4 text-muted-foreground" />
@@ -76,7 +83,7 @@ export function AnalysisResults({ filename }: AnalysisResultsProps) {
       </CardHeader>
       {expanded && (
         <CardContent className="space-y-3">
-          {loading ? (
+          {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-4">Analyzing data...</p>
           ) : anomalies.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">No anomalies detected</p>

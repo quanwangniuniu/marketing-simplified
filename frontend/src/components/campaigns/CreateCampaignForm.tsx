@@ -153,7 +153,7 @@ export default function CreateCampaignForm({
           onChange={(e) => onFieldChange('name', e.target.value)}
           className={`w-full px-3 py-2 border rounded-md ${
             errors.name ? 'border-red-500' : 'border-gray-300'
-          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          } focus:outline-none focus:ring-2 focus:ring-[#3CCED7]`}
           placeholder="Enter campaign name"
         />
         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
@@ -197,7 +197,7 @@ export default function CreateCampaignForm({
                 onClick={() => handlePlatformToggle(option.value)}
                 className={`px-3 py-1 rounded-md border text-sm transition-colors ${
                   isSelected
-                    ? 'bg-blue-50 border-blue-500 text-blue-700'
+                    ? 'bg-[#3CCED7]/10 border-[#3CCED7] text-[#1a9ba3]'
                     : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -265,7 +265,7 @@ export default function CreateCampaignForm({
           onChange={(e) => onFieldChange('start_date', e.target.value)}
           className={`w-full px-3 py-2 border rounded-md ${
             errors.start_date ? 'border-red-500' : 'border-gray-300'
-          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          } focus:outline-none focus:ring-2 focus:ring-[#3CCED7]`}
         />
         {errors.start_date && <p className="mt-1 text-sm text-red-600">{errors.start_date}</p>}
       </div>
@@ -281,7 +281,7 @@ export default function CreateCampaignForm({
           value={formData.end_date || ''}
           onChange={(e) => onFieldChange('end_date', e.target.value || undefined)}
           min={formData.start_date || ''}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
         />
         {errors.end_date && <p className="mt-1 text-sm text-red-600">{errors.end_date}</p>}
       </div>
@@ -296,7 +296,7 @@ export default function CreateCampaignForm({
           value={formData.hypothesis || ''}
           onChange={(e) => onFieldChange('hypothesis', e.target.value || undefined)}
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
           placeholder="Enter your campaign hypothesis"
         />
       </div>
@@ -324,7 +324,7 @@ export default function CreateCampaignForm({
           type="text"
           id="tags"
           onKeyDown={handleTagInput}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
           placeholder="Type a tag and press Enter"
         />
       </div>
@@ -343,7 +343,7 @@ export default function CreateCampaignForm({
           }
           min="0"
           step="0.01"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
           placeholder="0.00"
         />
       </div>

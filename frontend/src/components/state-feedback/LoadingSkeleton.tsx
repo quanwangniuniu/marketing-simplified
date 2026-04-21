@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type LoadingSkeletonProps = {
   rows?: number;
@@ -23,11 +24,10 @@ export default function LoadingSkeleton({
   return (
     <div className={`flex w-full flex-col gap-3 ${className}`}>
       {Array.from({ length: rows }).map((_, index) => (
-        <div
+        <Skeleton
           key={`skeleton-${index}`}
-          className={`animate-pulse bg-slate-200 ${rounded}`}
+          className={rounded}
           style={style}
-          aria-hidden="true"
         />
       ))}
     </div>

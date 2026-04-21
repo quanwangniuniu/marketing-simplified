@@ -18,7 +18,6 @@ export function waitForTasksPageReady(): void {
     }
   });
 
-  cy.contains("Initializing...", { timeout: 15_000 }).should("not.exist");
   cy.contains("Guided Onboarding", { timeout: 15_000 }).should("not.exist");
   cy.contains("Preparing your workspace", { timeout: 15_000 }).should(
     "not.exist",
@@ -34,7 +33,6 @@ export function selectProject(): void {
     Cypress.env("E2E_PROJECT_NAME") || "E2E Test Project";
 
   cy.visit("/tasks");
-  cy.contains("Initializing...", { timeout: 15_000 }).should("not.exist");
   cy.contains("Preparing your workspace", { timeout: 30_000 }).should(
     "not.exist",
   );

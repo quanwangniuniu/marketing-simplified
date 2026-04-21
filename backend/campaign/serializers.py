@@ -221,7 +221,7 @@ class CampaignUpdateSerializer(serializers.ModelSerializer):
             'platforms': {'required': False},
         }
 
-    assignee_id = serializers.UUIDField(required=False, allow_null=True)
+    assignee_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate_platforms(self, value):
         """Validate platforms list"""
@@ -408,7 +408,7 @@ class CampaignTemplateSerializer(serializers.ModelSerializer):
             'id', 'creator', 'version_number', 'usage_count', 'created_at', 'updated_at'
         ]
 
-    project_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    project_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     def create(self, validated_data):
         """Create template with automatic creator assignment and auto-versioning.

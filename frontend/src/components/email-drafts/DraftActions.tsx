@@ -74,7 +74,7 @@ export function DraftActions({
         </button>
         <button
           type="button"
-          className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700 ${
+          className={`${buttonClass} bg-[#3CCED7] text-white hover:bg-[#2AB5BD] ${
             sendDisabled ? "opacity-60 cursor-not-allowed" : ""
           }`}
           onClick={onSend}
@@ -170,7 +170,7 @@ export function DraftActions({
       </button>
       <button
         type="button"
-        className={`${iconButtonClass} bg-blue-600 text-white hover:bg-blue-700 ${
+        className={`${iconButtonClass} bg-[#3CCED7] text-white hover:bg-[#2AB5BD] ${
           sendDisabled ? "opacity-60 cursor-not-allowed" : ""
         }`}
         onClick={onSend}

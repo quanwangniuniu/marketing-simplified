@@ -3,7 +3,6 @@
 import React from 'react';
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useAuthStore } from '@/lib/authStore';
 import OnboardingWizard from './OnboardingWizard';
@@ -23,7 +22,12 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const isAuthRoute = isPublicAuthRoute || isOAuthCallbackRoute;
   const isRootRoute = pathname === '/';
   const { needsOnboarding, checking } = useOnboarding();
-  const showOverlay = !isAuthRoute && (needsOnboarding || checking);
+  const shouldShowOnboardingWizard = !isAuthRoute && needsOnboarding;
+  // Legacy "Preparing your workspace" blue spinner is intentionally disabled
+  // (G-09): per-page skeletons in dashboard-v2 already cover the brief check
+  // window, and stacking two overlays in a row was jarring.
+  const shouldShowBlockingCheck = false;
+  const shouldBlockBackground = shouldShowOnboardingWizard || shouldShowBlockingCheck;
 
   useEffect(() => {
     // Requirement: after signup, entering localhost should reset to logged-out
@@ -36,30 +40,18 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
     <div className="relative">
       <div
         className={`min-h-screen transition duration-200 ${
-          showOverlay ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
+          shouldBlockBackground ? 'pointer-events-none select-none blur-sm overflow-hidden' : ''
         }`}
       >
         {children}
       </div>
 
-      {showOverlay && (
-        <div className="pointer-events-none absolute inset-0 z-[9998] bg-slate-900/70 backdrop-blur-sm" />
+      {shouldBlockBackground && (
+        <div className="pointer-events-none fixed inset-0 z-[9998] bg-white/30 backdrop-blur-md" />
       )}
 
-      {!isAuthRoute && checking && !needsOnboarding && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-x-hidden px-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-100 px-6 py-5 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-            <div>
-              <div className="text-sm font-semibold text-gray-900">Preparing your workspace</div>
-              <div className="text-xs text-gray-600">Checking your project access...</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!isAuthRoute && needsOnboarding && (
-        <div className="relative z-[9999] -mt-[100vh] flex min-h-screen w-full items-center justify-center px-4 py-8">
+      {shouldShowOnboardingWizard && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto px-4 py-8">
           <OnboardingWizard />
         </div>
       )}

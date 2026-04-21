@@ -176,7 +176,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
                 placeholder={`${sourceNode?.label} → ${targetNode?.label}`}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
               />
               <p className="text-xs text-gray-500">
                 Leave empty to use default name (From → To)
@@ -184,7 +184,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
               <div className="flex gap-2">
                 <button
                   onClick={handleNameUpdate}
-                  className="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                  className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD]"
                 >
                   Update
                 </button>
@@ -224,7 +224,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
                 <select
                   value={editedFromNodeId || ""}
                   onChange={(e) => setEditedFromNodeId(Number(e.target.value) || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 >
                   <option value="">Select source node</option>
                   {nodes.filter(node => node.node_type !== "done").map((node) => (
@@ -239,7 +239,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
                 <select
                   value={editedToNodeId || ""}
                   onChange={(e) => setEditedToNodeId(Number(e.target.value) || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 >
                   <option value="">Select destination node</option>
                   {nodes.map((node) => (
@@ -252,7 +252,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
               <div className="flex gap-2">
                 <button
                   onClick={handlePathUpdate}
-                  className="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                  className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD]"
                 >
                   Update
                 </button>
@@ -289,7 +289,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
           <select
             value={connection.event_type || "manual_transition"}
             onChange={(e) => handleEventUpdate(e.target.value)}
-            className="w-full rounded-lg border-gray-300 bg-white px-3 py-2 text-sm border focus:border-blue-500 focus:ring-blue-500"
+            className="w-full rounded-lg border-gray-300 bg-white px-3 py-2 text-sm border focus:border-[#3CCED7] focus:ring-[#3CCED7]"
           >
             {EVENT_TYPES.map((event) => (
               <option key={event.value} value={event.value}>
@@ -304,12 +304,12 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
               Properties
-              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-[#3CCED7]/15 text-[#1a9ba3] rounded">
                 {Object.keys(connection.properties || {}).length}
               </span>
             </label>
             <button
-              className="text-blue-600 hover:text-blue-700 transition-colors"
+              className="text-[#3CCED7] hover:text-[#1a9ba3] transition-colors"
               onClick={() => setPropertiesOpen(!propertiesOpen)}
             >
               <Plus className="h-4 w-4" />
@@ -351,13 +351,13 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
 
               {/* Add new property form */}
               {isAddingProperty ? (
-                <div className="p-3 bg-white rounded-lg border-2 border-blue-500 space-y-2">
+                <div className="p-3 bg-white rounded-lg border-2 border-[#3CCED7] space-y-2">
                   <input
                     type="text"
                     value={newPropertyKey}
                     onChange={(e) => setNewPropertyKey(e.target.value)}
                     placeholder="Property key"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                     autoFocus
                   />
                   <input
@@ -365,12 +365,12 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
                     value={newPropertyValue}
                     onChange={(e) => setNewPropertyValue(e.target.value)}
                     placeholder="Property value"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={handleAddProperty}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD]"
                     >
                       Add
                     </button>
@@ -389,7 +389,7 @@ export default function ConnectionEditor({ connectionId, workflowId }: Connectio
               ) : (
                 <button
                   onClick={() => setIsAddingProperty(true)}
-                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:border-[#3CCED7] hover:text-[#3CCED7] hover:bg-[#3CCED7]/10 transition-colors"
                 >
                   + Add new property
                 </button>

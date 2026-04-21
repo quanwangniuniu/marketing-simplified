@@ -167,7 +167,7 @@ export function WorkflowViews({
                   <div className="inline-flex items-center gap-1">
                     <button
                       onClick={() => onEdit(workflow)}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#1a9ba3] hover:bg-[#3CCED7]/10"
                     >
                       <Edit2 className="h-3 w-3" />
                       Edit workflow
@@ -207,7 +207,7 @@ export function WorkflowViews({
         {workflows.map((workflow) => (
           <div
             key={workflow.id}
-            className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-200 hover:shadow-md"
+            className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:border-[#3CCED7]/30 hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -224,7 +224,7 @@ export function WorkflowViews({
               <span>Version {workflow.version}</span>
               <button
                 onClick={() => onEdit(workflow)}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#1a9ba3] hover:bg-[#3CCED7]/10"
               >
                 Edit workflow
                 <ArrowRight className="h-3 w-3" />

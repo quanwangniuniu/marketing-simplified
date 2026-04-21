@@ -87,7 +87,7 @@ export default function PlanCard({ name, price, priceLabel, priceSubtext, badge,
           <button
             onClick={handleSubscribe}
             disabled={isLoading || isCurrentPlan}
-            className='w-full py-3 text-base font-medium rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:cursor-not-allowed disabled:text-gray-500 flex items-center justify-center gap-2'
+            className='w-full py-3 text-base font-medium rounded-lg transition-opacity bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white shadow-sm hover:opacity-95 disabled:opacity-50 disabled:bg-gray-200 disabled:bg-none disabled:cursor-not-allowed disabled:text-gray-500 flex items-center justify-center gap-2'
           >
             {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
             {isCurrentPlan ? 'Current plan' : ctaText}
@@ -115,8 +115,8 @@ export default function PlanCard({ name, price, priceLabel, priceSubtext, badge,
                       </div>
                       <div className="relative">
                         <div className="group/icon">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer hover:text-blue-600 transition-colors">
-                            <Info className="w-4 h-4 text-gray-400 group-hover/icon:text-blue-600" />
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer hover:text-[#3CCED7] transition-colors">
+                            <Info className="w-4 h-4 text-gray-400 group-hover/icon:text-[#3CCED7]" />
                           </div>
                           <div className="absolute right-0 bottom-6 z-100 hidden group-hover/icon:block w-56 p-2 rounded-md bg-white border border-gray-200 shadow-lg text-[12px] text-gray-700">
                             {feat.tooltip}

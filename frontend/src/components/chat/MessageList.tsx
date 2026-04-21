@@ -167,7 +167,7 @@ export default function MessageList({
       {/* Loading indicator at top */}
       {isLoading && hasMore && (
         <div className="flex justify-center py-3">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
         </div>
       )}
 

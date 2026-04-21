@@ -596,14 +596,14 @@ const KlaviyoCanvasBlockRenderer: React.FC<KlaviyoCanvasBlockRendererProps> = ({
     case "Table":
       return (
         <div className="py-4 border border-gray-200 rounded p-4 text-center text-gray-600">
-          <Table className="h-8 w-8 mx-auto mb-2 text-blue-600" />
+          <Table className="h-8 w-8 mx-auto mb-2 text-[#3CCED7]" />
           <p className="text-sm font-medium">{block.label || "Table"}</p>
         </div>
       );
     case "ReviewQuote":
       return (
         <div className="py-4 border border-gray-200 rounded p-4 text-center text-gray-600">
-          <MessageSquare className="h-8 w-8 mx-auto mb-2 text-blue-600" />
+          <MessageSquare className="h-8 w-8 mx-auto mb-2 text-[#3CCED7]" />
           <p className="text-sm font-medium">{block.label || "Review quote"}</p>
         </div>
       );

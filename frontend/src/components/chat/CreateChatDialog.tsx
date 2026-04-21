@@ -168,7 +168,7 @@ export default function CreateChatDialog({
                   disabled={isCreating}
                   className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
                     chatType === 'private'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#3CCED7] text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
@@ -179,7 +179,7 @@ export default function CreateChatDialog({
                   disabled={isCreating}
                   className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
                     chatType === 'group'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#3CCED7] text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
@@ -202,7 +202,7 @@ export default function CreateChatDialog({
                 onChange={(e) => setGroupName(e.target.value)}
                 placeholder={variant === 'channel' ? 'e.g., general' : 'e.g., Design Team'}
                 disabled={isCreating}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
           )}
@@ -250,7 +250,7 @@ export default function CreateChatDialog({
           <button
             onClick={handleCreate}
             disabled={!isValid() || isCreating}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] hover:bg-[#2AB5BD] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isCreating ? (
               <>

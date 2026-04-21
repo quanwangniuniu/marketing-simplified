@@ -236,7 +236,7 @@ export function MeetingActionItemsSection({
             <Button
               type="button"
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-[#3CCED7] hover:bg-[#2AB5BD]"
               disabled={adding || !newTitle.trim()}
               onClick={() => void addItem()}
             >
@@ -358,7 +358,7 @@ export function MeetingActionItemsSection({
                       {row.converted_task_id != null ? (
                         <Link
                           href={`/tasks/${row.converted_task_id}`}
-                          className="mt-1 inline-block text-xs font-medium text-blue-700 hover:underline"
+                          className="mt-1 inline-block text-xs font-medium text-[#1a9ba3] hover:underline"
                         >
                           Open task #{row.converted_task_id}
                         </Link>
@@ -367,7 +367,7 @@ export function MeetingActionItemsSection({
                           <Button
                             type="button"
                             size="sm"
-                            className="bg-blue-600 hover:bg-blue-700"
+                            className="bg-[#3CCED7] hover:bg-[#2AB5BD]"
                             disabled={rowBusy === row.id || convertOwnerId === ''}
                             onClick={() => void convertOne(row.id)}
                           >

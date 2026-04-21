@@ -118,7 +118,7 @@ const KlaviyoImageSelectionModal: React.FC<KlaviyoImageSelectionModalProps> = ({
             <button
               className={`pb-3 text-sm ${
                 activeTab === 'library'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'border-b-2 border-[#3CCED7] text-[#3CCED7]'
                   : 'text-gray-500'
               }`}
               onClick={() => setActiveTab('library')}
@@ -128,7 +128,7 @@ const KlaviyoImageSelectionModal: React.FC<KlaviyoImageSelectionModalProps> = ({
             <button
               className={`pb-3 text-sm ${
                 activeTab === 'upload'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'border-b-2 border-[#3CCED7] text-[#3CCED7]'
                   : 'text-gray-500'
               }`}
               onClick={() => setActiveTab('upload')}
@@ -138,7 +138,7 @@ const KlaviyoImageSelectionModal: React.FC<KlaviyoImageSelectionModalProps> = ({
             <button
               className={`pb-3 text-sm ${
                 activeTab === 'import-url'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'border-b-2 border-[#3CCED7] text-[#3CCED7]'
                   : 'text-gray-500'
               }`}
               onClick={() => setActiveTab('import-url')}
@@ -320,7 +320,7 @@ const KlaviyoImageSelectionModal: React.FC<KlaviyoImageSelectionModalProps> = ({
               }}
               className={`px-4 py-2 rounded-md ${
                 selectedId !== null
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >

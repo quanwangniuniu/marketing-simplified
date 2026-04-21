@@ -32,7 +32,7 @@ export default function CreativeTestingSection() {
       {/* Description */}
           <p className="text-sm text-gray-700">
               Compare up to 5 different versions of your creative in a test that helps ensure delivery to new test ads.&nbsp;
-              <a href="#" className="text-blue-600 hover:underline text-sm">
+              <a href="#" className="text-[#3CCED7] hover:underline text-sm">
                 About creative testing
               </a>
           </p>

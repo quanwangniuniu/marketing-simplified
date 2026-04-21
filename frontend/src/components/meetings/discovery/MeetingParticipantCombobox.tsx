@@ -60,7 +60,7 @@ export function MeetingParticipantCombobox({
           disabled={disabled}
           data-testid="meeting-participant-combobox-trigger"
           className={cn(
-            'inline-flex h-10 min-w-[12rem] max-w-[18rem] items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed',
+            'inline-flex h-10 min-w-[12rem] max-w-[18rem] items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] disabled:cursor-not-allowed',
             disabled && 'opacity-50',
             triggerClassName,
           )}

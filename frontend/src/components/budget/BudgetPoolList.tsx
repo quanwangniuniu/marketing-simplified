@@ -130,7 +130,7 @@ export default function BudgetPoolList({
                     <span className="text-sm font-semibold text-gray-900">
                       Budget Pool #{pool.id}
                     </span>
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-[#3CCED7]/15 text-[#1a9ba3]">
                       {pool.currency}
                     </span>
                     <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">

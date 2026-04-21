@@ -326,7 +326,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                       socialDisplay: e.target.value as SocialDisplay,
                     })
                   }
-                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent appearance-none bg-white"
                 >
                   <option value="Icon only">Icon only</option>
                   <option value="Icon and text">Icon and text</option>
@@ -348,7 +348,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                   }
                   className={`flex-1 border-2 rounded-lg px-4 py-3 flex items-center justify-center transition ${
                     socialIconStyle === "Plain"
-                      ? "border-blue-700 bg-gray-50"
+                      ? "border-[#2AB5BD] bg-gray-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
@@ -361,7 +361,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                   }
                   className={`flex-1 border-2 rounded-lg px-4 py-3 flex items-center justify-center transition ${
                     socialIconStyle === "Filled"
-                      ? "border-blue-700 bg-gray-50"
+                      ? "border-[#2AB5BD] bg-gray-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
@@ -376,7 +376,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                   }
                   className={`flex-1 border-2 rounded-lg px-4 py-3 flex items-center justify-center transition ${
                     socialIconStyle === "Outlined"
-                      ? "border-blue-700 bg-gray-50"
+                      ? "border-[#2AB5BD] bg-gray-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
@@ -402,7 +402,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     className={`flex-1 border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Horizontal-right" ||
                       socialLayout === "Horizontal-bottom"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -416,7 +416,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     className={`flex-1 border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Vertical-right" ||
                       socialLayout === "Vertical-bottom"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -432,7 +432,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     }
                     className={`border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Horizontal-right"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -447,7 +447,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     }
                     className={`border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Horizontal-bottom"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -460,7 +460,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     }
                     className={`border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Vertical-right"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -473,7 +473,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     }
                     className={`border-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                       socialLayout === "Vertical-bottom"
-                        ? "border-blue-700 bg-gray-50 text-gray-900"
+                        ? "border-[#2AB5BD] bg-gray-50 text-gray-900"
                         : "border-gray-200 text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -566,7 +566,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                       });
                     }
                   }}
-                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent appearance-none bg-white"
                 >
                   <option value="none">None</option>
                   <option value="solid">Solid</option>
@@ -590,7 +590,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                             : undefined,
                         })
                       }
-                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                     />
                   </div>
                   <div className="space-y-1 flex items-center gap-2">
@@ -642,7 +642,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                 />
                 <span
                   className={`w-11 h-6 flex items-center rounded-full p-1 transition ${
-                    linkDeviceStyles ? "bg-blue-600" : "bg-gray-300"
+                    linkDeviceStyles ? "bg-[#3CCED7]" : "bg-gray-300"
                   }`}
                 >
                   <span
@@ -746,7 +746,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                   <label className="flex items-center gap-2 text-xs text-gray-600">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      className="h-4 w-4 text-[#3CCED7] border-gray-300 rounded"
                       checked={isPaddingLinked}
                       onChange={(e) =>
                         handleTogglePaddingLink(e.target.checked)
@@ -763,7 +763,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     onChange={(e) =>
                       handlePaddingChange("top", Number(e.target.value || 0))
                     }
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   />
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -783,7 +783,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                                 Number(e.target.value || 0)
                               )
                             }
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                         </div>
                       )
@@ -810,7 +810,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
             onClick={() => handleSocialTypeChange("Follow")}
             className={`p-4 border-2 rounded-lg text-left transition ${
               socialType === "Follow"
-                ? "border-blue-700 bg-gray-50"
+                ? "border-[#2AB5BD] bg-gray-50"
                 : "border-gray-200 hover:border-gray-300"
             }`}
           >
@@ -831,7 +831,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
             onClick={() => handleSocialTypeChange("Share")}
             className={`p-4 border-2 rounded-lg text-left transition ${
               socialType === "Share"
-                ? "border-blue-700 bg-gray-50"
+                ? "border-[#2AB5BD] bg-gray-50"
                 : "border-gray-200 hover:border-gray-300"
             }`}
           >
@@ -876,7 +876,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                               .defaultLabel,
                         })
                       }
-                      className="w-full px-3 py-1.5 pr-8 border border-gray-200 rounded-md text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-transparent appearance-none cursor-pointer"
+                      className="w-full px-3 py-1.5 pr-8 border border-gray-200 rounded-md text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent bg-transparent appearance-none cursor-pointer"
                     >
                       {Object.keys(platformConfigs).map((platform) => (
                         <option key={platform} value={platform}>
@@ -911,7 +911,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     onChange={(e) =>
                       handleUpdateSocialLink(link.id, { url: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
                     placeholder={config.baseUrl}
                   />
                 </div>
@@ -922,7 +922,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
                     onChange={(e) =>
                       handleUpdateSocialLink(link.id, { label: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
                     placeholder={config.defaultLabel}
                   />
                 </div>
@@ -951,13 +951,13 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => setSelectedBlock(null)}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done
         </button>
         <span className="text-base font-semibold text-gray-900">Social</span>
-        <button className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1">
+        <button className="text-[#3CCED7] hover:text-[#1a9ba3] text-xs flex items-center gap-1">
           {/* <HelpCircle className="h-4 w-4" />
           <span>How to use social blocks</span> */}
         </button>
@@ -970,7 +970,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
             onClick={() => setActiveBlockTab(tab)}
             className={`flex-1 text-sm font-medium py-3 ${
               activeBlockTab === tab
-                ? "text-blue-700 border-b-2 border-blue-700 bg-gray-50"
+                ? "text-[#1a9ba3] border-b-2 border-[#2AB5BD] bg-gray-50"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -996,7 +996,7 @@ const SocialInspector: React.FC<SocialInspectorProps> = ({
           >
             Clear styles
           </button>
-          <button className="flex-1 bg-blue-700 text-white rounded-md px-3 py-2 text-sm hover:bg-blue-800">
+          <button className="flex-1 bg-[#2AB5BD] text-white rounded-md px-3 py-2 text-sm hover:bg-[#1a9ba3]">
             Apply to all
           </button>
         </div>

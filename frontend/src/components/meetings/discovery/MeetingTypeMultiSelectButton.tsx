@@ -47,7 +47,7 @@ export function MeetingTypeMultiSelectButton({
           disabled={disabled}
           className={cn(
             'h-9 gap-1.5 border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50',
-            n > 0 && 'border-blue-200 bg-blue-50/90 text-blue-900',
+            n > 0 && 'border-[#3CCED7]/30 bg-[#3CCED7]/10/90 text-[#0f757a]',
           )}
           aria-label="Filter by meeting type"
           data-testid="meetings-meeting-type-trigger"
@@ -77,7 +77,7 @@ export function MeetingTypeMultiSelectButton({
                 <span
                   className={cn(
                     'flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300',
-                    checked && 'border-blue-600 bg-blue-600 text-white',
+                    checked && 'border-[#3CCED7] bg-[#3CCED7] text-white',
                   )}
                 >
                   {checked ? (

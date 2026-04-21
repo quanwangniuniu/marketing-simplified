@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { useAuthStore } from '../../lib/authStore';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
 
 // Props for ProtectedRoute component
 interface ProtectedRouteProps {
@@ -24,18 +25,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { isAuthenticated, user, loading, initialized } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const { suppressProtectedRouteLoading } = getAuthLoadingRoutePolicy(pathname);
 
-  // Check if user has required roles
-  const hasRequiredRoles = () => {
-    if (requiredRoles.length === 0) return true;
-    if (!user || !user.roles) return false;
-    return requiredRoles.some(role => user.roles.includes(role));
-  };
+  const hasRequiredRoles =
+    requiredRoles.length === 0 ||
+    Boolean(user?.roles && requiredRoles.some(role => user.roles.includes(role)));
 
   // Handle authentication and role checks
   useEffect(() => {
     // Wait for authentication to be initialized
-    if (!initialized) return;
+    if (!initialized || loading) return;
 
     // If authentication is required but user is not authenticated
     if (requiredAuth && !isAuthenticated) {
@@ -44,25 +44,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
 
     // If roles are required but user doesn't have them
-    if (requiredRoles.length > 0 && !hasRequiredRoles()) {
+    if (requiredRoles.length > 0 && !hasRequiredRoles) {
       // Redirect to unauthorized page or show error
       router.push('/unauthorized');
       return;
     }
-  }, [isAuthenticated, user, initialized, requiredAuth, requiredRoles, router, fallback]);
+  }, [isAuthenticated, initialized, loading, requiredAuth, requiredRoles, router, fallback, hasRequiredRoles]);
 
   // Show loading while authentication is being initialized
   if (!initialized || loading) {
-    return loadingComponent ? (
-      <>{loadingComponent}</>
-    ) : (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    if (loadingComponent && !suppressProtectedRouteLoading) {
+      return <>{loadingComponent}</>;
+    }
+    return null;
   }
 
   // If authentication is required but user is not authenticated, don't render children
@@ -71,7 +65,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // If roles are required but user doesn't have them, don't render children
-  if (requiredRoles.length > 0 && !hasRequiredRoles()) {
+  if (requiredRoles.length > 0 && !hasRequiredRoles) {
     return null;
   }
 

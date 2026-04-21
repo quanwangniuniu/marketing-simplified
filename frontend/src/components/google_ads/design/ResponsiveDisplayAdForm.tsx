@@ -364,7 +364,7 @@ export default function ResponsiveDisplayAdForm({
             setBusinessName(e.target.value);
           }}
           placeholder="Your business name"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
           maxLength={25}
         />
         <div className={`text-xs mt-1 ${getCharacterCountColor(businessName.length, 25)}`}>
@@ -384,7 +384,7 @@ export default function ResponsiveDisplayAdForm({
             setLongHeadline(e.target.value);
           }}
           placeholder="Your main headline"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
           maxLength={90}
         />
         <div className={`text-xs mt-1 ${getCharacterCountColor(longHeadline.length, 90)}`}>
@@ -409,7 +409,7 @@ export default function ResponsiveDisplayAdForm({
                   value={headline}
                   onChange={(e) => handleHeadlineChange(index, e.target.value)}
                   placeholder={`Headline ${index + 1}`}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                   maxLength={30}
                 />
                 <div className="flex justify-between items-center mt-1">
@@ -432,7 +432,7 @@ export default function ResponsiveDisplayAdForm({
         {headlines.length < 5 && (
           <button
             onClick={addHeadline}
-            className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+            className="mt-3 text-[#3CCED7] hover:text-[#1a9ba3] text-sm font-medium"
           >
             + Add Headline
           </button>
@@ -459,7 +459,7 @@ export default function ResponsiveDisplayAdForm({
                   onChange={(e) => handleDescriptionChange(index, e.target.value)}
                   placeholder={`Description ${index + 1}`}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] resize-none"
                   maxLength={90}
                 />
                 <div className="flex justify-between items-center mt-1">
@@ -482,7 +482,7 @@ export default function ResponsiveDisplayAdForm({
         {descriptions.length < 5 && (
           <button
             onClick={addDescription}
-            className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+            className="mt-3 text-[#3CCED7] hover:text-[#1a9ba3] text-sm font-medium"
           >
             + Add Description
           </button>
@@ -502,7 +502,7 @@ export default function ResponsiveDisplayAdForm({
           onChange={(e) => {
             setCallToActionText(e.target.value);
           }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
         >
           <option value="">Select a call to action</option>
           {CALL_TO_ACTION_OPTIONS.map(option => (
@@ -524,7 +524,7 @@ export default function ResponsiveDisplayAdForm({
         <div className="mb-4">
           <button 
             onClick={() => openMediaModal('image', 'both')}
-            className="text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 mb-2"
+            className="text-[#3CCED7] px-4 py-2 rounded-lg hover:bg-[#3CCED7]/10 mb-2"
           >
             + Image
           </button>
@@ -591,7 +591,7 @@ export default function ResponsiveDisplayAdForm({
         <div className="mb-4">
           <button 
             onClick={() => openLogoModal('logo')}
-            className="text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 mb-2"
+            className="text-[#3CCED7] px-4 py-2 rounded-lg hover:bg-[#3CCED7]/10 mb-2"
           >
             + Logo
           </button>
@@ -633,7 +633,7 @@ export default function ResponsiveDisplayAdForm({
         <div className="mb-4">
           <button 
             onClick={openVideoModal}
-            className="text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 mb-2"
+            className="text-[#3CCED7] px-4 py-2 rounded-lg hover:bg-[#3CCED7]/10 mb-2"
           >
             + Video
           </button>

@@ -62,7 +62,7 @@ export default function AdSetupSection({
               value="single"
               checked={format === 'single'}
               onChange={() => onFormatChange('single')}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              className="w-4 h-4 text-[#3CCED7] border-gray-300 focus:ring-[#3CCED7]"
             />
             <span className="text-sm font-medium text-gray-900">Single image or video</span>
           </label>
@@ -74,7 +74,7 @@ export default function AdSetupSection({
               value="carousel"
               checked={format === 'carousel'}
               onChange={() => onFormatChange('carousel')}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              className="w-4 h-4 text-[#3CCED7] border-gray-300 focus:ring-[#3CCED7]"
             />
             <div>
               <span className="text-sm font-medium text-gray-900">Carousel</span>
@@ -94,13 +94,13 @@ export default function AdSetupSection({
             type="checkbox"
             checked={multiAdvertiserAds}
             onChange={(e) => onMultiAdvertiserAdsChange(e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+            className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7] mt-0.5"
           />
           <div>
             <span className="text-sm font-semibold">Multi-advertiser ads</span>
             <p className="text-xs text-gray-600 mt-1">
               Your ad can appear with others in the same ad unit to help promote discoverability. Your ad creative may be resized or cropped.{' '}
-              <a href="#" className="text-blue-600 hover:underline">About multi-advertiser ads</a>
+              <a href="#" className="text-[#3CCED7] hover:underline">About multi-advertiser ads</a>
             </p>
           </div>
         </label>

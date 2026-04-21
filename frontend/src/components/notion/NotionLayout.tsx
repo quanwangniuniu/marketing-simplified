@@ -141,7 +141,7 @@ export default function NotionLayout({
             <button
               type="button"
               onClick={onSave}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors font-medium disabled:opacity-60"
+              className="px-3 py-1.5 text-sm bg-[#3CCED7] text-white hover:bg-[#2AB5BD] rounded-md transition-colors font-medium disabled:opacity-60"
               disabled={!selectedDraftId || isSaving || !hasChanges}
             >
               {isSaving ? 'Saving…' : 'Save'}
@@ -172,7 +172,7 @@ export default function NotionLayout({
               <button
                 type="button"
                 onClick={onCreateDraft}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="rounded-md bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2"
               >
                 New draft
               </button>
@@ -192,7 +192,7 @@ export default function NotionLayout({
               <button
                 type="button"
                 onClick={onClosePreview}
-                className="rounded-full bg-gray-100 p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="rounded-full bg-gray-100 p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 aria-label="Close preview"
               >
                 <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

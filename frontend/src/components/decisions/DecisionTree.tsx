@@ -31,20 +31,31 @@ interface DecisionTreeProps {
   linkingDisabled?: boolean;
   onCreateLink?: (fromId: number, toId: number) => void;
   onRemoveLink?: (fromId: number, toId: number) => void;
+  /** Override URL builder for detail popover link. Defaults to /decisions/{id}. */
+  getDecisionUrl?: (id: number, projectId?: number | null) => string;
+  /** Override URL builder for review popover link. Defaults to /decisions/{id}/review. */
+  getReviewUrl?: (id: number, projectId?: number | null) => string;
 }
+
+const defaultGetDecisionUrl = (id: number, projectId?: number | null) =>
+  `/decisions/${id}${projectId ? `?project_id=${projectId}` : ''}`;
+
+const defaultGetReviewUrl = (id: number, projectId?: number | null) =>
+  `/decisions/${id}/review${projectId ? `?project_id=${projectId}` : ''}`;
 
 type PositionedNode = DecisionGraphNode & { x: number; y: number; dateKey: string };
 type DateColumn = { dateKey: string; x: number; count: number };
 
-const NODE_WIDTH = 210;
-const NODE_HEIGHT = 64;
+const NODE_WIDTH = 240;
+const NODE_HEIGHT = 76;
 const COLUMN_GAP = 120;
 const COLUMN_PADDING_X = 24;
-const ROW_GAP = 24;
-const PADDING = 32;
+const ROW_GAP = 32;
+const PADDING = 56;
 const EXTRA_SCROLL = 240;
-const HEADER_BAND_HEIGHT = 40;
-const BAND_TOP_PADDING = 16;
+const HEADER_BAND_HEIGHT = 36;
+const BAND_TOP_PADDING = 20;
+const NODE_Y_BASE = BAND_TOP_PADDING + HEADER_BAND_HEIGHT + 12;
 const BASE_ZOOM = 0.7;
 const ZOOM_MIN = BASE_ZOOM * 0.5;
 const ZOOM_MAX = BASE_ZOOM * 2.0;
@@ -187,17 +198,52 @@ const clamp = (min: number, value: number, max: number) =>
 const statusColor = (status: string) => {
   switch (status) {
     case 'DRAFT':
-      return 'bg-amber-100 text-amber-800';
+      return 'bg-gray-100 text-gray-700';
     case 'AWAITING_APPROVAL':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-amber-50 text-amber-700';
     case 'COMMITTED':
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-emerald-50 text-emerald-700';
     case 'REVIEWED':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-violet-50 text-violet-700';
     case 'ARCHIVED':
-      return 'bg-slate-200 text-slate-700';
+      return 'bg-gray-100 text-gray-500';
     default:
       return 'bg-gray-100 text-gray-700';
+  }
+};
+
+const riskLeftBorder = (risk?: string | null) => {
+  switch (risk) {
+    case 'HIGH':
+      return 'border-l-[3px] border-l-rose-400';
+    case 'MEDIUM':
+      return 'border-l-[3px] border-l-amber-400';
+    case 'LOW':
+      return 'border-l-[3px] border-l-sky-400';
+    default:
+      return 'border-l-[3px] border-l-transparent';
+  }
+};
+
+const riskPillStyle = (risk?: string | null) => {
+  switch (risk) {
+    case 'HIGH':
+      return 'bg-rose-50 text-rose-700';
+    case 'MEDIUM':
+      return 'bg-amber-50 text-amber-700';
+    case 'LOW':
+      return 'bg-sky-50 text-sky-700';
+    default:
+      return 'bg-gray-100 text-gray-500';
+  }
+};
+
+const statusCardOpacity = (status: string) => {
+  switch (status) {
+    case 'ARCHIVED':
+      return 'opacity-60';
+    default:
+      return '';
   }
 };
 
@@ -225,6 +271,8 @@ const DecisionTree = ({
   linkingDisabled = false,
   onCreateLink,
   onRemoveLink,
+  getDecisionUrl,
+  getReviewUrl,
 }: DecisionTreeProps) => {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -337,10 +385,7 @@ const DecisionTree = ({
           ...node,
           dateKey,
           x: PADDING + dateIndex * (NODE_WIDTH + COLUMN_GAP),
-          y:
-            PADDING +
-            HEADER_BAND_HEIGHT +
-            rowIndex * (NODE_HEIGHT + ROW_GAP),
+          y: NODE_Y_BASE + rowIndex * (NODE_HEIGHT + ROW_GAP),
         });
       });
     });
@@ -352,7 +397,7 @@ const DecisionTree = ({
           ...node,
           dateKey: 'Unknown',
           x: PADDING,
-          y: PADDING + HEADER_BAND_HEIGHT + index * (NODE_HEIGHT + ROW_GAP),
+          y: NODE_Y_BASE + index * (NODE_HEIGHT + ROW_GAP),
         });
       });
     }
@@ -369,7 +414,7 @@ const DecisionTree = ({
     else labelMode = 'minimal';
     const densityEvery =
       spacing < 80 ? clamp(2, Math.ceil(80 / Math.max(spacing, 1)), 6) : 1;
-    const fontSize = clamp(10, Math.round(spacing / 10), 14);
+    const fontSize = clamp(12, Math.round(spacing / 10), 14);
     return { labelMode, densityEvery, fontSize, spacing };
   }, [scale]);
 
@@ -391,7 +436,7 @@ const DecisionTree = ({
       ? PADDING + NODE_WIDTH + COLUMN_PADDING_X * 2 + PADDING
       : 0;
     const emptyMinHeight = onCreateDecision && positionedNodes.length === 0
-      ? PADDING + HEADER_BAND_HEIGHT + NODE_HEIGHT + PADDING
+      ? NODE_Y_BASE + NODE_HEIGHT + PADDING
       : 0;
     return {
       width: Math.max(emptyMinWidth, maxX + createPanelWidth + PADDING + EXTRA_SCROLL),
@@ -594,7 +639,7 @@ const DecisionTree = ({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const targetX = (todayColumn.x + NODE_WIDTH / 2) * scale;
-    const targetY = (PADDING + HEADER_BAND_HEIGHT / 2) * scale;
+    const targetY = (NODE_Y_BASE / 2) * scale;
     autoFocusDone.current = true;
     requestAnimationFrame(() => {
       viewport.scrollLeft = Math.max(0, targetX - viewport.clientWidth / 2);
@@ -624,7 +669,7 @@ const DecisionTree = ({
       }
     }
     const targetX = (nearest.x + NODE_WIDTH / 2) * scale;
-    const targetY = (PADDING + HEADER_BAND_HEIGHT / 2) * scale;
+    const targetY = (NODE_Y_BASE / 2) * scale;
     requestAnimationFrame(() => {
       viewport.scrollLeft = Math.max(0, targetX - viewport.clientWidth / 2);
       viewport.scrollTop = Math.max(0, targetY - viewport.clientHeight / 2);
@@ -632,23 +677,23 @@ const DecisionTree = ({
   }, [focusDateKey, dateColumns, scale]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm">
+    <div className="relative h-full w-full overflow-hidden rounded-xl ring-1 ring-gray-100 bg-gray-50">
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-white/90 px-1.5 py-1 shadow-sm ring-1 ring-gray-200 backdrop-blur-sm">
         <button
           type="button"
           onClick={() => handleZoom('out')}
-          className="h-6 w-6 rounded-full border border-gray-200 text-gray-600 hover:border-gray-300"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
           aria-label="Zoom out"
         >
-          -
+          −
         </button>
-        <span className="min-w-[52px] text-center">
+        <span className="min-w-[44px] text-center text-[11px] font-medium text-gray-600">
           {Math.round((scale / BASE_ZOOM) * 100)}%
         </span>
         <button
           type="button"
           onClick={() => handleZoom('in')}
-          className="h-6 w-6 rounded-full border border-gray-200 text-gray-600 hover:border-gray-300"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
           aria-label="Zoom in"
         >
           +
@@ -661,7 +706,12 @@ const DecisionTree = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`h-[320px] w-full overflow-auto ${dragState.current.dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        style={{
+          backgroundImage:
+            'radial-gradient(circle, rgba(15, 23, 42, 0.06) 1px, transparent 1px)',
+          backgroundSize: '18px 18px',
+        }}
+        className={`h-full w-full overflow-auto ${dragState.current.dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div
           ref={contentRef}
@@ -682,7 +732,7 @@ const DecisionTree = ({
             return (
               <div
                 key={`panel-${column.dateKey}`}
-                className="absolute rounded-2xl border border-gray-200 bg-white shadow-sm"
+                className="absolute rounded-xl bg-white/70 ring-1 ring-gray-100 shadow-[0_1px_2px_rgba(15,23,42,0.03)] backdrop-blur-sm"
                 style={{
                   left: column.x - COLUMN_PADDING_X,
                   top: BAND_TOP_PADDING,
@@ -697,7 +747,7 @@ const DecisionTree = ({
 
           {dateColumns.length === 0 && onCreateDecision && (
             <div
-              className="absolute rounded-2xl border border-gray-200 bg-white shadow-sm"
+              className="absolute rounded-xl bg-white/70 ring-1 ring-gray-100 shadow-[0_1px_2px_rgba(15,23,42,0.03)] backdrop-blur-sm"
               style={{
                 left: PADDING - COLUMN_PADDING_X,
                 top: BAND_TOP_PADDING,
@@ -716,12 +766,12 @@ const DecisionTree = ({
               : PADDING - COLUMN_PADDING_X;
             return (
               <div
-                className="absolute flex items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50/50"
+                className="group absolute flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white/50 transition hover:border-[#3CCED7]/60 hover:bg-white"
                 style={{
                   left: createPanelX,
                   top: BAND_TOP_PADDING,
                   width: NODE_WIDTH + COLUMN_PADDING_X * 2,
-                  height: 160,
+                  height: 140,
                   zIndex: 25,
                   pointerEvents: 'auto',
                 }}
@@ -729,9 +779,10 @@ const DecisionTree = ({
                 <button
                   type="button"
                   onClick={onCreateDecision}
-                  className="text-sm font-semibold text-gray-500 hover:text-blue-600 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 transition group-hover:text-[#3CCED7] cursor-pointer"
                 >
-                  + Create Decision
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition group-hover:bg-[#3CCED7]/10 group-hover:text-[#3CCED7]">+</span>
+                  Create Decision
                 </button>
               </div>
             );
@@ -877,7 +928,7 @@ const DecisionTree = ({
                     ? formatDateLabel(column.dateKey)
                     : formatDateLabelMinimal(column.dateKey);
               const chipHeight = 24;
-              const chipY = (HEADER_BAND_HEIGHT - chipHeight) / 2;
+              const chipY = BAND_TOP_PADDING + (HEADER_BAND_HEIGHT - chipHeight) / 2;
               const centerX = column.x + NODE_WIDTH / 2;
               const chipWidth = Math.max(54, label.length * (fontSize * 0.6) + 18);
 
@@ -899,25 +950,18 @@ const DecisionTree = ({
                 );
               }
 
-              const { backgroundColor, borderColor, color } = getWeekdayStyle(
-                column.dateKey
-              );
               return (
                 <button
                   key={`header-${column.dateKey}`}
                   type="button"
-                  className="pointer-events-auto absolute flex items-center justify-center border shadow-sm"
+                  className="pointer-events-auto absolute flex items-center justify-center rounded-md text-[11px] font-medium uppercase tracking-wider text-gray-400 transition hover:text-gray-600"
                   style={{
                     left: centerX - chipWidth / 2,
                     top: chipY,
                     width: chipWidth,
                     height: chipHeight,
-                    borderRadius: chipHeight / 2,
                     fontSize,
-                    fontWeight: 600,
-                    backgroundColor,
-                    borderColor,
-                    color,
+                    letterSpacing: '0.06em',
                   }}
                   onMouseEnter={(event) => {
                     const rect = event.currentTarget.getBoundingClientRect();
@@ -954,7 +998,7 @@ const DecisionTree = ({
                   role="button"
                   tabIndex={0}
                   aria-label={`Drag to link decision ${node.title || node.id}`}
-                  className="absolute right-1 top-1/2 z-10 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-blue-500 bg-white shadow-sm hover:bg-blue-50"
+                  className="absolute right-1 top-1/2 z-10 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#3CCED7] bg-white shadow-sm hover:bg-[#3CCED7]/10"
                   style={{ right: 4 }}
                   onPointerDown={(e) => handleLinkHandlePointerDown(e, node)}
                   onPointerMove={handleLinkHandlePointerMove}
@@ -966,42 +1010,45 @@ const DecisionTree = ({
                 type="button"
                 data-decision-node
                 onClick={(event) => handleNodeClick(node, event)}
-                className={`w-full h-full rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition ${
+                className={`w-full h-full overflow-hidden rounded-xl bg-white px-3 py-2 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-150 will-change-transform hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] ${statusCardOpacity(node.status)} ${riskLeftBorder(node.riskLevel)} ${
                   mode === 'link-editor' && node.projectSeq && removedSeqSet.has(node.projectSeq)
-                    ? 'border-red-300 ring-2 ring-red-200'
+                    ? 'ring-2 ring-rose-200'
                     : mode === 'link-editor' && node.projectSeq && selectedSeqSet.has(node.projectSeq)
-                      ? 'border-emerald-300 ring-2 ring-emerald-200'
+                      ? 'ring-2 ring-emerald-200'
                       : mode === 'selector' && node.projectSeq && selectedSeqSet.has(node.projectSeq)
-                        ? 'border-emerald-300 ring-2 ring-emerald-200'
+                        ? 'ring-2 ring-emerald-200'
                         : selectedNodeId != null && node.id === selectedNodeId
-                          ? 'border-blue-500 ring-2 ring-blue-200'
-                          : 'border-gray-200 hover:border-blue-300 hover:shadow'
+                          ? 'ring-2 ring-[#3CCED7]'
+                          : 'ring-1 ring-gray-200 hover:ring-gray-300'
                 } ${
                   focusSeq && node.projectSeq === focusSeq
-                    ? 'ring-2 ring-blue-300'
+                    ? 'ring-2 ring-[#3CCED7]'
                     : ''
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="truncate text-[13px] font-semibold text-gray-900">
+                  <div className="min-w-0 flex-1 truncate text-[15px] font-semibold text-gray-900 leading-tight">
                     {node.title || 'Untitled'}
                   </div>
                   {node.projectSeq ? (
-                    <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="shrink-0 text-[12px] font-medium text-gray-400">
                       #{node.projectSeq}
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex items-center gap-1.5">
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor(
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColor(
                       node.status
                     )}`}
                   >
+                    <span className="mr-1 h-1 w-1 rounded-full bg-current opacity-70" />
                     {node.status}
                   </span>
                   {node.riskLevel ? (
-                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${riskPillStyle(node.riskLevel)}`}
+                    >
                       {node.riskLevel}
                     </span>
                   ) : null}
@@ -1014,7 +1061,7 @@ const DecisionTree = ({
                     e.stopPropagation();
                     onDelete(node);
                   }}
-                  className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 opacity-0 shadow-sm transition-opacity hover:bg-red-100 group-hover:opacity-100"
+                  className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-white text-rose-500 opacity-0 shadow-sm ring-1 ring-rose-200 transition-all hover:bg-rose-50 group-hover:opacity-100"
                   aria-label="Delete decision"
                 >
                   <X className="h-3 w-3" />
@@ -1028,8 +1075,8 @@ const DecisionTree = ({
             const lastColNodeCount = lastCol ? (nodeCountByColumn.get(lastCol.dateKey) ?? 0) : 0;
             const createLeft = lastCol ? lastCol.x : PADDING;
             const createTop = lastCol
-              ? PADDING + HEADER_BAND_HEIGHT + lastColNodeCount * (NODE_HEIGHT + ROW_GAP)
-              : PADDING + HEADER_BAND_HEIGHT;
+              ? NODE_Y_BASE + lastColNodeCount * (NODE_HEIGHT + ROW_GAP)
+              : NODE_Y_BASE;
             return (
               <div
                 className="absolute"
@@ -1045,9 +1092,10 @@ const DecisionTree = ({
                 <button
                   type="button"
                   onClick={onCreateDecision}
-                  className="w-full h-full rounded-xl border-2 border-dashed border-gray-300 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-400 hover:shadow cursor-pointer flex items-center justify-center"
+                  className="group w-full h-full rounded-xl border border-dashed border-gray-200 bg-white/60 px-3 py-2 text-left transition hover:border-[#3CCED7]/60 hover:bg-white hover:shadow-[0_2px_8px_rgba(60,206,215,0.08)] cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  <span className="text-sm font-semibold text-gray-400">+ Create Decision</span>
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition group-hover:bg-[#3CCED7]/10 group-hover:text-[#3CCED7]">+</span>
+                  <span className="text-xs font-medium text-gray-400 transition group-hover:text-[#3CCED7]">Create Decision</span>
                 </button>
               </div>
             );
@@ -1140,21 +1188,17 @@ const DecisionTree = ({
               ) : null}
               {popover.node.status === 'COMMITTED' && canReview ? (
                 <Link
-                  href={`/decisions/${popover.node.id}/review${
-                    projectId ? `?project_id=${projectId}` : ''
-                  }`}
+                  href={(getReviewUrl ?? defaultGetReviewUrl)(popover.node.id, projectId)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex w-[80px] items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:border-blue-300"
+                  className="inline-flex w-[80px] items-center justify-center gap-1.5 rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-1.5 text-xs font-semibold text-[#1a9ba3] hover:border-blue-300"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Review
                 </Link>
               ) : null}
               <Link
-                href={`/decisions/${popover.node.id}${
-                  projectId ? `?project_id=${projectId}` : ''
-                }`}
+                href={(getDecisionUrl ?? defaultGetDecisionUrl)(popover.node.id, projectId)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white"

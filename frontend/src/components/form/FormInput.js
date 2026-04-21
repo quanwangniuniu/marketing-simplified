@@ -36,8 +36,8 @@ export default function FormInput({
           className={`
             w-full px-3 py-2 border rounded-md shadow-sm transition-colors
             ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
-              focused ? 'border-blue-500 focus:border-blue-500 focus:ring-blue-500' : 
-              'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}
+              focused ? 'border-[#3CCED7] focus:border-[#3CCED7] focus:ring-[#3CCED7]' : 
+              'border-gray-300 focus:border-[#3CCED7] focus:ring-[#3CCED7]'}
             focus:outline-none focus:ring-1
           `}
         />

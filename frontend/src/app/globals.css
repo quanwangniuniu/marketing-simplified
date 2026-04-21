@@ -184,6 +184,33 @@ html, body {
   }
 }
 
+@keyframes skeleton-brand-fade {
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.55;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.95;
+  }
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.55;
+  }
+}
+
+.skeleton-fade {
+  background-color: rgba(60, 206, 215, 0.14);
+  background-image: linear-gradient(
+    90deg,
+    rgba(60, 206, 215, 0.28) 0%,
+    rgba(166, 230, 97, 0.45) 50%,
+    rgba(60, 206, 215, 0.28) 100%
+  );
+  background-size: 220% 220%;
+  animation: skeleton-brand-fade 2s ease-in-out infinite;
+}
+
 .timeline-bar {
   transform-origin: left center;
   animation: timeline-reveal 0.7s ease-out 1 both;
@@ -228,6 +255,11 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .timeline-bar {
     animation: none;
+  }
+
+  .skeleton-fade {
+    animation: none;
+    opacity: 0.85;
   }
 }
 .modal-overlay {

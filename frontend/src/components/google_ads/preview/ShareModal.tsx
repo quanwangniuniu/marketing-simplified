@@ -54,7 +54,7 @@ export default function ShareModal({
               <span className="text-sm">Link will expire in</span>
             </div>
             <select
-              className="border border-gray-300 rounded-md px-3 py-1.5 bg-white text-sm text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="border border-gray-300 rounded-md px-3 py-1.5 bg-white text-sm text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               value={days}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onDaysChange(parseInt(e.target.value, 10))}
               aria-label="Expiration"
@@ -95,14 +95,14 @@ export default function ShareModal({
             </svg>
             <input
               readOnly
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               value={link}
             />
             <button
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 copied
                   ? 'bg-gray-400 text-white cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+                  : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] cursor-pointer'
               }`}
               onClick={handleCopy}
               disabled={copied}

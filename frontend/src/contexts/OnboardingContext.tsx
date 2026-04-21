@@ -52,12 +52,15 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const evaluateProjects = useCallback(
-    (rawProjects: any) => {
+    (rawProjects: any, pendingInviteCount: number) => {
       const list = normalizeProjects(rawProjects);
       setProjects(list);
 
       if (list.length === 0) {
-        setNeedsOnboarding(true);
+        // A user with no projects but a pending invitation should land on
+        // /select-project (banner surfaces the invite) instead of being
+        // forced into the onboarding wizard.
+        setNeedsOnboarding(pendingInviteCount === 0);
         setActiveProject(null);
         return;
       }
@@ -83,8 +86,12 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
     setLoading(true);
 
     try {
-      const projectList = await ProjectAPI.getProjects();
-      evaluateProjects(projectList);
+      const [projectList, invitations] = await Promise.all([
+        ProjectAPI.getProjects(),
+        ProjectAPI.getMyPendingInvitations().catch(() => []),
+      ]);
+      const pendingCount = Array.isArray(invitations) ? invitations.length : 0;
+      evaluateProjects(projectList, pendingCount);
       setFetchError(null);
       setError(null);
     } catch (error: any) {

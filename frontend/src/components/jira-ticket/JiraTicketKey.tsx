@@ -20,7 +20,7 @@ const JiraTicketKey = React.forwardRef<HTMLAnchorElement, JiraTicketKeyProps>(
         onClick={handleClick}
         className={cn(
           "text-[11px] font-medium tracking-wide text-slate-400 transition-colors",
-          "hover:text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+          "hover:text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2",
           className
         )}
         {...props}

@@ -84,7 +84,7 @@ export default function PhotoCard({
     >
       <div className={`relative w-24 h-24 rounded-lg overflow-hidden border-2 transition-all ${
         isSelected
-          ? 'border-blue-500 ring-2 ring-blue-200'
+          ? 'border-[#3CCED7] ring-2 ring-blue-200'
           : 'border-gray-200 hover:border-gray-300'
       }`}>
         <img
@@ -106,7 +106,7 @@ export default function PhotoCard({
         {/* Selection checkmark */}
         {isSelected && (
           <div className="absolute top-2 right-2 bg-white rounded-full p-0.5">
-            <CheckCircle className="w-5 h-5 text-blue-500 fill-white" />
+            <CheckCircle className="w-5 h-5 text-[#3CCED7] fill-white" />
           </div>
         )}
       </div>

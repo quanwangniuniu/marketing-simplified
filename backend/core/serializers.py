@@ -94,7 +94,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         return False
 
     def get_member_count(self, obj):
-        return ProjectMember.objects.filter(project=obj, is_active=True).count()
+        return ProjectMember.objects.filter(project=obj, is_active=True).exclude(role='bot').count()
 
 
 class ProjectSummarySerializer(serializers.ModelSerializer):
@@ -115,7 +115,7 @@ class ProjectSummarySerializer(serializers.ModelSerializer):
         return False
 
     def get_member_count(self, obj):
-        return ProjectMember.objects.filter(project=obj, is_active=True).count()
+        return ProjectMember.objects.filter(project=obj, is_active=True).exclude(role='bot').count()
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):
