@@ -39,7 +39,9 @@ const BREADCRUMB_ROOT: Record<string, string> = {
   tiktok: 'Content',
   google_ads: 'Content',
   mailchimp: 'Content',
+  'mailchimp-v2': 'Content',
   klaviyo: 'Content',
+  'klaviyo-v2': 'Content',
   notion: 'Content',
   workflows: 'Tools',
   timeline: 'Tools',
@@ -52,6 +54,8 @@ const BREADCRUMB_LEAF: Record<string, string> = {
   'select-project': 'Select Project',
   overview: 'Overview',
   spreadsheet: 'Spreadsheets',
+  'mailchimp-v2': 'Mailchimp',
+  'klaviyo-v2': 'Klaviyo',
 };
 
 const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } => {
@@ -62,7 +66,12 @@ const getBreadcrumb = (pathname: string | null): { root: string; leaf: string } 
   return { root, leaf };
 };
 
-const ROOT_PATHS = new Set(['/overview', '/select-project']);
+const ROOT_PATHS = new Set([
+  '/overview',
+  '/select-project',
+  '/mailchimp-v2',
+  '/klaviyo-v2',
+]);
 
 export default function DashboardLayout({
   children,
