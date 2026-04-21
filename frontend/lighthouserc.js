@@ -37,7 +37,7 @@ const testSpreadsheetId = process.env.LHCI_TEST_SPREADSHEET_ID;
 
 const urls = [
   `${base}/`,
-  `${base}/spreadsheet`,
+  `${base}/spreadsheets`,
   `${base}/projects`,
   `${base}/decisions`,
   `${base}/campaigns`,

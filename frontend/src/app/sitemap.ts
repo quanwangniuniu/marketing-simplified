@@ -17,7 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 	// put paths in array
 	const paths = [
 		'/tasks',
-		'/spreadsheet',
+		'/spreadsheets',
 		'/decisions',
 		'/agent',
 		'/notion',

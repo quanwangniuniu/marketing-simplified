@@ -61,8 +61,8 @@ const getNavigationItems = (
 ): NavigationItem[] => {
   const baseItems: NavigationItem[] = [
     {
-      name: "Spreadsheet",
-      href: "/spreadsheet",
+      name: "Spreadsheets",
+      href: "/spreadsheets",
       icon: FileSpreadsheet,
       description: "Choose a project and open its spreadsheets",
     },
