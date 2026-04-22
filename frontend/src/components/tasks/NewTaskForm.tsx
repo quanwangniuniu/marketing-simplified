@@ -164,12 +164,12 @@ export default function NewTaskForm({
           Project *
         </label>
         {lockProject ? (
-          <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-sm text-gray-900">
+          <div className="flex items-center justify-between rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10/60 px-3 py-2 text-sm text-gray-900">
             <span className="truncate">
               {projectName ||
                 (taskData.project_id ? String(taskData.project_id) : "Project")}
             </span>
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+            <span className="rounded-full bg-[#3CCED7]/15 px-2 py-0.5 text-xs font-medium text-[#1a9ba3]">
               Locked
             </span>
           </div>
@@ -181,7 +181,7 @@ export default function NewTaskForm({
             onChange={(e) =>
               handleInputChange("project_id", Number(e.target.value))
             }
-            className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+            className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20 ${
               errors.project_id ? "border-red-500" : "border-gray-300"
             }`}
             required
@@ -227,7 +227,7 @@ export default function NewTaskForm({
           name="type"
           value={taskData.type || ""}
           onChange={(e) => handleInputChange("type", e.target.value)}
-          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20 ${
             errors.type ? "border-red-500" : "border-gray-300"
           }`}
           required
@@ -265,7 +265,7 @@ export default function NewTaskForm({
           name="summary"
           value={taskData.summary || ""}
           onChange={(e) => handleInputChange("summary", e.target.value)}
-          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20 ${
             errors.summary ? "border-red-500" : "border-gray-300"
           }`}
           placeholder="Enter a short summary"
@@ -294,7 +294,7 @@ export default function NewTaskForm({
             resizeDescriptionTextarea();
           }}
           onInput={resizeDescriptionTextarea}
-          className="w-full resize-none overflow-hidden rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full resize-none overflow-hidden rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20"
           rows={4}
           placeholder="Enter task description"
         />
@@ -315,7 +315,7 @@ export default function NewTaskForm({
           onChange={(e) =>
             handleInputChange("current_approver_id", Number(e.target.value))
           }
-          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+          className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20 ${
             errors.current_approver_id ? "border-red-500" : "border-gray-300"
           }`}
           required={isApproverRequired}
@@ -357,7 +357,7 @@ export default function NewTaskForm({
             type="date"
             value={taskData.start_date || ""}
             onChange={(e) => handleInputChange("start_date", e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20"
           />
         </div>
 
@@ -375,7 +375,7 @@ export default function NewTaskForm({
             type="date"
             value={taskData.due_date || ""}
             onChange={(e) => handleInputChange("due_date", e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20"
           />
         </div>
       </div>

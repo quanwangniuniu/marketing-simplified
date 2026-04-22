@@ -170,6 +170,12 @@ export const ProjectAPI = {
       .then((response) => response.data);
   },
 
+  createProject: (payload: Partial<ProjectData>): Promise<ProjectData> => {
+    return api
+      .post<ProjectData>('/api/core/projects/', payload)
+      .then((response) => response.data);
+  },
+
   // Create the first project through onboarding
   createProjectViaOnboarding: (payload: OnboardingProjectPayload): Promise<OnboardingProjectResponse | ProjectData> => {
     const mediaWorkTypeMap: Record<string, string> = {
@@ -334,9 +340,15 @@ export const ProjectAPI = {
       .get(`/api/core/invitations/pending/`, { params })
       .then((response) => response.data || []);
   },
-  acceptInvitation: (token: string): Promise<any> => {
+  acceptInvitation: (
+    token: string,
+    credentials?: { password?: string; username?: string }
+  ): Promise<any> => {
+    const body: Record<string, string> = { token };
+    if (credentials?.password) body.password = credentials.password;
+    if (credentials?.username) body.username = credentials.username;
     return api
-      .post(`/api/core/invitations/accept/`, { token })
+      .post(`/api/core/invitations/accept/`, body)
       .then((response) => response.data);
   },
 

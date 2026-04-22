@@ -87,7 +87,7 @@ export default function ParticipantSelector({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search members..."
-          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
         />
       </div>
 
@@ -95,7 +95,7 @@ export default function ParticipantSelector({
       <div className="border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3CCED7]"></div>
           </div>
         ) : filteredMembers.length === 0 ? (
           <div className="text-center py-8 text-gray-500 text-sm">
@@ -112,11 +112,11 @@ export default function ParticipantSelector({
                   type="checkbox"
                   checked={selectedIds.includes(member.user.id)}
                   onChange={() => handleToggle(member.user.id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                 />
 
                 {/* Avatar */}
-                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-medium text-sm flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#3CCED7] text-white flex items-center justify-center font-medium text-sm flex-shrink-0">
                   {member.user.username?.charAt(0)?.toUpperCase() || '?'}
                 </div>
 

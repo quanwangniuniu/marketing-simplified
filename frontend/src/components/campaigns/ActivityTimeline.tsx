@@ -117,8 +117,8 @@ export default function ActivityTimeline({ campaignId }: ActivityTimelineProps) 
     switch (item.type) {
       case 'status_change':
         return (
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <ArrowRight className="h-4 w-4 text-blue-600" />
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#3CCED7]/15 flex items-center justify-center">
+            <ArrowRight className="h-4 w-4 text-[#0E8A96]" />
           </div>
         );
       case 'check_in':
@@ -240,7 +240,7 @@ export default function ActivityTimeline({ campaignId }: ActivityTimelineProps) 
                   href={item.details.screenshot_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                  className="inline-flex items-center gap-1 text-sm text-[#0E8A96] hover:text-[#0A6F78]"
                 >
                   <ImageIcon className="h-4 w-4" />
                   View screenshot
@@ -260,7 +260,7 @@ export default function ActivityTimeline({ campaignId }: ActivityTimelineProps) 
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Activity Timeline</h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
           <span className="ml-3 text-gray-600">Loading timeline...</span>
         </div>
       </div>
@@ -388,7 +388,7 @@ export default function ActivityTimeline({ campaignId }: ActivityTimelineProps) 
                       onClick={() => handlePageChange(pageNum)}
                       className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                         isCurrentPage
-                          ? 'bg-indigo-600 text-white'
+                          ? 'bg-[#3CCED7] text-white'
                           : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
                       }`}
                     >

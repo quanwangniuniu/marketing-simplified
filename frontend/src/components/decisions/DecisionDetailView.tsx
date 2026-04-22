@@ -14,7 +14,7 @@ import type {
 const statusColor = (status: string) => {
   switch (status) {
     case "AWAITING_APPROVAL":
-      return "bg-blue-100 text-blue-800";
+      return "bg-[#3CCED7]/15 text-[#1a9ba3]";
     case "COMMITTED":
       return "bg-emerald-100 text-emerald-800";
     case "REVIEWED":
@@ -59,7 +59,7 @@ const DecisionDetailView = ({
   return (
     <div className="flex h-full flex-col bg-gray-50">
       {decision.status === "AWAITING_APPROVAL" ? (
-        <div className="border-b border-blue-100 bg-blue-50 px-6 py-3 text-sm text-blue-800">
+        <div className="border-b border-[#3CCED7]/20 bg-[#3CCED7]/10 px-6 py-3 text-sm text-[#1a9ba3]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="font-semibold">Pending approval.</span> This
@@ -72,8 +72,8 @@ const DecisionDetailView = ({
                 disabled={approving}
                 className={`rounded-md px-3 py-2 text-xs font-semibold ${
                   approving
-                    ? "cursor-not-allowed bg-blue-100 text-blue-400"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
+                    ? "cursor-not-allowed bg-[#3CCED7]/15 text-[#3CCED7]"
+                    : "bg-[#3CCED7] text-white hover:bg-[#2AB5BD]"
                 }`}
               >
                 {approving ? "Approving..." : "Approve"}

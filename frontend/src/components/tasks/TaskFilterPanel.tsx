@@ -513,7 +513,7 @@ export function TaskFilterPanel({
         <Filter className="h-4 w-4 text-slate-500" />
         <span>Filter</span>
         {activeCount > 0 ? (
-          <span className="ml-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+          <span className="ml-1 rounded-full bg-[#3CCED7] px-2 py-0.5 text-xs font-semibold text-white">
             {activeCount}
           </span>
         ) : null}

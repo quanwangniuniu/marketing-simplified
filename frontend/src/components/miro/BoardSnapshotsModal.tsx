@@ -171,7 +171,7 @@ export default function BoardSnapshotsModal({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Optional note..."
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !creating) {
                   handleCreateSnapshot();
@@ -181,7 +181,7 @@ export default function BoardSnapshotsModal({
             <button
               onClick={handleCreateSnapshot}
               disabled={creating}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-[#3CCED7] text-white rounded-md text-sm hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {creating ? "Creating..." : "Create"}
             </button>
@@ -232,7 +232,7 @@ export default function BoardSnapshotsModal({
                   <button
                     onClick={() => handleRestoreClick(revision.version)}
                     disabled={restoring === revision.version || confirmRestoreVersion !== null}
-                    className="ml-4 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                    className="ml-4 px-3 py-1.5 bg-[#3CCED7] text-white rounded text-xs hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                   >
                     <RotateCcw className="w-3 h-3" />
                     {restoring === revision.version ? "Restoring..." : "Restore"}
@@ -245,7 +245,7 @@ export default function BoardSnapshotsModal({
 
         {/* Inline restore confirmation (keeps everything in one shared Dialog) */}
         {confirmRestoreVersion !== null && (
-          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <div className="rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10 p-3 text-sm text-[#0f757a]">
             <div className="font-semibold">Restore snapshot</div>
             <div className="mt-1">
               Restore to version {confirmRestoreVersion}? This will replace the current board state.
@@ -261,7 +261,7 @@ export default function BoardSnapshotsModal({
               </button>
               <button
                 type="button"
-                className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex justify-center rounded-md bg-[#3CCED7] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 onClick={handleConfirmRestore}
                 disabled={restoring !== null}
               >

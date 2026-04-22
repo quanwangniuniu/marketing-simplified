@@ -131,7 +131,7 @@ function QuickChip({
       className={cn(
         'rounded-full border px-3 py-1.5 text-xs font-medium transition',
         active
-          ? 'border-blue-600 bg-blue-50 text-blue-800'
+          ? 'border-[#3CCED7] bg-[#3CCED7]/10 text-[#1a9ba3]'
           : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
         disabled && 'opacity-50',
       )}
@@ -180,7 +180,7 @@ function FilterRowChrome({
 }
 
 const compactControl =
-  'h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50';
+  'h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50';
 
 const compactDate = `${compactControl} max-w-[11rem]`;
 
@@ -667,7 +667,7 @@ export function MeetingFiltersPanel({
               data-testid="meetings-add-filter-trigger"
               disabled={disabled}
               className={cn(
-                'mt-3 inline-flex items-center gap-1.5 rounded-md px-1 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 hover:text-blue-900 disabled:opacity-50',
+                'mt-3 inline-flex items-center gap-1.5 rounded-md px-1 py-1.5 text-sm font-medium text-[#1a9ba3] hover:bg-[#3CCED7]/10 hover:text-[#0f757a] disabled:opacity-50',
               )}
             >
               <Plus className="h-4 w-4 shrink-0" aria-hidden />
@@ -726,7 +726,7 @@ export function MeetingFiltersPanel({
           <Button
             type="button"
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-[#3CCED7] hover:bg-[#2AB5BD]"
             onClick={() => {
               onAdvancedFiltersApply({
                 discovery: {

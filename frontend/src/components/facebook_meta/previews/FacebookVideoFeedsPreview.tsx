@@ -55,7 +55,7 @@ const FacebookVideoFeedsPreview: React.FC<FacebookVideoFeedsPreviewProps> = ({ m
       <p className="text-xs text-gray-500 mb-1">AIDS resource centre</p>
       <div className="flex items-center justify-between">
         <p className="font-semibold text-gray-900">Asdda</p>
-        <button className="bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium">
+        <button className="bg-[#3CCED7] text-white py-2 px-4 rounded-lg text-sm font-medium">
           Download
         </button>
       </div>

@@ -93,7 +93,7 @@ export default function ForwardMessagesDialog({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search chats..."
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
             />
             <div className="overflow-y-auto space-y-2 pr-1">
               {filteredChats.length === 0 ? (
@@ -108,7 +108,7 @@ export default function ForwardMessagesDialog({
                       type="checkbox"
                       checked={selectedChatIds.includes(chat.id)}
                       onChange={() => toggleChat(chat.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                      className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-800 truncate">
                       {getChatDisplayName(chat, currentUserId)}
@@ -147,7 +147,7 @@ export default function ForwardMessagesDialog({
             <button
               onClick={handleSubmit}
               disabled={!hasTargets || isForwarding}
-              className="px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 text-sm font-medium text-white bg-[#3CCED7] hover:bg-[#2AB5BD] rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isForwarding ? 'Forwarding...' : 'Forward'}
             </button>

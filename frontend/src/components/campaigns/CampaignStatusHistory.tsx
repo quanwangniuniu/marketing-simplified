@@ -72,7 +72,7 @@ export default function CampaignStatusHistory({ campaignId }: CampaignStatusHist
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Status History</h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
           <span className="ml-3 text-gray-600">Loading status history...</span>
         </div>
       </div>

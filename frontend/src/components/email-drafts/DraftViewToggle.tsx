@@ -29,7 +29,7 @@ export function DraftViewToggle({
   cardLabel = "Card",
   className = "",
   tabWrapperClassName = "p-1",
-  activeTabWrapperClassName = "border-b-2 border-blue-600",
+  activeTabWrapperClassName = "border-b-2 border-[#3CCED7]",
   inactiveTabWrapperClassName = "",
   activeTabClassName = "text-black",
   inactiveTabClassName = "text-gray-500 hover:text-gray-700",

@@ -306,7 +306,7 @@ export default function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
               disabled={saving || hasPendingOperations}
               className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${
                 !saving && !hasPendingOperations
-                  ? "bg-blue-600 hover:bg-blue-700"
+                  ? "bg-[#3CCED7] hover:bg-[#2AB5BD]"
                   : "bg-gray-400 cursor-not-allowed"
               }`}
             >
@@ -339,7 +339,7 @@ export default function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
                 onClick={() => setShowDiagram(true)}
                 className={`rounded px-3 py-1.5 text-sm font-medium ${
                   showDiagram
-                    ? "bg-blue-50 text-blue-700"
+                    ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
@@ -349,7 +349,7 @@ export default function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
                 onClick={() => setShowDiagram(false)}
                 className={`rounded px-3 py-1.5 text-sm font-medium ${
                   !showDiagram
-                    ? "bg-blue-50 text-blue-700"
+                    ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
@@ -359,7 +359,7 @@ export default function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowAddNodeDialog(true)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                className="rounded-lg bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2AB5BD]"
               >
                 Add node
               </button>

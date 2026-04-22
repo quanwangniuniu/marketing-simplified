@@ -67,7 +67,7 @@ export default function MessageItem({
   };
 
   const selectionClass = isSelectMode
-    ? `cursor-pointer border ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-transparent'} rounded-lg p-1`
+    ? `cursor-pointer border ${isSelected ? 'border-[#3CCED7] ring-2 ring-blue-100' : 'border-transparent'} rounded-lg p-1`
     : '';
   const forwardedContainerClass = isForwarded ? 'relative pt-4' : '';
   const ownMessageContentClass = `${forwardedContainerClass} flex flex-col items-end`;
@@ -90,7 +90,7 @@ export default function MessageItem({
             type="checkbox"
             checked={isSelected}
             onChange={handleToggleSelect}
-            className="absolute left-0 top-2 w-4 h-4 text-blue-600 border-gray-300 rounded"
+            className="absolute left-0 top-2 w-4 h-4 text-[#3CCED7] border-gray-300 rounded"
           />
         )}
         <div className="flex justify-end">
@@ -111,7 +111,7 @@ export default function MessageItem({
                 )}
                 {/* Message bubble with content */}
                 {hasContent && (
-                  <div className="inline-block w-fit max-w-full bg-blue-600 text-white rounded-lg px-4 py-2 break-words">
+                  <div className="inline-block w-fit max-w-full bg-[#A6E661] text-gray-900 rounded-lg px-4 py-2 break-words">
                     <p className="text-sm whitespace-pre-wrap">{messageContent}</p>
                   </div>
                 )}
@@ -161,7 +161,7 @@ export default function MessageItem({
           type="checkbox"
           checked={isSelected}
           onChange={handleToggleSelect}
-          className="absolute left-0 top-2 w-4 h-4 text-blue-600 border-gray-300 rounded"
+          className="absolute left-0 top-2 w-4 h-4 text-[#3CCED7] border-gray-300 rounded"
         />
       )}
       <div className="flex justify-start">

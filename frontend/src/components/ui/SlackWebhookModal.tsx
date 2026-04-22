@@ -123,16 +123,16 @@ export default function SlackWebhookModal({
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+        <div className="bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-[#3CCED7]" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">How to get your Slack webhook URL:</h3>
-              <div className="mt-2 text-sm text-blue-700">
+              <h3 className="text-sm font-medium text-[#1a9ba3]">How to get your Slack webhook URL:</h3>
+              <div className="mt-2 text-sm text-[#1a9ba3]">
                 <ol className="list-decimal list-inside space-y-1">
                   <li>Go to your Slack workspace settings</li>
                   <li>Navigate to "Apps" → "Incoming Webhooks"</li>
@@ -183,7 +183,7 @@ export default function SlackWebhookModal({
             checked={formData.is_active}
             onChange={(e) => handleInputChange('is_active', e.target.checked)}
             disabled={loading}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+            className="h-4 w-4 text-[#3CCED7] focus:ring-[#3CCED7] border-gray-300 rounded disabled:opacity-50"
           />
           <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
             Enable notifications immediately
@@ -196,7 +196,7 @@ export default function SlackWebhookModal({
             type="button"
             onClick={handleClose}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -204,7 +204,7 @@ export default function SlackWebhookModal({
             type="submit"
             onClick={undefined}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] border border-transparent rounded-md shadow-sm hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
             {loading && <LoadingSpinner size="sm" />}
             <span>{loading ? 'Saving...' : (isEditing ? 'Update Integration' : 'Add Integration')}</span>

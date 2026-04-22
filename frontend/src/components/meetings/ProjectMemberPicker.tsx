@@ -146,7 +146,7 @@ export function ProjectMemberPicker({
               setOpen(true);
               setQuery('');
             }}
-            className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50"
+            className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] disabled:bg-gray-50"
             aria-expanded={open}
             aria-haspopup="listbox"
             role="combobox"
@@ -185,7 +185,7 @@ export function ProjectMemberPicker({
               <li key={m.id} role="option">
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-[#3CCED7]/10 focus:bg-[#3CCED7]/10 focus:outline-none"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleSelect(m)}
                 >

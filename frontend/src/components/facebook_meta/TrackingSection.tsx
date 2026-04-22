@@ -38,7 +38,7 @@ export default function TrackingSection() {
                   Add pixel code to your website and Instant
                   Experience to report conversions, see activity
                   and build audiences for ad targeting.<br />
-                  <a href="#" className="text-blue-600 hover:underline">
+                  <a href="#" className="text-[#3CCED7] hover:underline">
                     Learn more
                   </a>
                 </p>
@@ -65,7 +65,7 @@ export default function TrackingSection() {
                   Add events to your app to view analytics,
                   measure ad performance and build audiences
                   for ad targeting.<br />
-                  <a href="#" className="text-blue-600 hover:underline">
+                  <a href="#" className="text-[#3CCED7] hover:underline">
                     Learn more
                   </a>
                 </p>
@@ -93,7 +93,7 @@ export default function TrackingSection() {
               <div className="absolute bottom-0 left-0 transform translate-x-4 w-80 bg-white text-gray-900 text-sm rounded-lg shadow-lg z-50 border border-gray-200 p-4">
                 <p>
                   Upload offline sales and interaction data to measure ad conversions. Then build audiences for ad targeting based on these transactions.<br />
-                  <a href="#" className="text-blue-600 hover:underline">
+                  <a href="#" className="text-[#3CCED7] hover:underline">
                     Learn more
                   </a>
                 </p>
@@ -117,7 +117,7 @@ export default function TrackingSection() {
               <div className="absolute bottom-0 left-0 transform translate-x-4 w-80 bg-white text-gray-900 text-sm rounded-lg shadow-lg z-50 border border-gray-200 p-4">
                 <p>
                   Add parameters to the end of your website URL to track where your visitors are coming from.&nbsp;
-                  <a href="#" className="text-blue-600 hover:underline">
+                  <a href="#" className="text-[#3CCED7] hover:underline">
                     About URL parameters
                   </a>
                 </p>
@@ -130,12 +130,12 @@ export default function TrackingSection() {
         <input
           type="text"
           placeholder="key1=value1&key2=value2"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
         />
         
         {/* Build URL parameter link */}
         <div>
-          <a href="#" className="text-blue-600 hover:underline text-sm pt-2">
+          <a href="#" className="text-[#3CCED7] hover:underline text-sm pt-2">
             Build a URL parameter
           </a>
         </div>

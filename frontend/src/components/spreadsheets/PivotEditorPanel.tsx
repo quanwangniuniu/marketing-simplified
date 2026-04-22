@@ -228,14 +228,14 @@ export function PivotEditorPanel({
           {/* Rows Section */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Rows3 className="h-4 w-4 text-blue-600" />
+              <Rows3 className="h-4 w-4 text-[#3CCED7]" />
               <span className="text-sm font-semibold text-gray-700">Rows</span>
             </div>
             <div className="space-y-1.5">
               {config.rows.map((field, index) => (
                 <div
                   key={`row-${index}`}
-                  className="flex items-center gap-2 p-2 bg-blue-50 rounded border border-blue-100"
+                  className="flex items-center gap-2 p-2 bg-[#3CCED7]/10 rounded border border-[#3CCED7]/20"
                 >
                   <span className="flex-1 text-sm text-gray-800 truncate">{field}</span>
                   <button
@@ -269,7 +269,7 @@ export function PivotEditorPanel({
               <label className="mt-1.5 flex items-center gap-2 text-xs text-gray-600">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-[#3CCED7] focus:ring-[#3CCED7]"
                   checked={config.showGrandTotalRow ?? true}
                   onChange={handleToggleGrandTotalRow}
                 />

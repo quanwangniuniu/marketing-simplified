@@ -30,7 +30,7 @@ const ViewButton = ({
     className={cn(
       'rounded-md border px-4 py-1.5 text-sm',
       active
-        ? 'border-blue-600 bg-blue-600 text-white'
+        ? 'border-[#3CCED7] bg-[#3CCED7] text-white'
         : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
     )}
   >
@@ -54,7 +54,7 @@ const TasksToolbar: React.FC<TasksToolbarProps> = ({
         placeholder={searchPlaceholder || 'Search tasks...'}
         value={searchValue ?? ''}
         onChange={(event) => onSearchChange?.(event.target.value)}
-        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
       />
     </div>
     <div className="flex items-center gap-2">

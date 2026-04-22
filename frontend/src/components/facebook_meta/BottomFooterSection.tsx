@@ -23,7 +23,7 @@ export default function BottomFooterSection({
           By clicking <span className="font-bold">Publish</span>, you acknowledge that your use of Meta's ad tools is subject to our{' '}
           <a
             href="#"
-            className="text-blue-600 hover:underline"
+            className="text-[#3CCED7] hover:underline"
             onClick={(e) => e.preventDefault()}
           >
             Terms and Conditions

@@ -104,7 +104,7 @@ const FacebookStoriesPreviewContent: React.FC<FacebookStoriesPreviewProps> = ({
             <ChevronUp className="w-4 h-4 text-gray-50" />
           </div>
           <div className="flex items-center justify-center">
-            <button className="bg-gray-50 rounded-md text-2xl p-2 cursor-text inline-flex items-center gap-2 text-blue-900">
+            <button className="bg-gray-50 rounded-md text-2xl p-2 cursor-text inline-flex items-center gap-2 text-[#0f757a]">
               <Link className="w-6 h-6" />
               Download
             </button>

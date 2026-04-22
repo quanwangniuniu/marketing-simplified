@@ -117,7 +117,7 @@ function InlineMultiSelectController<T extends string>({
     const currentLabels = getLabels(selectedValues);
     return (
       <div ref={containerRef} className={`relative inline-block ${className}`}>
-        <div className="border border-blue-500 rounded-md p-2 bg-white shadow-lg min-w-[200px] z-50">
+        <div className="border border-[#3CCED7] rounded-md p-2 bg-white shadow-lg min-w-[200px] z-50">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-gray-700">Select platforms</span>
             {isLoading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
@@ -159,7 +159,7 @@ function InlineMultiSelectController<T extends string>({
                   onClick={() => toggleOption(option.value)}
                   className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${
                     isSelected
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                      ? 'bg-[#3CCED7]/10 text-[#1a9ba3] border border-[#3CCED7]/30'
                       : 'hover:bg-gray-50 text-gray-700'
                   }`}
                 >
@@ -167,7 +167,7 @@ function InlineMultiSelectController<T extends string>({
                     <div
                       className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
                         isSelected
-                          ? 'bg-blue-600 border-blue-600'
+                          ? 'bg-[#3CCED7] border-[#3CCED7]'
                           : 'border-gray-300'
                       }`}
                     >
@@ -201,7 +201,7 @@ function InlineMultiSelectController<T extends string>({
               type="button"
               onClick={handleSave}
               disabled={isLoading}
-              className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+              className="text-xs bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white px-3 py-1 rounded hover:opacity-95 disabled:opacity-50"
             >
               Save
             </button>
@@ -236,7 +236,7 @@ function InlineMultiSelectController<T extends string>({
   return (
     <div
       onClick={startEdit}
-      className={`cursor-pointer hover:text-blue-600 transition-colors inline-flex items-center gap-1 ${className}`}
+      className={`cursor-pointer hover:text-[#0E8A96] transition-colors inline-flex items-center gap-1 ${className}`}
       title="Click to edit"
     >
       {triggerContent}

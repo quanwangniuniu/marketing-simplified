@@ -227,7 +227,7 @@ export function MeetingHeader({
                   placeholder="Add reference"
                 />
               ) : (
-                <button type="button" onClick={() => setEditingReference(true)} className="text-sm text-blue-600">
+                <button type="button" onClick={() => setEditingReference(true)} className="text-sm text-[#3CCED7]">
                   {externalReference || 'Add reference'}
                 </button>
               )}
