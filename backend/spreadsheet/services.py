@@ -1339,7 +1339,8 @@ class CellService:
         start_row: int,
         end_row: int,
         start_column: int,
-        end_column: int
+        end_column: int,
+        include_sheet_dimensions: bool = True,
     ) -> Dict[str, Any]:
         """
         Read cells within a specified range.
@@ -1351,7 +1352,9 @@ class CellService:
             end_row: Ending row position (inclusive)
             start_column: Starting column position (inclusive)
             end_column: Ending column position (inclusive)
-            
+            include_sheet_dimensions: When False, skip full-sheet Max(position) queries;
+                sheet_row_count / sheet_column_count are None (faster for scroll/tile reads).
+
         Returns:
             Dict with cells array, row_count, and column_count
         """
@@ -1389,13 +1392,17 @@ class CellService:
         ).exclude(
             value_type=CellValueType.EMPTY
         ).select_related('sheet', 'row', 'column')
-        
-        # Full sheet dimensions (so the client can size the grid to the whole sheet, not just the requested range)
-        row_agg = SheetRow.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
-        col_agg = SheetColumn.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
-        sheet_row_count = (row_agg['position__max'] + 1) if row_agg['position__max'] is not None else 0
-        sheet_column_count = (col_agg['position__max'] + 1) if col_agg['position__max'] is not None else 0
-        
+
+        if include_sheet_dimensions:
+            # Full sheet dimensions (so the client can size the grid to the whole sheet, not just the requested range)
+            row_agg = SheetRow.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
+            col_agg = SheetColumn.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
+            sheet_row_count = (row_agg['position__max'] + 1) if row_agg['position__max'] is not None else 0
+            sheet_column_count = (col_agg['position__max'] + 1) if col_agg['position__max'] is not None else 0
+        else:
+            sheet_row_count = None
+            sheet_column_count = None
+
         return {
             'cells': list(cells),
             'row_count': end_row - start_row + 1,

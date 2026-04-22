@@ -180,7 +180,8 @@ export const SpreadsheetAPI = {
     startRow: number,
     endRow: number,
     startColumn: number,
-    endColumn: number
+    endColumn: number,
+    options?: { includeSheetDimensions?: boolean }
   ): Promise<{
     cells: Array<{
       id: number;
@@ -230,6 +231,9 @@ export const SpreadsheetAPI = {
         end_row: endRow,
         start_column: startColumn,
         end_column: endColumn,
+        ...(options?.includeSheetDimensions === false
+          ? { include_sheet_dimensions: false }
+          : {}),
       },
       { timeout: SPREADSHEET_LONG_REQUEST_TIMEOUT_MS }
     );

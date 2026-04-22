@@ -1,5 +1,7 @@
 from django.test import TestCase
 from decimal import Decimal
+from typing import Any, Dict, Optional
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -1737,6 +1739,63 @@ class SheetColumnDeleteViewTest(TestCase):
             .values_list('position', flat=True)
         )
         self.assertEqual(positions, [0, 1, 2])
+
+
+class CellRangeReadViewTest(TestCase):
+    """POST /cells/range/ — optional full-sheet dimension aggregates"""
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        url = (
+            f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        )
+        r = self.client.post(
+            url,
+            {
+                'operations': [
+                    {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'a1'},
+                ],
+                'auto_expand': True,
+            },
+            format='json',
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def _read_range(self, extra: Optional[Dict[str, Any]] = None):
+        body = {
+            'start_row': 0,
+            'end_row': 0,
+            'start_column': 0,
+            'end_column': 0,
+        }
+        if extra:
+            body.update(extra)
+        url = (
+            f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/range/'
+        )
+        return self.client.post(url, body, format='json')
+
+    def test_includes_sheet_dimensions_by_default(self):
+        response = self._read_range()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('sheet_row_count', response.data)
+        self.assertIn('sheet_column_count', response.data)
+        self.assertIsNotNone(response.data['sheet_row_count'])
+        self.assertIsNotNone(response.data['sheet_column_count'])
+        self.assertTrue(len(response.data.get('cells', [])) >= 1)
+
+    def test_omits_sheet_dimensions_when_disabled(self):
+        response = self._read_range({'include_sheet_dimensions': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data.get('sheet_row_count'))
+        self.assertIsNone(response.data.get('sheet_column_count'))
+        self.assertTrue(len(response.data.get('cells', [])) >= 1)
 
 
 class CellBatchUpdateDependencyTest(TestCase):

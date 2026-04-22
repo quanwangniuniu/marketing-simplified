@@ -265,7 +265,12 @@ class CellRangeReadSerializer(serializers.Serializer):
     end_row = serializers.IntegerField(min_value=0)
     start_column = serializers.IntegerField(min_value=0)
     end_column = serializers.IntegerField(min_value=0)
-    
+    include_sheet_dimensions = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text='When false, skip full-sheet max row/column queries (faster for scroll/tile fetches).',
+    )
+
     def validate(self, data):
         """Validate range parameters"""
         if data['start_row'] > data['end_row']:

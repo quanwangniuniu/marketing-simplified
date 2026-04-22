@@ -832,7 +832,10 @@ class CellRangeReadView(APIView):
                 start_row=serializer.validated_data['start_row'],
                 end_row=serializer.validated_data['end_row'],
                 start_column=serializer.validated_data['start_column'],
-                end_column=serializer.validated_data['end_column']
+                end_column=serializer.validated_data['end_column'],
+                include_sheet_dimensions=serializer.validated_data.get(
+                    'include_sheet_dimensions', True
+                ),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
