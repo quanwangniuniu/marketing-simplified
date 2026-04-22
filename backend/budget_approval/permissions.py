@@ -1,6 +1,7 @@
 from rest_framework import permissions
 from django.conf import settings
 import logging
+from core.models import ProjectMember
 from .models import BudgetRequestStatus
 from utils.rbac_utils import has_rbac_permission, require_user_context, user_has_team
 
@@ -92,32 +93,32 @@ class BudgetRequestPermission(permissions.BasePermission):
 
 class ApprovalPermission(permissions.BasePermission):
     """Permissions to approve or reject budget requests"""
-    
+
     def has_permission(self, request, view):
         """Check if the user has permission to access the decision API"""
 
         if request is None or view is None:
             return False
-        
+
         # Super admin bypass all permission checks
         if request.user.is_superuser:
             return True
-            
+
         # Check required request headers
         # must have x-user-role
         # if user has team, must have x-team-id
         if not require_user_context(request, user_has_team(request.user)):
             return False
-        
+
         # Get team_id if user has team
         team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
-        
+
         # Get organization from user
         organization = getattr(request.user, 'organization', None)
-        
+
         # Check if the user has approval permission
         return has_rbac_permission(request.user, 'BUDGET_REQUEST', 'APPROVE', organization, team_id)
-    
+
     def has_object_permission(self, request, view, obj):
         """Check if the user has permission to approve a specific object"""
         # Handle None request (for direct permission class testing)
@@ -156,33 +157,68 @@ class BudgetPoolPermission(permissions.BasePermission):
         # Super admin bypass all permission checks
         if request.user.is_superuser:
             return True
-            
-        # Check required request headers
+
+        if not request.user.is_authenticated:
+            return False
+
+        # Product: any authenticated user may create a budget pool (skip require_user_context + BUDGET_POOL EDIT).
+        action = getattr(view, 'action', None)
+        if action == 'create':
+            return True
+        if action is None and request.method == 'POST':
+            return True
+
+        # List / retrieve pools: allow any authenticated user; rows are scoped in BudgetPoolViewSet.get_queryset.
+        if action == 'list':
+            return True
+        if action == 'retrieve':
+            return True
+
+        # --- Original implementation (before relaxed create). Kept for reference / easy revert. ---
+        # # Check required request headers
+        # if not require_user_context(request, user_has_team(request.user)):
+        #     return False
+        #
+        # # Get team_id if user has team
+        # team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
+        #
+        # # Get organization from user
+        # organization = getattr(request.user, 'organization', None)
+        #
+        # # Check RBAC permissions based on action type
+        # # Handle views that don't have action attribute (like UpdateAPIView)
+        # if hasattr(view, 'action'):
+        #     if view.action == 'create':
+        #         return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
+        #     elif view.action == 'list':
+        #         return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
+        # else:
+        #     # For views without action attribute, check based on HTTP method
+        #     if request.method == 'POST':
+        #         return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
+        #     elif request.method == 'GET':
+        #         return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
+        #     elif request.method in ['PUT', 'PATCH']:
+        #         return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
+        #
+        # return True
+
+        # List / non-create: strict path (require_user_context + RBAC)
         if not require_user_context(request, user_has_team(request.user)):
             return False
-        
-        # Get team_id if user has team
+
         team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
-        
-        # Get organization from user
         organization = getattr(request.user, 'organization', None)
-        
-        # Check RBAC permissions based on action type
-        # Handle views that don't have action attribute (like UpdateAPIView)
+
         if hasattr(view, 'action'):
-            if view.action == 'create':
-                return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
-            elif view.action == 'list':
+            if view.action == 'list':
                 return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
         else:
-            # For views without action attribute, check based on HTTP method
-            if request.method == 'POST':
-                return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
-            elif request.method == 'GET':
+            if request.method == 'GET':
                 return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
             elif request.method in ['PUT', 'PATCH']:
                 return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
-        
+
         return True
     
     def has_object_permission(self, request, view, obj):
@@ -203,8 +239,12 @@ class BudgetPoolPermission(permissions.BasePermission):
         if hasattr(obj, 'project') and hasattr(obj.project, 'organization'):
             organization = obj.project.organization
         
-        # Check RBAC permissions based on action type with organization check
+        # Retrieve: project member OR legacy RBAC VIEW (tests / roles without ProjectMember).
         if view.action == 'retrieve':
+            if ProjectMember.objects.filter(
+                user=request.user, project=obj.project, is_active=True
+            ).exists():
+                return True
             return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
         elif view.action in ['update', 'partial_update']:
             return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)

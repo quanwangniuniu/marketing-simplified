@@ -8,7 +8,7 @@ import pytest
 from django.urls import reverse
 from rest_framework import status
 from calendars.models import Calendar
-from core.models import Project, ProjectMember
+from core.models import Project, ProjectMember, AdChannel
 from core.utils.project_calendars import ensure_project_calendar
 
 
@@ -161,6 +161,21 @@ class TestProjectViewSet:
         assert response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
         if response.status_code == status.HTTP_403_FORBIDDEN:
             assert 'error' in response.data
+
+    def test_project_ad_channels_lists_project_channels(self, authenticated_client, project):
+        """GET .../ad-channels/ returns AdChannel rows for the project."""
+        AdChannel.objects.create(name="TikTok", project=project)
+        AdChannel.objects.create(name="Meta", project=project)
+
+        url = f'/api/core/projects/{project.id}/ad-channels/'
+        response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
+        ids = {row['id'] for row in response.data}
+        names = {row['name'] for row in response.data}
+        assert names == {'TikTok', 'Meta'}
+        assert all(i > 0 for i in ids)
 
     def test_get_project_details(self, authenticated_client, project):
         """Get project details should return full project data"""

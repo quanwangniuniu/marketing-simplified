@@ -116,6 +116,12 @@ export interface ProjectInvitationData {
   created_at?: string;
 }
 
+/** Row from GET /api/core/projects/{id}/ad-channels/ */
+export interface ProjectAdChannel {
+  id: number;
+  name: string;
+}
+
 const normalizeProjectsResponse = (data: any): ProjectData[] => {
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.results)) return data.results;
@@ -170,10 +176,10 @@ export const ProjectAPI = {
       .then((response) => response.data);
   },
 
-  createProject: (payload: Partial<ProjectData>): Promise<ProjectData> => {
+  getProjectAdChannels: (projectId: number): Promise<ProjectAdChannel[]> => {
     return api
-      .post<ProjectData>('/api/core/projects/', payload)
-      .then((response) => response.data);
+      .get<ProjectAdChannel[]>(`/api/core/projects/${projectId}/ad-channels/`)
+      .then((response) => (Array.isArray(response.data) ? response.data : []));
   },
 
   // Create the first project through onboarding
@@ -340,15 +346,9 @@ export const ProjectAPI = {
       .get(`/api/core/invitations/pending/`, { params })
       .then((response) => response.data || []);
   },
-  acceptInvitation: (
-    token: string,
-    credentials?: { password?: string; username?: string }
-  ): Promise<any> => {
-    const body: Record<string, string> = { token };
-    if (credentials?.password) body.password = credentials.password;
-    if (credentials?.username) body.username = credentials.username;
+  acceptInvitation: (token: string): Promise<any> => {
     return api
-      .post(`/api/core/invitations/accept/`, body)
+      .post(`/api/core/invitations/accept/`, { token })
       .then((response) => response.data);
   },
 

@@ -1,8 +1,10 @@
 import api from "../api";
 
-/** Path prefix matches `backend/budget_approval/urls.py` included at `api/`. */
-const POOLS = "/api/task/budget-pools/";
-const TASKS = "/api/task/budget-tasks/";
+/** Path prefix matches `backend/budget_approval/urls.py` included at `api/budgets/`. */
+// const POOLS = "/api/task/budget-pools/"; // legacy (404 — no matching Django route)
+// const TASKS = "/api/task/budget-tasks/";
+const POOLS = "/api/budgets/pools/";
+const TASKS = "/api/budgets/requests/";
 
 function listResults<T>(data: unknown): T[] {
   if (Array.isArray(data)) return data as T[];

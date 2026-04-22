@@ -84,6 +84,9 @@ services:
       #   condition: service_healthy
     volumes:
       # - sonar-token-data:/token
+      
+      - ./backend:/app
+
       - ../agentdoc/databackup:/app/agent_data
     command: ["/bin/bash", "/app/entrypoint-dev"]
     logging:
@@ -312,7 +315,7 @@ services:
       context: ./devops/topic-init
       dockerfile: Dockerfile.dev
     container_name: topic-init
-    restart: on-failure:3
+    restart: always
     entrypoint: ["/bin/bash", "/usr/local/bin/entrypoint-dev"]
     depends_on:
       kafka:

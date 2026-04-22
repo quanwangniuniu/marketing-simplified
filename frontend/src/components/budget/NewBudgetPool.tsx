@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { CreateBudgetPoolData } from "@/lib/api/budgetApi";
+import { ProjectAPI } from "@/lib/api/projectApi";
 import { useProjects } from "@/hooks/useProjects";
 
 interface NewBudgetPoolProps {
@@ -36,7 +37,6 @@ export default function NewBudgetPool({
   // Only update if the incoming prop values are different from current formData
   // This prevents infinite loops when user input triggers parent update
   useEffect(() => {
-     console.log('NewBudgetPool - budgetPoolData changed:', budgetPoolData)
     const propValues = {
       project: budgetPoolData.project || undefined,
       ad_channel: budgetPoolData.ad_channel || undefined,
@@ -105,15 +105,39 @@ export default function NewBudgetPool({
   const [loadingAdChannels, setLoadingAdChannels] = useState(false);
   const [adChannels, setAdChannels] = useState<{ id: number, name: string }[]>([]);
 
-  // Get ad channels list
+  // Load ad channels for the selected project (must match DB — mock ids 1/2 break creates)
   useEffect(() => {
-    // TODO: fetch all ad channels from API
-    // set mock ad channels for now
-    setAdChannels([
-      { id: 1, name: 'TikTok' },
-      { id: 2, name: 'Facebook' },
-    ]);
-  }, []);
+    const projectId = formData.project;
+    if (!projectId) {
+      setAdChannels([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingAdChannels(true);
+      try {
+        const channels = await ProjectAPI.getProjectAdChannels(projectId);
+        if (cancelled) return;
+        setAdChannels(channels);
+        const selected = formDataRef.current.ad_channel;
+        if (selected && !channels.some((c) => c.id === selected)) {
+          const cleared = { ...formDataRef.current, ad_channel: undefined };
+          setFormData(cleared);
+          onBudgetPoolDataChange?.(cleared);
+        }
+      } catch {
+        if (!cancelled) setAdChannels([]);
+      } finally {
+        if (!cancelled) setLoadingAdChannels(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally omit onBudgetPoolDataChange — parent may pass unstable inline callbacks.
+  }, [formData.project]);
 
   const handleInputChange = (field: keyof CreateBudgetPoolData, value: any) => {
     // Clear error when user starts typing
@@ -122,7 +146,10 @@ export default function NewBudgetPool({
     }
     
     // Update local form data
-    const newFormData = { ...formData, [field]: value };
+    const newFormData =
+      field === 'project'
+        ? { ...formData, project: value, ad_channel: undefined }
+        : { ...formData, [field]: value };
     setFormData(newFormData);
     
     // Update parent component if callback provided
@@ -210,6 +237,11 @@ export default function NewBudgetPool({
         </select>
         {errors.ad_channel && (
           <p className="text-red-500 text-sm mt-1">{errors.ad_channel}</p>
+        )}
+        {formData.project && !loadingAdChannels && adChannels.length === 0 && (
+          <p className="text-amber-700 text-sm mt-1">
+            No ad channels exist for this project yet. Add AdChannel rows for this project in Django admin (or via API), then refresh this page.
+          </p>
         )}
       </div>
 

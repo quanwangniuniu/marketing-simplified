@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { BudgetAPI } from '@/lib/api/budgetApi';
+import { ProjectAPI } from '@/lib/api/projectApi';
 
 interface BudgetRequestData {
   amount: string;
@@ -40,16 +41,39 @@ export default function NewBudgetRequestForm({
   const [budgetPools, setBudgetPools] = useState<any[]>([]);
   const [filteredBudgetPools, setFilteredBudgetPools] = useState<any[]>([]);
   const [lastProjectId, setLastProjectId] = useState<number | null>(null);
+  const budgetDataRef = useRef(budgetData);
+  budgetDataRef.current = budgetData;
 
-  // Get ad channels list based on selected project
+  // Load ad channels for the task project (must be real AdChannel PKs for the project)
   useEffect(() => {
-    // TODO: fetch all ad channels
-    // set mock ad channels for now
-    setAdChannels([
-      { id: 1, name: 'TikTok' },
-      { id: 2, name: 'Facebook' },
-    ]);
-  }, []);
+    if (!taskData.project_id) {
+      setAdChannels([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingAdChannels(true);
+      try {
+        const channels = await ProjectAPI.getProjectAdChannels(taskData.project_id);
+        if (cancelled) return;
+        setAdChannels(channels);
+        const bd = budgetDataRef.current;
+        if (bd.ad_channel != null && !channels.some((c) => c.id === bd.ad_channel)) {
+          onBudgetDataChange({ ...bd, ad_channel: null, budget_pool: null });
+        }
+      } catch {
+        if (!cancelled) setAdChannels([]);
+      } finally {
+        if (!cancelled) setLoadingAdChannels(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid re-fetch when parent passes unstable onBudgetDataChange
+  }, [taskData.project_id]);
 
   // Clear budget pool selection immediately when project changes
   useEffect(() => {

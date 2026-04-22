@@ -198,24 +198,43 @@ class TestBudgetPoolPermissions:
         
         assert response.status_code == status.HTTP_200_OK
     
-    def test_user_cannot_create_budget_pool(self, api_client, user3, project, ad_channel, team):
-        """Test user cannot create budget pool (permission denied)"""
-        # user3 has no role permissions, so should be denied
+    def test_authenticated_user_can_create_budget_pool_without_pool_edit_role(
+        self, api_client, user3, project, ad_channel, team
+    ):
+        """Any authenticated user may create a pool; RBAC EDIT is not required for POST."""
         api_client.force_authenticate(user=user3)
         api_client.credentials(HTTP_X_USER_ROLE='team_member', HTTP_X_TEAM_ID=str(team.id))
-        
+
         data = {
             'project': project.id,
             'ad_channel': ad_channel.id,
             'total_amount': '5000.00',
-            'currency': 'AUD'
+            'currency': 'AUD',
         }
-        
+
         url = reverse('budget-pool-list')
         response = api_client.post(url, data, format='json')
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-    
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_user_without_pool_view_can_list_pools_for_their_org_project(
+        self, api_client, user3, budget_pool, team
+    ):
+        """GET list is allowed without BUDGET_POOL VIEW; queryset is scoped by org / membership."""
+        api_client.force_authenticate(user=user3)
+        api_client.credentials(HTTP_X_USER_ROLE='team_member', HTTP_X_TEAM_ID=str(team.id))
+
+        url = reverse('budget-pool-list')
+        response = api_client.get(url, {'project_id': budget_pool.project.id})
+
+        assert response.status_code == status.HTTP_200_OK
+        ids = (
+            [item['id'] for item in response.data['results']]
+            if isinstance(response.data, dict) and 'results' in response.data
+            else [item['id'] for item in response.data]
+        )
+        assert budget_pool.id in ids
+
     def test_user_cannot_update_budget_pool(self, api_client, user3, budget_pool, team):
         """Test user cannot update budget pool (permission denied)"""
         # user3 has no role permissions, so should be denied

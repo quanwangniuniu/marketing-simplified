@@ -308,6 +308,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         ensure_project_calendar(project)
 
+        try:
+            ProjectInitializationService.ensure_default_ad_channels(project)
+        except Exception as exc:  # pragma: no cover - safeguard
+            logger.warning(
+                "Default ad channels not seeded for project %s: %s", project.id, exc
+            )
+
         return project
 
     def perform_destroy(self, instance):
@@ -344,6 +351,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             'message': 'Active project updated successfully',
             'active_project': serializer.data
         })
+
+    @action(detail=True, methods=['get'], url_path='ad-channels')
+    def ad_channels(self, request, pk=None):
+        """List advertising channels configured for this project (for budget pool / request forms)."""
+        project = self.get_object()
+        rows = project.ad_channels.all().order_by('name', 'id')
+        return Response([{'id': ch.id, 'name': ch.name} for ch in rows])
 
     @action(detail=True, methods=['get'], url_path='decisions/graph')
     def decisions_graph(self, request, pk=None):

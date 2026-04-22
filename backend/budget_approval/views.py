@@ -5,6 +5,8 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.contrib.auth import get_user_model
 
+from core.models import ProjectMember
+
 from .models import BudgetRequest, BudgetPool, BudgetRequestStatus
 from .serializers import (
     BudgetRequestSerializer, 
@@ -128,6 +130,52 @@ class BudgetPoolViewSet(viewsets.ModelViewSet):
     queryset = BudgetPool.objects.all()
     serializer_class = BudgetPoolSerializer
     permission_classes = [BudgetPoolPermission]
+
+    def get_queryset(self):
+        """Scope pools to the user's projects (membership) or, if none, their organization."""
+        qs = BudgetPool.objects.select_related('project', 'project__organization', 'ad_channel')
+        user = self.request.user
+        if not user.is_authenticated:
+            return qs.none()
+        if user.is_superuser:
+            return self._filter_budget_pool_queryset_by_request(qs)
+
+        member_pids = set(
+            ProjectMember.objects.filter(user=user, is_active=True).values_list(
+                'project_id', flat=True
+            )
+        )
+        param = self.request.query_params.get('project_id')
+        if param is not None:
+            try:
+                want_pid = int(param)
+            except (TypeError, ValueError):
+                return qs.none()
+            if member_pids:
+                if want_pid not in member_pids:
+                    return qs.none()
+                return qs.filter(project_id=want_pid)
+            org_id = getattr(user, 'organization_id', None)
+            if not org_id:
+                return qs.none()
+            return qs.filter(project_id=want_pid, project__organization_id=org_id)
+
+        if member_pids:
+            return qs.filter(project_id__in=member_pids)
+        org_id = getattr(user, 'organization_id', None)
+        if not org_id:
+            return qs.none()
+        return qs.filter(project__organization_id=org_id)
+
+    def _filter_budget_pool_queryset_by_request(self, qs):
+        param = self.request.query_params.get('project_id')
+        if param is None:
+            return qs
+        try:
+            pid = int(param)
+        except (TypeError, ValueError):
+            return qs.none()
+        return qs.filter(project_id=pid)
 
     def destroy(self, request, *args, **kwargs):
         """Delete budget pool with proper error handling for protected foreign keys"""

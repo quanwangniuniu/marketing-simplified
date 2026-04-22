@@ -6,6 +6,8 @@ from core.utils.project import initialize_project_dashboards, validate_project_c
 
 logger = logging.getLogger(__name__)
 
+# Default advertising channels per project (matches legacy budget UI options; stored as real AdChannel rows).
+DEFAULT_AD_CHANNEL_NAMES: tuple[str, ...] = ('TikTok', 'Facebook')
 
 DEFAULT_BUDGET_STRUCTURES: Dict[str, List[Dict]] = {
     'single_consolidated': [
@@ -67,6 +69,14 @@ class ProjectInitializationService:
     DASHBOARD_CONFIG_VERSION = 1
 
     @classmethod
+    def ensure_default_ad_channels(cls, project):
+        """Create baseline AdChannel rows for budget forms (idempotent)."""
+        from core.models import AdChannel
+
+        for name in DEFAULT_AD_CHANNEL_NAMES:
+            AdChannel.objects.get_or_create(project=project, name=name)
+
+    @classmethod
     def initialize_project(cls, project):
         """
         Initialize dashboards, report templates, and budget scaffolding.
@@ -81,6 +91,7 @@ class ProjectInitializationService:
             )
 
         try:
+            cls.ensure_default_ad_channels(project)
             cls._initialize_dashboards(project)
             if project.budget_management_type:
                 cls._initialize_budget_structures(project)
