@@ -23,7 +23,7 @@ interface BoardListSidebarProps {
 const cardBase =
   "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-600 shadow-sm transition-colors";
 const cardInactive = "hover:border-gray-300 hover:bg-gray-50/80";
-const cardActive = "border-blue-400 bg-blue-50/60 text-gray-800 ring-1 ring-blue-200/60";
+const cardActive = "border-[#3CCED7] bg-[#3CCED7]/10/60 text-gray-800 ring-1 ring-blue-200/60";
 
 const railBtnBase =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-semibold uppercase leading-none tracking-tight shadow-sm transition-colors";
@@ -128,7 +128,7 @@ export default function BoardListSidebar({
         {isOpen && (
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-xl border border-blue-600 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-600 shadow-sm hover:bg-blue-50"
+            className="inline-flex items-center gap-1 rounded-xl border border-[#3CCED7] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#3CCED7] shadow-sm hover:bg-[#3CCED7]/10"
             onClick={onCreateBoard}
           >
             <Plus className="h-3 w-3" />

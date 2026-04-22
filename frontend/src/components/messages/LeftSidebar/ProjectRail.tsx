@@ -91,7 +91,7 @@ export default function ProjectRail({
                   'w-full h-10 rounded-lg flex items-center justify-center',
                   'border transition-colors',
                   isSelected
-                    ? 'bg-white border-blue-300 text-blue-700 shadow-sm'
+                    ? 'bg-white border-blue-300 text-[#1a9ba3] shadow-sm'
                     : 'bg-white/60 border-gray-200 text-gray-700 hover:bg-white hover:border-gray-300',
                 ].join(' ')}
                 title={project.name}

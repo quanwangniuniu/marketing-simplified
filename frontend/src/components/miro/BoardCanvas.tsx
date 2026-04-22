@@ -983,7 +983,7 @@ export default function BoardCanvas({
 
       {selectionBounds && selectedItemIds.length > 1 && (
         <div
-          className="absolute border-2 border-blue-500/80 pointer-events-none"
+          className="absolute border-2 border-[#3CCED7]/80 pointer-events-none"
           style={{
             left: selectionBounds.x * viewport.zoom + viewport.x,
             top: selectionBounds.y * viewport.zoom + viewport.y,
@@ -996,7 +996,7 @@ export default function BoardCanvas({
 
       {marqueeRect && (
         <div
-          className="absolute border border-blue-500 bg-blue-100/20 pointer-events-none"
+          className="absolute border border-[#3CCED7] bg-[#3CCED7]/15/20 pointer-events-none"
           style={{
             left: Math.min(marqueeRect.startX, marqueeRect.currentX) * viewport.zoom + viewport.x,
             top: Math.min(marqueeRect.startY, marqueeRect.currentY) * viewport.zoom + viewport.y,

@@ -130,14 +130,14 @@ export function MeetingDateTimePicker({
             variant === 'comfortable'
               ? 'rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-base shadow-sm min-h-[52px]'
               : 'rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm',
-            'focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+            'focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30',
             'disabled:cursor-not-allowed disabled:opacity-50',
             !dateValue && 'text-gray-500',
           )}
         >
           <CalendarIcon
             className={cn(
-              'shrink-0 text-blue-600',
+              'shrink-0 text-[#3CCED7]',
               variant === 'comfortable' ? 'h-5 w-5' : 'h-4 w-4',
             )}
             aria-hidden
@@ -204,9 +204,9 @@ export function MeetingDateTimePicker({
                   className={cn(
                     'mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors',
                     !inMonth && 'text-slate-300',
-                    inMonth && !isSelected && 'text-slate-800 hover:bg-blue-100',
+                    inMonth && !isSelected && 'text-slate-800 hover:bg-[#3CCED7]/15',
                     isToday && !isSelected && inMonth && 'ring-1 ring-blue-300',
-                    isSelected && 'bg-blue-600 font-semibold text-white shadow-sm hover:bg-blue-600',
+                    isSelected && 'bg-[#3CCED7] font-semibold text-white shadow-sm hover:bg-[#3CCED7]',
                   )}
                 >
                   {format(day, 'd')}
@@ -218,7 +218,7 @@ export function MeetingDateTimePicker({
 
           {/* Time panel — right column on md+, below calendar on small screens */}
           {draftDate ? (
-            <div className="w-full shrink-0 rounded-xl border border-blue-100 bg-slate-50/80 p-3 shadow-inner md:mt-0 md:w-[220px]">
+            <div className="w-full shrink-0 rounded-xl border border-[#3CCED7]/20 bg-slate-50/80 p-3 shadow-inner md:mt-0 md:w-[220px]">
               <p className="mb-2 text-center text-xs font-medium text-slate-700">{headerLine}</p>
               <div className="max-h-[180px] space-y-1.5 overflow-y-auto pr-0.5">
                 {timeSlots.map((slot) => {
@@ -232,7 +232,7 @@ export function MeetingDateTimePicker({
                         'w-full rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors',
                         active
                           ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-blue-500 bg-white text-blue-600 hover:bg-blue-50',
+                          : 'border-[#3CCED7] bg-white text-[#3CCED7] hover:bg-[#3CCED7]/10',
                       )}
                     >
                       {slot.label}
@@ -256,7 +256,7 @@ export function MeetingDateTimePicker({
               </div>
               <Button
                 type="button"
-                className="mt-2 w-full bg-blue-600 text-xs text-white hover:bg-blue-700"
+                className="mt-2 w-full bg-[#3CCED7] text-xs text-white hover:bg-[#2AB5BD]"
                 size="sm"
                 disabled={!draftTime.trim()}
                 onClick={handleConfirm}

@@ -8,6 +8,7 @@ import Button from '@/components/button/Button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, Minus, Plus, Edit, Trash2, Paperclip, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
 
 interface CampaignSnapshotsProps {
   campaignId: string;
@@ -92,6 +93,8 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
   const [error, setError] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<PerformanceSnapshot | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchSnapshots = async () => {
@@ -122,21 +125,27 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
     fetchSnapshots();
   }, [campaignId, refreshTrigger]);
 
-  const handleDelete = async (snapshot: PerformanceSnapshot) => {
-    if (!window.confirm('Are you sure you want to delete this snapshot?')) {
-      return;
-    }
+  const handleDelete = (snapshot: PerformanceSnapshot) => {
+    setConfirmDeleteTarget(snapshot);
+  };
 
+  const performDelete = async () => {
+    if (!confirmDeleteTarget) return;
+    const snapshot = confirmDeleteTarget;
+    setDeleting(true);
     try {
       await CampaignAPI.deleteSnapshot(campaignId, snapshot.id);
       setSnapshots((prev) => prev.filter((item) => item.id !== snapshot.id));
-      toast.success('Snapshot deleted successfully');
+      toast.success('Snapshot deleted');
+      setConfirmDeleteTarget(null);
       if (onDelete) {
         onDelete(snapshot.id);
       }
     } catch (err: any) {
       console.error('Failed to delete snapshot:', err);
       toast.error(err.response?.data?.error || err.message || 'Failed to delete snapshot');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -157,7 +166,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance Snapshots</h2>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]"></div>
           <span className="ml-3 text-gray-600">Loading snapshots...</span>
         </div>
       </div>
@@ -189,6 +198,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
               }
             }}
             leftIcon={<Plus className="h-4 w-4" />}
+            className="!bg-gradient-to-br !from-[#3CCED7] !to-[#A6E661] !border-transparent hover:!brightness-105 !text-white focus-visible:!ring-[#3CCED7]/30"
           >
             New Snapshot
           </Button>
@@ -245,7 +255,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
                   <div className="flex items-start gap-4">
                     {/* Milestone Badge */}
                     <div className="flex-shrink-0">
-                      <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
+                      <Badge variant="outline" className="bg-[#3CCED7]/10 text-[#1a9ba3] border-[#3CCED7]/30">
                         {snapshot.milestone_type_display}
                       </Badge>
                     </div>
@@ -310,7 +320,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
                                 onEdit(snapshot);
                               }
                             }}
-                            className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            className="p-1.5 text-gray-600 hover:text-[#0E8A96] hover:bg-[#3CCED7]/10 rounded transition-colors"
                             title="Edit snapshot"
                           >
                             <Edit className="h-4 w-4" />
@@ -390,7 +400,7 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
                                 onEdit(snapshot);
                               }
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-[#0E8A96] hover:bg-[#3CCED7]/10 rounded transition-colors"
                           >
                             <Edit className="h-4 w-4" />
                             Edit
@@ -415,6 +425,17 @@ export default function CampaignSnapshots({ campaignId, onEdit, onDelete, onCrea
           })}
         </div>
       )}
+
+      <BrandConfirmDialog
+        open={!!confirmDeleteTarget}
+        onOpenChange={(next) => { if (!next) setConfirmDeleteTarget(null); }}
+        title="Delete Snapshot?"
+        message="This snapshot will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        loading={deleting}
+        onConfirm={performDelete}
+      />
     </div>
   );
 }

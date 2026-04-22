@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Chat } from '@/types/chat';
+import type { ProjectMemberData } from '@/lib/api/projectApi';
 import ProjectRail from '@/components/messages/LeftSidebar/ProjectRail';
 import NavRail, { type MessagesNavView } from '@/components/messages/LeftSidebar/NavRail';
 import HomeSidebar from '@/components/messages/LeftSidebar/HomeSidebar';
@@ -21,6 +22,10 @@ interface SlackMessagesLayoutProps {
   chatListEmptyState: React.ReactNode;
   roleByUserId?: Record<number, string>;
 
+  projectMembers: ProjectMemberData[];
+  isLoadingMembers: boolean;
+  onStartDM: (userId: number) => void;
+
   chatPanel: React.ReactNode;
 }
 
@@ -36,6 +41,9 @@ export default function SlackMessagesLayout({
   isLoadingChats,
   chatListEmptyState,
   roleByUserId,
+  projectMembers,
+  isLoadingMembers,
+  onStartDM,
   chatPanel,
 }: SlackMessagesLayoutProps) {
   const isMobileChatOpen = Boolean(currentChatId && !isLoadingChats);
@@ -73,6 +81,9 @@ export default function SlackMessagesLayout({
             isLoading={isLoadingChats}
             emptyState={chatListEmptyState}
             roleByUserId={roleByUserId}
+            projectMembers={projectMembers}
+            isLoadingMembers={isLoadingMembers}
+            onStartDM={onStartDM}
           />
         </div>
 

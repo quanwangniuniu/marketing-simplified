@@ -81,7 +81,7 @@ export default function MobileCardFrame({ children, variantKey }: MobileCardFram
             <div className="flex items-center gap-4 pb-2">
               <div className="flex flex-col items-center">
                 <span className="text-xs text-gray-700 pb-1">All</span>
-                <div className="w-full h-0.5 bg-blue-600 rounded-full"></div>
+                <div className="w-full h-0.5 bg-[#3CCED7] rounded-full"></div>
               </div>
               <span className="text-xs text-gray-600">Images</span>
               <span className="text-xs text-gray-600">Videos</span>

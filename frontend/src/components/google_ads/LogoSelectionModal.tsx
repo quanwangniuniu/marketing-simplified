@@ -381,7 +381,7 @@ const LogoSelectionModal: React.FC<LogoSelectionModalProps> = ({
       <div className="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-blue-600">
+          <h2 className="text-xl font-semibold text-[#3CCED7]">
             Select Logos
           </h2>
           <button
@@ -400,7 +400,7 @@ const LogoSelectionModal: React.FC<LogoSelectionModalProps> = ({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-[#3CCED7] text-[#3CCED7]'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -445,7 +445,7 @@ const LogoSelectionModal: React.FC<LogoSelectionModalProps> = ({
                   <button
                     onClick={handleUploadClick}
                     disabled={isUploading}
-                    className="text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="text-[#3CCED7] px-4 py-2 rounded-lg hover:bg-[#3CCED7]/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {isUploading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -459,7 +459,7 @@ const LogoSelectionModal: React.FC<LogoSelectionModalProps> = ({
                 <div
                   className={`mt-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
                     isDragOver
-                      ? 'border-blue-500 bg-blue-50 text-blue-600'
+                      ? 'border-[#3CCED7] bg-[#3CCED7]/10 text-[#3CCED7]'
                       : 'border-gray-300 bg-gray-50 text-gray-600'
                   } ${isUploading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                   onClick={handleUploadClick}
@@ -529,7 +529,7 @@ const LogoSelectionModal: React.FC<LogoSelectionModalProps> = ({
               className={`px-4 py-2 rounded-lg font-medium ${
                 disableContinue
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
               }`}
             >
               Continue

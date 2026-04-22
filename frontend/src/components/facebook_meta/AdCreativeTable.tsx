@@ -47,7 +47,7 @@ interface AdCreativeTableProps {
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: 'bg-green-100 text-green-800 border-green-200',
-  IN_PROCESS: 'bg-blue-100 text-blue-800 border-blue-200',
+  IN_PROCESS: 'bg-[#3CCED7]/15 text-[#1a9ba3] border-[#3CCED7]/30',
   WITH_ISSUES: 'bg-red-100 text-red-800 border-red-200',
   DELETED: 'bg-gray-200 text-gray-800 border-gray-200',
 };
@@ -349,7 +349,7 @@ export default function AdCreativeTable({
                     {onView && (
                       <button
                         onClick={() => onView(creative.id)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-2 text-[#3CCED7] hover:bg-[#3CCED7]/10 rounded-lg transition-colors"
                         title="View"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

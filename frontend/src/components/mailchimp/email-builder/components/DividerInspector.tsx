@@ -233,7 +233,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
                 Style
               </span>
               <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 value={dividerStyle}
                 onChange={(e) =>
                   updateDividerSettings({
@@ -336,7 +336,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
                 />
                 <span
                   className={`w-11 h-6 flex items-center rounded-full p-1 transition ${
-                    linkDeviceStyles ? "bg-blue-600" : "bg-gray-300"
+                    linkDeviceStyles ? "bg-[#3CCED7]" : "bg-gray-300"
                   }`}
                 >
                   <span
@@ -378,7 +378,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
                   <label className="flex items-center gap-2 text-xs text-gray-600">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      className="h-4 w-4 text-[#3CCED7] border-gray-300 rounded"
                       checked={isPaddingLinked}
                       onChange={(e) =>
                         handleTogglePaddingLink(e.target.checked)
@@ -395,7 +395,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
                     onChange={(e) =>
                       handlePaddingChange("top", Number(e.target.value || 0))
                     }
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   />
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -415,7 +415,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
                                 Number(e.target.value || 0)
                               )
                             }
-                            className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
                           />
                         </div>
                       )
@@ -446,13 +446,13 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => setSelectedBlock(null)}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done
         </button>
         <span className="text-base font-semibold text-gray-900">Divider</span>
-        <button className="text-blue-600 hover:text-blue-700 text-xs flex items-center gap-1">
+        <button className="text-[#3CCED7] hover:text-[#1a9ba3] text-xs flex items-center gap-1">
           {/* <HelpCircle className="h-4 w-4" />
           How to use divider blocks */}
         </button>
@@ -465,7 +465,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
             onClick={() => setActiveBlockTab(tab)}
             className={`flex-1 text-sm font-medium py-3 ${
               activeBlockTab === tab
-                ? "text-blue-700 border-b-2 border-blue-700 bg-gray-50"
+                ? "text-[#1a9ba3] border-b-2 border-[#2AB5BD] bg-gray-50"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -506,7 +506,7 @@ const DividerInspector: React.FC<DividerInspectorProps> = ({
           >
             Clear styles
           </button>
-          <button className="flex-1 bg-blue-700 text-white rounded-md px-3 py-2 text-sm hover:bg-blue-800">
+          <button className="flex-1 bg-[#2AB5BD] text-white rounded-md px-3 py-2 text-sm hover:bg-[#1a9ba3]">
             Apply to all
           </button>
         </div>

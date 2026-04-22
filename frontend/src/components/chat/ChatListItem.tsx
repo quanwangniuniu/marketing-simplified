@@ -171,7 +171,7 @@ export default function ChatListItem({
         onDragOver={onDragOver}
         onDrop={onDrop}
         className={`transition-all duration-200 ${
-          isActive ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'
+          isActive ? 'bg-[#3CCED7]/10 border-l-4 border-[#3CCED7]' : 'hover:bg-gray-50 border-l-4 border-transparent'
         } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
         {/* Main Row - use div instead of button to avoid nested buttons */}
@@ -190,7 +190,7 @@ export default function ChatListItem({
                   ? 'bg-gradient-to-br from-violet-500 to-violet-600'
                   : chat.type === 'group'
                     ? 'bg-gradient-to-br from-purple-500 to-purple-600'
-                    : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                    : 'bg-gradient-to-br from-[#3CCED7] to-[#3CCED7]'
               } text-white font-semibold text-lg shadow-sm`}>
                 {isBot ? (
                   <Bot className="w-6 h-6" />
@@ -210,7 +210,7 @@ export default function ChatListItem({
               <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="flex items-center gap-2 min-w-0">
                   <h3 className={`font-semibold truncate ${
-                    isActive ? 'text-blue-900' : 'text-gray-900'
+                    isActive ? 'text-[#0f757a]' : 'text-gray-900'
                   }`}>
                     {getChatName()}
                   </h3>
@@ -261,7 +261,7 @@ export default function ChatListItem({
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Unread Badge - only show when count > 0 */}
                   {(chat.unread_count ?? 0) > 0 && (
-                    <span className="bg-blue-600 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-sm">
+                    <span className="bg-[#3CCED7] text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] flex items-center justify-center px-1.5 shadow-sm">
                       {chat.unread_count! > 99 ? '99+' : chat.unread_count}
                     </span>
                   )}
@@ -292,7 +292,7 @@ export default function ChatListItem({
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                 chat.type === 'group' 
                   ? 'bg-purple-100 text-purple-700' 
-                  : 'bg-blue-100 text-blue-700'
+                  : 'bg-[#3CCED7]/15 text-[#1a9ba3]'
               }`}>
                 {chat.type === 'group' ? (
                   <>

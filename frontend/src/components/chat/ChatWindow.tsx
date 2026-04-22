@@ -267,7 +267,7 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
               <button
                 onClick={handleOpenForwardDialog}
                 disabled={selectedMessageIds.length === 0 || isForwarding}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-[#3CCED7] text-white rounded-md hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Forward className="w-3.5 h-3.5" />
                 Forward

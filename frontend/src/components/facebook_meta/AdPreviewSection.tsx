@@ -85,7 +85,7 @@ export default function AdPreviewSection({
         <div className="flex items-center space-x-3">
           <button
             onClick={() => onPreviewToggle(!isPreviewEnabled)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPreviewEnabled ? 'bg-blue-600' : 'bg-gray-200'
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPreviewEnabled ? 'bg-[#3CCED7]' : 'bg-gray-200'
               }`}
           >
             <span
@@ -173,7 +173,7 @@ export default function AdPreviewSection({
                 <button
                   onClick={() => onFormatChange('desktop')}
                   className={`px-3 py-2 rounded-md transition-colors ${selectedFormat === 'desktop'
-                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    ? 'bg-[#3CCED7]/15 text-[#3CCED7] hover:bg-blue-200'
                     : 'hover:bg-gray-200'
                     }`}
                 >
@@ -182,7 +182,7 @@ export default function AdPreviewSection({
                 <button
                   onClick={() => onFormatChange('mobile')}
                   className={`px-3 py-2 rounded-md transition-colors ${selectedFormat === 'mobile'
-                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    ? 'bg-[#3CCED7]/15 text-[#3CCED7] hover:bg-blue-200'
                     : 'hover:bg-gray-200'
                     }`}
                 >
@@ -191,7 +191,7 @@ export default function AdPreviewSection({
                 <button
                   onClick={() => onFormatChange('story')}
                   className={`px-3 py-2 rounded-md transition-colors ${selectedFormat === 'story'
-                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    ? 'bg-[#3CCED7]/15 text-[#3CCED7] hover:bg-blue-200'
                     : 'hover:bg-gray-200'
                     }`}
                 >
@@ -200,7 +200,7 @@ export default function AdPreviewSection({
                 <button
                   onClick={() => onFormatChange('reel')}
                   className={`px-3 py-2 rounded-md transition-colors ${selectedFormat === 'reel'
-                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    ? 'bg-[#3CCED7]/15 text-[#3CCED7] hover:bg-blue-200'
                     : 'hover:bg-gray-200'
                     }`}
                 >
@@ -222,7 +222,7 @@ export default function AdPreviewSection({
               <button
                 onClick={() => setSelectedContent('all')}
                 className={`w-12 h-12 rounded-md text-sm font-medium transition-colors ${selectedContent === 'all'
-                  ? 'border-2 border-blue-500 hover:bg-gray-100'
+                  ? 'border-2 border-[#3CCED7] hover:bg-gray-100'
                   : 'bg-gray-50 hover:bg-gray-200'
                   }`}
               >
@@ -256,7 +256,7 @@ export default function AdPreviewSection({
                             />
                           )
                         ) : media.type === 'photo' ? (
-                          <div className="w-full h-full bg-blue-500 flex items-center justify-center">
+                          <div className="w-full h-full bg-[#3CCED7] flex items-center justify-center">
                             <span className="text-white text-xs font-bold">IMG</span>
                           </div>
                         ) : (

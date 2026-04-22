@@ -240,9 +240,9 @@ export function TemplateSidebar({
               <button
                 type="button"
                 onClick={() => handleCreateCustomTemplateClick()}
-                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-3 text-left transition hover:bg-blue-50"
+                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[#3CCED7]/30 bg-[#3CCED7]/10/40 p-3 text-left transition hover:bg-[#3CCED7]/10"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3CCED7]/15 text-[#3CCED7]">
                   <Plus className="h-4 w-4" />
                 </span>
                 <span>

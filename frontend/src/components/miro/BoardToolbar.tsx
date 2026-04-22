@@ -138,7 +138,7 @@ export default function BoardToolbar({
                           onDragEnd={handleDragEnd}
                           className={`p-2 rounded cursor-move ${
                             activeTool === "emoji"
-                              ? "bg-blue-100 text-blue-700"
+                              ? "bg-[#3CCED7]/15 text-[#1a9ba3]"
                               : "hover:bg-gray-100 text-gray-600"
                           }`}
                           aria-label={tool.label}
@@ -196,7 +196,7 @@ export default function BoardToolbar({
                     onDragEnd={handleDragEnd}
                     className={`p-2 rounded ${
                       activeTool === tool.type
-                        ? "bg-blue-100 text-blue-700"
+                        ? "bg-[#3CCED7]/15 text-[#1a9ba3]"
                         : "hover:bg-gray-100 text-gray-600"
                     } ${!isSelect ? "cursor-move" : ""}`}
                     aria-label={tool.label}
@@ -294,7 +294,7 @@ function LineVariantButton({
           onClick();
         }}
         className={`w-12 rounded px-1 py-1 text-[10px] leading-none transition ${
-          active ? "bg-blue-100 text-blue-700" : "hover:bg-gray-100 text-gray-700"
+          active ? "bg-[#3CCED7]/15 text-[#1a9ba3]" : "hover:bg-gray-100 text-gray-700"
         }`}
         aria-pressed={active}
         aria-label={label}

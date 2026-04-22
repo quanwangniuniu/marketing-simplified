@@ -160,7 +160,7 @@ export function MeetingArtifactLinker({
       <div className="md:col-span-1">
         <label className="text-xs font-medium text-gray-700">Resource type</label>
         <select
-          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
           value={kind}
           disabled={disabled || resourceLoading}
           onChange={(e) => setKind(e.target.value as KindOption)}
@@ -191,7 +191,7 @@ export function MeetingArtifactLinker({
                 setOpen(true);
               }}
               onFocus={() => setOpen(true)}
-              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50"
+              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] disabled:bg-gray-50"
               role="combobox"
               aria-expanded={open}
             />
@@ -207,7 +207,7 @@ export function MeetingArtifactLinker({
                     <li key={row.key}>
                       <button
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#3CCED7]/10 focus:bg-[#3CCED7]/10 focus:outline-none"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={row.onPick}
                       >
@@ -234,7 +234,7 @@ export function MeetingArtifactLinker({
               placeholder="e.g. tag, document"
               maxLength={50}
               disabled={disabled}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
             />
           </div>
           <div className="md:col-span-1">
@@ -245,7 +245,7 @@ export function MeetingArtifactLinker({
               placeholder="e.g. 42"
               inputMode="numeric"
               disabled={disabled}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
             />
           </div>
         </>

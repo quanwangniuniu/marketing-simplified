@@ -46,7 +46,7 @@ const metricToneStyles: Record<MetricTone, string> = {
 
 const metricIconTone: Record<MetricTone, string> = {
   default: "bg-slate-100 text-slate-500",
-  info: "bg-blue-50 text-blue-600",
+  info: "bg-[#3CCED7]/10 text-[#3CCED7]",
   success: "bg-emerald-50 text-emerald-600",
   warning: "bg-amber-50 text-amber-600",
 };
@@ -180,7 +180,7 @@ const JiraSummaryView: React.FC<JiraSummaryViewProps> = ({
               type="button"
               onClick={onViewWorkItems}
               disabled={loading}
-              className="text-xs font-semibold text-blue-600 hover:underline disabled:cursor-default disabled:opacity-60"
+              className="text-xs font-semibold text-[#3CCED7] hover:underline disabled:cursor-default disabled:opacity-60"
             >
               View all work items
             </button>
@@ -256,7 +256,7 @@ const JiraSummaryView: React.FC<JiraSummaryViewProps> = ({
               type="button"
               onClick={onViewItems}
               disabled={loading}
-              className="text-xs font-semibold text-blue-600 hover:underline disabled:cursor-default disabled:opacity-60"
+              className="text-xs font-semibold text-[#3CCED7] hover:underline disabled:cursor-default disabled:opacity-60"
             >
               View all items
             </button>

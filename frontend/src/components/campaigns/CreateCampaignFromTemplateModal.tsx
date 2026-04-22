@@ -203,8 +203,8 @@ export default function CreateCampaignFromTemplateModal({
     try {
       const data: CreateCampaignFromTemplateData = {
         name: name.trim(),
-        project: projectId,
-        owner: String(ownerId),
+        project: Number(projectId),
+        owner: Number(ownerId),
         start_date: startDate,
         end_date: endDate || undefined,
         objective: objective,
@@ -276,7 +276,7 @@ export default function CreateCampaignFromTemplateModal({
                   const template = templates.find((t) => t.id === e.target.value);
                   setSelectedTemplate(template || null);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                 disabled={submitting || loadingTemplates}
               >
                 <option value="">Select a template</option>
@@ -291,10 +291,10 @@ export default function CreateCampaignFromTemplateModal({
 
           {/* Template Info (if provided or selected) */}
           {selectedTemplate && (
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-              <p className="text-sm font-medium text-blue-900 mb-1">Template: {selectedTemplate.name}</p>
+            <div className="bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-md p-3">
+              <p className="text-sm font-medium text-[#0f757a] mb-1">Template: {selectedTemplate.name}</p>
               {selectedTemplate.description && (
-                <p className="text-xs text-blue-700">{selectedTemplate.description}</p>
+                <p className="text-xs text-[#1a9ba3]">{selectedTemplate.description}</p>
               )}
             </div>
           )}
@@ -309,7 +309,7 @@ export default function CreateCampaignFromTemplateModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter campaign name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>
@@ -325,7 +325,7 @@ export default function CreateCampaignFromTemplateModal({
                 setProjectId(e.target.value);
                 setOwnerId(null);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             >
               <option value="">Select a project</option>
@@ -361,7 +361,7 @@ export default function CreateCampaignFromTemplateModal({
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>
@@ -374,7 +374,7 @@ export default function CreateCampaignFromTemplateModal({
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               min={startDate}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>
@@ -386,7 +386,7 @@ export default function CreateCampaignFromTemplateModal({
               <select
                 value={objective || ''}
                 onChange={(e) => setObjective(e.target.value as CampaignObjective)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                 disabled={submitting}
               >
                 <option value="">Select objective</option>
@@ -416,7 +416,7 @@ export default function CreateCampaignFromTemplateModal({
                       disabled={submitting}
                       className={`px-3 py-1 rounded-md border text-sm transition-colors ${
                         isSelected
-                          ? 'bg-blue-50 border-blue-500 text-blue-700'
+                          ? 'bg-[#3CCED7]/10 border-[#3CCED7] text-[#1a9ba3]'
                           : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -437,7 +437,7 @@ export default function CreateCampaignFromTemplateModal({
                 onChange={(e) => setHypothesis(e.target.value)}
                 placeholder="Enter hypothesis"
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                 disabled={submitting}
               />
             </div>
@@ -453,7 +453,7 @@ export default function CreateCampaignFromTemplateModal({
               placeholder="Enter budget estimate"
               min="0"
               step="0.01"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>

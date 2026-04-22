@@ -50,7 +50,7 @@ const ModuleApproverEditor: React.FC<ModuleApproverEditorProps> = ({
           />
           <div className="mt-4 flex gap-2">
             <button
-              className="bg-blue-600 text-white px-4 py-2 rounded"
+              className="bg-[#3CCED7] text-white px-4 py-2 rounded"
               onClick={handleSave}
               disabled={loading}
             >

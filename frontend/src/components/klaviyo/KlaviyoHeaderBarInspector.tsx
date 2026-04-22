@@ -159,7 +159,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
               onChange={(e) =>
                 handleUpdate({ headerBarLayout: e.target.value as HeaderBarLayout })
               }
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 appearance-none bg-white"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] appearance-none bg-white"
             >
               {layoutOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -310,7 +310,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                               handleUpdateItem(item.id, { imageAltText: e.target.value })
                             }
                             placeholder="Describe the image"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                         </div>
                       </>
@@ -327,7 +327,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                               handleUpdateItem(item.id, { content: e.target.value })
                             }
                             placeholder="Link text"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                         </div>
                         <div className="space-y-2">
@@ -341,7 +341,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                                 linkType: e.target.value as ButtonLinkType,
                               })
                             }
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           >
                             <option value="Web">Web</option>
                             <option value="Email">Email</option>
@@ -365,7 +365,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                                 ? "+1 (555) 123-4567"
                                 : "https://example.com"
                             }
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                         </div>
                         <div className="flex items-center">
@@ -378,7 +378,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                                 linkOpenInNewTab: e.target.checked,
                               })
                             }
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="h-4 w-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                           />
                           <label
                             htmlFor={`open-new-tab-${item.id}`}
@@ -434,7 +434,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
               <select
                 value={fontFamily}
                 onChange={(e) => updateLinkStyles({ fontFamily: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 appearance-none bg-white"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] appearance-none bg-white"
               >
                 <option value="Arial">Arial</option>
                 <option value="Helvetica">Helvetica</option>
@@ -533,7 +533,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                 }
                 className={`p-2 border rounded-lg ${
                   isBold
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -546,7 +546,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                 }
                 className={`p-2 border rounded-lg ${
                   isItalic
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -561,7 +561,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                 }
                 className={`p-2 border rounded-lg ${
                   isUnderline
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -576,7 +576,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
                 }
                 className={`p-2 border rounded-lg ${
                   isStrikethrough
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -639,7 +639,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
               onClick={() => handleUpdate({ headerBarItemAlignment: "left" })}
               className={`p-2 border rounded-lg ${
                 itemAlignment === "left"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -650,7 +650,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
               onClick={() => handleUpdate({ headerBarItemAlignment: "center" })}
               className={`p-2 border rounded-lg ${
                 itemAlignment === "center"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -661,7 +661,7 @@ const KlaviyoHeaderBarInspector: React.FC<KlaviyoHeaderBarInspectorProps> = ({
               onClick={() => handleUpdate({ headerBarItemAlignment: "right" })}
               className={`p-2 border rounded-lg ${
                 itemAlignment === "right"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >

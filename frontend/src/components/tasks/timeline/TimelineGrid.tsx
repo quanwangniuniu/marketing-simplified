@@ -153,7 +153,7 @@ const TimelineGrid = ({
             </div>
             {typeof todayPosition === 'number' ? (
               <div
-                className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-blue-500 z-20"
+                className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-[#3CCED7] z-20"
                 style={{ left: leftColumnWidth + todayPosition }}
               />
             ) : null}

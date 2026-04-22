@@ -59,6 +59,8 @@ export interface TaskData {
     | "REJECTED"
     | "LOCKED"
     | "CANCELLED";
+  priority?: string;
+  planned_start_date?: string | null;
   linked_object?: unknown;
   is_subtask?: boolean; // Indicates if this task is a subtask
   parent_relationship?: any; // Parent relationship if this is a subtask

@@ -28,19 +28,19 @@ export default function ConfirmDialog({
   const iconMap = {
     warning: <AlertTriangle className="h-6 w-6 text-yellow-600" />,
     danger: <Trash2 className="h-6 w-6 text-red-600" />,
-    info: <Info className="h-6 w-6 text-blue-600" />,
+    info: <Info className="h-6 w-6 text-[#3CCED7]" />,
   };
 
   const buttonColorMap = {
     warning: "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
     danger: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
-    info: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+    info: "bg-[#3CCED7] hover:bg-[#2AB5BD] focus:ring-[#3CCED7]",
   };
 
   const bgColorMap = {
     warning: "bg-yellow-50",
     danger: "bg-red-50",
-    info: "bg-blue-50",
+    info: "bg-[#3CCED7]/10",
   };
 
   return (

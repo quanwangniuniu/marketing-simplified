@@ -160,7 +160,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             {/* {contentBlocks.length > 9 && (
               <button
                 onClick={() => setShowMoreBlocks(!showMoreBlocks)}
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                className="text-xs text-[#3CCED7] hover:underline flex items-center gap-1"
               >
                 {showMoreBlocks ? (
                   <>
@@ -215,7 +215,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
             {/* {blankLayouts.length > 3 && (
               <button
                 onClick={() => setShowMoreLayouts(!showMoreLayouts)}
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                className="text-xs text-[#3CCED7] hover:underline flex items-center gap-1"
               >
                 {showMoreLayouts ? (
                   <>
@@ -247,7 +247,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
               <span className="text-sm text-gray-700">Image & Text</span>
             </button> */}
 
-            {/* <button className="text-xs text-blue-600 hover:underline mt-4">
+            {/* <button className="text-xs text-[#3CCED7] hover:underline mt-4">
               Show more
             </button> */}
           {/* </div> */}
@@ -280,13 +280,13 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
               <div key={section} className="border-b border-gray-200 pb-3">
                 <button
                   onClick={() => toggleSection(section)}
-                  className="w-full flex items-center justify-between text-left text-sm font-semibold text-blue-600"
+                  className="w-full flex items-center justify-between text-left text-sm font-semibold text-[#3CCED7]"
                 >
                   <span>{section}</span>
                   {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-blue-600" />
+                    <ChevronUp className="h-4 w-4 text-[#3CCED7]" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-blue-600" />
+                    <ChevronDown className="h-4 w-4 text-[#3CCED7]" />
                   )}
                 </button>
 
@@ -385,7 +385,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 e.stopPropagation();
                                 backgroundImageInputRef.current?.click();
                               }}
-                              className="text-blue-600 hover:text-blue-700 underline"
+                              className="text-[#3CCED7] hover:text-[#1a9ba3] underline"
                             >
                               Browse
                             </button>
@@ -430,7 +430,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                   Math.max(0, Number(e.target.value) || 0)
                                 )
                               }
-                              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                             />
                             <div className="flex flex-col">
                               <button
@@ -476,7 +476,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                   Math.max(0, Number(e.target.value) || 0)
                                 )
                               }
-                              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                             />
                             <div className="flex flex-col">
                               <button
@@ -520,13 +520,13 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           key={tab}
                           className={`px-3 py-2 text-sm font-medium relative ${
                             tab === "P"
-                              ? "text-blue-600"
+                              ? "text-[#3CCED7]"
                               : "text-gray-600 hover:text-gray-900"
                           }`}
                         >
                           {tab}
                           {tab === "P" && (
-                            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3CCED7]" />
                           )}
                         </button>
                       ))}
@@ -546,7 +546,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
 
                         {/* Font and Color Row */}
                         <div className="flex items-center gap-2">
-                          <select className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                          <select className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                             <option>Helvetica</option>
                             <option>Arial</option>
                             <option>Georgia</option>
@@ -568,7 +568,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <button className="px-2 py-2 text-gray-700 hover:bg-gray-50 border-r border-gray-200">
                               <AlignLeft className="h-4 w-4" />
                             </button>
-                            <button className="px-2 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 border-r border-gray-200">
+                            <button className="px-2 py-2 text-[#3CCED7] bg-[#3CCED7]/10 hover:bg-[#3CCED7]/15 border-r border-gray-200">
                               <AlignCenter className="h-4 w-4" />
                             </button>
                             <button className="px-2 py-2 text-gray-700 hover:bg-gray-50 border-r border-gray-200">
@@ -590,7 +590,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={0}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -618,7 +618,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="text"
                             placeholder="Block Background"
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-lg hover:border-gray-300">
                             <X className="h-4 w-4 text-gray-400" />
@@ -639,7 +639,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <input
                               type="checkbox"
                               defaultChecked
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -650,7 +650,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={0}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -674,7 +674,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         <label className="block text-sm font-semibold text-gray-900">
                           Border
                         </label>
-                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                           <option>None</option>
                           <option>Solid</option>
                           <option>Dashed</option>
@@ -726,7 +726,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={16}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -750,7 +750,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <label className="block text-sm font-medium text-gray-900">
                               Line height
                             </label>
-                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                               <option>1.5</option>
                               <option>1</option>
                               <option>1.2</option>
@@ -767,7 +767,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={0}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -802,7 +802,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={16}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -826,7 +826,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <label className="block text-sm font-medium text-gray-900">
                               Line height
                             </label>
-                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                               <option>1.5</option>
                               <option>1</option>
                               <option>1.2</option>
@@ -843,7 +843,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={0}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -897,7 +897,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <button className="px-3 py-2 text-sm italic text-gray-700 bg-white hover:bg-gray-50 border-r border-gray-200">
                               I
                             </button>
-                            <button className="px-3 py-2 text-sm underline text-blue-600 bg-blue-50 hover:bg-blue-100 border-blue-200">
+                            <button className="px-3 py-2 text-sm underline text-[#3CCED7] bg-[#3CCED7]/10 hover:bg-[#3CCED7]/15 border-[#3CCED7]/30">
                               U
                             </button>
                           </div>
@@ -984,7 +984,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         </label>
                         <select
                           defaultValue="Solid"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600 mb-2"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] mb-2"
                         >
                           <option>None</option>
                           <option>Solid</option>
@@ -995,7 +995,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={2}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -1021,7 +1021,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           Button font
                         </label>
                         <div className="flex items-center gap-2">
-                          <select className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                          <select className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]">
                             <option>Helvetica</option>
                             <option>Arial</option>
                             <option>Georgia</option>
@@ -1030,7 +1030,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <input
                               type="number"
                               defaultValue={16}
-                              className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                             />
                             <div className="flex flex-col">
                               <button
@@ -1065,7 +1065,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <button className="px-2 py-2 text-gray-700 hover:bg-gray-50 border-r border-gray-200">
                             <AlignLeft className="h-4 w-4" />
                           </button>
-                          <button className="px-2 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 border-r border-gray-200">
+                          <button className="px-2 py-2 text-[#3CCED7] bg-[#3CCED7]/10 hover:bg-[#3CCED7]/15 border-r border-gray-200">
                             <AlignCenter className="h-4 w-4" />
                           </button>
                           <button className="px-2 py-2 text-gray-700 hover:bg-gray-50 border-r border-gray-200">
@@ -1086,7 +1086,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={0}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -1116,7 +1116,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <span className="text-sm text-gray-700">
                             Link Desktop and Mobile Styles
                           </span>
-                          <button className="relative w-11 h-6 bg-blue-600 rounded-full flex items-center justify-end px-1">
+                          <button className="relative w-11 h-6 bg-[#3CCED7] rounded-full flex items-center justify-end px-1">
                             <Check className="h-4 w-4 text-white" />
                           </button>
                         </div>
@@ -1171,7 +1171,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                                className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                               />
                               <span className="text-sm text-gray-700">
                                 Apply to all sides
@@ -1188,7 +1188,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <input
                                   type="number"
                                   defaultValue={12}
-                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                                 />
                                 <div className="flex flex-col">
                                   <button
@@ -1215,7 +1215,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <input
                                   type="number"
                                   defaultValue={12}
-                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                                 />
                                 <div className="flex flex-col">
                                   <button
@@ -1242,7 +1242,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <input
                                   type="number"
                                   defaultValue={24}
-                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                                 />
                                 <div className="flex flex-col">
                                   <button
@@ -1269,7 +1269,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                                 <input
                                   type="number"
                                   defaultValue={24}
-                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                                 />
                                 <div className="flex flex-col">
                                   <button
@@ -1309,7 +1309,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         </label>
                         <select
                           defaultValue="Solid"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                         >
                           <option>None</option>
                           <option>Solid</option>
@@ -1359,7 +1359,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         <span className="text-sm text-gray-700">
                           Link Desktop and Mobile Styles
                         </span>
-                        <button className="relative w-11 h-6 bg-blue-600 rounded-full flex items-center justify-end px-1">
+                        <button className="relative w-11 h-6 bg-[#3CCED7] rounded-full flex items-center justify-end px-1">
                           <Check className="h-4 w-4 text-white" />
                         </button>
                       </div>
@@ -1393,7 +1393,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <input
                               type="checkbox"
                               defaultChecked
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -1410,7 +1410,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1437,7 +1437,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1464,7 +1464,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1491,7 +1491,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1532,7 +1532,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="text"
                             placeholder="Block Background"
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-lg hover:border-gray-300">
                             <X className="h-4 w-4 text-gray-400" />
@@ -1553,7 +1553,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <input
                               type="checkbox"
                               defaultChecked
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -1564,7 +1564,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={0}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -1590,7 +1590,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         </label>
                         <select
                           defaultValue="None"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                         >
                           <option>None</option>
                           <option>Solid</option>
@@ -1611,7 +1611,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         <span className="text-sm text-gray-700">
                           Link Desktop and Mobile Styles
                         </span>
-                        <button className="relative w-11 h-6 bg-blue-600 rounded-full flex items-center justify-end px-1">
+                        <button className="relative w-11 h-6 bg-[#3CCED7] rounded-full flex items-center justify-end px-1">
                           <Check className="h-4 w-4 text-white" />
                         </button>
                       </div>
@@ -1643,7 +1643,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -1660,7 +1660,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1687,7 +1687,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1714,7 +1714,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1741,7 +1741,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1782,7 +1782,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="text"
                             placeholder="Block Background"
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-lg hover:border-gray-300">
                             <X className="h-4 w-4 text-gray-400" />
@@ -1803,7 +1803,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                             <input
                               type="checkbox"
                               defaultChecked
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -1814,7 +1814,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <input
                             type="number"
                             defaultValue={0}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                           />
                           <div className="flex flex-col">
                             <button
@@ -1840,7 +1840,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         </label>
                         <select
                           defaultValue="None"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                         >
                           <option>None</option>
                           <option>Solid</option>
@@ -1861,7 +1861,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                         <span className="text-sm text-gray-700">
                           Link Desktop and Mobile Styles
                         </span>
-                        <button className="relative w-11 h-6 bg-blue-600 rounded-full flex items-center justify-end px-1">
+                        <button className="relative w-11 h-6 bg-[#3CCED7] rounded-full flex items-center justify-end px-1">
                           <Check className="h-4 w-4 text-white" />
                         </button>
                       </div>
@@ -1893,7 +1893,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-600"
+                              className="w-4 h-4 text-[#3CCED7] border-gray-300 rounded focus:ring-[#3CCED7]"
                             />
                             <span className="text-sm text-gray-700">
                               Apply to all sides
@@ -1910,7 +1910,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1937,7 +1937,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={12}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1964,7 +1964,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button
@@ -1991,7 +1991,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                               <input
                                 type="number"
                                 defaultValue={24}
-                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                               />
                               <div className="flex flex-col">
                                 <button

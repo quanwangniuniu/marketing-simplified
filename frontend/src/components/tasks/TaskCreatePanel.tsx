@@ -56,7 +56,7 @@ export default function TaskCreatePanel({
       >
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <div className="flex items-center gap-2 text-gray-900">
-            <span className="flex h-6 w-6 items-center justify-center rounded border border-blue-200 bg-blue-50 text-blue-600">
+            <span className="flex h-6 w-6 items-center justify-center rounded border border-[#3CCED7]/30 bg-[#3CCED7]/10 text-[#3CCED7]">
               <Icon name="check" size="sm" />
             </span>
             <h2 className="text-sm font-semibold">{title}</h2>

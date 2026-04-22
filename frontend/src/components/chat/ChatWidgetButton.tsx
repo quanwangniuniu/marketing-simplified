@@ -15,7 +15,7 @@ export default function ChatWidgetButton({ unreadCount }: ChatWidgetButtonProps)
       {/* Button that slides in/out - hidden by default, shows on hover */}
       <button
         onClick={openWidget}
-        className="relative bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg transition-all duration-300 ease-out translate-x-12 hover:translate-x-0 opacity-50 hover:opacity-100 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        className="relative bg-[#3CCED7] hover:bg-[#2AB5BD] active:bg-[#1a9ba3] text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg transition-all duration-300 ease-out translate-x-12 hover:translate-x-0 opacity-50 hover:opacity-100 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2"
         aria-label="Open chat"
         title="Open chat"
       >

@@ -120,7 +120,7 @@ export default function OrganizationContent({
             <div className="space-y-3">
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="px-6 py-3 bg-gradient-to-r text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                className="px-6 py-3 bg-gradient-to-r text-white rounded-lg hover:from-[#3CCED7] hover:to-[#2AB5BD] transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               >
                 <Plus className="w-4 h-4 inline mr-2" strokeWidth={1.5} />
                 Create Organization
@@ -246,7 +246,7 @@ export default function OrganizationContent({
                           <button
                             key={pageNum}
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${isCurrentPage
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-[#3CCED7] text-white'
                               : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-900'
                               }`}
                             onClick={() => setPage(pageNum)}

@@ -25,7 +25,7 @@ export default function PlatformPolicyUpdateDetail({
       case 'not_started':
         return 'bg-gray-100 text-gray-800';
       case 'planning':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-[#3CCED7]/15 text-[#1a9ba3]';
       case 'in_progress':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
@@ -117,7 +117,7 @@ export default function PlatformPolicyUpdateDetail({
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-600">Change Type:</span>
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+            <span className="px-2 py-0.5 rounded-full bg-[#3CCED7]/15 text-[#1a9ba3]">
               {formatStatus(policyUpdate.policy_change_type)}
             </span>
           </div>
@@ -179,7 +179,7 @@ export default function PlatformPolicyUpdateDetail({
               </div>
               <div className="flex flex-row items-center gap-3">
                 <label className="block text-sm font-semibold text-gray-900 tracking-wide">Change Type</label>
-                <span className="inline-block px-2 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
+                <span className="inline-block px-2 py-1 text-sm font-medium rounded-full bg-[#3CCED7]/15 text-[#1a9ba3]">
                   {formatStatus(policyUpdate.policy_change_type)}
                 </span>
               </div>

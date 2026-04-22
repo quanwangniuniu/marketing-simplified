@@ -1198,7 +1198,7 @@ export default function TaskDetail({
       case "APPROVED":
         return "bg-green-50 text-green-800";
       case "UNDER_REVIEW":
-        return "bg-blue-50 text-blue-800";
+        return "bg-[#3CCED7]/10 text-[#1a9ba3]";
       case "SUBMITTED":
         return "bg-amber-50 text-amber-800";
       case "REJECTED":
@@ -2329,7 +2329,7 @@ export default function TaskDetail({
                               isApproved
                                 ? "bg-green-500 text-white"
                                 : isCurrent
-                                ? "bg-blue-500 text-white"
+                                ? "bg-[#3CCED7] text-white"
                                 : "bg-slate-200 text-slate-500"
                             }`}
                           >
@@ -2341,7 +2341,7 @@ export default function TaskDetail({
                                 isApproved
                                   ? "text-green-700"
                                   : isCurrent
-                                  ? "text-blue-700"
+                                  ? "text-[#1a9ba3]"
                                   : "text-slate-400"
                               }`}
                             >
@@ -2367,7 +2367,7 @@ export default function TaskDetail({
                                 )}
                               </p>
                             ) : isCurrent ? (
-                              <p className="text-xs text-blue-500">
+                              <p className="text-xs text-[#3CCED7]">
                                 Awaiting approval
                               </p>
                             ) : (
@@ -2644,7 +2644,7 @@ export default function TaskDetail({
                         <div
                           className={`w-3 h-3 rounded-full mr-3 mt-1 ${
                             index === approvalHistory.length - 1
-                              ? "bg-blue-500"
+                              ? "bg-[#3CCED7]"
                               : "bg-gray-300"
                           }`}
                         ></div>
@@ -2701,7 +2701,7 @@ export default function TaskDetail({
                   ${
                     isReviewing
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-[#3CCED7] text-white hover:bg-[#2AB5BD]"
                   }
                   `}
                 >

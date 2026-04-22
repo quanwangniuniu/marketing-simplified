@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
   Mail,
   ShieldCheck,
   Sparkles,
@@ -38,33 +37,6 @@ const mediaWorkOptions = [
   'App Acquisition / App Install Campaigns',
 ];
 
-const useCaseOptions = [
-  'Project & Task Management',
-  'Campaign Planning & Optimization',
-  'Team Collaboration & Approvals',
-  'Creative Asset Management',
-  'Performance Tracking & Analytics',
-  'Budget & Pacing Management',
-  'Workflow & Task Assignment',
-  'Centralized Operations Workspace',
-  'Product personalization and analytics.',
-];
-
-const roleOptions = [
-  'Super Administrator',
-  'Organization Admin',
-  'Team Leader',
-  'Junior / Senior / Specialist Media Buyer',
-  'Designer / Copywriter (Creative Team)',
-  'Reviewer / Approver',
-  'Campaign Manager',
-  'Data Analyst',
-  'Budget Controller',
-  'Other',
-];
-
-const teamSizeOptions = ['Only me', '2-50', '51-250', '251-1k', '1k-5k', '5k+'];
-
 const defaultObjectives = ['awareness'];
 const defaultKpis = {
   ctr: { target: 0.02, suggested_by: defaultObjectives },
@@ -82,21 +54,6 @@ const steps: WizardStep[] = [
     description: 'Choose all channels that apply.',
   },
   {
-    id: 'useCases',
-    title: 'What Will You Use Marketing Simplified For?',
-    description: 'Select the workflows you want to streamline.',
-  },
-  {
-    id: 'role',
-    title: "What's Your Role?",
-    description: 'Help us tailor the workspace.',
-  },
-  {
-    id: 'teamSize',
-    title: 'Team Size',
-    description: 'Estimate how many people will collaborate here.',
-  },
-  {
     id: 'invites',
     title: 'Invite Teammates',
     description: 'Add emails now or skip and invite later.',
@@ -106,9 +63,6 @@ const steps: WizardStep[] = [
 type WizardState = {
   projectName: string;
   mediaWorkTypes: string[];
-  useCases: string[];
-  role: string;
-  teamSize: string;
   inviteEmails: string[];
   inviteInput: string;
 };
@@ -116,9 +70,6 @@ type WizardState = {
 const initialState: WizardState = {
   projectName: '',
   mediaWorkTypes: [],
-  useCases: [],
-  role: '',
-  teamSize: '',
   inviteEmails: [],
   inviteInput: '',
 };
@@ -144,7 +95,7 @@ const OnboardingWizard: React.FC = () => {
     }
   };
 
-  const toggleMultiSelect = (key: 'mediaWorkTypes' | 'useCases', value: string) => {
+  const toggleMultiSelect = (key: 'mediaWorkTypes', value: string) => {
     setState((prev) => {
       const exists = prev[key].includes(value);
       const nextValues = exists
@@ -153,10 +104,6 @@ const OnboardingWizard: React.FC = () => {
       return { ...prev, [key]: nextValues };
     });
     setStepError(null);
-  };
-
-  const setSingleSelect = (key: 'role' | 'teamSize', value: string) => {
-    updateState({ [key]: value } as Partial<WizardState>);
   };
 
   const validateEmail = (email: string) => {
@@ -201,24 +148,6 @@ const OnboardingWizard: React.FC = () => {
           return false;
         }
         return true;
-      case 'useCases':
-        if (state.useCases.length === 0) {
-          setStepError('Select at least one use case.');
-          return false;
-        }
-        return true;
-      case 'role':
-        if (!state.role) {
-          setStepError('Select your role.');
-          return false;
-        }
-        return true;
-      case 'teamSize':
-        if (!state.teamSize) {
-          setStepError('Select your team size.');
-          return false;
-        }
-        return true;
       default:
         return true;
     }
@@ -238,9 +167,6 @@ const OnboardingWizard: React.FC = () => {
   const buildPayload = (skipInvites: boolean): OnboardingProjectPayload => ({
     name: state.projectName.trim(),
     media_work_types: state.mediaWorkTypes,
-    use_cases: state.useCases,
-    role: state.role,
-    team_size: state.teamSize,
     invite_emails: skipInvites ? [] : state.inviteEmails,
     objectives: defaultObjectives,
     kpis: defaultKpis,
@@ -265,7 +191,7 @@ const OnboardingWizard: React.FC = () => {
       markCompleted(project);
       // Refresh projects in store and navigate to the main workspace
       refreshProjects().finally(() => {
-        router.push('/tasks');
+        router.push('/overview');
       });
       toast.success('Onboarding complete. Project created!');
     } catch (error: any) {
@@ -294,8 +220,8 @@ const OnboardingWizard: React.FC = () => {
       onClick={onClick}
       className={`px-3 py-2 rounded-full border text-sm transition ${
         isSelected
-          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700'
+          ? 'bg-gradient-to-br from-[#3CCED7] to-[#A6E661] text-white border-transparent shadow-sm'
+          : 'bg-white text-gray-700 border-gray-200 hover:border-[#3CCED7]/40 hover:text-[#3CCED7]'
       }`}
     >
       {label}
@@ -313,7 +239,7 @@ const OnboardingWizard: React.FC = () => {
               value={state.projectName}
               onChange={(e) => updateState({ projectName: e.target.value })}
               placeholder="e.g. Q1 Performance Launch"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20 focus:outline-none transition"
             />
           </div>
         );
@@ -333,61 +259,6 @@ const OnboardingWizard: React.FC = () => {
             </div>
           </div>
         );
-      case 'useCases':
-        return (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600">Choose the workflows you plan to run.</p>
-            <div className="flex flex-wrap gap-2">
-              {useCaseOptions.map((option) =>
-                renderOptionPill(
-                  option,
-                  state.useCases.includes(option),
-                  () => toggleMultiSelect('useCases', option),
-                  option
-                )
-              )}
-            </div>
-          </div>
-        );
-      case 'role':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {roleOptions.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setSingleSelect('role', role)}
-                className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
-                  state.role === role
-                    ? 'border-blue-600 bg-blue-50 text-blue-800'
-                    : 'border-gray-200 bg-white hover:border-blue-300 hover:text-blue-700'
-                }`}
-              >
-                <span>{role}</span>
-                {state.role === role && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-              </button>
-            ))}
-          </div>
-        );
-      case 'teamSize':
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {teamSizeOptions.map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => setSingleSelect('teamSize', size)}
-                className={`rounded-lg border px-3 py-2 text-sm transition ${
-                  state.teamSize === size
-                    ? 'border-blue-600 bg-blue-50 text-blue-800'
-                    : 'border-gray-200 bg-white hover:border-blue-300 hover:text-blue-700'
-                }`}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-        );
       case 'invites':
         return (
           <div className="space-y-3">
@@ -403,12 +274,12 @@ const OnboardingWizard: React.FC = () => {
                   }
                 }}
                 placeholder="name@company.com"
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20 focus:outline-none transition"
               />
               <button
                 type="button"
                 onClick={addInvite}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-60"
+                className="px-4 py-2 rounded-lg bg-gradient-to-br from-[#3CCED7] to-[#A6E661] text-white font-medium hover:opacity-90 transition disabled:opacity-60"
                 disabled={!state.inviteInput}
               >
                 Add
@@ -419,13 +290,13 @@ const OnboardingWizard: React.FC = () => {
                 {state.inviteEmails.map((email) => (
                   <span
                     key={email}
-                    className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-800 px-3 py-1 text-sm"
+                    className="inline-flex items-center gap-2 rounded-full bg-[#3CCED7]/10 text-[#0F172A] border border-[#3CCED7]/30 px-3 py-1 text-sm"
                   >
                     {email}
                     <button
                       type="button"
                       onClick={() => removeInvite(email)}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-[#3CCED7] hover:text-[#0F172A]"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -445,32 +316,32 @@ const OnboardingWizard: React.FC = () => {
 
   return (
     <div className="relative z-[9999] w-full max-w-4xl mx-auto">
-      <div className="absolute -top-10 left-6 text-xs text-blue-100 uppercase tracking-[0.2em] flex items-center gap-2">
+      <div className="absolute -top-10 left-6 text-xs text-white/90 uppercase tracking-[0.2em] flex items-center gap-2">
         <Sparkles className="w-4 h-4" />
         Guided Onboarding
       </div>
       <div className="bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="px-8 pt-8 pb-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-blue-50">
+        <div className="px-8 pt-8 pb-4 border-b border-gray-100 bg-gradient-to-r from-[#3CCED7]/5 via-white to-[#A6E661]/5">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-gray-500">Step {currentStep + 1} of {steps.length}</div>
               <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
                 {steps[currentStep].title}
-                {currentStep === 0 && <ShieldCheck className="w-5 h-5 text-blue-600" />}
-                {currentStep === 5 && <Mail className="w-5 h-5 text-blue-600" />}
+                {currentStep === 0 && <ShieldCheck className="w-5 h-5 text-[#3CCED7]" />}
+                {currentStep === steps.length - 1 && <Mail className="w-5 h-5 text-[#3CCED7]" />}
               </h2>
               <p className="text-gray-600 mt-1">{steps[currentStep].description}</p>
             </div>
             <div className="text-right">
               <div className="flex items-center gap-2 text-sm text-gray-600 justify-end">
-                <Users className="w-4 h-4 text-blue-600" />
+                <Users className="w-4 h-4 text-[#3CCED7]" />
                 Workspace locked until setup
               </div>
             </div>
           </div>
           <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-600 transition-all duration-300"
+              className="h-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661] transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -505,7 +376,7 @@ const OnboardingWizard: React.FC = () => {
 
         <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2 text-sm text-gray-600">
-            <ShieldCheck className="w-4 h-4 text-blue-600" />
+            <ShieldCheck className="w-4 h-4 text-[#3CCED7]" />
             Your dashboard is disabled until onboarding is complete.
           </div>
           <div className="flex items-center gap-3">
@@ -525,7 +396,7 @@ const OnboardingWizard: React.FC = () => {
               <button
                 type="button"
                 onClick={handleNext}
-                className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-70"
+                className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-br from-[#3CCED7] to-[#A6E661] rounded-lg hover:opacity-90 disabled:opacity-70"
                 disabled={submitting}
               >
                 Next
@@ -546,7 +417,7 @@ const OnboardingWizard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSubmit(false)}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-70"
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-br from-[#3CCED7] to-[#A6E661] rounded-lg hover:opacity-90 disabled:opacity-70"
                   disabled={submitting}
                 >
                   {submitting ? 'Creating...' : 'Send invitations'}

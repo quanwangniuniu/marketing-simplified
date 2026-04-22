@@ -96,12 +96,12 @@ function MeetingToolbarSearch({
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         disabled={disabled}
-        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
         aria-label="Search meetings"
       />
       <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-hidden />
+          <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" aria-hidden />
         ) : null}
         {local ? (
           <button
@@ -189,7 +189,7 @@ export function MeetingDiscoveryToolbar({
             <Filter className="h-4 w-4 text-slate-500" aria-hidden />
             <span>Filter</span>
             {filterBadgeCount > 0 ? (
-              <span className="min-w-[1.25rem] rounded-full bg-blue-600 px-1.5 py-0.5 text-center text-xs font-semibold text-white">
+              <span className="min-w-[1.25rem] rounded-full bg-[#3CCED7] px-1.5 py-0.5 text-center text-xs font-semibold text-white">
                 {filterBadgeCount}
               </span>
             ) : null}
@@ -224,7 +224,7 @@ export function MeetingDiscoveryToolbar({
                 <button
                   type="button"
                   onClick={onClearAll}
-                  className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-800"
+                  className="shrink-0 text-sm font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
                 >
                   Clear
                 </button>

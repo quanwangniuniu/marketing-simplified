@@ -75,7 +75,7 @@ const ViewButton = ({
     className={cn(
       "rounded-md border px-4 py-1.5 text-sm",
       active
-        ? "border-blue-600 bg-blue-600 text-white"
+        ? "border-[#3CCED7] bg-[#3CCED7] text-white"
         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
     )}
   >
@@ -106,7 +106,7 @@ const JiraTasksToolbar = ({
         placeholder={searchPlaceholder || "Search tasks..."}
         value={searchValue ?? ""}
         onChange={(event) => onSearchChange?.(event.target.value)}
-        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
       />
     </div>
     {rightOfSearch}
@@ -129,7 +129,7 @@ const JiraTasksToolbar = ({
 
 const typeBadgeStyles: Record<string, string> = {
   task: "bg-slate-100 text-slate-700",
-  budget: "bg-blue-100 text-blue-700",
+  budget: "bg-[#3CCED7]/15 text-[#1a9ba3]",
   asset: "bg-indigo-100 text-indigo-700",
   retrospective: "bg-purple-100 text-purple-700",
   report: "bg-slate-100 text-slate-700",
@@ -251,9 +251,9 @@ const JiraTasksList = ({
               }}
               className={cn(
                 "group w-full rounded-md border px-3 py-2 text-left transition",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-1",
                 isSelected
-                  ? "border-blue-500 bg-blue-50 shadow-sm"
+                  ? "border-[#3CCED7] bg-[#3CCED7]/10 shadow-sm"
                   : "border-transparent hover:border-slate-200 hover:bg-slate-50"
               )}
             >

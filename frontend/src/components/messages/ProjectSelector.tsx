@@ -115,7 +115,7 @@ export default function ProjectSelector({
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors min-w-[200px] shadow-sm"
       >
-        <FolderOpen className="w-5 h-5 text-blue-600" />
+        <FolderOpen className="w-5 h-5 text-[#3CCED7]" />
         <span className="flex-1 text-left text-sm font-medium text-gray-700 truncate">
           {selectedProject?.name || 'Select Project'}
         </span>
@@ -132,18 +132,18 @@ export default function ProjectSelector({
               key={project.id}
               onClick={() => handleSelectProject(project.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${
-                project.id === selectedProjectId ? 'bg-blue-50' : ''
+                project.id === selectedProjectId ? 'bg-[#3CCED7]/10' : ''
               }`}
             >
               <FolderOpen
                 className={`w-4 h-4 flex-shrink-0 ${
-                  project.id === selectedProjectId ? 'text-blue-600' : 'text-gray-400'
+                  project.id === selectedProjectId ? 'text-[#3CCED7]' : 'text-gray-400'
                 }`}
               />
               <div className="flex-1 min-w-0">
                 <p
                   className={`text-sm font-medium truncate ${
-                    project.id === selectedProjectId ? 'text-blue-700' : 'text-gray-700'
+                    project.id === selectedProjectId ? 'text-[#1a9ba3]' : 'text-gray-700'
                   }`}
                 >
                   {project.name}
@@ -155,7 +155,7 @@ export default function ProjectSelector({
                 )}
               </div>
               {project.id === selectedProjectId && (
-                <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <Check className="w-4 h-4 text-[#3CCED7] flex-shrink-0" />
               )}
             </button>
           ))}

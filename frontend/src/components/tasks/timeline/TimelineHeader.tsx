@@ -87,7 +87,7 @@ const TimelineHeader = ({
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
             aria-label="Search timeline"
-            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
           />
         </div>
         <div className="flex items-center">
@@ -108,7 +108,7 @@ const TimelineHeader = ({
             value={selectedWorkType}
             onChange={(event) => onWorkTypeChange(event.target.value)}
             aria-label="Work type filter"
-            className="h-9 appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-9 appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm text-slate-700 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
           >
             {workTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -126,7 +126,7 @@ const TimelineHeader = ({
             type="button"
             onClick={() => setSettingsOpen((prev) => !prev)}
             className={`rounded-md border px-2.5 py-2 text-slate-600 transition ${
-              settingsOpen ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+              settingsOpen ? 'border-[#3CCED7] bg-[#3CCED7]/10' : 'border-slate-200 bg-white hover:bg-slate-50'
             }`}
             aria-label="View settings"
             aria-expanded={settingsOpen}
@@ -143,7 +143,7 @@ const TimelineHeader = ({
                   <select
                     value={displayRange}
                     onChange={(event) => onDisplayRangeChange?.(event.target.value)}
-                    className="h-9 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="h-9 w-full appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm text-slate-700 focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="3">3 months</option>
                     <option value="6">6 months</option>
