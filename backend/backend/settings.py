@@ -99,6 +99,10 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Compress JSON/text responses (big win for bulk endpoints like spreadsheet
+    # readCellRange and batch responses). axios sends Accept-Encoding: gzip by
+    # default so no frontend change needed. Must be placed before CommonMiddleware.
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

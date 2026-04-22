@@ -529,6 +529,82 @@ describe('SpreadsheetGrid import error handling', () => {
     expect(allAutoExpand.every((v) => v === false)).toBe(true);
   }, 15000);
 
+  it('shows imported values optimistically before the backend resize resolves', async () => {
+    // 1200 rows x 1 col forces a backend resize (DEFAULT_ROWS is 1000). We gate the
+    // resize mock on an external promise so it stays in-flight while we check the UI.
+    const rows: string[] = [];
+    for (let r = 0; r < 1200; r += 1) rows.push(`optimistic-${r}`);
+    const csv = rows.join('\n');
+
+    let releaseResize: (() => void) | undefined;
+    const resizeHeld = new Promise<void>((resolve) => {
+      releaseResize = resolve;
+    });
+    resizeSheetMock.mockImplementation(async () => {
+      await resizeHeld;
+      return {
+        rows_created: 200,
+        columns_created: 0,
+        total_rows: 1200,
+        total_columns: 26,
+      };
+    });
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // While resizeSheet is still pending, the optimistic cell value should already
+    // be rendered and no chunk upload should have fired yet.
+    await waitFor(() => expect(screen.getByText('optimistic-0')).toBeInTheDocument(), {
+      timeout: 2000,
+    });
+    expect(resizeSheetMock).toHaveBeenCalled();
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+
+    // Release the resize; chunks should now flow and the import should finalize.
+    releaseResize?.();
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+  }, 15000);
+
+  it('rolls back the optimistic apply when the backend resize fails', async () => {
+    const rows: string[] = [];
+    for (let r = 0; r < 1200; r += 1) rows.push(`rollback-${r}`);
+    const csv = rows.join('\n');
+
+    resizeSheetMock.mockRejectedValue(new Error('resize network error'));
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // We briefly display optimistic data, then the resize failure triggers a rollback
+    // and the error toast. After rollback, the cell must no longer contain the
+    // imported text.
+    await waitFor(
+      () => expect(toastError).toHaveBeenCalled(),
+      { timeout: 5000 },
+    );
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('rollback-0')).not.toBeInTheDocument();
+    expect(finalizeImportMock).not.toHaveBeenCalled();
+  }, 15000);
+
   it('skips post-import hydration when there are no formulas', async () => {
     const rows: string[] = [];
     for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);

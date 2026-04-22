@@ -250,7 +250,7 @@ const TILE_COLUMNS = 20;
 const ADD_ROWS_TRIGGER_DISTANCE = 100; // Show "Add rows" UI when within this many pixels of bottom
 const PREFETCH_ROWS_PER_CHUNK = 100; // Rows per request during post-import hydration
 const PREFETCH_CONCURRENCY = 2; // Max concurrent readCellRange requests during hydration
-const IMPORT_BATCH_CONCURRENCY = 2; // Max concurrent batch uploads during import (higher can hurt DB; 2 hides RTT while avoiding lock contention)
+const IMPORT_BATCH_CONCURRENCY = 4; // Max concurrent batch uploads during import. After A2 chunks no longer create rows/cols (auto_expand=false), so Row/Column lock contention is gone and 4 is safe. Each chunk only writes disjoint cells.
 const DEFAULT_NUMBER_FORMAT: NumberFormat = { type: 'GENERAL' };
 
 const DEFAULT_CELL_FORMAT: CellFormat = {
@@ -945,13 +945,19 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
    * @param persistToBackend Whether to persist to backend (default: true)
    * @returns true if resize succeeded, false if clamped to max
    */
-  const resizeGrid = useCallback(
-    async (
+  /**
+   * Synchronously update the local grid dimensions (rowCount / colCount) and the
+   * module-level dimensionsCache. Returns the effective (clamped) dimensions and
+   * whether clamping occurred, so callers can decide what to persist.
+   *
+   * No backend call is made here. Callers that also want to persist should pair this
+   * with `persistResizeToBackend`, or use the composite `resizeGrid` wrapper below.
+   */
+  const updateGridDimensionsLocal = useCallback(
+    (
       targetRows: number,
       targetCols: number,
-      persistToBackend: boolean = true,
-      immediate: boolean = false
-    ): Promise<boolean> => {
+    ): { clampedRows: number; clampedCols: number; wasClamped: boolean } => {
       const clampedRows = Math.min(MAX_ROWS, Math.max(0, targetRows));
       const clampedCols = Math.min(MAX_COLUMNS, Math.max(0, targetCols));
       const wasClamped = clampedRows < targetRows || clampedCols < targetCols;
@@ -960,40 +966,78 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       setColCount(clampedCols);
       dimensionsCache.set(sheetId, { rowCount: clampedRows, colCount: clampedCols });
 
-      if (persistToBackend) {
-        if (immediate) {
-          // Skip debounce and await the backend call. Used by the import path which
-          // needs all SheetRow/SheetColumn records to exist before firing data chunks,
-          // so chunks can pass auto_expand=false and skip all row/col creation work.
-          if (resizeDebounceTimerRef.current) {
-            clearTimeout(resizeDebounceTimerRef.current);
-            resizeDebounceTimerRef.current = null;
-          }
-          try {
-            await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
-          } catch (error: any) {
-            console.error('Failed to persist sheet dimensions:', error);
-            return false;
-          }
-        } else {
-          // Debounced resize API call (normal editing path)
-          if (resizeDebounceTimerRef.current) {
-            clearTimeout(resizeDebounceTimerRef.current);
-          }
-          resizeDebounceTimerRef.current = setTimeout(async () => {
-            try {
-              await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
-            } catch (error: any) {
-              console.error('Failed to persist sheet dimensions:', error);
-              // Non-blocking error - dimensions are still updated locally
-            }
-          }, RESIZE_DEBOUNCE_MS);
+      return { clampedRows, clampedCols, wasClamped };
+    },
+    [sheetId]
+  );
+
+  /**
+   * Persist the given sheet dimensions to the backend.
+   * - `immediate=false` (default): debounce the POST so rapid edits coalesce.
+   * - `immediate=true`: skip debounce, await the POST, return true on success and
+   *   false if the call errored. Used by the import path.
+   */
+  const persistResizeToBackend = useCallback(
+    async (clampedRows: number, clampedCols: number, immediate: boolean = false): Promise<boolean> => {
+      if (immediate) {
+        if (resizeDebounceTimerRef.current) {
+          clearTimeout(resizeDebounceTimerRef.current);
+          resizeDebounceTimerRef.current = null;
+        }
+        try {
+          await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
+          return true;
+        } catch (error: any) {
+          console.error('Failed to persist sheet dimensions:', error);
+          return false;
         }
       }
 
+      if (resizeDebounceTimerRef.current) {
+        clearTimeout(resizeDebounceTimerRef.current);
+      }
+      resizeDebounceTimerRef.current = setTimeout(async () => {
+        try {
+          await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
+        } catch (error: any) {
+          console.error('Failed to persist sheet dimensions:', error);
+          // Non-blocking error - dimensions are still updated locally
+        }
+      }, RESIZE_DEBOUNCE_MS);
+      return true;
+    },
+    [sheetId, spreadsheetId]
+  );
+
+  /**
+   * Composite helper that keeps the original single-call API: update local state
+   * first, then kick off the backend persist. Used by existing (non-import) call
+   * sites so they do not need to change.
+   *
+   * Returns false only when:
+   *   - the requested dimensions were clamped by MAX_ROWS / MAX_COLUMNS, OR
+   *   - `immediate=true` and the backend call failed.
+   */
+  const resizeGrid = useCallback(
+    async (
+      targetRows: number,
+      targetCols: number,
+      persistToBackend: boolean = true,
+      immediate: boolean = false
+    ): Promise<boolean> => {
+      const { clampedRows, clampedCols, wasClamped } = updateGridDimensionsLocal(targetRows, targetCols);
+
+      if (!persistToBackend) {
+        return !wasClamped;
+      }
+
+      const persisted = await persistResizeToBackend(clampedRows, clampedCols, immediate);
+      if (immediate && !persisted) {
+        return false;
+      }
       return !wasClamped;
     },
-    [rowCount, colCount, sheetId, spreadsheetId]
+    [updateGridDimensionsLocal, persistResizeToBackend]
   );
 
   /**
@@ -4171,34 +4215,22 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         return;
       }
 
-      // Ensure backend has all SheetRow/SheetColumn records for the imported region
-      // BEFORE firing chunks. We use immediate=true to skip the debounce so each
-      // chunk can pass auto_expand=false and avoid redundant row/col existence
-      // checks and bulk_create attempts on the server.
+      // Step 1: update the grid's local dimensions synchronously so optimistic apply
+      // below can render into the newly expanded area without waiting on the network.
       const targetRowCount = Math.max(rowCount, requiredRows);
       const targetColCount = Math.max(colCount, requiredCols);
-      const resizeSucceeded = await resizeGrid(
+      const { clampedRows, clampedCols, wasClamped } = updateGridDimensionsLocal(
         targetRowCount,
         targetColCount,
-        /* persistToBackend */ true,
-        /* immediate */ true,
       );
-      if (!resizeSucceeded) {
+      if (wasClamped) {
         toast.error('Failed to resize grid for import');
         return;
       }
 
-      const chunks = chunkOperations<CellOperation>(normalizedOperations, 500);
-      setImportProgress({ current: 0, total: chunks.length });
-
-      const importId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `import_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      const abortController = new AbortController();
-      importAbortControllerRef.current = abortController;
-      const signal = abortController.signal;
-
+      // Step 2: record the reverse history entry (prev -> next) so the user can undo,
+      // AND so we have the prevValue list available if we need to roll back the
+      // optimistic apply when the backend resize call fails.
       const changes: CellChange[] = [];
       operations.forEach((op) => {
         const prevValue = getCellRawInput(op.row, op.column);
@@ -4216,13 +4248,47 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         pushHistoryEntry({ changes });
       }
 
-      // Optimistically apply to UI (sparse) in a single batched setCells call.
-      // Calling the per-cell applyCellValueLocal N times would clone the cells Map
-      // N times -> O(n^2). For a 100k-cell import that freezes the browser for minutes;
-      // the batched helper keeps this to a single Map clone.
+      // Step 3: optimistic UI apply. One batched setCells, so the user sees the
+      // imported data IMMEDIATELY (before the backend resize network call).
       applyCellValuesLocalBatch(
         operations.map((op) => ({ row: op.row, col: op.column, value: op.raw_input || '' }))
       );
+
+      // Step 4: start the backend resize (don't await yet). Chunks need the server-side
+      // SheetRow / SheetColumn rows to exist before they can be safely written with
+      // auto_expand=false, so we must await this before the first chunk fires - but
+      // NOT before the optimistic display.
+      const resizePromise = persistResizeToBackend(clampedRows, clampedCols, /* immediate */ true);
+
+      // Step 5: also prepare chunks locally while the network call is in flight; this
+      // work is free (pure in-memory) and lets chunks fire as soon as resize lands.
+      // chunk size 1000: the old Q() OR bug that blew up at ~1000 has been replaced
+      // with row_id__in + column_id__in, so 1000 is safe again. Larger chunks halve
+      // network round-trips vs the 500 we temporarily used during the A2 rollout.
+      const chunks = chunkOperations<CellOperation>(normalizedOperations, 1000);
+      setImportProgress({ current: 0, total: chunks.length });
+
+      const importId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `import_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const abortController = new AbortController();
+      importAbortControllerRef.current = abortController;
+      const signal = abortController.signal;
+
+      // Step 6: now actually wait for the backend to finish building rows/columns.
+      const resizePersisted = await resizePromise;
+      if (!resizePersisted) {
+        // Roll back the optimistic apply so the user does not see "fake" data that
+        // was never written to the backend. Resets each touched cell to its
+        // pre-import raw_input by replaying the changes list in reverse.
+        applyCellValuesLocalBatch(
+          changes.map((c) => ({ row: c.row, col: c.col, value: c.prevValue })),
+        );
+        importAbortControllerRef.current = null;
+        toast.error('Failed to resize grid for import');
+        return;
+      }
 
       // Error reporting strategy:
       // - `firstError` owns the single reported failure. Concurrent in-flight requests
@@ -4391,7 +4457,8 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       loadCellRange,
       runWithConcurrency,
       visibleRange,
-      resizeGrid,
+      updateGridDimensionsLocal,
+      persistResizeToBackend,
       rowCount,
       colCount,
     ]
