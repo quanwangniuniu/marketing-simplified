@@ -4,7 +4,7 @@ import { act } from 'react';
 import '@testing-library/jest-dom';
 import { AxiosResponse } from 'axios';
 // Import the component directly from the file
-import TasksPage from '@/app/tasks/page';
+import TasksPage from '@/app/(project)/tasks/page';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { BudgetAPI } from '@/lib/api/budgetApi';
 import { approverApi } from '@/lib/api/approverApi';

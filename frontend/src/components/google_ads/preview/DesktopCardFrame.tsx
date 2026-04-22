@@ -94,7 +94,7 @@ export default function DesktopCardFrame({ children, variantKey }: DesktopCardFr
               <div className="flex items-center gap-3 border-b border-gray-200 pb-2" style={{ maxWidth: '720px' }}>
                 <div className="flex flex-col items-center">
                   <div className="h-7 px-3 flex items-center text-sm text-gray-700">All</div>
-                  <div className="w-full h-1 bg-blue-600 rounded-full"></div>
+                  <div className="w-full h-1 bg-[#3CCED7] rounded-full"></div>
                 </div>
                 <div className="h-7 px-3 flex items-center text-sm text-gray-600">Images</div>
                 <div className="h-7 px-3 flex items-center text-sm text-gray-600">Videos</div>

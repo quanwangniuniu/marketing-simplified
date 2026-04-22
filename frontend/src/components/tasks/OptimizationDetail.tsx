@@ -346,7 +346,7 @@ export default function OptimizationDetail({
                 localExecutionStatus === "completed"
                   ? "bg-green-50 text-green-800"
                   : localExecutionStatus === "monitoring"
-                  ? "bg-blue-50 text-blue-800"
+                  ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                   : localExecutionStatus === "executed"
                   ? "bg-purple-50 text-purple-800"
                   : localExecutionStatus === "planned"

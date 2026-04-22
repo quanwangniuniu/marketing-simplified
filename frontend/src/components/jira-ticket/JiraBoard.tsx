@@ -142,9 +142,9 @@ const JiraBoardCard = React.forwardRef<HTMLDivElement, JiraBoardCardProps>(
       className={cn(
         "min-h-[132px] w-full min-w-0 shrink-0 rounded-md border bg-white px-3 py-2.5 text-[13px] shadow-sm transition grid grid-rows-[40px_24px_24px] gap-2 overflow-hidden",
         "border-slate-200 hover:border-slate-300 hover:shadow",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-        isDragging && "border-blue-400 bg-blue-50 shadow-lg",
-        isDropTarget && "border-blue-500 ring-2 ring-blue-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]",
+        isDragging && "border-[#3CCED7] bg-[#3CCED7]/10 shadow-lg",
+        isDropTarget && "border-[#3CCED7] ring-2 ring-blue-200",
         className
       )}
       {...props}

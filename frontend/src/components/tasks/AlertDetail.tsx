@@ -22,7 +22,7 @@ const statusOptions = [
 
 const statusStyles: Record<string, string> = {
   open: "bg-gray-100 text-gray-700 border-gray-200",
-  acknowledged: "bg-blue-100 text-blue-700 border-blue-200",
+  acknowledged: "bg-[#3CCED7]/15 text-[#1a9ba3] border-[#3CCED7]/30",
   in_progress: "bg-amber-100 text-amber-700 border-amber-200",
   mitigated: "bg-teal-100 text-teal-700 border-teal-200",
   resolved: "bg-green-100 text-green-700 border-green-200",
@@ -546,10 +546,10 @@ export default function AlertDetail({ alert, projectId, onRefresh }: AlertDetail
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+        <div className="bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-blue-900">Resolution Steps</h4>
-            <span className="text-xs text-blue-600">Tap to add</span>
+            <h4 className="text-sm font-semibold text-[#0f757a]">Resolution Steps</h4>
+            <span className="text-xs text-[#3CCED7]">Tap to add</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {quickResolutions.map((item) => (
@@ -557,7 +557,7 @@ export default function AlertDetail({ alert, projectId, onRefresh }: AlertDetail
                 key={item}
                 type="button"
                 onClick={() => addToken("resolution_steps", item)}
-                className="px-3 py-1 rounded-full text-xs font-medium bg-white text-blue-700 border border-blue-200"
+                className="px-3 py-1 rounded-full text-xs font-medium bg-white text-[#1a9ba3] border border-[#3CCED7]/30"
               >
                 {item}
               </button>
@@ -567,12 +567,12 @@ export default function AlertDetail({ alert, projectId, onRefresh }: AlertDetail
             {splitTokens(formData.resolution_steps || "").map((token, index) => (
               <span
                 key={`${token}-${index}`}
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-[#3CCED7]/15 text-[#1a9ba3]"
               >
                 {token}
                 <button
                   type="button"
-                  className="text-blue-700"
+                  className="text-[#1a9ba3]"
                   onClick={() => removeToken("resolution_steps", index)}
                 >
                   x
@@ -591,7 +591,7 @@ export default function AlertDetail({ alert, projectId, onRefresh }: AlertDetail
             />
             <button
               type="button"
-              className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md"
+              className="px-3 py-2 bg-[#3CCED7] text-white text-sm rounded-md"
               onClick={() => {
                 if (!draftNotes.resolution.trim()) return;
                 addToken("resolution_steps", draftNotes.resolution.trim());
@@ -772,8 +772,8 @@ export default function AlertDetail({ alert, projectId, onRefresh }: AlertDetail
                   placeholder="0"
                 />
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-2.5">
-                <div className="text-xs text-blue-700">Window</div>
+              <div className="bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-md p-4 space-y-2.5">
+                <div className="text-xs text-[#1a9ba3]">Window</div>
                 <select
                   className={IMPLICIT_ALERT_FIELD_CLASS}
                   value={formData.initial_metrics.change_window}

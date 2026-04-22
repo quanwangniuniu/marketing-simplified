@@ -229,7 +229,7 @@ const KlaviyoSocialLinksInspector: React.FC<
                                   e.target.value as SocialPlatform
                                 )
                               }
-                              className="w-full pl-10 pr-8 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent appearance-none bg-white"
+                              className="w-full pl-10 pr-8 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent appearance-none bg-white"
                             >
                               {Object.keys(platformConfigs).map((platform) => (
                                 <option
@@ -262,7 +262,7 @@ const KlaviyoSocialLinksInspector: React.FC<
                                 url: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent"
                             placeholder={config.baseUrl}
                           />
                         </div>

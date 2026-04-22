@@ -167,8 +167,8 @@ export default function WorkflowListPage() {
         <div className="min-h-screen bg-gray-50">
           <div className="mx-auto max-w-6xl px-4 py-10">
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 text-sm uppercase tracking-wide text-blue-700">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+              <div className="flex items-center gap-3 text-sm uppercase tracking-wide text-[#1a9ba3]">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#3CCED7]/15 text-[#1a9ba3]">
                   <GitBranch className="h-4 w-4" />
                 </div>
                 Workflows
@@ -261,7 +261,7 @@ export default function WorkflowListPage() {
                       value={newWorkflowName}
                       onChange={(e) => setNewWorkflowName(e.target.value)}
                       placeholder="e.g. Budget approval flow"
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#3CCED7] focus:ring-2 focus:ring-blue-200"
                     />
                   </div>
                   <div className="space-y-1">
@@ -275,7 +275,7 @@ export default function WorkflowListPage() {
                           e.target.value as WorkflowStatus
                         )
                       }
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#3CCED7] focus:ring-2 focus:ring-blue-200"
                     >
                       <option value="draft">Draft</option>
                       <option value="published">Published</option>

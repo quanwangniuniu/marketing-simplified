@@ -348,7 +348,7 @@ export function MeetingSummaryPanel({
           <p className="text-xs font-semibold text-slate-500">Meeting details</p>
           {loading ? (
             <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-[#3CCED7]" />
               Loading…
             </div>
           ) : error ? (
@@ -378,7 +378,7 @@ export function MeetingSummaryPanel({
                 <div>
                   <label className="text-xs font-medium text-slate-600">Title</label>
                   <input
-                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     value={titleDraft}
                     onChange={(e) => setTitleDraft(e.target.value)}
                   />
@@ -386,7 +386,7 @@ export function MeetingSummaryPanel({
                 <div>
                   <label className="text-xs font-medium text-slate-600">Meeting type</label>
                   <select
-                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     value={meetingTypeDraft}
                     onChange={(e) => setMeetingTypeDraft(e.target.value)}
                     aria-label="Meeting type or template"
@@ -417,7 +417,7 @@ export function MeetingSummaryPanel({
                 <div>
                   <label className="text-xs font-medium text-slate-600">Objective</label>
                   <textarea
-                    className="mt-1 min-h-[88px] w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 min-h-[88px] w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     value={objectiveDraft}
                     onChange={(e) => setObjectiveDraft(e.target.value)}
                     rows={4}
@@ -463,7 +463,7 @@ export function MeetingSummaryPanel({
                   <label className="text-xs font-medium text-slate-600">Conference / link</label>
                   <input
                     type="text"
-                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     value={extRefDraft}
                     onChange={(e) => setExtRefDraft(e.target.value)}
                     placeholder="e.g. Zoom or Meet URL"
@@ -472,7 +472,7 @@ export function MeetingSummaryPanel({
                     <Button
                       type="button"
                       size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
+                      className="bg-[#3CCED7] hover:bg-[#2AB5BD]"
                       disabled={!extRefDraft.trim()}
                       onClick={openRef}
                     >
@@ -517,7 +517,7 @@ export function MeetingSummaryPanel({
                 {!zoomStatusLoading && !zoomConnected && (
                   <Link
                     href="/settings?open_zoom=1"
-                    className="flex items-center justify-center gap-1 text-xs text-slate-500 transition-colors hover:text-blue-600"
+                    className="flex items-center justify-center gap-1 text-xs text-slate-500 transition-colors hover:text-[#3CCED7]"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
                     Zoom not connected · Connect in Settings
@@ -619,7 +619,7 @@ export function MeetingSummaryPanel({
               <div className="flex flex-col gap-3">
                 <Button
                   type="button"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-[#3CCED7] hover:bg-[#2AB5BD]"
                   disabled={savingMeta}
                   onClick={() => void saveMeta()}
                 >
@@ -633,7 +633,7 @@ export function MeetingSummaryPanel({
 
                 <Link
                   href={`/projects/${projectId}/meetings/${meetingId}`}
-                  className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-medium text-blue-800 transition hover:bg-blue-100"
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-2.5 text-sm font-medium text-[#1a9ba3] transition hover:bg-[#3CCED7]/15"
                 >
                   Open full meeting workspace
                   <span className="ml-1" aria-hidden>

@@ -119,7 +119,7 @@ export default function CreateBoardModal({
                   setSelectedProjectId(e.target.value === "" ? "" : Number(e.target.value))
                 }
                 disabled={isCreating || !projects || projects.length === 0}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 {!projects || projects.length === 0 ? (
                   <option value="">No projects available</option>
@@ -150,7 +150,7 @@ export default function CreateBoardModal({
               placeholder="Enter board title"
               disabled={isCreating}
               autoFocus
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -166,7 +166,7 @@ export default function CreateBoardModal({
             <button
               type="submit"
               disabled={!isValid || isCreating}
-              className="inline-flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex w-full justify-center rounded-md border border-transparent bg-[#3CCED7] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isCreating ? "Creating..." : "Create"}
             </button>

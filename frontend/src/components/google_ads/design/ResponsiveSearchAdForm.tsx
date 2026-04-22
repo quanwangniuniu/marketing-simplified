@@ -112,7 +112,7 @@ export default function ResponsiveSearchAdForm({
                   value={headline}
                   onChange={(e) => handleHeadlineChange(index, e.target.value)}
                   placeholder={`Headline ${index + 1}`}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                   maxLength={30}
                 />
                 <div className="flex justify-between items-center mt-1">
@@ -135,7 +135,7 @@ export default function ResponsiveSearchAdForm({
         {headlines.length < 15 && (
           <button
             onClick={addHeadline}
-            className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+            className="mt-3 text-[#3CCED7] hover:text-[#1a9ba3] text-sm font-medium"
           >
             + Add Headline
           </button>
@@ -162,7 +162,7 @@ export default function ResponsiveSearchAdForm({
                   onChange={(e) => handleDescriptionChange(index, e.target.value)}
                   placeholder={`Description ${index + 1}`}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] resize-none"
                   maxLength={90}
                 />
                 <div className="flex justify-between items-center mt-1">
@@ -185,7 +185,7 @@ export default function ResponsiveSearchAdForm({
         {descriptions.length < 4 && (
           <button
             onClick={addDescription}
-            className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+            className="mt-3 text-[#3CCED7] hover:text-[#1a9ba3] text-sm font-medium"
           >
             + Add Description
           </button>
@@ -212,7 +212,7 @@ export default function ResponsiveSearchAdForm({
                 handleUpdate(headlines, descriptions, newPath1, path2);
               }}
               placeholder="e.g., products"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               maxLength={15}
             />
             <div className={`text-xs mt-1 ${getCharacterCountColor(path1.length, 15)}`}>
@@ -232,7 +232,7 @@ export default function ResponsiveSearchAdForm({
                 handleUpdate(headlines, descriptions, path1, newPath2);
               }}
               placeholder="e.g., sale"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               maxLength={15}
             />
             <div className={`text-xs mt-1 ${getCharacterCountColor(path2.length, 15)}`}>

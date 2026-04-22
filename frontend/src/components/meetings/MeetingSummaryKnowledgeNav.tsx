@@ -39,7 +39,7 @@ export function MeetingSummaryKnowledgeNav({
               <Link
                 key={item.id}
                 href={item.detail_url ?? item.url}
-                className="truncate text-sm text-blue-600 hover:underline"
+                className="truncate text-sm text-[#3CCED7] hover:underline"
               >
                 {item.title}
               </Link>
@@ -80,8 +80,8 @@ export function MeetingSummaryKnowledgeNav({
             Create task from this meeting
           </Link>
           <Link
-            href={`/decisions/new?project_id=${projectId}&origin_meeting_id=${meetingId}`}
-            className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50/80 px-3 py-2 text-sm font-medium text-blue-900 transition hover:bg-blue-100"
+            href={`/decisions?project_id=${projectId}&origin_meeting_id=${meetingId}`}
+            className="inline-flex items-center justify-center rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10/80 px-3 py-2 text-sm font-medium text-[#0f757a] transition hover:bg-[#3CCED7]/15"
           >
             Create decision from this meeting
           </Link>

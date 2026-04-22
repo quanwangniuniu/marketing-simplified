@@ -92,7 +92,7 @@ export default function RetrospectiveDetail({
       case "reported":
         return "bg-green-100 text-green-800";
       case "completed":
-        return "bg-blue-100 text-blue-800";
+        return "bg-[#3CCED7]/15 text-[#1a9ba3]";
       case "in_progress":
         return "bg-yellow-100 text-yellow-800";
       case "scheduled":
@@ -422,7 +422,7 @@ export default function RetrospectiveDetail({
               <button
                 onClick={handleStartAnalysis}
                 disabled={startingAnalysis}
-                className="w-full px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
+                className="w-full px-2 py-1 bg-[#3CCED7] text-white text-xs rounded hover:bg-[#2AB5BD] disabled:bg-[#3CCED7] disabled:cursor-not-allowed"
                 data-action
               >
                 {startingAnalysis ? "Starting..." : "Start Analysis"}
@@ -670,7 +670,7 @@ export default function RetrospectiveDetail({
                   <button
                     onClick={handleStartAnalysis}
                     disabled={startingAnalysis}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-[#3CCED7] text-white text-sm rounded-md hover:bg-[#2AB5BD] disabled:bg-[#3CCED7] disabled:cursor-not-allowed"
                     data-action
                   >
                     {startingAnalysis

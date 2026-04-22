@@ -101,13 +101,13 @@ const CreativeLibraryDrawer: React.FC<CreativeLibraryDrawerProps> = ({ isOpen, o
         <div className="px-5 pt-3">
           <div className="flex items-center gap-6 border-b">
             <button
-              className={`pb-3 text-sm ${activeTab === 'posts' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+              className={`pb-3 text-sm ${activeTab === 'posts' ? 'border-b-2 border-[#3CCED7] text-[#3CCED7]' : 'text-gray-500'}`}
               onClick={() => setActiveTab('posts')}
             >
               TikTok posts
             </button>
             <button
-              className={`pb-3 text-sm ${activeTab === 'library' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+              className={`pb-3 text-sm ${activeTab === 'library' ? 'border-b-2 border-[#3CCED7] text-[#3CCED7]' : 'text-gray-500'}`}
               onClick={() => setActiveTab('library')}
             >
               Creative library
@@ -243,8 +243,8 @@ const CreativeLibraryDrawer: React.FC<CreativeLibraryDrawerProps> = ({ isOpen, o
                 <span
                   className={`absolute left-1 top-1 bottom-1 w-12 rounded-full bg-white shadow transition-transform duration-200 ${type === 'video' ? 'translate-x-0' : 'translate-x-14'}`}
                 />
-                <span className={`flex-1 text-center z-10 text-sm font-medium px-2 ${type === 'video' ? 'text-blue-600' : 'text-gray-500'}`}>Videos</span>
-                <span className={`flex-1 text-center z-10 text-sm font-medium px-2 ${type === 'image' ? 'text-blue-600' : 'text-gray-500'}`}>Images</span>
+                <span className={`flex-1 text-center z-10 text-sm font-medium px-2 ${type === 'video' ? 'text-[#3CCED7]' : 'text-gray-500'}`}>Videos</span>
+                <span className={`flex-1 text-center z-10 text-sm font-medium px-2 ${type === 'image' ? 'text-[#3CCED7]' : 'text-gray-500'}`}>Images</span>
               </button>
             )}
           </div>
@@ -330,7 +330,7 @@ const CreativeLibraryDrawer: React.FC<CreativeLibraryDrawerProps> = ({ isOpen, o
               onConfirm?.(mat);
               onClose();
             }}
-            className={`px-4 py-2 rounded-md ${selectedId !== null ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            className={`px-4 py-2 rounded-md ${selectedId !== null ? 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
           >
             Confirm
           </button>

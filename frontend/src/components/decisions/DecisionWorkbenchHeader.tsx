@@ -35,7 +35,7 @@ const statusColor = (status: string) => {
     case 'DRAFT':
       return 'bg-amber-100 text-amber-800';
     case 'AWAITING_APPROVAL':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-[#3CCED7]/15 text-[#1a9ba3]';
     case 'COMMITTED':
       return 'bg-emerald-100 text-emerald-800';
     case 'REVIEWED':
@@ -143,7 +143,7 @@ const DecisionWorkbenchHeader = ({
                     }
                   }}
                   autoFocus
-                  className="w-full max-w-xl rounded border border-gray-300 px-3 py-1 text-lg font-semibold text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full max-w-xl rounded border border-gray-300 px-3 py-1 text-lg font-semibold text-gray-900 shadow-sm focus:border-[#3CCED7] focus:outline-none"
                   placeholder="Decision title"
                 />
               ) : (
@@ -201,7 +201,7 @@ const DecisionWorkbenchHeader = ({
               disabled={!dirty || saving}
               className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
                 dirty && !saving
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
                   : 'cursor-not-allowed bg-gray-200 text-gray-500'
               }`}
             >

@@ -19,7 +19,7 @@ const EmojiPicker = dynamic(
     ssr: false,
     loading: () => (
       <div className="w-[350px] h-[400px] bg-white border border-gray-200 rounded-lg flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3CCED7]" />
       </div>
     )
   }
@@ -303,8 +303,8 @@ export default function MessageInput({
               {/* Upload Progress or Status */}
               {attachment.uploading && (
                 <div className="flex items-center gap-1">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  <span className="text-xs text-blue-600">{attachment.progress}%</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-[#3CCED7]" />
+                  <span className="text-xs text-[#3CCED7]">{attachment.progress}%</span>
                 </div>
               )}
 
@@ -358,7 +358,7 @@ export default function MessageInput({
           disabled={disabled}
           className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
             showEmojiPicker 
-              ? 'bg-blue-100 text-blue-600' 
+              ? 'bg-[#3CCED7]/15 text-[#3CCED7]' 
               : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
           aria-label="Add emoji"
@@ -376,7 +376,7 @@ export default function MessageInput({
           placeholder={hasAttachments ? "Add a message..." : "Type a message..."}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-sm max-h-24 overflow-y-auto"
+          className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-sm max-h-24 overflow-y-auto"
           style={{
             minHeight: '38px',
             maxHeight: '96px',
@@ -387,7 +387,7 @@ export default function MessageInput({
         <button
           onClick={handleSend}
           disabled={!canSend || disabled}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg p-2 transition-colors flex-shrink-0"
+          className="bg-[#3CCED7] hover:bg-[#2AB5BD] disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg p-2 transition-colors flex-shrink-0"
           aria-label="Send message"
         >
           <Send className="w-5 h-5" />

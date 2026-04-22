@@ -202,7 +202,7 @@ export default function CompanionBannerSelectionModal({
             onClick={() => setActiveTab('upload')}
             className={`px-6 py-3 text-sm font-medium ${
               activeTab === 'upload'
-                ? 'text-blue-600 border-b-2 border-blue-600'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7]'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -212,7 +212,7 @@ export default function CompanionBannerSelectionModal({
             onClick={() => setActiveTab('account')}
             className={`px-6 py-3 text-sm font-medium ${
               activeTab === 'account'
-                ? 'text-blue-600 border-b-2 border-blue-600'
+                ? 'text-[#3CCED7] border-b-2 border-[#3CCED7]'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -233,7 +233,7 @@ export default function CompanionBannerSelectionModal({
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-[#3CCED7] bg-[#3CCED7]/10 hover:bg-[#3CCED7]/15 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isUploading ? (
                           <>
@@ -289,7 +289,7 @@ export default function CompanionBannerSelectionModal({
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Asset Library</h3>
                   {loading ? (
                     <div className="text-center py-8">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#3CCED7]" />
                       <p className="mt-2 text-sm text-gray-500">Loading photos...</p>
                     </div>
                   ) : (
@@ -333,7 +333,7 @@ export default function CompanionBannerSelectionModal({
               className={`px-4 py-2 text-sm font-medium rounded-md ${
                 disableContinue
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
               }`}
             >
               Continue

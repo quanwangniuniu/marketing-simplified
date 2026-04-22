@@ -407,7 +407,7 @@ const DecisionEditModal = ({
                   setTitle(event.target.value);
                 }}
                 placeholder="Draft title"
-                className="mt-2 w-full rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
+                className="mt-2 w-full rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-900 shadow-sm focus:border-[#3CCED7] focus:outline-none"
               />
             </div>
 
@@ -481,7 +481,7 @@ const DecisionEditModal = ({
                 className={`rounded-md px-4 py-2 text-xs font-semibold text-white ${
                   !canEdit || loading || saving
                     ? "cursor-not-allowed bg-gray-300"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    : "bg-[#3CCED7] hover:bg-[#2AB5BD]"
                 }`}
               >
                 {saving ? "Saving…" : "Save"}

@@ -12,7 +12,7 @@ const CustomWorkflowNode = memo(({ data, selected }: NodeProps) => {
   return (
     <div
       className={`px-4 py-2 rounded-lg border-2 shadow-md transition-all ${
-        selected ? "ring-2 ring-blue-400 ring-offset-2" : ""
+        selected ? "ring-2 ring-[#3CCED7] ring-offset-2" : ""
       }`}
       style={{
         backgroundColor: data.backgroundColor || "#3b82f6",
@@ -28,7 +28,7 @@ const CustomWorkflowNode = memo(({ data, selected }: NodeProps) => {
         position={Position.Top}
         id="top-source"
         isConnectable={true}
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
+        className="!w-3 !h-3 !bg-[#3CCED7] !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
         style={{ top: -6, zIndex: 10 }}
       />
       <Handle
@@ -46,7 +46,7 @@ const CustomWorkflowNode = memo(({ data, selected }: NodeProps) => {
         position={Position.Right}
         id="right-source"
         isConnectable={true}
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
+        className="!w-3 !h-3 !bg-[#3CCED7] !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
         style={{ right: -6, zIndex: 10 }}
       />
       <Handle
@@ -64,7 +64,7 @@ const CustomWorkflowNode = memo(({ data, selected }: NodeProps) => {
         position={Position.Bottom}
         id="bottom-source"
         isConnectable={true}
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
+        className="!w-3 !h-3 !bg-[#3CCED7] !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
         style={{ bottom: -6, zIndex: 10 }}
       />
       <Handle
@@ -82,7 +82,7 @@ const CustomWorkflowNode = memo(({ data, selected }: NodeProps) => {
         position={Position.Left}
         id="left-source"
         isConnectable={true}
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
+        className="!w-3 !h-3 !bg-[#3CCED7] !border-2 !border-white hover:!w-4 hover:!h-4 transition-all opacity-0 hover:opacity-100 !cursor-pointer"
         style={{ left: -6, zIndex: 10 }}
       />
       <Handle

@@ -53,7 +53,7 @@ const TiktokAdDetail: React.FC<TiktokAdDetailProps> = ({ selectedCreative, selec
             value={text}
             onChange={(e) => onChange?.({ text: e.target.value, cta: { mode: ctaMode, label: ctaLabel } })}
             placeholder="Enter ad text"
-            className="w-full pr-16 px-3 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="w-full pr-16 px-3 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent outline-none"
           />
           {(() => { const len = (text || '').length; const max = 100; return (
             <div className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm ${len > max ? 'text-red-500' : 'text-gray-400'}`}>{len}/{max}</div>
