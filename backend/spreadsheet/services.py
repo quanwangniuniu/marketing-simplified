@@ -22,6 +22,16 @@ from core.models import Project
 
 logger = logging.getLogger(__name__)
 
+
+class CellBatchArgumentError(Exception):
+    """Structured batch cell validation failure (maps to HTTP 400 in views)."""
+
+    def __init__(self, details: List[Dict[str, Any]]):
+        self.code = 'INVALID_ARGUMENT'
+        self.details = details
+        super().__init__(self.code)
+
+
 class SpreadsheetService:
     """Service class for handling spreadsheet business logic"""
     
@@ -1441,14 +1451,12 @@ class CellService:
         rows_to_create = set()
         columns_to_create = set()
 
-        # When auto_expand is disabled we need to verify each op's (row, column) already
-        # exists. Instead of issuing two .exists() queries per op (O(N) round-trips), fetch
-        # all present positions once and do O(1) set lookups below.
-        if not auto_expand and not import_mode:
-            # Validate that every target position already exists.
-            # Skipped in import_mode: resize_sheet already created all required rows/columns
-            # before the first chunk fires, so this full-table scan is redundant and runs
-            # once per chunk (e.g. 30 chunks × 2 queries = 60 unnecessary queries).
+        # When auto_expand is disabled we must verify each op's (row, column) already exists.
+        # This runs even when import_mode=True: real imports call resize_sheet first so every
+        # target position exists and these checks are cheap no-ops; callers that skip resize
+        # still get a clear 400 instead of silently skipping cell writes.
+        # Two queries total (not per-op).
+        if not auto_expand:
             existing_row_positions = set(
                 SheetRow.objects.filter(sheet=sheet, is_deleted=False)
                 .values_list('position', flat=True)
@@ -1547,8 +1555,6 @@ class CellService:
                     # Auto-expand collection only when raw_input is non-empty
                     if raw_input_stripped:
                         if not auto_expand and existing_row_positions is not None:
-                            # import_mode skips this check (existing_row_positions is None):
-                            # resize_sheet already created all rows/columns before chunks fire.
                             if row_pos not in existing_row_positions:
                                 validation_errors.append({
                                     'index': index,
@@ -1650,8 +1656,6 @@ class CellService:
                 if value_type != CellValueType.EMPTY:
                     # Check if row/column exists (for non-auto-expand mode).
                     # Uses the set snapshot built above for O(1) lookup (no per-op SQL).
-                    # import_mode skips this check (existing_row_positions is None):
-                    # resize_sheet already created all rows/columns before chunks fire.
                     if not auto_expand and existing_row_positions is not None:
                         if row_pos not in existing_row_positions:
                             validation_errors.append({
@@ -1677,12 +1681,11 @@ class CellService:
                         rows_to_create.add(row_pos)
                         columns_to_create.add(col_pos)
         
-        # If validation errors exist, raise before any DB writes (triggers rollback)
+        # If validation errors exist, raise before any DB writes (triggers rollback).
+        # Do not use django.core.exceptions.ValidationError for structured payloads:
+        # Django flattens nested dicts/lists into ErrorDetail/strings and breaks API clients.
         if validation_errors:
-            raise ValidationError({
-                'code': 'INVALID_ARGUMENT',
-                'details': validation_errors
-            })
+            raise CellBatchArgumentError(validation_errors)
         
         # PHASE 2: EXECUTION (bulk writes - no per-cell save/update_or_create)
         # Note: previously this section called _log_position_duplicates once per unique

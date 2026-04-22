@@ -59,7 +59,7 @@ from .serializers import (
     PivotConfigSerializer,
     PivotConfigCreateUpdateSerializer,
 )
-from .services import SpreadsheetService, SheetService, CellService
+from .services import SpreadsheetService, SheetService, CellService, CellBatchArgumentError
 from .models import SheetStructureOperation
 from core.models import Project
 from .tasks import apply_pattern_job
@@ -886,6 +886,11 @@ class CellBatchUpdateView(APIView):
                 operations=serializer.validated_data['operations'],
                 auto_expand=serializer.validated_data.get('auto_expand', True),
                 import_mode=import_mode
+            )
+        except CellBatchArgumentError as e:
+            return Response(
+                {'code': e.code, 'details': e.details},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except DjangoValidationError as e:
             # Django's ValidationError has message_dict / messages / str(); it does NOT have .detail

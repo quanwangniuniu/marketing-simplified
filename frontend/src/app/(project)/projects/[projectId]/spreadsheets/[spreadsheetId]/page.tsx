@@ -115,7 +115,12 @@ export default function SpreadsheetDetailPage() {
   >([]);
   const applyHighlightStepsRef = useRef<(steps: WorkflowPatternStepRecord[]) => void>(() => {});
   const isReplayingRef = useRef(false);
-  const isCreatingFirstSheetRef = useRef(false);
+  // Promise cache for the auto-create "Sheet1" call. React Strict Mode fires the
+  // loader effect twice in dev, and the two async coroutines can both observe an
+  // empty sheet list before either has POSTed. Caching the in-flight promise
+  // guarantees only ONE POST /sheets/ is sent per mount — concurrent callers
+  // await the same promise and share its result (or error).
+  const firstSheetPromiseRef = useRef<Promise<SheetData | null> | null>(null);
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
 
   useEffect(() => {
@@ -236,31 +241,30 @@ export default function SpreadsheetDetailPage() {
       return null;
     }
 
-    // If another concurrent call is already in the process of creation, exit directly.
-    if (isCreatingFirstSheetRef.current) {
-      return null;
+    // If a creation promise is already in flight (or resolved), return it so all
+    // concurrent callers get the same Sheet1 without issuing a second POST.
+    if (firstSheetPromiseRef.current) {
+      return firstSheetPromiseRef.current;
     }
 
-    // lock
-    isCreatingFirstSheetRef.current = true;
-
-    try {
-      return await SpreadsheetAPI.createSheet(Number(spreadsheetId), { name: 'Sheet1' });
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 400) {
-        // Sheet1 already exists (race/auto-create), fetch it.
-        const retryResponse = await SpreadsheetAPI.listSheets(Number(spreadsheetId));
-        const retrySheets = retryResponse.results || [];
-        if (retrySheets.length > 0) {
-          return retrySheets[0];
+    const promise: Promise<SheetData | null> = (async () => {
+      try {
+        return await SpreadsheetAPI.createSheet(Number(spreadsheetId), { name: 'Sheet1' });
+      } catch (err: any) {
+        // Defensive: if another tab / stale request beat us to it, surface the
+        // existing Sheet1 instead of failing the page load.
+        if (err?.response?.status === 400) {
+          const retry = await SpreadsheetAPI.listSheets(Number(spreadsheetId));
+          if (retry.results && retry.results.length > 0) {
+            return retry.results[0];
+          }
         }
+        throw err;
       }
-      throw err;
-    } finally {
-      // Unlock regardless of success or failure.
-      isCreatingFirstSheetRef.current = false;
-    }
+    })();
+
+    firstSheetPromiseRef.current = promise;
+    return promise;
   };
 
   useEffect(() => {

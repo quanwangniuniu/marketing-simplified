@@ -371,7 +371,9 @@ class CellBatchUpdateSerializer(serializers.Serializer):
     """Serializer for batch cell update"""
     operations = CellOperationSerializer(many=True, min_length=1, max_length=2000)
     auto_expand = serializers.BooleanField(default=True)
-    import_id = serializers.UUIDField(required=False, allow_null=True)
+    # Correlation id for chunked imports (logging / finalize). Accepts UUIDs from the
+    # browser (crypto.randomUUID) and short opaque strings in tests or custom clients.
+    import_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=64)
     chunk_index = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     import_mode = serializers.BooleanField(default=False)
 
