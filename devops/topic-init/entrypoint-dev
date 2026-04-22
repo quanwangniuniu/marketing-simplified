@@ -11,4 +11,4 @@ cd /usr/local/bin/ && python3 create-topics.py
 
 echo "Done."
 
-exec /etc/confluent/docker/run
+exit 0

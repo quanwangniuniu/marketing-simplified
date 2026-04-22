@@ -215,7 +215,7 @@ export function WeekView({
                       slotStart,
                       "EEEE, MMMM d 'at' h:mm a",
                     )}`}
-                    className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-blue-50 flex flex-col"
+                    className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/10 flex flex-col"
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const position = computePanelPosition(rect);
@@ -447,7 +447,7 @@ export function DayView({
                   slotStart,
                   "EEEE, MMMM d 'at' h:mm a",
                 )}`}
-                className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-blue-50"
+                className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/10"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const position = computePanelPosition(rect, "day");
@@ -623,9 +623,9 @@ export function MonthView({
                   <span
                     className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${
                       isSelected
-                        ? "bg-blue-600 text-white"
+                        ? "bg-[#3CCED7] text-white"
                         : isToday
-                        ? "border border-blue-500 text-blue-700"
+                        ? "border border-[#3CCED7] text-[#1a9ba3]"
                         : inMonth
                         ? "text-gray-800"
                         : "text-gray-300"
@@ -809,7 +809,7 @@ export function YearView({ currentDate, onDaySelect }: YearViewProps) {
                     !inMonth
                       ? "text-gray-300"
                       : isToday
-                      ? "border border-blue-500 bg-white text-blue-700"
+                      ? "border border-[#3CCED7] bg-white text-[#1a9ba3]"
                       : "text-gray-700 hover:bg-white"
                   }`;
                   return (

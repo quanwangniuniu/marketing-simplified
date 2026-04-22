@@ -141,11 +141,11 @@ export default function NewAssetForm({
       </div>
 
       {/* Workflow Information */}
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-        <p className="text-xs text-blue-800">
+      <div className="p-3 bg-[#3CCED7]/10 border border-[#3CCED7]/30 rounded-md">
+        <p className="text-xs text-[#1a9ba3]">
           <strong>Workflow:</strong> After creating the asset:
         </p>
-        <ol className="text-xs text-blue-700 mt-1 ml-4 list-decimal">
+        <ol className="text-xs text-[#1a9ba3] mt-1 ml-4 list-decimal">
           {assetData.file ? (
             <>
               <li>File will be uploaded automatically as the first version</li>

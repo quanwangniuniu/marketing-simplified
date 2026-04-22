@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2 } from 'lucide-react';
+import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { googleDocsApi } from '@/lib/api/googleDocsApi';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ import {
 } from '@/components/spreadsheets/spreadsheetImportExport';
 import { adjustFormulaReferences, colLabelToIndex } from '@/lib/spreadsheet/formulaFill';
 import { ApplyHighlightParams } from '@/types/patterns';
+import BrandSelect from '@/components/ui/BrandSelect';
 
 interface SpreadsheetGridProps {
   spreadsheetId: number;
@@ -4538,7 +4539,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline text-blue-600"
+              className="underline text-[#3CCED7]"
               onClick={() => toast.dismiss(t.id)}
             >
               Open in Google Sheets
@@ -5184,7 +5185,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         </div>
       )}
       {isSaving && pendingOps.size > 0 && (
-        <div className="absolute top-2 right-2 z-30 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded text-xs">
+        <div className="absolute top-2 right-2 z-30 bg-[#3CCED7]/10 border border-[#3CCED7]/30 text-[#1a9ba3] px-3 py-1 rounded text-xs">
           Saving...
         </div>
       )}
@@ -5208,10 +5209,30 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         />
         <button
           type="button"
+          onClick={() => setSheetsImportModalOpen(true)}
+          disabled={isImporting}
+          title="Import from Google Sheets"
+          className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-[#0E8A96] transition hover:bg-[#3CCED7]/10 disabled:opacity-60"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={2.3} aria-hidden="true" />
+          Sheets Import
+        </button>
+        <button
+          type="button"
+          onClick={handleImportClick}
+          disabled={isImporting}
+            className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
+        >
+          <Download className="h-3.5 w-3.5" strokeWidth={2.3} aria-hidden="true" />
+          Import
+        </button>
+        <span className="mx-1 inline-block h-5 w-px bg-gray-200" aria-hidden="true" />
+        <button
+          type="button"
           onClick={handleUnifiedUndo}
           disabled={!canUndo || isReverting}
           title="Undo (Ctrl+Z)"
-            className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
         >
             <Undo2 className="h-3.5 w-3.5" strokeWidth={2.3} />
         </button>
@@ -5220,7 +5241,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           onClick={handleUnifiedRedo}
           disabled={!canRedo || isReverting}
           title="Redo (Ctrl+Shift+Z)"
-            className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
         >
             <Redo2 className="h-3.5 w-3.5" strokeWidth={2.3} />
         </button>
@@ -5228,10 +5249,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           type="button"
           onClick={handleFreezeHeader}
           title={frozenRowCount > 0 ? 'Unfreeze header (Ctrl+Shift+F)' : 'Freeze header (Ctrl+Shift+F)'}
-            className={`flex h-7 w-7 items-center justify-center rounded border transition-colors text-xs ${
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition text-xs ${
             frozenRowCount > 0
-              ? 'border-blue-300 bg-blue-50 text-blue-700'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
           }`}
           data-testid="freeze-header-button"
         >
@@ -5239,23 +5260,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               <Snowflake className="h-3 w-3" strokeWidth={2.3} />
             <span>H</span>
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={handleImportClick}
-          disabled={isImporting}
-            className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-        >
-          Import
-        </button>
-        <button
-          type="button"
-          onClick={() => setSheetsImportModalOpen(true)}
-          disabled={isImporting}
-          title="Import from Google Sheets"
-          className="rounded border border-green-200 px-2 py-0.5 text-[11px] font-semibold text-green-700 hover:bg-green-50 disabled:opacity-60"
-        >
-          Sheets Import
         </button>
         <div className="relative" ref={exportMenuRef}>
           <button
@@ -5275,31 +5279,33 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               setExportMenuOpen((prev) => !prev);
             }}
             disabled={isImporting}
-              className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             data-export-menu-trigger
           >
+            <Upload className="h-3.5 w-3.5" strokeWidth={2.3} aria-hidden="true" />
             Export
           </button>
           {exportMenuOpen && exportMenuAnchor &&
             createPortal(
               <div
-                className="fixed z-[1000] w-40 rounded-md border border-gray-200 bg-white shadow-lg"
+                className="fixed z-[1000] w-40 overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100"
                 style={{
                   top: exportMenuAnchor.top,
-                  left: exportMenuAnchor.left - 160,
+                  left: exportMenuAnchor.left - exportMenuAnchor.width,
                 }}
                 role="menu"
                 data-export-menu
               >
+                <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
                 <button
                   type="button"
                   onClick={() => {
                     handleExportCSV();
                     setExportMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                   role="menuitem"
                 >
                   Export as CSV
@@ -5310,7 +5316,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     handleExportXLSX();
                     setExportMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                   role="menuitem"
                 >
                   Export as XLSX
@@ -5321,7 +5327,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     handleExportGoogleSheets();
                     setExportMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-xs font-semibold text-green-700 hover:bg-green-50"
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-[#0E8A96] transition hover:bg-[#3CCED7]/10"
                   role="menuitem"
                 >
                   Export to Google Sheets
@@ -5343,7 +5349,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           }}
           title="Pivot Table"
           disabled={!onOpenPivotBuilder}
-          className="flex h-7 items-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="pivot-table-button"
         >
           <Table2 className="h-3.5 w-3.5" strokeWidth={2.3} />
@@ -5362,7 +5368,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 setHighlightMenuOpen((prev) => !prev);
               }}
               disabled={!hasSelection}
-              className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
               aria-haspopup="menu"
               aria-expanded={highlightMenuOpen}
               data-highlight-menu-trigger
@@ -5376,10 +5382,11 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             </button>
               {highlightMenuOpen && (
                 <div
-                  className="absolute left-0 mt-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg z-30"
+                  className="absolute left-0 mt-2 w-44 overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100 z-30"
                   role="menu"
                   data-highlight-menu
                 >
+                  <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
                   {HIGHLIGHT_COLORS.map((color) => (
                     <button
                       key={color.id}
@@ -5389,7 +5396,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                         applyHighlightToSelection(color.value, color.value);
                         setHighlightMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                       role="menuitem"
                       data-testid={`highlight-color-${color.id}`}
                     >
@@ -5403,7 +5410,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                       applyHighlightToSelection(null, CLEAR_HIGHLIGHT);
                       setHighlightMenuOpen(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    className="w-full px-3 py-2 text-left text-xs font-medium text-gray-500 transition hover:bg-gray-50"
                     role="menuitem"
                     data-testid="highlight-clear"
                   >
@@ -5418,10 +5425,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               onClick={() => applyFormatToSelection({ bold: !formatStateForSelection?.bold })}
               disabled={!hasSelection}
               title="Bold"
-              className={`flex h-7 w-7 items-center justify-center rounded border transition-colors disabled:opacity-60 ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition disabled:opacity-60 ${
                 formatStateForSelection?.bold
-                  ? 'border-blue-300 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
               data-testid="format-bold"
             >
@@ -5432,10 +5439,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               onClick={() => applyFormatToSelection({ italic: !formatStateForSelection?.italic })}
               disabled={!hasSelection}
               title="Italic"
-              className={`flex h-7 w-7 items-center justify-center rounded border transition-colors disabled:opacity-60 ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition disabled:opacity-60 ${
                 formatStateForSelection?.italic
-                  ? 'border-blue-300 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
               data-testid="format-italic"
             >
@@ -5446,10 +5453,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               onClick={() => applyFormatToSelection({ strikethrough: !formatStateForSelection?.strikethrough })}
               disabled={!hasSelection}
               title="Strikethrough"
-              className={`flex h-7 w-7 items-center justify-center rounded border transition-colors disabled:opacity-60 ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition disabled:opacity-60 ${
                 formatStateForSelection?.strikethrough
-                  ? 'border-blue-300 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
               data-testid="format-strikethrough"
             >
@@ -5465,18 +5472,19 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 disabled={!hasSelection}
                 title="Text color"
                 data-text-color-trigger
-                className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
                 data-testid="format-text-color"
               >
                 <Palette className="h-4 w-4" strokeWidth={2.5} style={selectedTextColor ? { color: selectedTextColor } : undefined} />
               </button>
               {textColorMenuOpen && (
                 <div
-                  className="absolute left-0 mt-2 w-36 rounded-md border border-gray-200 bg-white shadow-lg z-30 p-2"
+                  className="absolute left-0 mt-2 w-44 overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100 z-30"
                   role="menu"
                   data-text-color-menu
                 >
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
+                  <div className="grid grid-cols-4 gap-1.5 p-2">
                     {TEXT_COLORS.map((c) => (
                       <button
                         key={c.id}
@@ -5486,62 +5494,63 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                           applyFormatToSelection({ textColor: c.value });
                           setTextColorMenuOpen(false);
                         }}
-                        className="h-6 w-6 rounded border border-gray-200 hover:ring-2 hover:ring-blue-300"
+                        className="h-6 w-6 rounded-md border border-gray-200 transition hover:scale-110 hover:ring-2 hover:ring-[#3CCED7]"
                         style={{ backgroundColor: c.value }}
                         title={c.label}
                       />
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedTextColor(null);
-                      applyFormatToSelection({ textColor: null });
-                      setTextColorMenuOpen(false);
-                    }}
-                    className="mt-2 w-full rounded border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                  >
-                    Clear color
-                  </button>
+                  <div className="border-t border-gray-100 px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTextColor(null);
+                        applyFormatToSelection({ textColor: null });
+                        setTextColorMenuOpen(false);
+                      }}
+                      className="w-full rounded-md px-2 py-1 text-left text-xs font-medium text-gray-500 transition hover:bg-gray-50"
+                    >
+                      Clear color
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-            <select
+            <BrandSelect
               value={selectedFontFamily ?? ''}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                setSelectedFontFamily(v);
-                applyFormatToSelection({ fontFamily: v });
+              onValueChange={(v) => {
+                const next = v || null;
+                setSelectedFontFamily(next);
+                applyFormatToSelection({ fontFamily: next });
               }}
               disabled={!hasSelection}
-              className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 max-w-[120px]"
-              data-testid="format-font-family"
-              title="Font family"
-            >
-              {FONT_FAMILIES.map((f) => (
-                <option key={f.id} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedFontSize ?? CELL_FONT_SIZE}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10) || CELL_FONT_SIZE;
-                setSelectedFontSize(v);
-                applyFormatToSelection({ fontSize: v });
+              ariaLabel="Font family"
+              testId="format-font-family"
+              widthClass="min-w-[7rem] max-w-[8rem]"
+              renderValue={(val) => {
+                const match = FONT_FAMILIES.find((f) => f.value === val);
+                return match?.label ?? 'Default';
+              }}
+              options={FONT_FAMILIES.map((f) => ({
+                value: f.value,
+                label: f.label,
+                style: f.value ? { fontFamily: f.value } : undefined,
+              }))}
+            />
+            <BrandSelect
+              value={String(selectedFontSize ?? CELL_FONT_SIZE)}
+              onValueChange={(v) => {
+                const n = parseInt(v, 10) || CELL_FONT_SIZE;
+                setSelectedFontSize(n);
+                applyFormatToSelection({ fontSize: n });
               }}
               disabled={!hasSelection}
-              className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 w-14"
-              data-testid="format-font-size"
-              title="Font size"
-            >
-              {FONT_SIZES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Font size"
+              testId="format-font-size"
+              widthClass="w-16"
+              renderValue={(val) => val}
+              options={FONT_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
+            />
           </div>
           <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
             <div className="relative">
@@ -5554,10 +5563,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 disabled={!hasSelection}
                 title="Currency"
                 data-format-currency-trigger
-                className={`flex h-8 w-8 items-center justify-center rounded border transition-colors disabled:opacity-60 text-base font-medium ${
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition disabled:opacity-60 text-base font-medium ${
                   selectedNumberFormat?.type === 'CURRENCY'
-                    ? 'border-blue-300 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
                 data-testid="format-currency"
               >
@@ -5565,43 +5574,46 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               </button>
               {currencyMenuOpen && (
                 <div
-                  className="absolute left-0 mt-1 w-32 rounded-md border border-gray-200 bg-white shadow-lg z-30 py-1"
+                  className="absolute left-0 mt-1 w-32 overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100 z-30"
                   role="menu"
                   data-currency-menu
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = selectedNumberFormat ? { ...selectedNumberFormat, type: 'GENERAL' as const, currencyCode: null } : null;
-                      setSelectedNumberFormat(next);
-                      applyFormatToSelection({ numberFormat: next });
-                      setCurrencyMenuOpen(false);
-                    }}
-                    className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    role="menuitem"
-                  >
-                    General
-                  </button>
-                  {CURRENCIES.map((c) => (
+                  <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
+                  <div className="py-1">
                     <button
-                      key={c.code}
                       type="button"
                       onClick={() => {
-                        const next: NumberFormat = {
-                          type: 'CURRENCY',
-                          currencyCode: c.code,
-                          decimalPlaces: selectedNumberFormat?.decimalPlaces ?? 2,
-                        };
+                        const next = selectedNumberFormat ? { ...selectedNumberFormat, type: 'GENERAL' as const, currencyCode: null } : null;
                         setSelectedNumberFormat(next);
                         applyFormatToSelection({ numberFormat: next });
                         setCurrencyMenuOpen(false);
                       }}
-                      className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                       role="menuitem"
                     >
-                      {c.label}
+                      General
                     </button>
-                  ))}
+                    {CURRENCIES.map((c) => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => {
+                          const next: NumberFormat = {
+                            type: 'CURRENCY',
+                            currencyCode: c.code,
+                            decimalPlaces: selectedNumberFormat?.decimalPlaces ?? 2,
+                          };
+                          setSelectedNumberFormat(next);
+                          applyFormatToSelection({ numberFormat: next });
+                          setCurrencyMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                        role="menuitem"
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -5617,10 +5629,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               }}
               disabled={!hasSelection}
               title="Percent"
-              className={`flex h-8 w-8 items-center justify-center rounded border transition-colors disabled:opacity-60 ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition disabled:opacity-60 ${
                 selectedNumberFormat?.type === 'PERCENT'
-                  ? 'border-blue-300 bg-blue-50 text-blue-700 font-semibold'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-[#3CCED7]/10 text-[#0E8A96] ring-1 ring-[#3CCED7]/30 font-semibold'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
               data-testid="format-percent"
             >
@@ -5638,7 +5650,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               }}
               disabled={!hasSelection}
               title="Decrease decimals"
-              className="flex h-8 w-8 flex-col items-center justify-center rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60 pt-0.5"
+              className="inline-flex h-8 w-8 flex-col items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 pt-0.5"
               data-testid="format-decimal-decrease"
             >
               <span className="text-xs font-medium leading-tight">.0</span>
@@ -5656,7 +5668,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               }}
               disabled={!hasSelection}
               title="Increase decimals"
-              className="flex h-8 w-8 flex-col items-center justify-center rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60 pt-0.5"
+              className="inline-flex h-8 w-8 flex-col items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 pt-0.5"
               data-testid="format-decimal-increase"
             >
               <span className="text-xs font-medium leading-tight">.00</span>
@@ -5773,14 +5785,14 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             <div className="px-3 py-2 border-b border-gray-100">
               <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-gray-600">
                 <span>Filter</span>
-                {hasColumnFilter(sortMenu.colIndex) ? <Check className="h-3 w-3 text-blue-600" /> : null}
+                {hasColumnFilter(sortMenu.colIndex) ? <Check className="h-3 w-3 text-[#3CCED7]" /> : null}
               </div>
               <input
                 type="text"
                 value={getActiveFilterExpression(sortMenu.colIndex)}
                 onChange={(e) => handleColumnFilterChange(sortMenu.colIndex, e.target.value)}
                 placeholder="e.g. >= 7, = abc"
-                className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-900 focus:border-blue-400 focus:outline-none"
+                className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                 aria-label={`Filter column ${columnIndexToLabel(sortMenu.colIndex)}`}
               />
             </div>
@@ -5792,7 +5804,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               role="menuitem"
             >
               <span>Sort A → Z</span>
-              {getActiveSortDirection(sortMenu.colIndex) === 'asc' ? <Check className="h-3.5 w-3.5 text-blue-600" /> : null}
+              {getActiveSortDirection(sortMenu.colIndex) === 'asc' ? <Check className="h-3.5 w-3.5 text-[#3CCED7]" /> : null}
             </button>
             <button
               type="button"
@@ -5802,7 +5814,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               role="menuitem"
             >
               <span>Sort Z → A</span>
-              {getActiveSortDirection(sortMenu.colIndex) === 'desc' ? <Check className="h-3.5 w-3.5 text-blue-600" /> : null}
+              {getActiveSortDirection(sortMenu.colIndex) === 'desc' ? <Check className="h-3.5 w-3.5 text-[#3CCED7]" /> : null}
             </button>
           </div>,
           document.body
@@ -5826,7 +5838,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             e.stopPropagation();
             handleFormulaBarKeyDown(e);
           }}
-          className="w-full rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+          className="w-full rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
           disabled={!activeCell}
         />
       </div>
@@ -5845,7 +5857,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   value={sheetsImportUrl}
                   onChange={(e) => setSheetsImportUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                   disabled={sheetsImportLoading}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleImportGoogleSheets(); }}
                   autoFocus
@@ -5888,7 +5900,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 <select
                   value={selectedXlsxSheet}
                   onChange={(e) => setSelectedXlsxSheet(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   disabled={isImporting}
                 >
                   {xlsxImport.sheetNames.map((name) => (
@@ -5908,7 +5920,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   <button
                     type="button"
                     onClick={handleConfirmXlsxImport}
-                    className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="rounded bg-[#3CCED7] px-3 py-1 text-xs font-semibold text-white hover:bg-[#2AB5BD] disabled:opacity-60"
                     disabled={isImporting || !selectedXlsxSheet}
                   >
                     Import
@@ -5982,7 +5994,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                 <th
                   key={colIndex}
                   className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center relative overflow-visible ${
-                    isColumnHeaderSelected(colIndex) ? 'bg-blue-100' : 'bg-gray-200'
+                    isColumnHeaderSelected(colIndex) ? 'bg-[#3CCED7]/15' : 'bg-gray-200'
                   }`}
                   style={{ width: `${colWidth}px`, minWidth: `${colWidth}px`, ...headerCellStyle }}
                   onClick={() => handleColumnHeaderClick(colIndex)}
@@ -6006,7 +6018,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     >
                       <ChevronDown className="h-3 w-3" />
                       {hasColumnFilter(colIndex) ? (
-                        <Check className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-white text-blue-600" />
+                        <Check className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-white text-[#3CCED7]" />
                       ) : null}
                     </button>
                   </div>
@@ -6090,7 +6102,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   {/* Row Number */}
                   <td
                     className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center sticky left-0 z-10 relative overflow-visible ${
-                      isRowHeaderSelected(row) ? 'bg-blue-100' : 'bg-gray-100'
+                      isRowHeaderSelected(row) ? 'bg-[#3CCED7]/15' : 'bg-gray-100'
                     }`}
                     style={{ ...rowBaseStyle, ...frozenStickyStyle }}
                     data-testid={`row-header-${row}`}
@@ -6151,25 +6163,25 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     // Determine cell styling based on selection state
                     let cellClassName = 'border border-gray-300 p-0 relative align-top';
                     if (isEditing) {
-                      cellClassName += ' ring-2 ring-blue-600 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isActive && isInSelection) {
                       // Active cell within selection: thicker border
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     } else if (isActive) {
                       // Active cell without selection
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isInSelection) {
                       // Cell in selection range (but not active)
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-100';
+                        cellClassName += ' bg-[#3CCED7]/15';
                       }
                     }
                     if (isCellInFillPreview(row, col)) {
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     }
                     if (isHighlighted) {
@@ -6238,7 +6250,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                         )}
                         {showFillHandle && (
                           <div
-                            className="absolute bottom-0 right-0 h-2 w-2 bg-blue-600 border border-white cursor-crosshair"
+                            className="absolute bottom-0 right-0 h-2 w-2 bg-[#3CCED7] border border-white cursor-crosshair"
                             onPointerDown={(e) => handleFillHandlePointerDown(e, row, col)}
                           />
                         )}
@@ -6294,7 +6306,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                   {/* Row Number */}
                   <td
                     className={`border border-gray-300 text-xs font-semibold text-gray-600 text-center sticky left-0 z-10 relative overflow-visible ${
-                      isRowHeaderSelected(row) ? 'bg-blue-100' : 'bg-gray-100'
+                      isRowHeaderSelected(row) ? 'bg-[#3CCED7]/15' : 'bg-gray-100'
                     }`}
                     style={{ ...rowBaseStyle, ...frozenStickyStyle }}
                     data-testid={`row-header-${row}`}
@@ -6355,25 +6367,25 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     // Determine cell styling based on selection state
                     let cellClassName = 'border border-gray-300 p-0 relative align-top';
                     if (isEditing) {
-                      cellClassName += ' ring-2 ring-blue-600 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isActive && isInSelection) {
                       // Active cell within selection: thicker border
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     } else if (isActive) {
                       // Active cell without selection
-                      cellClassName += ' ring-2 ring-blue-500 ring-inset';
+                      cellClassName += ' ring-2 ring-[#3CCED7] ring-inset';
                     } else if (isInSelection) {
                       // Cell in selection range (but not active)
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-100';
+                        cellClassName += ' bg-[#3CCED7]/15';
                       }
                     }
                     if (isCellInFillPreview(row, col)) {
                       if (!hasHighlight) {
-                        cellClassName += ' bg-blue-50';
+                        cellClassName += ' bg-[#3CCED7]/10';
                       }
                     }
                     if (isHighlighted) {
@@ -6442,7 +6454,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                         )}
                         {showFillHandle && (
                           <div
-                            className="absolute bottom-0 right-0 h-2 w-2 bg-blue-600 border border-white cursor-crosshair"
+                            className="absolute bottom-0 right-0 h-2 w-2 bg-[#3CCED7] border border-white cursor-crosshair"
                             onPointerDown={(e) => handleFillHandlePointerDown(e, row, col)}
                           />
                         )}
@@ -6493,13 +6505,13 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                     setShowAddRowsUI(false);
                   }
                 }}
-                className="w-24 rounded border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:border-blue-400 focus:outline-none"
+                className="w-24 rounded border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:border-[#3CCED7] focus:outline-none"
                 autoFocus
               />
               <button
                 type="button"
                 onClick={handleAddRows}
-                className="rounded bg-blue-600 px-3 py-1 text-sm font-semibold text-white hover:bg-blue-700"
+                className="rounded bg-[#3CCED7] px-3 py-1 text-sm font-semibold text-white hover:bg-[#2AB5BD]"
               >
                 Add
               </button>

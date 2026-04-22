@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MessageSquare, Plus, Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
@@ -8,6 +8,7 @@ import { useChatStore } from '@/lib/chatStore';
 import { useChatData } from '@/hooks/useChatData';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { useProjectMemberRoles } from '@/hooks/useProjectMemberRoles';
+import { useProjectMembers } from '@/hooks/useProjectMembers';
 import ProjectSelector from './ProjectSelector';
 import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
@@ -30,12 +31,16 @@ export default function MessagePageContent() {
   const setCurrentChat = useChatStore(state => state.setCurrentChat);
   const chatsByProject = useChatStore(state => state.chatsByProject);
   // Get chats for the selected project only (independent from widget)
-  const chats = selectedProjectId ? (chatsByProject[selectedProjectId] || []) : [];
+  const chats = useMemo(
+    () => (selectedProjectId ? (chatsByProject[selectedProjectId] || []) : []),
+    [chatsByProject, selectedProjectId]
+  );
 
   const { roleByUserId } = useProjectMemberRoles(selectedProjectId);
+  const { members: projectMembers, isLoading: isLoadingMembers } = useProjectMembers(selectedProjectId);
   
   // Fetch chats for selected project
-  const { fetchChats, isLoading } = useChatData({
+  const { fetchChats, createNewChat, isLoading } = useChatData({
     projectId: selectedProjectId || undefined,
     autoFetch: false,
   });
@@ -191,6 +196,35 @@ export default function MessagePageContent() {
     fetchChats();
   };
 
+  const handleStartDM = useCallback(async (targetUserId: number) => {
+    if (!selectedProjectId) return;
+
+    // Check if a DM thread already exists with this user
+    const existingChat = chats.find(
+      (c) =>
+        c.type === 'private' &&
+        c.participants?.some((p) => p.user.id === targetUserId)
+    );
+
+    if (existingChat) {
+      setCurrentChat(existingChat.id);
+      replaceMessagesQuery({ projectId: selectedProjectId, chatId: existingChat.id, messageId: null });
+      return;
+    }
+
+    try {
+      const newChat = await createNewChat({
+        type: 'private',
+        project_id: selectedProjectId,
+        participant_ids: [targetUserId],
+      });
+      setCurrentChat(newChat.id);
+      replaceMessagesQuery({ projectId: selectedProjectId, chatId: newChat.id, messageId: null });
+    } catch {
+      // createNewChat already shows a toast on error
+    }
+  }, [selectedProjectId, chats, createNewChat, setCurrentChat, replaceMessagesQuery]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -201,7 +235,7 @@ export default function MessagePageContent() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
+              <MessageSquare className="w-6 h-6 text-[#3CCED7]" />
               <h1 className="text-xl font-semibold text-gray-900">Messages</h1>
             </div>
             
@@ -221,7 +255,7 @@ export default function MessagePageContent() {
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
             data-testid="messages-search"
           />
         </div>
@@ -237,6 +271,9 @@ export default function MessagePageContent() {
         onCreateChannel={handleCreateChannel}
         roleByUserId={roleByUserId}
         isLoadingChats={isLoading}
+        projectMembers={projectMembers}
+        isLoadingMembers={isLoadingMembers}
+        onStartDM={handleStartDM}
         chatListEmptyState={
           !selectedProjectId ? (
             <div className="flex items-center justify-center p-6 text-center">

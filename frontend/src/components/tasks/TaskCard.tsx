@@ -72,7 +72,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, onDelete, index }) =
       case 'UNDER_REVIEW':
         return 'bg-yellow-50 text-yellow-600 border-yellow-100';
       case 'SUBMITTED':
-        return 'bg-blue-50 text-blue-600 border-blue-100';
+        return 'bg-[#3CCED7]/10 text-[#3CCED7] border-[#3CCED7]/20';
       case 'REJECTED':
         return 'bg-red-50 text-red-600 border-red-100';
       case 'DRAFT':
@@ -91,7 +91,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, onDelete, index }) =
       case 'retrospective':
         return 'bg-orange-50 text-orange-600 border-orange-100';
       case 'report':
-        return 'bg-blue-50 text-blue-600 border-blue-100';
+        return 'bg-[#3CCED7]/10 text-[#3CCED7] border-[#3CCED7]/20';
       case 'scaling':
         return 'bg-green-50 text-green-600 border-green-100';
       case 'alert':

@@ -164,7 +164,7 @@ function InlineUserSelector({
   return (
     <span
       onClick={startEdit}
-      className={`cursor-pointer hover:text-blue-600 transition-colors ${className}`}
+      className={`cursor-pointer hover:text-[#0E8A96] transition-colors ${className}`}
       title="Click to edit"
     >
       {triggerContent}

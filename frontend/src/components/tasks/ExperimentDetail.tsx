@@ -271,7 +271,7 @@ export default function ExperimentDetail({
                 localStatus === "running"
                   ? "bg-green-50 text-green-800"
                   : localStatus === "completed"
-                  ? "bg-blue-50 text-blue-800"
+                  ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                   : localStatus === "paused"
                   ? "bg-yellow-50 text-yellow-800"
                   : localStatus === "cancelled"

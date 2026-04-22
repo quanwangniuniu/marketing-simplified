@@ -279,7 +279,7 @@ export function MeetingActionItemsSection({
             One-click <span className="font-medium text-gray-800">Convert</span> uses smart defaults.
             <Link
               href={tasksModuleHref}
-              className="ml-1.5 font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-800"
+              className="ml-1.5 font-medium text-[#3CCED7] underline decoration-blue-600/30 underline-offset-2 hover:text-[#1a9ba3]"
             >
               Open Tasks module (this project)
             </Link>
@@ -296,13 +296,13 @@ export function MeetingActionItemsSection({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           placeholder="New action item — e.g. Send revised media plan to client"
-          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
         />
         <input
           value={newDescription}
           onChange={(e) => setNewDescription(e.target.value)}
           placeholder="Context (optional)"
-          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
         />
       </div>
 
@@ -327,7 +327,7 @@ export function MeetingActionItemsSection({
           <select
             value={typeDraft || (taskTypes[0]?.value ?? '')}
             onChange={(e) => setTypeDraft(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
           >
             {taskTypes.length === 0 ? (
               <option value="">Loading types…</option>
@@ -343,7 +343,7 @@ export function MeetingActionItemsSection({
           <select
             value={priorityDraft}
             onChange={(e) => setPriorityDraft(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
           >
             {PRIORITY_OPTIONS.map((p) => (
               <option key={p} value={p}>
@@ -355,7 +355,7 @@ export function MeetingActionItemsSection({
           <select
             value={ownerIdDraft}
             onChange={(e) => setOwnerIdDraft(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
           >
             <option value="">Owner: me (default)</option>
             {projectMembers.map((m) => (
@@ -369,7 +369,7 @@ export function MeetingActionItemsSection({
             type="date"
             value={dueDateDraft}
             onChange={(e) => setDueDateDraft(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
           />
 
           <label className="inline-flex items-center gap-2 text-xs text-gray-700 md:col-span-2">
@@ -437,7 +437,7 @@ export function MeetingActionItemsSection({
                           {linkedTask?.id ? (
                             <Link
                               href={tasksModuleHref}
-                              className="font-medium text-blue-600 underline decoration-blue-600/30 underline-offset-2 hover:text-blue-800"
+                              className="font-medium text-[#3CCED7] underline decoration-blue-600/30 underline-offset-2 hover:text-[#1a9ba3]"
                             >
                               View in Tasks module
                             </Link>

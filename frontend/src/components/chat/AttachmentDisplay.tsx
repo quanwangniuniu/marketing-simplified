@@ -75,12 +75,12 @@ export default function AttachmentDisplay({ attachments, isOwnMessage = false }:
             key={attachment.id}
             className={`flex items-center gap-3 p-3 rounded-lg border ${
               isOwnMessage 
-                ? 'bg-blue-500 border-blue-400' 
+                ? 'bg-[#3CCED7] border-[#3CCED7]' 
                 : 'bg-gray-100 border-gray-200'
             }`}
           >
             <div className={`p-2 rounded-lg ${
-              isOwnMessage ? 'bg-blue-400' : 'bg-gray-200'
+              isOwnMessage ? 'bg-[#3CCED7]' : 'bg-gray-200'
             }`}>
               <FileText className={`w-5 h-5 ${
                 isOwnMessage ? 'text-white' : 'text-gray-600'
@@ -102,7 +102,7 @@ export default function AttachmentDisplay({ attachments, isOwnMessage = false }:
               onClick={() => handleDownload(attachment)}
               className={`p-2 rounded-lg transition-colors ${
                 isOwnMessage 
-                  ? 'hover:bg-blue-400 text-white' 
+                  ? 'hover:bg-[#3CCED7] text-white' 
                   : 'hover:bg-gray-200 text-gray-600'
               }`}
               aria-label="Download file"

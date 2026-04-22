@@ -380,11 +380,11 @@ const TimelineView = ({
             className="grid items-stretch bg-white"
             style={{ gridTemplateColumns: `${leftColumnWidth}px 1fr` }}
           >
-            <div className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600">
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-[#3CCED7]">
               <button
                 type="button"
                 onClick={() => onCreateTask?.(null)}
-                className="inline-flex items-center gap-2 rounded-md px-2 py-1 hover:bg-blue-50"
+                className="inline-flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[#3CCED7]/10"
               >
                 <Plus className="h-4 w-4" />
                 Create Task
@@ -405,7 +405,7 @@ const TimelineView = ({
                 onClick={() => handleScaleChange(option.value)}
                 className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
                   scale === option.value
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-[#3CCED7] text-white'
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >

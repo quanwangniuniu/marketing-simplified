@@ -80,7 +80,7 @@ export default function WorkflowEmptyState() {
 
       <a
         href="#"
-        className="mt-6 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
+        className="mt-6 inline-block text-sm font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
       >
         Learn more
       </a>

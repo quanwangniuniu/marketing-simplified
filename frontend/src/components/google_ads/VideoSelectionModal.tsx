@@ -250,7 +250,7 @@ const VideoSelectionModal: React.FC<VideoSelectionModalProps> = ({
       <div className="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-blue-600">
+          <h2 className="text-xl font-semibold text-[#3CCED7]">
             Select Videos
           </h2>
           <button
@@ -269,7 +269,7 @@ const VideoSelectionModal: React.FC<VideoSelectionModalProps> = ({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-[#3CCED7] text-[#3CCED7]'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -324,12 +324,12 @@ const VideoSelectionModal: React.FC<VideoSelectionModalProps> = ({
                         value={youtubeUrl}
                         onChange={(e) => setYoutubeUrl(e.target.value)}
                         placeholder="https://www.youtube.com/watch?v=..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
                       />
                       <button
                         onClick={handleYouTubeUrlSubmit}
                         disabled={isValidatingUrl || !youtubeUrl.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-[#3CCED7] text-white rounded-md hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         {isValidatingUrl ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -394,7 +394,7 @@ const VideoSelectionModal: React.FC<VideoSelectionModalProps> = ({
               className={`px-4 py-2 rounded-lg font-medium ${
                 disableContinue
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD]'
               }`}
             >
               Continue

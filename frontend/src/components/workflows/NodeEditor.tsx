@@ -211,7 +211,7 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
                   type="text"
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleNameUpdate();
@@ -266,7 +266,7 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
                     onClick={() => handleCategoryUpdate(category.value)}
                     className={`w-full text-left px-3 py-2 border rounded-md transition-colors ${
                       node.node_type === category.value
-                        ? "border-blue-500 bg-blue-50"
+                        ? "border-[#3CCED7] bg-[#3CCED7]/10"
                         : "border-gray-300 hover:bg-gray-50"
                     }`}
                   >
@@ -308,7 +308,7 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
                       key={color.value}
                       onClick={() => handleColorUpdate(color.value)}
                       className={`flex items-center gap-2 p-2 border rounded-md hover:bg-gray-50 ${
-                        node.color === color.value ? "ring-2 ring-blue-500" : ""
+                        node.color === color.value ? "ring-2 ring-[#3CCED7]" : ""
                       }`}
                     >
                       <span
@@ -342,12 +342,12 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
                 Properties
-                <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium bg-[#3CCED7]/15 text-[#1a9ba3] rounded">
                   {Object.keys(node.data?.properties || {}).length}
                 </span>
               </label>
               <button
-                className="text-blue-600 hover:text-blue-700 transition-colors"
+                className="text-[#3CCED7] hover:text-[#1a9ba3] transition-colors"
                 onClick={() => setPropertiesOpen(!propertiesOpen)}
               >
                 <Plus className="h-4 w-4" />
@@ -395,13 +395,13 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
 
                 {/* Add new property form */}
                 {isAddingProperty ? (
-                  <div className="p-3 bg-white rounded-lg border-2 border-blue-500 space-y-2">
+                  <div className="p-3 bg-white rounded-lg border-2 border-[#3CCED7] space-y-2">
                     <input
                       type="text"
                       value={newPropertyKey}
                       onChange={(e) => setNewPropertyKey(e.target.value)}
                       placeholder="Property key"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                       autoFocus
                     />
                     <input
@@ -409,12 +409,12 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
                       value={newPropertyValue}
                       onChange={(e) => setNewPropertyValue(e.target.value)}
                       placeholder="Property value"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={handleAddProperty}
-                        className="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                        className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD]"
                       >
                         Add
                       </button>
@@ -433,7 +433,7 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
                 ) : (
                   <button
                     onClick={() => setIsAddingProperty(true)}
-                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:border-[#3CCED7] hover:text-[#3CCED7] hover:bg-[#3CCED7]/10 transition-colors"
                   >
                     + Add new property
                   </button>
@@ -448,7 +448,7 @@ export default function NodeEditor({ nodeId, workflowId }: NodeEditorProps) {
               <label className="block text-sm font-medium text-gray-700">Transitions</label>
               <button
                 onClick={() => setIsConnectionDialogOpen(true)}
-                className="text-blue-600 hover:text-blue-700"
+                className="text-[#3CCED7] hover:text-[#1a9ba3]"
               >
                 <Plus className="h-4 w-4" />
               </button>

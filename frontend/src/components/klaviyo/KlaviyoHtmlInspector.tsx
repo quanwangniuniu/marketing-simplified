@@ -31,7 +31,7 @@ const KlaviyoHtmlInspector: React.FC<KlaviyoHtmlInspectorProps> = ({
             value={htmlContent}
             onChange={(e) => handleContentChange(e.target.value)}
             placeholder="Enter your HTML code here..."
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono min-h-[200px] resize-y"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] font-mono min-h-[200px] resize-y"
             spellCheck={false}
           />
           <p className="text-xs text-gray-500">

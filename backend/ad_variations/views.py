@@ -178,6 +178,7 @@ class VariationStatusChangeView(CampaignContextMixin, APIView):
 class VariationStatusHistoryListView(CampaignContextMixin, generics.ListAPIView):
     serializer_class = VariationStatusHistorySerializer
     pagination_class = StatusHistoryCursorPagination
+    filter_backends = []
 
     def get_queryset(self):
         campaign = self.get_campaign()

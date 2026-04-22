@@ -6,6 +6,7 @@ import CreateOrganizationModal from './CreateOrganizationModal';
 import InviteMembersModal from './InviteMembersModal';
 import useStripe from '@/hooks/useStripe';
 import { useAuthStore } from '@/lib/authStore';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface OrganizationContentProps {
   user: {
@@ -19,6 +20,25 @@ interface OrganizationContentProps {
       name: string;
     } | null;
   };
+}
+
+function OrganizationMembersSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          key={`organization-member-skeleton-${index}`}
+          className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg"
+        >
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function OrganizationContent({ user }: OrganizationContentProps) {
@@ -85,13 +105,13 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
             </div>
             <div className="text-xl font-semibold text-gray-700 mb-3">No Organization Found</div>
             <p className="text-gray-500 mb-6 max-w-md mx-auto">
-              You haven't joined any organization yet. Organization features like team management,
+              You haven&apos;t joined any organization yet. Organization features like team management,
               subscription plans, and usage tracking are not available.
             </p>
             <div className="space-y-3">
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="px-6 py-3 bg-gradient-to-r text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                className="px-6 py-3 bg-gradient-to-r text-white rounded-lg hover:from-[#3CCED7] hover:to-[#2AB5BD] transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               >
                 <Plus className="w-4 h-4 inline mr-2" strokeWidth={1.5} />
                 Create Organization
@@ -146,7 +166,11 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-sm font-medium text-gray-900">Members</span>
-                <span className="text-sm text-gray-500">{count}</span>
+                {loadingMembers ? (
+                  <Skeleton className="h-4 w-8" />
+                ) : (
+                  <span className="text-sm text-gray-500">{count}</span>
+                )}
               </div>
             </div>
           </div>
@@ -157,13 +181,14 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
             </div>
             <div className="space-y-3">
               {loadingMembers ? (
-                <div className="text-sm text-gray-500">Loading members...</div>
+                <OrganizationMembersSkeleton />
               ) : members.length === 0 ? (
                 <div className="text-sm text-gray-500">No members found.</div>
               ) : (
                 members.map((m) => (
                   <div key={m.id} className="flex items-center space-x-3 p-3 border border-gray-100 rounded-lg">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={m?.avatar || "/profile-avatar.svg"}
                         alt={m?.username || m?.email || 'User'}
@@ -204,7 +229,7 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
                           <button
                             key={pageNum}
                             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${isCurrentPage
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-[#3CCED7] text-white'
                               : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-900'
                               }`}
                             onClick={() => setPage(pageNum)}

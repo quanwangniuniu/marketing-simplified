@@ -88,7 +88,7 @@ export default function CreateOrganizationModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#3CCED7] to-[#3CCED7] rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -119,7 +119,7 @@ export default function CreateOrganizationModal({
               value={formData.name}
               onChange={handleInputChange}
               placeholder="Enter organization name"
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] transition-colors ${
                 errors.name ? 'border-red-300 bg-red-50' : 'border-gray-300'
               }`}
               disabled={loading}
@@ -141,7 +141,7 @@ export default function CreateOrganizationModal({
               onChange={handleInputChange}
               placeholder="Brief description of your organization"
               rows={3}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] transition-colors resize-none"
               disabled={loading}
             />
           </div>
@@ -158,7 +158,7 @@ export default function CreateOrganizationModal({
               value={formData.email_domain}
               onChange={handleInputChange}
               placeholder="company.com"
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] transition-colors ${
                 errors.email_domain ? 'border-red-300 bg-red-50' : 'border-gray-300'
               }`}
               disabled={loading}
@@ -184,7 +184,7 @@ export default function CreateOrganizationModal({
             <button
               type="submit"
               disabled={loading || !formData.name.trim()}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-[#3CCED7] to-[#3CCED7] text-white rounded-lg hover:from-[#3CCED7] hover:to-[#2AB5BD] transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none"
             >
               {loading ? (
                 <div className="flex items-center justify-center">

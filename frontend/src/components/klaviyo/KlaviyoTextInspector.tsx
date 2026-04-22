@@ -153,7 +153,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
             <select
               value={fontFamily}
               onChange={(e) => handleStyleChange?.({ fontFamily: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 appearance-none bg-white"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7] appearance-none bg-white"
             >
               <option value="Arial">Arial</option>
               <option value="Helvetica">Helvetica</option>
@@ -209,7 +209,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
               onClick={() => handleStyleChange?.({ textAlign: "left" })}
               className={`p-2 border rounded-lg ${
                 textAlign === "left"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -220,7 +220,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
               onClick={() => handleStyleChange?.({ textAlign: "center" })}
               className={`p-2 border rounded-lg ${
                 textAlign === "center"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -231,7 +231,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
               onClick={() => handleStyleChange?.({ textAlign: "right" })}
               className={`p-2 border rounded-lg ${
                 textAlign === "right"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -242,7 +242,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
               onClick={() => handleStyleChange?.({ textAlign: "justify" })}
               className={`p-2 border rounded-lg ${
                 textAlign === "justify"
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-[#3CCED7] text-white border-[#3CCED7]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
@@ -310,7 +310,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
             </button>
           </div>
           <select
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
             value={borderStyle}
             onChange={(e) => {
               const value = e.target.value as TextStyles["borderStyle"];
@@ -351,7 +351,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
                       : undefined,
                   })
                 }
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
               />
               <span className="text-xs text-gray-500">px</span>
               <button
@@ -427,7 +427,7 @@ const KlaviyoTextInspector: React.FC<KlaviyoTextInspectorProps> = ({
               />
               <span
                 className={`w-11 h-6 flex items-center rounded-full p-1 transition ${
-                  isFullWidthMobile ? "bg-blue-600" : "bg-gray-300"
+                  isFullWidthMobile ? "bg-[#3CCED7]" : "bg-gray-300"
                 }`}
               >
                 <span

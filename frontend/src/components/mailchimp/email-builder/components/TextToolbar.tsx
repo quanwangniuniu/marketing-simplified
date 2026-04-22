@@ -253,7 +253,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                 // Apply styles
                 handleStyleChange(styles);
               }}
-              className="bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
             >
               <option>Paragraph</option>
               <option>Heading 1</option>
@@ -266,7 +266,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
               onChange={(e) =>
                 handleStyleChange({ fontFamily: e.target.value })
               }
-              className="bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
             >
               <option>Helvetica</option>
               <option>Arial</option>
@@ -278,7 +278,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
               onChange={(e) =>
                 handleStyleChange({ fontSize: parseInt(e.target.value) || 16 })
               }
-              className="w-16 bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="w-16 bg-white border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#3CCED7]"
             />
           </div>
         ),
@@ -378,7 +378,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
               type="button"
               onClick={handleOpenTextLinkModal}
               className={`${baseToolbarButtonClasses} ${
-                linkButtonIsActive ? "bg-gray-200 text-blue-700" : ""
+                linkButtonIsActive ? "bg-gray-200 text-[#1a9ba3]" : ""
               }`}
               title="Add text link"
             >
@@ -473,13 +473,13 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                           }}
                           className={`w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-gray-100 ${
                             isSelected
-                              ? "bg-blue-50 text-blue-700"
+                              ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                               : "text-gray-700"
                           }`}
                         >
                           <span>{option.label}</span>
                           {isSelected && (
-                            <Check className="h-4 w-4 text-blue-700" />
+                            <Check className="h-4 w-4 text-[#1a9ba3]" />
                           )}
                         </button>
                       );
@@ -520,7 +520,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                         }}
                         className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 ${
                           currentStyles.lineHeight === option.value
-                            ? "bg-blue-50 text-blue-700"
+                            ? "bg-[#3CCED7]/10 text-[#1a9ba3]"
                             : "text-gray-700"
                         }`}
                       >
@@ -581,7 +581,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                       min="0"
                       step="1"
                       placeholder="0"
-                      className="w-16 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-600 text-center"
+                      className="w-16 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-[#3CCED7] text-center"
                       autoFocus
                     />
                   </div>
@@ -981,7 +981,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                 onChange={(e) =>
                   setTextLinkType(e.target.value as ButtonLinkType)
                 }
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
               >
                 {linkOptions.map((option) => (
                   <option key={option} value={option}>
@@ -994,13 +994,13 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                 value={textLinkValue}
                 placeholder={linkPlaceholders[textLinkType]}
                 onChange={(e) => setTextLinkValue(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
               />
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                className="h-4 w-4 text-[#3CCED7] border-gray-300 rounded"
                 checked={textLinkOpenInNewTab}
                 onChange={(e) => setTextLinkOpenInNewTab(e.target.checked)}
               />
@@ -1022,7 +1022,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                 disabled={!textLinkValue.trim()}
                 className={`flex-1 rounded-md px-3 py-2 text-sm text-white ${
                   textLinkValue.trim()
-                    ? "bg-blue-600 hover:bg-blue-700"
+                    ? "bg-[#3CCED7] hover:bg-[#2AB5BD]"
                     : "bg-blue-200 cursor-not-allowed"
                 }`}
               >
@@ -1113,7 +1113,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                         onClick={() => {}}
                         className={`${baseToolbarButtonClasses} ${
                           currentStyles.listType === "unordered"
-                            ? "border border-blue-600 bg-blue-50 text-blue-700"
+                            ? "border border-[#3CCED7] bg-[#3CCED7]/10 text-[#1a9ba3]"
                             : ""
                         }`}
                         title="Unordered list"
@@ -1125,7 +1125,7 @@ const TextToolbar: React.FC<TextToolbarProps> = ({
                         onClick={() => {}}
                         className={`${baseToolbarButtonClasses} ${
                           currentStyles.listType === "ordered"
-                            ? "border border-blue-600 bg-blue-50 text-blue-700"
+                            ? "border border-[#3CCED7] bg-[#3CCED7]/10 text-[#1a9ba3]"
                             : ""
                         }`}
                         title="Ordered list"

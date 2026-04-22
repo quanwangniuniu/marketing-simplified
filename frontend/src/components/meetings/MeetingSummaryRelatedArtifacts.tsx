@@ -32,7 +32,7 @@ export function MeetingSummaryRelatedArtifacts({
               <Link
                 key={item.id}
                 href={item.detail_url ?? item.url}
-                className="truncate text-sm text-blue-700/90 hover:underline"
+                className="truncate text-sm text-[#1a9ba3]/90 hover:underline"
               >
                 {item.title}
               </Link>

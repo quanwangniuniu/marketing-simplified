@@ -86,7 +86,7 @@ export default function InviteMembersModal({ isOpen, onClose, onInvited }: Invit
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto p-0 relative">
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-green-500 to-blue-600 p-6 rounded-t-lg flex justify-between items-center">
+        <div className="bg-gradient-to-r from-green-500 to-[#3CCED7] p-6 rounded-t-lg flex justify-between items-center">
           <h3 className="text-xl font-bold text-white">Invite Team Members</h3>
           <button onClick={handleClose} className="text-white hover:text-gray-200">
             <X className="w-6 h-6" />
@@ -112,14 +112,14 @@ export default function InviteMembersModal({ isOpen, onClose, onInvited }: Invit
                 onChange={(e) => setCurrentEmail(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Enter email address"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#3CCED7] focus:border-[#3CCED7] sm:text-sm"
                 disabled={inviteUsersLoading}
               />
               <button
                 type="button"
                 onClick={addEmail}
                 disabled={inviteUsersLoading || !currentEmail.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                className="px-4 py-2 bg-[#3CCED7] text-white rounded-md hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3CCED7] disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -172,7 +172,7 @@ export default function InviteMembersModal({ isOpen, onClose, onInvited }: Invit
           <button
             type="button"
             onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3CCED7]"
             disabled={inviteUsersLoading}
           >
             Cancel

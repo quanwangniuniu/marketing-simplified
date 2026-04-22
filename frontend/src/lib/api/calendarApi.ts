@@ -63,25 +63,25 @@ export interface CreateCalendarPayload {
 }
 
 export const CalendarAPI = {
-  listCalendars: () => api.get<CalendarDTO[]>("/api/v1/calendars/"),
+  listCalendars: () => api.get<CalendarDTO[]>("/api/calendars/"),
 
   createCalendar: (payload: CreateCalendarPayload) =>
-    api.post<CalendarDTO>("/api/v1/calendars/", payload),
+    api.post<CalendarDTO>("/api/calendars/", payload),
 
   listSubscriptions: () =>
-    api.get<CalendarSubscriptionDTO[]>("/api/v1/subscriptions/"),
+    api.get<CalendarSubscriptionDTO[]>("/api/subscriptions/"),
 
   updateSubscription: (
     subscriptionId: string,
     data: Partial<Pick<CalendarSubscriptionDTO, "color_override" | "is_hidden">>,
   ) =>
     api.patch<CalendarSubscriptionDTO>(
-      `/api/v1/subscriptions/${subscriptionId}/`,
+      `/api/subscriptions/${subscriptionId}/`,
       data,
     ),
 
   getDayView: (params: { date: string; calendar_ids?: string[] }) =>
-    api.get<CalendarViewResponse>("/api/v1/views/day/", {
+    api.get<CalendarViewResponse>("/api/views/day/", {
       params: {
         date: params.date,
         calendar_ids: params.calendar_ids?.join(","),
@@ -89,7 +89,7 @@ export const CalendarAPI = {
     }),
 
   getWeekView: (params: { start_date: string; calendar_ids?: string[] }) =>
-    api.get<CalendarViewResponse>("/api/v1/views/week/", {
+    api.get<CalendarViewResponse>("/api/views/week/", {
       params: {
         start_date: params.start_date,
         calendar_ids: params.calendar_ids?.join(","),
@@ -101,7 +101,7 @@ export const CalendarAPI = {
     month: number;
     calendar_ids?: string[];
   }) =>
-    api.get<CalendarViewResponse>("/api/v1/views/month/", {
+    api.get<CalendarViewResponse>("/api/views/month/", {
       params: {
         year: params.year,
         month: params.month,
@@ -114,7 +114,7 @@ export const CalendarAPI = {
     end_date?: string;
     calendar_ids?: string[];
   }) =>
-    api.get<CalendarViewResponse>("/api/v1/views/agenda/", {
+    api.get<CalendarViewResponse>("/api/views/agenda/", {
       params: {
         start_date: params.start_date,
         end_date: params.end_date,
@@ -123,19 +123,19 @@ export const CalendarAPI = {
     }),
 
   createEvent: (payload: Partial<EventDTO>) =>
-    api.post<EventDTO>("/api/v1/events/", payload),
+    api.post<EventDTO>("/api/events/", payload),
 
   // For now we do not send If-Match headers to avoid 412 conflicts
   // when the same user updates an event multiple times quickly.
   updateEvent: (eventId: string, payload: Partial<EventDTO>, _etag?: string) =>
-    api.patch<EventDTO>(`/api/v1/events/${eventId}/`, payload),
+    api.patch<EventDTO>(`/api/events/${eventId}/`, payload),
 
   deleteEvent: (eventId: string, _etag?: string) =>
-    api.delete<void>(`/api/v1/events/${eventId}/`),
+    api.delete<void>(`/api/events/${eventId}/`),
 
   // Fetch system-derived calendar events (from Decisions and Tasks, read-only)
   getDerivedEvents: (params: { start: string; end: string }) =>
-    api.get<{ count: number; results: DerivedCalendarEventDTO[] }>("/api/v1/derived-events/", {
+    api.get<{ count: number; results: DerivedCalendarEventDTO[] }>("/api/derived-events/", {
       params: {
         start: params.start,
         end: params.end,

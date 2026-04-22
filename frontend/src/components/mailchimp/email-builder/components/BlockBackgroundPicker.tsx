@@ -104,7 +104,7 @@ const BlockBackgroundPicker: React.FC<BlockBackgroundPickerProps> = ({
       onClick={() => handleBgSelect(color)}
       className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${
         selected
-          ? "border-blue-600 ring-2 ring-blue-200"
+          ? "border-[#3CCED7] ring-2 ring-blue-200"
           : "border-gray-200 hover:border-gray-300"
       }`}
       style={{ backgroundColor: color }}
@@ -117,7 +117,7 @@ const BlockBackgroundPicker: React.FC<BlockBackgroundPickerProps> = ({
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => setIsBlockBackgroundPickerOpen(false)}
-          className="flex items-center text-sm text-blue-700 hover:text-blue-800 gap-1"
+          className="flex items-center text-sm text-[#1a9ba3] hover:text-[#1a9ba3] gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
           Done
@@ -154,7 +154,7 @@ const BlockBackgroundPicker: React.FC<BlockBackgroundPickerProps> = ({
                   }}
                   className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${
                     isSelected
-                      ? "border-blue-600 ring-2 ring-blue-200"
+                      ? "border-[#3CCED7] ring-2 ring-blue-200"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                   style={
@@ -183,7 +183,7 @@ const BlockBackgroundPicker: React.FC<BlockBackgroundPickerProps> = ({
             <span className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Brand kit
             </span>
-            <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            <button className="text-sm text-[#3CCED7] hover:text-[#1a9ba3] font-medium">
               Edit
             </button>
           </div>

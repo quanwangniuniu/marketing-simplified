@@ -13,6 +13,7 @@ import { debugLog } from "@/lib/agentDebug"
 export function SpreadsheetView() {
   const [reports, setReports] = useState<ImportedCSVFile[]>([])
   const [selectedSheet, setSelectedSheet] = useState("")
+  const [reportsLoading, setReportsLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -23,6 +24,8 @@ export function SpreadsheetView() {
         debugLog("reports", "Loaded:", list.length)
       } catch {
         debugLog("reports", "Load failed")
+      } finally {
+        setReportsLoading(false)
       }
     }
     load()
@@ -52,9 +55,13 @@ export function SpreadsheetView() {
         selectedSheet={selectedSheet}
         onSheetChange={setSelectedSheet}
         onDelete={handleDelete}
+        loading={reportsLoading}
       />
-      <DataTable fileId={reports.find((r) => r.filename === selectedSheet)?.id ?? ""} />
-      <AnalysisResults filename={selectedSheet} />
+      <DataTable
+        fileId={reports.find((r) => r.filename === selectedSheet)?.id ?? ""}
+        loading={reportsLoading}
+      />
+      <AnalysisResults filename={selectedSheet} loading={reportsLoading} />
     </div>
   )
 }

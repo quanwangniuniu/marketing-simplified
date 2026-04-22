@@ -32,7 +32,7 @@ export function MeetingFilterPopoverForm({
   variant = 'default',
 }: MeetingFilterPopoverFormProps) {
   const selectClass =
-    'w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50';
+    'w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50';
 
   return (
     <div className={cn('space-y-4', className)}>

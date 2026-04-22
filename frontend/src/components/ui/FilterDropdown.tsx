@@ -100,7 +100,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
             relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border transition-colors duration-200
             ${error 
               ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+              : 'border-gray-300 focus:border-[#3CCED7] focus:ring-[#3CCED7]'
             }
             ${disabled || loading
               ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
@@ -120,7 +120,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
           </span>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
             {loading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#3CCED7]"></div>
             ) : (
               <ChevronDown 
                 className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${
@@ -146,9 +146,9 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
                     relative cursor-pointer select-none py-2 pl-10 pr-4 w-full text-left transition-colors duration-150
                     ${option.disabled 
                       ? 'text-gray-400 cursor-not-allowed' 
-                      : 'text-gray-900 hover:bg-blue-100 hover:text-blue-900'
+                      : 'text-gray-900 hover:bg-[#3CCED7]/15 hover:text-[#0f757a]'
                     }
-                    ${value === option.id ? 'bg-blue-50 text-blue-900' : ''}
+                    ${value === option.id ? 'bg-[#3CCED7]/10 text-[#0f757a]' : ''}
                   `}
                   onClick={() => handleOptionClick(option.id)}
                   disabled={option.disabled}
@@ -161,7 +161,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
                     {option.name}
                   </span>
                   {value === option.id && (
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[#3CCED7]">
                       <Check className="h-5 w-5" />
                     </span>
                   )}

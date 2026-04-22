@@ -175,7 +175,7 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="e.g. Q1 Performance Launch"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 focus:border-[#3CCED7] focus:ring-2 focus:ring-blue-200 transition"
             />
           </div>
         );
@@ -191,8 +191,8 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
                   onClick={() => toggleType(option.value)}
                   className={`px-3 py-2 rounded-full border text-sm transition ${
                     selectedTypes.includes(option.value)
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700'
+                      ? 'bg-[#3CCED7] text-white border-[#3CCED7] shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-[#1a9ba3]'
                   }`}
                 >
                   {option.label}
@@ -216,12 +216,12 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
                   }
                 }}
                 placeholder="name@company.com"
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
+                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 focus:border-[#3CCED7] focus:ring-2 focus:ring-blue-200 transition"
               />
               <button
                 type="button"
                 onClick={addInvite}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-60"
+                className="px-4 py-2 rounded-lg bg-[#3CCED7] text-white font-medium hover:bg-[#2AB5BD] transition disabled:opacity-60"
                 disabled={!inviteInput}
               >
                 Add
@@ -232,13 +232,13 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
                 {invites.map((email) => (
                   <span
                     key={email}
-                    className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-800 px-3 py-1 text-sm"
+                    className="inline-flex items-center gap-2 rounded-full bg-[#3CCED7]/10 text-[#1a9ba3] px-3 py-1 text-sm"
                   >
                     {email}
                     <button
                       type="button"
                       onClick={() => removeInvite(email)}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-[#3CCED7] hover:text-[#1a9ba3]"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -269,21 +269,21 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
           <div className="px-8 pt-8 pb-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-blue-50">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <div className="text-xs uppercase tracking-[0.2em] text-blue-500 flex items-center gap-2">
+                <div className="text-xs uppercase tracking-[0.2em] text-[#3CCED7] flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
                   Create Project
                 </div>
                 <h2 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
                   {steps[step].title}
-                  {step === 1 && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
-                  {step === 2 && <Users className="w-5 h-5 text-blue-600" />}
+                  {step === 1 && <CheckCircle2 className="w-5 h-5 text-[#3CCED7]" />}
+                  {step === 2 && <Users className="w-5 h-5 text-[#3CCED7]" />}
                 </h2>
                 <p className="text-gray-600">{steps[step].description}</p>
               </div>
               <div className="text-sm font-medium text-gray-600">Step {step + 1} of {steps.length}</div>
             </div>
             <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div className="h-full bg-[#3CCED7] transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
 
@@ -298,7 +298,7 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
 
           <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Users className="w-4 h-4 text-blue-600" />
+              <Users className="w-4 h-4 text-[#3CCED7]" />
               We’ll keep everyone in sync once the project is created.
             </div>
             <div className="flex items-center gap-3">
@@ -318,7 +318,7 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-70"
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-[#3CCED7] rounded-lg hover:bg-[#2AB5BD] disabled:opacity-70"
                   disabled={submitting}
                 >
                   Next
@@ -339,7 +339,7 @@ const CreateProjectModal = ({ open, onClose, onCreated }: CreateProjectModalProp
                   <button
                     type="button"
                     onClick={() => handleSubmit(false)}
-                    className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-70"
+                    className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-[#3CCED7] rounded-lg hover:bg-[#2AB5BD] disabled:opacity-70"
                     disabled={submitting}
                   >
                     {submitting ? 'Creating...' : 'Create project'}

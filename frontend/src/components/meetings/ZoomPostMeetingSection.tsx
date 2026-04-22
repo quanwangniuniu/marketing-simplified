@@ -52,7 +52,7 @@ export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSecti
           {top.showSettingsLink ? (
             <>
               {' '}
-              <Link href="/settings?open_zoom=1" className="font-medium text-blue-700 underline">
+              <Link href="/settings?open_zoom=1" className="font-medium text-[#1a9ba3] underline">
                 Settings
               </Link>
             </>
@@ -139,7 +139,7 @@ export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSecti
                         href={f.download_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 text-blue-700 underline"
+                        className="inline-flex items-center gap-0.5 text-[#1a9ba3] underline"
                       >
                         Download
                         <ExternalLink className="h-3 w-3" />
@@ -150,7 +150,7 @@ export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSecti
                         href={f.play_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-0.5 text-blue-700 underline"
+                        className="inline-flex items-center gap-0.5 text-[#1a9ba3] underline"
                       >
                         Play
                         <ExternalLink className="h-3 w-3" />

@@ -1052,7 +1052,7 @@ export function MeetingDocumentEditor({ projectId, meetingId }: Props) {
           }}
           onScroll={() => setScrollLayoutTick((t) => t + 1)}
           onBlur={() => { void persistViaHttp(latestContentRef.current); }}
-          className="relative z-0 min-h-[420px] w-full overflow-auto rounded-md border border-gray-300 px-3 py-2 text-sm leading-6 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:my-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-700 [&_p]:my-1"
+          className="relative z-0 min-h-[420px] w-full overflow-auto rounded-md border border-gray-300 px-3 py-2 text-sm leading-6 focus:border-[#3CCED7] focus:outline-none focus:ring-1 focus:ring-[#3CCED7] [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:my-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:text-gray-700 [&_p]:my-1"
         />
         
         <div className="pointer-events-none absolute inset-0 z-[100] overflow-visible" aria-hidden>

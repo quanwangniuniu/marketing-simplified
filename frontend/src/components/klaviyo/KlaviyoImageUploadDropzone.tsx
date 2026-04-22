@@ -57,7 +57,7 @@ const KlaviyoImageUploadDropzone: React.FC<KlaviyoImageUploadDropzoneProps> = ({
         }
       }}
       className={`border-2 border-dashed rounded-lg h-72 flex flex-col items-center justify-center text-gray-600 ${
-        isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+        isDragging ? 'border-[#3CCED7] bg-[#3CCED7]/10' : 'border-gray-300'
       } cursor-pointer select-none`}
       role="button"
       tabIndex={0}

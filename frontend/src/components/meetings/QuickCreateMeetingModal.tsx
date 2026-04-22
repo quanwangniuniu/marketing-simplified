@@ -185,8 +185,8 @@ export function QuickCreateMeetingModal({
                   className={cn(
                     'flex h-24 flex-col items-center justify-center rounded-xl border text-center text-sm font-medium transition',
                     active
-                      ? 'border-blue-500 bg-blue-500 text-white shadow-md'
-                      : 'border-gray-200 bg-white text-gray-800 hover:border-blue-300 hover:bg-blue-50/40',
+                      ? 'border-[#3CCED7] bg-[#3CCED7] text-white shadow-md'
+                      : 'border-gray-200 bg-white text-gray-800 hover:border-blue-300 hover:bg-[#3CCED7]/10/40',
                   )}
                 >
                   <Icon className="mb-2 h-5 w-5" />
@@ -200,7 +200,7 @@ export function QuickCreateMeetingModal({
               className={cn(
                 'flex h-24 flex-col items-center justify-center rounded-xl border border-dashed text-sm font-medium transition',
                 showCustomTemplates
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  ? 'border-[#3CCED7] bg-[#3CCED7]/10 text-[#1a9ba3]'
                   : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400 hover:text-gray-700',
               )}
             >
@@ -226,8 +226,8 @@ export function QuickCreateMeetingModal({
                     className={cn(
                       'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs font-medium transition',
                       selectedTemplateId === template.value
-                        ? 'border-blue-600 bg-blue-600 text-white'
-                        : 'border-gray-200 bg-white text-gray-800 hover:border-blue-300 hover:bg-blue-50/60',
+                        ? 'border-[#3CCED7] bg-[#3CCED7] text-white'
+                        : 'border-gray-200 bg-white text-gray-800 hover:border-blue-300 hover:bg-[#3CCED7]/10/60',
                     )}
                   >
                     <span className="line-clamp-2">{template.label}</span>
@@ -251,7 +251,7 @@ export function QuickCreateMeetingModal({
                   className={cn(
                     'rounded-xl border px-3 py-2 text-sm font-medium transition',
                     selectedDurationId === duration.id
-                      ? 'border-blue-600 bg-blue-600 text-white shadow-[0_6px_16px_rgba(37,99,235,0.35)]'
+                      ? 'border-[#3CCED7] bg-[#3CCED7] text-white shadow-[0_6px_16px_rgba(37,99,235,0.35)]'
                       : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300',
                   )}
                 >
@@ -272,7 +272,7 @@ export function QuickCreateMeetingModal({
                   className={cn(
                     'rounded-xl border px-3 py-2 text-sm font-medium transition',
                     selectedWhenId === option.id
-                      ? 'border-blue-500 bg-blue-500 text-white'
+                      ? 'border-[#3CCED7] bg-[#3CCED7] text-white'
                       : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300',
                   )}
                 >
@@ -311,7 +311,7 @@ export function QuickCreateMeetingModal({
               className={cn(
                 'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition',
                 inviteOpen
-                  ? 'border-blue-600 bg-blue-600 text-white'
+                  ? 'border-[#3CCED7] bg-[#3CCED7] text-white'
                   : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300',
               )}
             >
@@ -343,7 +343,7 @@ export function QuickCreateMeetingModal({
             type="button"
             disabled={creating}
             onClick={() => void handleSubmit()}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#3CCED7] px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {creating ? (
               <>

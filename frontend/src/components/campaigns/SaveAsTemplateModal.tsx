@@ -71,7 +71,7 @@ export default function SaveAsTemplateModal({
         name: name.trim(),
         description: description.trim() || undefined,
         sharing_scope: sharingScope,
-        project_id: projectId || undefined,
+        project_id: projectId ? Number(projectId) : undefined,
       };
 
       const response = await CampaignAPI.saveCampaignAsTemplate(campaignId, data);
@@ -122,7 +122,7 @@ export default function SaveAsTemplateModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter template name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>
@@ -135,7 +135,7 @@ export default function SaveAsTemplateModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter template description (optional)"
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]"
               disabled={submitting}
             />
           </div>

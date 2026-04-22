@@ -96,7 +96,7 @@ export default function ProjectInvitationApprovalModal({
       <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]">
         <div className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-white via-slate-50 to-blue-50 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-900 to-blue-700 text-white shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-900 to-[#2AB5BD] text-white shadow-sm">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
@@ -127,7 +127,7 @@ export default function ProjectInvitationApprovalModal({
               <button
                 type="button"
                 onClick={loadInvitations}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                className="text-xs font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
               >
                 Refresh
               </button>

@@ -202,7 +202,7 @@ export default function AddNodeDialog({
             onClick={() => setActiveTab("existing")}
             className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "existing"
-                ? "border-blue-600 text-blue-600"
+                ? "border-[#3CCED7] text-[#3CCED7]"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -212,7 +212,7 @@ export default function AddNodeDialog({
             onClick={() => setActiveTab("new")}
             className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "new"
-                ? "border-blue-600 text-blue-600"
+                ? "border-[#3CCED7] text-[#3CCED7]"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -233,7 +233,7 @@ export default function AddNodeDialog({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search nodes..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 />
               </div>
 
@@ -286,7 +286,7 @@ export default function AddNodeDialog({
                   value={newNodeName}
                   onChange={(e) => setNewNodeName(e.target.value)}
                   placeholder="Enter node name..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 />
               </div>
 
@@ -297,7 +297,7 @@ export default function AddNodeDialog({
                 <select
                   value={newNodeType}
                   onChange={(e) => setNewNodeType(e.target.value as NodeType)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]"
                 >
                   {NODE_CATEGORIES.map((category) => (
                     <option key={category.value} value={category.value}>
@@ -319,7 +319,7 @@ export default function AddNodeDialog({
                     <label
                       key={color.value}
                       className={`flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer ${
-                        newNodeColor === color.value ? "ring-2 ring-blue-500" : ""
+                        newNodeColor === color.value ? "ring-2 ring-[#3CCED7]" : ""
                       }`}
                     >
                       <input
@@ -355,7 +355,7 @@ export default function AddNodeDialog({
           <button
             onClick={activeTab === "existing" ? handleAddExistingNode : handleCreateNewNode}
             disabled={loading || (activeTab === "existing" && !selectedExistingNode)}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-md hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Adding..." : "Add"}
           </button>

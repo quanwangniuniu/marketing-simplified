@@ -145,7 +145,7 @@
                     {/* Loading Overlay */}
                     {isLoading && (
                         <div className="absolute inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                            <Loader2 className="w-8 h-8 animate-spin text-[#3CCED7]" />
                         </div>
                     )}
 
@@ -185,7 +185,7 @@
                             <div className="flex items-start">
                                 <button
                                     onClick={() => setIsLinkSharingOn(!isLinkSharingOn)}
-                                    className={`relative mr-4 inline-flex h-6 w-11 items-center rounded-full transition-colors ${isLinkSharingOn ? 'bg-blue-600' : 'bg-gray-200'
+                                    className={`relative mr-4 inline-flex h-6 w-11 items-center rounded-full transition-colors ${isLinkSharingOn ? 'bg-[#3CCED7]' : 'bg-gray-200'
                                         }`}
                                 >
                                     <span
@@ -211,7 +211,7 @@
                                             <button
                                                 onClick={() => setShowDaysDropdown(!showDaysDropdown)}
                                                 disabled={preview ? true : false}
-                                                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-left text-sm text-gray-900 ${preview ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-left text-sm text-gray-900 ${preview ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7]'
                                                     }`}
                                             >
                                                 {preview && preview.days_active ? daysOptions.find(opt => opt.value === preview.days_active.toString())?.label : selectedDays ? daysOptions.find(opt => opt.value === selectedDays)?.label : 'Select an option'}
@@ -302,7 +302,7 @@
                     <div className="flex justify-end p-6 my-3">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-[#3CCED7] transition-colors"
                         >
                             Close
                         </button>

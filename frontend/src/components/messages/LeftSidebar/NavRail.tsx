@@ -39,13 +39,13 @@ export default function NavRail({ active, onChange }: NavRailProps) {
             className={[
               'flex flex-col items-center gap-0.5 rounded-lg py-2 px-1 text-[10px] font-medium transition-colors',
               isActive
-                ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                ? 'bg-white text-[#1a9ba3] shadow-sm border border-[#3CCED7]/30'
                 : 'text-gray-600 hover:bg-white/80 hover:text-gray-900 border border-transparent',
             ].join(' ')}
             aria-current={isActive ? 'page' : undefined}
             data-testid={`messages-nav-${item.id}`}
           >
-            <span className={isActive ? 'text-blue-600' : 'text-gray-500'}>{item.icon}</span>
+            <span className={isActive ? 'text-[#3CCED7]' : 'text-gray-500'}>{item.icon}</span>
             <span className="leading-tight text-center">{item.label}</span>
           </button>
         );
