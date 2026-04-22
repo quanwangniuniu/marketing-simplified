@@ -54,6 +54,24 @@ export interface ProjectAvailableRolesResponse {
   default_role: string;
 }
 
+/** Writable fields for POST /api/core/projects/ (simple create). */
+export interface CreateProjectPayload {
+  name: string;
+  description?: string | null;
+  project_type?: string[];
+  work_model?: string[];
+  advertising_platforms?: string[];
+  objectives?: string[];
+  kpis?: Record<string, any>;
+  target_kpi_value?: string | null;
+  budget_management_type?: string | null;
+  total_monthly_budget?: number | string | null;
+  pacing_enabled?: boolean;
+  budget_config?: Record<string, any>;
+  primary_audience_type?: string | null;
+  audience_targeting?: Record<string, any>;
+}
+
 export interface OnboardingProjectPayload {
   name: string;
   description?: string | null;
@@ -180,6 +198,12 @@ export const ProjectAPI = {
     return api
       .get<ProjectAdChannel[]>(`/api/core/projects/${projectId}/ad-channels/`)
       .then((response) => (Array.isArray(response.data) ? response.data : []));
+  },
+
+  createProject: (payload: CreateProjectPayload): Promise<ProjectData> => {
+    return api
+      .post<ProjectData>('/api/core/projects/', payload)
+      .then((response) => response.data);
   },
 
   // Create the first project through onboarding
@@ -346,9 +370,16 @@ export const ProjectAPI = {
       .get(`/api/core/invitations/pending/`, { params })
       .then((response) => response.data || []);
   },
-  acceptInvitation: (token: string): Promise<any> => {
+  acceptInvitation: (
+    token: string,
+    extra?: { password?: string; username?: string }
+  ): Promise<any> => {
     return api
-      .post(`/api/core/invitations/accept/`, { token })
+      .post(`/api/core/invitations/accept/`, {
+        token,
+        ...(extra?.password ? { password: extra.password } : {}),
+        ...(extra?.username ? { username: extra.username } : {}),
+      })
       .then((response) => response.data);
   },
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Modal from '@/components/ui/Modal';
-import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import { ProjectAPI, type CreateProjectPayload, type ProjectData } from '@/lib/api/projectApi';
 
 interface QuickCreateProjectModalProps {
   open: boolean;
@@ -69,7 +69,7 @@ export default function QuickCreateProjectModal({ open, onClose, onCreated }: Qu
     setSubmitting(true);
     setError(null);
     try {
-      const payload: Partial<ProjectData> = {
+      const payload: CreateProjectPayload = {
         name: trimmed,
         description: description.trim() || null,
         project_type: selectedTypes,
