@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, date
 from task.models import Task, ApprovalRecord, TaskComment
 from decision.models import Decision
 from spreadsheet.models import Spreadsheet
@@ -48,6 +48,10 @@ class DashboardSummaryView(APIView):
     Dashboard summary endpoint - Returns all dashboard statistics.
     Supports optional project_id filtering.
 
+    Query params:
+        project_id (int, optional): Scope all metrics to a specific project.
+        days (int, optional): Number of days for daily_task_activity. Allowed: 7 or 30. Default: 7.
+
     PERFORMANCE NOTES:
     - SAFETY LOCK 2: Tracing disabled for this endpoint (high response body size)
     - SAFETY LOCK 3: Never use async/await or asyncio.gather - sequential queries only
@@ -55,9 +59,15 @@ class DashboardSummaryView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    # Allowed values for the `days` query param.
+    # 7  → last 7 days  (default)
+    # 30 → last 30 days
+    ALLOWED_DAYS = {7, 30}
+
     @disable_tracing
     def get(self, request):
         try:
+            # ── Validate project_id ──────────────────────────────────────────
             project_id_param = request.query_params.get('project_id')
             project_id = None
             if project_id_param is not None:
@@ -74,6 +84,15 @@ class DashboardSummaryView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+            # ── Validate days ────────────────────────────────────────────────
+            days_param = request.query_params.get('days', '7')
+            try:
+                days = int(days_param)
+            except (TypeError, ValueError):
+                days = 7
+            if days not in self.ALLOWED_DAYS:
+                days = 7
+
             queryset = Task.objects.all()
             if project_id is not None:
                 queryset = queryset.filter(project_id=project_id)
@@ -82,6 +101,7 @@ class DashboardSummaryView(APIView):
             seven_days_ago = now - timedelta(days=7)
             seven_days_ahead = now + timedelta(days=7)
 
+            # ── Existing time_metrics (always 7-day totals) ──────────────────
             time_metrics = {
                 'completed_last_7_days': queryset.filter(
                     status__in=[Task.Status.APPROVED, Task.Status.LOCKED],
@@ -101,77 +121,149 @@ class DashboardSummaryView(APIView):
                 ).count()
             }
 
+            # ── daily_task_activity ──────────────────────────────────────────
+            # Returns one entry per day for the last `days` days.
+            # Each entry: { date: "YYYY-MM-DD", created: int, completed: int }
+            #
+            # Strategy:
+            #   - Build a full date range first so days with zero activity
+            #     still appear in the response (the chart needs all N points).
+            #   - Query created and completed counts separately, then merge.
+            #   - "completed" = tasks whose status changed to APPROVED/LOCKED
+            #     within the window.  We use updated_at as the proxy for
+            #     completion date because Task has no explicit completed_at field.
+            #
+            # SAFETY: days is already validated to be in {7, 30}.
+
+            period_start = now - timedelta(days=days)
+
+            # Build zero-filled date index
+            daily_map: dict[date, dict] = {}
+            for offset in range(days):
+                day = (period_start + timedelta(days=offset + 1)).date()
+                daily_map[day] = {'date': str(day), 'created': 0, 'completed': 0}
+
+            # Created tasks per day — group by date of created_at
+            created_qs = (
+                queryset
+                .filter(created_at__date__gt=period_start.date(),
+                        created_at__date__lte=now.date())
+                .values('created_at__date')
+                .annotate(count=Count('id'))
+            )
+            for row in created_qs:
+                day = row['created_at__date']
+                if day in daily_map:
+                    daily_map[day]['created'] = row['count']
+
+            # Completed tasks per day — tasks that moved to a terminal status
+            # within the window.  We use updated_at as the completion date proxy.
+            completed_qs = (
+                queryset
+                .filter(
+                    status__in=[Task.Status.APPROVED, Task.Status.LOCKED],
+                    updated_at__date__gt=period_start.date(),
+                    updated_at__date__lte=now.date(),
+                )
+                .values('updated_at__date')
+                .annotate(count=Count('id'))
+            )
+            for row in completed_qs:
+                day = row['updated_at__date']
+                if day in daily_map:
+                    daily_map[day]['completed'] = row['count']
+
+            # Return sorted chronologically
+            daily_task_activity = sorted(daily_map.values(), key=lambda x: x['date'])
+
+            # ── Status breakdown ─────────────────────────────────────────────
             total_work_items = queryset.count()
 
             status_mapping = {
-                Task.Status.DRAFT: ('TO_DO', 'To Do', '#94A3B8'),
-                Task.Status.SUBMITTED: ('TO_DO', 'To Do', '#94A3B8'),
-                Task.Status.UNDER_REVIEW: ('IN_PROGRESS', 'In Progress', '#3B82F6'),
-                Task.Status.APPROVED: ('DONE', 'Done', '#10B981'),
-                Task.Status.LOCKED: ('DONE', 'Done', '#10B981'),
-                Task.Status.REJECTED: ('RESEARCH', 'Research', '#8B5CF6'),
-                Task.Status.CANCELLED: ('CANCELLED', 'Cancelled', '#6B7280'),
+                Task.Status.DRAFT:        ('TO_DO',      'To Do',       '#94A3B8'),
+                Task.Status.SUBMITTED:    ('TO_DO',      'To Do',       '#94A3B8'),
+                Task.Status.UNDER_REVIEW: ('IN_PROGRESS','In Progress', '#3B82F6'),
+                Task.Status.APPROVED:     ('DONE',       'Done',        '#10B981'),
+                Task.Status.LOCKED:       ('DONE',       'Done',        '#10B981'),
+                Task.Status.REJECTED:     ('RESEARCH',   'Research',    '#8B5CF6'),
+                Task.Status.CANCELLED:    ('CANCELLED',  'Cancelled',   '#6B7280'),
             }
 
-            status_counts = {}
+            status_counts: dict = {}
             for task_status in queryset.values('status').annotate(count=Count('status')):
-                db_status = task_status['status']
-                count = task_status['count']
-                display_status, display_name, color = status_mapping.get(db_status, (db_status, db_status, '#94A3B8'))
-
+                db_status   = task_status['status']
+                count        = task_status['count']
+                display_status, display_name, color = status_mapping.get(
+                    db_status, (db_status, db_status, '#94A3B8')
+                )
                 if display_status not in status_counts:
                     status_counts[display_status] = {
-                        'status': display_status,
+                        'status':       display_status,
                         'display_name': display_name,
-                        'count': 0,
-                        'color': color
+                        'count':        0,
+                        'color':        color,
                     }
                 status_counts[display_status]['count'] += count
 
             status_breakdown = list(status_counts.values())
-            status_overview = {
+            status_overview  = {
                 'total_work_items': total_work_items,
-                'breakdown': status_breakdown
+                'breakdown':        status_breakdown,
             }
 
-            priority_counts = queryset.values('priority').annotate(count=Count('priority')).order_by('priority')
-            priority_order = [Task.Priority.HIGHEST, Task.Priority.HIGH, Task.Priority.MEDIUM, Task.Priority.LOW, Task.Priority.LOWEST]
+            # ── Priority breakdown ───────────────────────────────────────────
+            priority_counts = (
+                queryset
+                .values('priority')
+                .annotate(count=Count('priority'))
+                .order_by('priority')
+            )
+            priority_order = [
+                Task.Priority.HIGHEST, Task.Priority.HIGH, Task.Priority.MEDIUM,
+                Task.Priority.LOW,     Task.Priority.LOWEST,
+            ]
             priority_count_dict = {item['priority']: item['count'] for item in priority_counts}
-            priority_breakdown = []
-            for priority in priority_order:
-                priority_breakdown.append({
-                    'priority': priority,
-                    'count': priority_count_dict.get(priority, 0)
-                })
+            priority_breakdown = [
+                {'priority': p, 'count': priority_count_dict.get(p, 0)}
+                for p in priority_order
+            ]
 
-            type_counts = queryset.values('type').annotate(count=Count('type')).order_by('-count')
+            # ── Types of work ────────────────────────────────────────────────
+            type_counts = (
+                queryset
+                .values('type')
+                .annotate(count=Count('type'))
+                .order_by('-count')
+            )
             type_display_names = {
-                'budget': 'Budget',
-                'asset': 'Asset',
+                'budget':        'Budget',
+                'asset':         'Asset',
                 'retrospective': 'Retrospective',
-                'report': 'Report',
-                'execution': 'Execution'
+                'report':        'Report',
+                'execution':     'Execution',
             }
-            types_of_work = []
-            for type_item in type_counts:
-                type_code = type_item['type']
-                count = type_item['count']
-                percentage = (count / total_work_items * 100) if total_work_items > 0 else 0
-                types_of_work.append({
-                    'type': type_code,
-                    'display_name': type_display_names.get(type_code, type_code.title()),
-                    'count': count,
-                    'percentage': round(percentage, 1)
-                })
+            types_of_work = [
+                {
+                    'type':         item['type'],
+                    'display_name': type_display_names.get(item['type'], item['type'].title()),
+                    'count':        item['count'],
+                    'percentage':   round(item['count'] / total_work_items * 100, 1)
+                                    if total_work_items > 0 else 0,
+                }
+                for item in type_counts
+            ]
 
+            # ── Recent activity ──────────────────────────────────────────────
             recent_activity = self._get_recent_activity(project_id, limit=20)
 
+            # ── Assemble response ────────────────────────────────────────────
             dashboard_data = {
-                'time_metrics': time_metrics,
-                'status_overview': status_overview,
-                'priority_breakdown': priority_breakdown,
-                'types_of_work': types_of_work,
-                'recent_activity': recent_activity
+                'time_metrics':        time_metrics,
+                'status_overview':     status_overview,
+                'priority_breakdown':  priority_breakdown,
+                'types_of_work':       types_of_work,
+                'recent_activity':     recent_activity,
+                'daily_task_activity': daily_task_activity,  # NEW
             }
 
             serializer = DashboardSummarySerializer(dashboard_data)
@@ -197,49 +289,57 @@ class DashboardSummaryView(APIView):
 
         task_filter = Q(project_id=project_id) if project_id else Q()
 
-        recent_tasks = Task.objects.filter(task_filter).select_related('owner').order_by('-created_at')[:limit]
+        recent_tasks = (
+            Task.objects.filter(task_filter)
+            .select_related('owner')
+            .order_by('-created_at')[:limit]
+        )
         for task in recent_tasks:
             if task.owner:
                 activities.append({
-                    'id': f'task_created_{task.id}',
-                    'event_type': 'task_created',
-                    'user': task.owner,
-                    'task': task,
-                    'timestamp': task.created_at,
-                    'human_readable': self._get_human_readable_time(task.created_at)
+                    'id':             f'task_created_{task.id}',
+                    'event_type':     'task_created',
+                    'user':           task.owner,
+                    'task':           task,
+                    'timestamp':      task.created_at,
+                    'human_readable': self._get_human_readable_time(task.created_at),
                 })
 
         approval_filter = Q(task__project_id=project_id) if project_id else Q()
-        approval_records = ApprovalRecord.objects.filter(
-            approval_filter
-        ).select_related('approved_by', 'task').order_by('-decided_time')[:limit]
-
+        approval_records = (
+            ApprovalRecord.objects
+            .filter(approval_filter)
+            .select_related('approved_by', 'task')
+            .order_by('-decided_time')[:limit]
+        )
         for record in approval_records:
             event_type = 'approved' if record.is_approved else 'rejected'
             activities.append({
-                'id': f'{event_type}_{record.id}',
-                'event_type': event_type,
-                'user': record.approved_by,
-                'task': record.task,
-                'timestamp': record.decided_time,
+                'id':             f'{event_type}_{record.id}',
+                'event_type':     event_type,
+                'user':           record.approved_by,
+                'task':           record.task,
+                'timestamp':      record.decided_time,
                 'human_readable': self._get_human_readable_time(record.decided_time),
-                'is_approved': record.is_approved
+                'is_approved':    record.is_approved,
             })
 
         comment_filter = Q(task__project_id=project_id) if project_id else Q()
-        comments = TaskComment.objects.filter(
-            comment_filter
-        ).select_related('user', 'task').order_by('-created_at')[:limit]
-
+        comments = (
+            TaskComment.objects
+            .filter(comment_filter)
+            .select_related('user', 'task')
+            .order_by('-created_at')[:limit]
+        )
         for comment in comments:
             activities.append({
-                'id': f'commented_{comment.id}',
-                'event_type': 'commented',
-                'user': comment.user,
-                'task': comment.task,
-                'timestamp': comment.created_at,
+                'id':             f'commented_{comment.id}',
+                'event_type':     'commented',
+                'user':           comment.user,
+                'task':           comment.task,
+                'timestamp':      comment.created_at,
                 'human_readable': self._get_human_readable_time(comment.created_at),
-                'comment_body': comment.body[:100] if len(comment.body) > 100 else comment.body
+                'comment_body':   comment.body[:100] if len(comment.body) > 100 else comment.body,
             })
 
         activities.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -247,27 +347,26 @@ class DashboardSummaryView(APIView):
 
     def _get_human_readable_time(self, timestamp):
         """Convert timestamp to human-readable relative time string."""
-        now = timezone.now()
-        diff = now - timestamp
-        seconds = diff.total_seconds()
+        now     = timezone.now()
+        seconds = (now - timestamp).total_seconds()
 
         if seconds < 60:
             return 'less than a minute ago'
         elif seconds < 3600:
-            minutes = int(seconds / 60)
-            return f'{minutes} minute{"s" if minutes > 1 else ""} ago'
+            m = int(seconds / 60)
+            return f'{m} minute{"s" if m > 1 else ""} ago'
         elif seconds < 86400:
-            hours = int(seconds / 3600)
-            return f'{hours} hour{"s" if hours > 1 else ""} ago'
+            h = int(seconds / 3600)
+            return f'{h} hour{"s" if h > 1 else ""} ago'
         elif seconds < 604800:
-            days = int(seconds / 86400)
-            return f'{days} day{"s" if days > 1 else ""} ago'
+            d = int(seconds / 86400)
+            return f'{d} day{"s" if d > 1 else ""} ago'
         elif seconds < 2592000:
-            weeks = int(seconds / 604800)
-            return f'{weeks} week{"s" if weeks > 1 else ""} ago'
+            w = int(seconds / 604800)
+            return f'{w} week{"s" if w > 1 else ""} ago'
         else:
-            months = int(seconds / 2592000)
-            return f'{months} month{"s" if months > 1 else ""} ago'
+            mo = int(seconds / 2592000)
+            return f'{mo} month{"s" if mo > 1 else ""} ago'
 
 
 # ── SMP-472: Project Workspace Dashboard ──────────────────────────────────
@@ -291,10 +390,6 @@ class ProjectWorkspaceDashboardView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    # Maximum items returned per zone — keeps the dashboard lightweight
-    # Soft cap per zone payload. UI now supports progressive reveal ("Show more"),
-    # so this should be high enough to provide meaningful expansion while keeping
-    # the workspace response lightweight.
     ZONE_LIMIT = 20
 
     def get(self, request):
@@ -322,27 +417,15 @@ class ProjectWorkspaceDashboardView(APIView):
         from task.models import TaskRelation
         from spreadsheet.models import PatternJob, WorkflowPattern
 
-        # Get ContentType for Decision — used to identify decision-linked tasks
         decision_content_type = ContentType.objects.get_for_model(Decision)
 
-        # Terminal task statuses — tasks in these states are considered resolved
         RESOLVED_TASK_STATUSES = [
             Task.Status.APPROVED,
             Task.Status.LOCKED,
             Task.Status.CANCELLED,
         ]
 
-        # Workspace queue policy (single source of truth for prioritization):
-        # 1) Decisions: awaiting approval > unresolved execution > high risk > recent updates
-        # 2) Tasks: overdue > blocked > decision-linked > recent updates
-        # 3) Operations:
-        #    - Spreadsheets: running/queued jobs first, then recent updates
-        #    - Patterns: origins with running/queued jobs first, then recent updates
-
         # --- Decision Zone ---
-        # Show active decisions and order as an action queue:
-        # awaiting approval first, then unresolved execution, then high risk, then recency.
-
         unresolved_tasks_subquery = Task.objects.filter(
             project_id=project_id,
             content_type=decision_content_type,
@@ -380,17 +463,11 @@ class ProjectWorkspaceDashboardView(APIView):
         )[:self.ZONE_LIMIT]
 
         # --- Task Zone ---
-        # Show tasks needing execution attention: submitted, under review, or rejected
-        # Annotate with urgency/action flags used by the project workspace queue:
-        # overdue first, then blocked, then decision-linked, then recency.
-
-        # Subquery: is this task blocked by another task via TaskRelation.BLOCKS?
         blocked_subquery = TaskRelation.objects.filter(
             target_task=OuterRef('pk'),
             relationship_type=TaskRelation.BLOCKS,
         )
 
-        # Subquery: is this task linked to a Decision via GenericForeignKey?
         decision_linked_subquery = Task.objects.filter(
             pk=OuterRef('pk'),
             content_type=decision_content_type,
@@ -415,16 +492,13 @@ class ProjectWorkspaceDashboardView(APIView):
             is_blocked_flag=Exists(blocked_subquery),
             is_decision_linked_flag=Exists(decision_linked_subquery),
         ).order_by(
-            '-is_overdue_flag',          # Overdue tasks are highest urgency
-            '-is_blocked_flag',          # Then blocked tasks
-            '-is_decision_linked_flag',  # Then decision-linked tasks
+            '-is_overdue_flag',
+            '-is_blocked_flag',
+            '-is_decision_linked_flag',
             '-updated_at',
         )[:self.ZONE_LIMIT]
 
         # --- Spreadsheet Zone ---
-        # Show operationally active spreadsheets in this project:
-        # running jobs first, then most recently updated.
-
         running_job_subquery = PatternJob.objects.filter(
             spreadsheet=OuterRef('pk'),
             status__in=['queued', 'running'],
@@ -438,10 +512,6 @@ class ProjectWorkspaceDashboardView(APIView):
         ).order_by('-has_running_job_flag', '-updated_at')[:self.ZONE_LIMIT]
 
         # --- Pattern Zone ---
-        # Show operationally active patterns scoped to this project:
-        # patterns whose origin spreadsheet currently has running jobs first, then recency.
-
-        # Get all spreadsheet IDs belonging to this project
         project_spreadsheet_ids = Spreadsheet.objects.filter(
             project_id=project_id,
             is_deleted=False,
@@ -460,12 +530,11 @@ class ProjectWorkspaceDashboardView(APIView):
             is_origin_running_flag=Exists(pattern_origin_running_subquery),
         ).order_by('-is_origin_running_flag', '-updated_at')[:self.ZONE_LIMIT]
 
-        # --- Serialize and respond ---
         data = {
-            'decisions': list(decisions),
-            'tasks': list(tasks),
+            'decisions':    list(decisions),
+            'tasks':        list(tasks),
             'spreadsheets': list(spreadsheets),
-            'patterns': list(patterns),
+            'patterns':     list(patterns),
         }
         serializer = ProjectWorkspaceDashboardSerializer(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
