@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useProjectStore } from '@/lib/projectStore';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
@@ -14,6 +15,7 @@ import TaskCreateChecklistAside, {
 } from '@/components/tasks-v2/new/TaskCreateChecklistAside';
 import { getTypeSchema, getUnfilledRequiredKeys } from '@/lib/tasks-v2/typeFieldSchemas';
 import { TASK_TYPE_CONFIG_STATIC } from '@/lib/taskTypeConfigRegistry';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PRIORITIES: { value: string; label: string }[] = [
   { value: 'HIGHEST', label: 'Highest' },
@@ -24,6 +26,7 @@ const PRIORITIES: { value: string; label: string }[] = [
 ];
 
 const BRAND_GRADIENT = 'linear-gradient(90deg, #3CCED7 0%, #A6E661 100%)';
+const WORK_TYPE_SKELETON_WIDTHS = ['w-20', 'w-24', 'w-28', 'w-32', 'w-[92px]', 'w-[116px]'];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -65,6 +68,8 @@ export default function CreateTaskPage() {
   const [taskTypes, setTaskTypes] = useState<{ value: string; label: string }[]>([]);
   const [members, setMembers] = useState<ProjectMemberData[]>([]);
   const [submitting, setSubmitting] = useState<'submit' | 'draft' | null>(null);
+  const [taskTypesLoading, setTaskTypesLoading] = useState(true);
+  const [membersLoading, setMembersLoading] = useState(false);
 
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -77,18 +82,22 @@ export default function CreateTaskPage() {
   const [typeFormState, setTypeFormState] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    setTaskTypesLoading(true);
     TaskAPI.getTaskTypes()
       .then(setTaskTypes)
-      .catch(() => toast.error('Failed to load task types'));
+      .catch(() => toast.error('Failed to load task types'))
+      .finally(() => setTaskTypesLoading(false));
   }, []);
 
   useEffect(() => {
     if (!projectId) return;
+    setMembersLoading(true);
     ProjectAPI.getProjectMembers(projectId)
       .then(setMembers)
       .catch(() => {
         // Members are optional for the form; surface silently.
-      });
+      })
+      .finally(() => setMembersLoading(false));
   }, [projectId]);
 
   const schema = useMemo(() => getTypeSchema(type), [type]);
@@ -257,7 +266,8 @@ export default function CreateTaskPage() {
   };
 
   return (
-    <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+    <ProtectedRoute renderChildrenWhileLoading>
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
       <div className="mx-auto w-full max-w-5xl px-6 py-8">
         <button
           type="button"
@@ -286,7 +296,11 @@ export default function CreateTaskPage() {
 
             <div id={COMMON_ANCHOR.summary} className="px-8 pt-7 pb-2">
               <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
-                New task in {activeProject?.name ?? 'project'}
+                New task in{' '}
+                {activeProject?.name ?? (projectId ? '' : 'project')}
+                {projectId && !activeProject?.name ? (
+                  <Skeleton className="inline-flex h-3 w-24 align-middle" />
+                ) : null}
               </p>
               <input
                 value={summary}
@@ -311,7 +325,14 @@ export default function CreateTaskPage() {
                 Work type *
               </p>
               <div className="flex flex-wrap gap-2">
-                {taskTypes.map((t) => {
+                {taskTypesLoading
+                  ? Array.from({ length: 6 }).map((_, index) => (
+                      <Skeleton
+                        key={`task-type-skeleton-${index}`}
+                        className={`h-[30px] rounded-full ${WORK_TYPE_SKELETON_WIDTHS[index % WORK_TYPE_SKELETON_WIDTHS.length]}`}
+                      />
+                    ))
+                  : taskTypes.map((t) => {
                   const selected = t.value === type;
                   return (
                     <button
@@ -331,7 +352,7 @@ export default function CreateTaskPage() {
               </div>
             </div>
 
-            {schema && (
+            {!taskTypesLoading && schema && (
               <>
                 <div className="my-2 border-t border-gray-100" />
                 <div className="px-8 py-5">
@@ -404,19 +425,23 @@ export default function CreateTaskPage() {
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Approver
               </p>
-              <select
-                value={approverId}
-                onChange={(e) => setApproverId(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
-              >
-                <option value="">Unassigned</option>
-                {members.map((m) => (
-                  <option key={m.user.id} value={m.user.id}>
-                    {m.user.username || m.user.name || `User ${m.user.id}`}
-                    {m.user.email ? ` · ${m.user.email}` : ''}
-                  </option>
-                ))}
-              </select>
+              {membersLoading ? (
+                <Skeleton className="h-10 w-full rounded-md" />
+              ) : (
+                <select
+                  value={approverId}
+                  onChange={(e) => setApproverId(e.target.value)}
+                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.username || m.user.name || `User ${m.user.id}`}
+                      {m.user.email ? ` · ${m.user.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-8 py-4">
@@ -462,7 +487,8 @@ export default function CreateTaskPage() {
           </aside>
         </div>
       </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }
 

@@ -122,16 +122,16 @@ export default function MessagePageContent({
   );
   
   useEffect(() => {
-    if (dataProjectId) {
+    if (selectedProjectId) {
       // Only fetch if we haven't fetched for this project yet, or if WebSocket just connected
-      const fetchKey = `${dataProjectId}-${connected}`;
+      const fetchKey = `${selectedProjectId}-${connected}`;
       if (hasFetchedRef.current !== fetchKey) {
         hasFetchedRef.current = fetchKey;
-        console.log('[MessagePage] Fetching chats for project:', dataProjectId, 'connected:', connected);
+        console.log('[MessagePage] Fetching chats for project:', selectedProjectId, 'connected:', connected);
         fetchChats();
       }
     }
-  }, [connected, dataProjectId, fetchChats]);
+  }, [connected, selectedProjectId, fetchChats]);
   
   // Get current chat from store
   const currentChat = chats.find(chat => chat.id === currentChatId);

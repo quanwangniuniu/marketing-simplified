@@ -205,16 +205,6 @@ export default function SpreadsheetsListPage() {
   const hasPrevious = page > 1;
 
   const renderEmptyState = () => {
-    if (delayedLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
-          <p className="mt-3 font-medium text-gray-900">Loading spreadsheets…</p>
-          <p className="text-sm text-gray-600">Fetching spreadsheets from the backend.</p>
-        </div>
-      );
-    }
-
     if (error) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
@@ -282,7 +272,7 @@ export default function SpreadsheetsListPage() {
     );
   };
 
-  const showTable = !error && (delayedLoading || spreadsheets.length > 0);
+  const showTable = delayedLoading || (!error && spreadsheets.length > 0);
 
   return (
     <ProtectedRoute renderChildrenWhileLoading>
@@ -301,9 +291,13 @@ export default function SpreadsheetsListPage() {
               </div>
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">
-                    {project?.name ?? 'Project'}
-                  </h1>
+                  {projectId && !project ? (
+                    <Skeleton className="h-8 w-48" />
+                  ) : (
+                    <h1 className="text-2xl font-semibold text-gray-900">
+                      {project?.name ?? 'Project'}
+                    </h1>
+                  )}
                   <div className="mt-1 flex items-center gap-2 text-sm uppercase tracking-wide text-[#1a9ba3]">
                     <div className="h-6 w-6 rounded-lg bg-[#3CCED7]/15 text-[#1a9ba3] flex items-center justify-center">
                       <FileSpreadsheet className="h-4 w-4" />

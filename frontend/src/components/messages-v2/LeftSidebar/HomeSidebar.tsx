@@ -16,6 +16,7 @@ import FilesSidebarView from './FilesSidebarView';
 import ActivitySidebarView from './ActivitySidebarView';
 import ProjectMembersSection from './ProjectMembersSection';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function normalizeChat(c: Chat): Chat {
   const raw = c.project_id ?? (c as { project?: number }).project;
@@ -66,6 +67,34 @@ function Section({
         {headerExtra}
       </div>
       <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function SidebarRowsSkeleton({
+  rows = 4,
+  withHeading = false,
+}: {
+  rows?: number;
+  withHeading?: boolean;
+}) {
+  return (
+    <div className="px-3 py-2">
+      {withHeading ? <Skeleton className="mb-3 h-3 w-24" /> : null}
+      <div className="space-y-1">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div
+            key={`messages-sidebar-skeleton-${index}`}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5"
+          >
+            <Skeleton className="h-6 w-6 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -263,13 +292,42 @@ export default function HomeSidebar({
   );
 
   const mainListContent = () => {
+    const showHome = view === 'home';
+    const showDmsOnly = view === 'dms';
+
     if (!selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">{emptyState}</div>;
     }
     if (isLoading) {
+      if (view === 'activity' || view === 'files') {
+        return <SidebarRowsSkeleton rows={2} withHeading />;
+      }
+
       return (
-        <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
+        <div className="pb-2">
+          {showHome && (
+            <Section title="Starred" icon={<Star className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={2} />
+            </Section>
+          )}
+
+          {showHome && (
+            <Section title="Channels" icon={<Hash className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={4} />
+            </Section>
+          )}
+
+          {(showHome || showDmsOnly) && (
+            <Section title="Direct messages" icon={<Users className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={4} />
+            </Section>
+          )}
+
+          {(showHome || showDmsOnly) && selectedProjectId && (
+            <Section title="Project members" icon={<User className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={4} />
+            </Section>
+          )}
         </div>
       );
     }
@@ -280,9 +338,6 @@ export default function HomeSidebar({
     if (view === 'files') {
       return <FilesSidebarView selectedProjectId={selectedProjectId} />;
     }
-
-    const showHome = view === 'home';
-    const showDmsOnly = view === 'dms';
 
     if (showDmsOnly && privateChats.length === 0 && !selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">No direct messages</div>;

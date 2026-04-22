@@ -5842,16 +5842,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         tabIndex={0}
         aria-busy={cellCanvasLoading}
       >
-        {cellCanvasLoading ? (
-          <div
-            className="absolute inset-0 z-20 flex items-center justify-center bg-white/75 pointer-events-auto"
-            role="status"
-            aria-live="polite"
-            aria-label="Loading spreadsheet cells"
-          >
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500" aria-hidden />
-          </div>
-        ) : null}
         {/* Column headers in separate table to avoid thead/tbody gap with sticky. */}
         <div className="sticky top-0 z-10 shrink-0 bg-gray-200">
           <table

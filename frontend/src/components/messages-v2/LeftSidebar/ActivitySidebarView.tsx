@@ -3,6 +3,7 @@ import { addDays, format, startOfDay } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { CalendarAPI, type CalendarSubscriptionDTO, type EventDTO } from '@/lib/api/calendarApi';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type DayGroup = { dayKey: string; label: string; events: EventDTO[] };
 
@@ -122,8 +123,28 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
 
   if (isLoading) {
     return (
-      <div className="p-4">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
+      <div className="flex-1 flex flex-col">
+        <div className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          Activity
+        </div>
+        <div className="space-y-3 p-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`messages-activity-skeleton-${index}`}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+            >
+              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                <Skeleton className="h-3.5 w-3.5 rounded-full" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <div className="mt-2 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -226,4 +247,3 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
     </div>
   );
 }
-

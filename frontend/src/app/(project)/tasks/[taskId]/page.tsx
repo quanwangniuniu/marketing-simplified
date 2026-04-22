@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import type { TaskData } from '@/types/task';
@@ -80,54 +81,87 @@ export default function TaskV2DetailPage() {
   };
 
   const readOnly = task?.status === 'LOCKED';
+  const taskShell = (task ?? {
+    id: taskId ?? undefined,
+    summary: '',
+    description: '',
+    status: 'DRAFT',
+    type: 'task',
+    project: null,
+    project_id: null,
+    owner: null,
+    current_approver: null,
+    linked_object: null,
+    start_date: null,
+    due_date: null,
+  }) as TaskData;
 
   return (
-    <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-      <div className="bg-gray-50">
-        {loading && (
-          <div className="px-6 py-12 text-center text-sm text-gray-400">Loading task…</div>
-        )}
-        {error && !loading && (
+    <ProtectedRoute renderChildrenWhileLoading>
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+        <div className="bg-gray-50">
+          {error && !loading && (
           <div className="px-6 py-12 text-center text-sm text-rose-600">{error}</div>
         )}
-        {task && !loading && !error && (
+          {(!error && (task || loading)) && (
           <div className="mx-auto max-w-[1440px] px-6 py-4">
             <TaskDetailHeader
-              task={task}
+              task={taskShell}
               members={members}
-              readOnly={readOnly}
+              readOnly={Boolean(readOnly)}
               onUpdated={onMutated}
               onMutated={onMutated}
               onDelete={() => setConfirmDelete(true)}
+              loading={loading}
             />
 
             <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
               <div className="min-w-0 space-y-5">
-                <TaskDescriptionBlock task={task} readOnly={readOnly} onUpdated={onMutated} />
-                <TaskTypeBlock task={task} />
-                <TaskSubtasksBlock task={task} readOnly={readOnly} refreshKey={refreshKey} />
-                <TaskRelationsBlock task={task} readOnly={readOnly} />
-                {task.id && (
-                  <TaskAttachmentsBlock taskId={task.id} readOnly={readOnly} />
+                <TaskDescriptionBlock
+                  task={taskShell}
+                  readOnly={Boolean(readOnly)}
+                  onUpdated={onMutated}
+                  loading={loading}
+                />
+                <TaskTypeBlock task={taskShell} loading={loading} />
+                <TaskSubtasksBlock
+                  task={taskShell}
+                  readOnly={Boolean(readOnly)}
+                  refreshKey={refreshKey}
+                  loading={loading}
+                />
+                <TaskRelationsBlock task={taskShell} readOnly={Boolean(readOnly)} loading={loading} />
+                {(task?.id || loading) && (
+                  <TaskAttachmentsBlock
+                    taskId={task?.id ?? 0}
+                    readOnly={Boolean(readOnly)}
+                    loading={loading}
+                  />
                 )}
-                {task.id && (
+                {(task?.id || loading) && (
                   <TaskActivityBlock
-                    taskId={task.id}
-                    readOnly={readOnly}
+                    taskId={task?.id ?? 0}
+                    readOnly={Boolean(readOnly)}
                     refreshKey={refreshKey}
+                    loading={loading}
                   />
                 )}
               </div>
 
               <aside className="space-y-5">
                 <PropertiesPanel
-                  task={task}
+                  task={taskShell}
                   members={members}
-                  readOnly={readOnly}
+                  readOnly={Boolean(readOnly)}
                   onUpdated={onMutated}
+                  loading={loading}
                 />
-                {task.id && (
-                  <ApprovalTimelinePanel taskId={task.id} refreshKey={refreshKey} />
+                {(task?.id || loading) && (
+                  <ApprovalTimelinePanel
+                    taskId={task?.id ?? 0}
+                    refreshKey={refreshKey}
+                    loading={loading}
+                  />
                 )}
               </aside>
             </div>
@@ -163,8 +197,9 @@ export default function TaskV2DetailPage() {
             </div>
           </div>
         )}
-      </div>
-      <ChatFAB />
-    </DashboardLayout>
+        </div>
+        <ChatFAB />
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }

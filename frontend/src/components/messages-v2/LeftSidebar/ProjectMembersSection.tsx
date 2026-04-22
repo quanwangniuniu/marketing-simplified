@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { User, UserPlus } from 'lucide-react';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectMembersSectionProps {
   members: ProjectMemberData[];
@@ -46,9 +47,9 @@ export default function ProjectMembersSection({
     return (
       <div className="space-y-2 px-3 py-2">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-2 animate-pulse">
-            <div className="w-7 h-7 rounded-full bg-gray-200" />
-            <div className="h-3 w-24 bg-gray-200 rounded" />
+          <div key={i} className="flex items-center gap-2">
+            <Skeleton className="h-7 w-7 rounded-full" />
+            <Skeleton className="h-3 w-24" />
           </div>
         ))}
       </div>

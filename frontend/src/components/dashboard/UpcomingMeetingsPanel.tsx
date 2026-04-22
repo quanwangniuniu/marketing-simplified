@@ -1,11 +1,13 @@
 'use client';
 
 import { CalendarDays, Clock, Users } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { MeetingListItem } from '@/types/meeting';
 
 interface UpcomingMeetingsPanelProps {
   meetings: MeetingListItem[];
   isOpen: boolean;
+  loading?: boolean;
 }
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
@@ -25,7 +27,29 @@ function formatDateLabel(iso: string | null): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-export default function UpcomingMeetingsPanel({ meetings, isOpen }: UpcomingMeetingsPanelProps) {
+function MeetingRowSkeleton() {
+  return (
+    <div className="rounded-md border-[0.5px] border-gray-200 p-2.5">
+      <div className="flex items-start gap-2">
+        <Skeleton className="mt-0.5 h-3.5 w-3.5 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-14 rounded-full" />
+          </div>
+          <Skeleton className="h-4 w-full max-w-[220px]" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function UpcomingMeetingsPanel({
+  meetings,
+  isOpen,
+  loading = false,
+}: UpcomingMeetingsPanelProps) {
   const today = meetings.filter((m) => m.scheduled_date === TODAY_ISO);
   const nextSeven = meetings.filter((m) => m.scheduled_date && m.scheduled_date > TODAY_ISO);
 
@@ -42,13 +66,26 @@ export default function UpcomingMeetingsPanel({ meetings, isOpen }: UpcomingMeet
           <CalendarDays className="w-4 h-4 text-gray-500" />
           <span className="text-sm font-semibold text-gray-900">Upcoming Meetings</span>
           <span className="ml-auto text-[11px] text-gray-400">
-            {today.length} today
+            {loading ? <Skeleton className="h-3 w-14" /> : `${today.length} today`}
           </span>
         </div>
 
         {/* List */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
-          {meetings.length === 0 && (
+          {loading && (
+            <section>
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                <Skeleton className="h-3 w-20" />
+              </div>
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <MeetingRowSkeleton key={`upcoming-meeting-skeleton-${index}`} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {!loading && meetings.length === 0 && (
             <div className="text-center py-10 text-xs text-gray-400">
               <CalendarDays className="w-6 h-6 mx-auto mb-2 text-gray-300" />
               No upcoming meetings.

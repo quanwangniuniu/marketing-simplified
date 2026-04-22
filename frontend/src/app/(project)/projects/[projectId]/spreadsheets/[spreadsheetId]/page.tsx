@@ -84,6 +84,7 @@ export default function SpreadsheetDetailPage() {
   const [deletingSheet, setDeletingSheet] = useState(false);
   const [highlightCell, setHighlightCell] = useState<{ row: number; col: number } | null>(null);
   const [patterns, setPatterns] = useState<WorkflowPatternSummary[]>([]);
+  const [patternsLoading, setPatternsLoading] = useState(true);
   const [exportingPattern, setExportingPattern] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<WorkflowPatternDetail | null>(null);
   const [applySteps, setApplySteps] = useState<
@@ -325,10 +326,13 @@ export default function SpreadsheetDetailPage() {
   useEffect(() => {
     const loadPatterns = async () => {
       try {
+        setPatternsLoading(true);
         const response = await PatternAPI.listPatterns();
         setPatterns(response.results || []);
       } catch (err) {
         console.error('Failed to load patterns:', err);
+      } finally {
+        setPatternsLoading(false);
       }
     };
     loadPatterns();
@@ -1603,7 +1607,7 @@ export default function SpreadsheetDetailPage() {
                     />
                   ) : (
                     <PatternAgentPanel
-                      loading={delayedLoading}
+                      loading={delayedLoading || patternsLoading}
                       items={agentSteps}
                       patterns={patterns}
                       selectedPatternId={selectedPattern?.id ?? null}

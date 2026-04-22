@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Briefcase,
   Building2,
@@ -42,34 +42,10 @@ const getInitials = (name?: string | null): string => {
   return (words[0][0] + words[1][0]).toUpperCase();
 };
 
-function ProfileV2Skeleton() {
-  return (
-    <DashboardLayout>
-      <div className="p-6">
-        <div className="p-6 bg-white rounded-lg border border-gray-200 space-y-6">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-16 w-16 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-4 w-56" />
-            </div>
-          </div>
-          <div className="flex items-start gap-6 pt-4">
-            <div className="w-[30%] min-w-[280px] space-y-4">
-              <Skeleton className="h-64 w-full rounded-lg" />
-              <Skeleton className="h-10 w-full rounded-lg" />
-            </div>
-            <Skeleton className="flex-1 h-80 rounded-lg" />
-          </div>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
-}
-
 function ProfileV2Content() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionKey>('dashboard');
+  const profileLoading = loading || !user;
 
   const userAny = user as { job?: string; department?: string; location?: string } | null;
   const [organizationName, setOrganizationName] = useState<string>(
@@ -196,19 +172,27 @@ function ProfileV2Content() {
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
           <div>
             <div className="text-xs text-gray-500 mb-1">Display name</div>
-            <div className="text-sm text-gray-900">{displayName}</div>
+            <div className="text-sm text-gray-900">
+              {profileLoading ? <Skeleton className="h-4 w-32" /> : displayName}
+            </div>
           </div>
           <div>
             <div className="text-xs text-gray-500 mb-1">Email</div>
-            <div className="text-sm text-gray-900 break-all">{user?.email ?? '—'}</div>
+            <div className="text-sm text-gray-900 break-all">
+              {profileLoading ? <Skeleton className="h-4 w-44" /> : (user?.email ?? '—')}
+            </div>
           </div>
           <div>
             <div className="text-xs text-gray-500 mb-1">Username</div>
-            <div className="text-sm text-gray-900">{user?.username ?? '—'}</div>
+            <div className="text-sm text-gray-900">
+              {profileLoading ? <Skeleton className="h-4 w-24" /> : (user?.username ?? '—')}
+            </div>
           </div>
           <div>
             <div className="text-xs text-gray-500 mb-1">Primary role</div>
-            <div className="text-sm text-gray-900">{primaryRole ?? '—'}</div>
+            <div className="text-sm text-gray-900">
+              {profileLoading ? <Skeleton className="h-4 w-20" /> : (primaryRole ?? '—')}
+            </div>
           </div>
         </div>
       </div>
@@ -242,18 +226,27 @@ function ProfileV2Content() {
             <div className="-mt-8 flex items-end justify-between gap-4 flex-wrap">
               <div className="flex items-end gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shadow-sm ring-4 ring-white">
-                  <span className="text-white text-lg font-semibold">{getInitials(displayName)}</span>
+                  {profileLoading ? (
+                    <Skeleton className="h-16 w-16 rounded-full ring-4 ring-white" />
+                  ) : (
+                    <span className="text-white text-lg font-semibold">{getInitials(displayName)}</span>
+                  )}
                 </div>
                 <div className="pb-1">
-                  <div className="text-lg font-semibold text-gray-900 leading-tight">{displayName}</div>
-                  <div className="text-sm text-gray-500 mt-0.5">{user?.email ?? ''}</div>
+                  <div className="text-lg font-semibold text-gray-900 leading-tight">
+                    {profileLoading ? <Skeleton className="h-6 w-40" /> : displayName}
+                  </div>
+                  <div className="text-sm text-gray-500 mt-0.5">
+                    {profileLoading ? <Skeleton className="h-4 w-56" /> : (user?.email ?? '')}
+                  </div>
                 </div>
               </div>
-              {primaryRole && (
+              {!profileLoading && primaryRole && (
                 <span className="inline-flex items-center rounded-full border border-[#3CCED7]/30 bg-[#3CCED7]/5 px-2.5 py-0.5 text-xs font-medium text-[#3CCED7]">
                   {primaryRole}
                 </span>
               )}
+              {profileLoading && <Skeleton className="h-6 w-20 rounded-full" />}
             </div>
 
             <div className="mt-8 flex items-start gap-6 w-full">
@@ -268,7 +261,19 @@ function ProfileV2Content() {
                   </div>
 
                   <div ref={aboutSectionRef} className="mt-4 space-y-1">
-                    {fieldRows.map(({ key, icon: Icon, label, placeholder }) => {
+                    {profileLoading
+                      ? fieldRows.map(({ key }) => (
+                          <div key={key} className="rounded-md px-2 py-2">
+                            <div className="flex items-center gap-3">
+                              <Skeleton className="h-4 w-4 rounded-sm" />
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-4 w-28" />
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      : fieldRows.map(({ key, icon: Icon, label, placeholder }) => {
                       const isActive = activeField === key;
                       const hasValue = !!fields[key]?.trim();
                       return (
@@ -322,10 +327,17 @@ function ProfileV2Content() {
 
                   <div className="mt-5 pt-4 border-t border-gray-100">
                     <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1">Contact</div>
-                    <div className="flex items-center gap-3 px-2 py-1.5 text-sm text-gray-700">
-                      <Mail className="h-4 w-4 text-gray-400 shrink-0" />
-                      <span className="truncate">{user?.email ?? 'Your email'}</span>
-                    </div>
+                    {profileLoading ? (
+                      <div className="flex items-center gap-3 px-2 py-1.5">
+                        <Skeleton className="h-4 w-4 rounded-sm" />
+                        <Skeleton className="h-4 w-44" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 px-2 py-1.5 text-sm text-gray-700">
+                        <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                        <span className="truncate">{user?.email ?? 'Your email'}</span>
+                      </div>
+                    )}
                   </div>
 
                   <p className="mt-4 text-[11px] text-gray-400 italic">
@@ -360,7 +372,9 @@ function ProfileV2Content() {
                     </nav>
                   </div>
                   <div className="p-6">
-                    {activeSection === 'dashboard' ? renderOverview() : <OrganizationContent user={transformUserForOrg()} />}
+                    {activeSection === 'dashboard' ? renderOverview() : (
+                      <OrganizationContent user={transformUserForOrg()} loading={profileLoading} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -374,10 +388,8 @@ function ProfileV2Content() {
 
 export default function ProfileV2Page() {
   return (
-    <ProtectedRoute loadingComponent={<ProfileV2Skeleton />}>
-      <Suspense fallback={<ProfileV2Skeleton />}>
+    <ProtectedRoute renderChildrenWhileLoading>
         <ProfileV2Content />
-      </Suspense>
     </ProtectedRoute>
   );
 }

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertCircle, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useProjectStore } from '@/lib/projectStore';
@@ -123,6 +124,7 @@ export default function SpreadsheetsV2DetailPage() {
 
   const [highlightCell, setHighlightCell] = useState<{ row: number; col: number } | null>(null);
   const [patterns, setPatterns] = useState<WorkflowPatternSummary[]>([]);
+  const [patternsLoading, setPatternsLoading] = useState(true);
   const [exportingPattern, setExportingPattern] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<WorkflowPatternDetail | null>(null);
   const [applySteps, setApplySteps] = useState<
@@ -317,9 +319,11 @@ export default function SpreadsheetsV2DetailPage() {
   }, [spreadsheetId]);
 
   useEffect(() => {
+    setPatternsLoading(true);
     PatternAPI.listPatterns()
       .then((response) => setPatterns(response.results || []))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setPatternsLoading(false));
   }, []);
 
   const loadPatternDetail = useCallback(async (patternId: string) => {
@@ -803,271 +807,296 @@ export default function SpreadsheetsV2DetailPage() {
 
   const activeSheet = sheets.find((s) => s.id === activeSheetId);
 
-  if (loading) {
-    return (
-      <DashboardLayout alerts={[]}>
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <div className="flex flex-col items-center justify-center rounded-xl bg-white p-12 text-center shadow-sm ring-1 ring-gray-100">
-            <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
-            <p className="mt-3 text-sm font-medium text-gray-900">Loading spreadsheet…</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   if (error) {
     return (
-      <DashboardLayout alerts={[]}>
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <div className="flex flex-col items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-10 text-center">
-            <AlertCircle className="h-6 w-6 text-rose-600" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-rose-700">Could not load spreadsheet</p>
-            <p className="mt-1 text-xs text-rose-600">{error}</p>
-            <Link
-              href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
-              className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
-            >
-              Back to spreadsheets
-            </Link>
+      <ProtectedRoute renderChildrenWhileLoading>
+        <DashboardLayout alerts={[]}>
+          <div className="mx-auto max-w-7xl px-6 py-8">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-rose-200 bg-rose-50 p-10 text-center">
+              <AlertCircle className="h-6 w-6 text-rose-600" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold text-rose-700">Could not load spreadsheet</p>
+              <p className="mt-1 text-xs text-rose-600">{error}</p>
+              <Link
+                href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
+                className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
+              >
+                Back to spreadsheets
+              </Link>
+            </div>
           </div>
-        </div>
-      </DashboardLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
-  if (!spreadsheet) {
+  if (!spreadsheet && !loading) {
     return (
-      <DashboardLayout alerts={[]}>
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <div className="flex flex-col items-center justify-center rounded-xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
-            <FileSpreadsheet className="h-7 w-7 text-gray-400" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-gray-900">Spreadsheet not found</p>
-            <p className="mt-1 text-xs text-gray-500">The spreadsheet you're looking for doesn't exist.</p>
-            <Link
-              href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
-              className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
-            >
-              Back to spreadsheets
-            </Link>
+      <ProtectedRoute renderChildrenWhileLoading>
+        <DashboardLayout alerts={[]}>
+          <div className="mx-auto max-w-7xl px-6 py-8">
+            <div className="flex flex-col items-center justify-center rounded-xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
+              <FileSpreadsheet className="h-7 w-7 text-gray-400" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold text-gray-900">Spreadsheet not found</p>
+              <p className="mt-1 text-xs text-gray-500">The spreadsheet you&apos;re looking for doesn&apos;t exist.</p>
+              <Link
+                href={`/spreadsheets${projectId ? `?project_id=${projectId}` : ''}`}
+                className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
+              >
+                Back to spreadsheets
+              </Link>
+            </div>
           </div>
-        </div>
-      </DashboardLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <DashboardLayout alerts={[]}>
-      <div className="mx-auto flex h-[calc(100vh-6rem)] w-full max-w-[1600px] flex-col gap-4 px-6 py-6">
-        <SpreadsheetDetailHeader
-          projectId={projectId}
-          projectName={projectName}
-          spreadsheetName={spreadsheet.name}
-          saving={renamingSpreadsheetSaving}
-          onRename={handleRenameSpreadsheet}
+    <ProtectedRoute renderChildrenWhileLoading>
+      <DashboardLayout alerts={[]}>
+        <div className="mx-auto flex h-[calc(100vh-6rem)] w-full max-w-[1600px] flex-col gap-4 px-6 py-6">
+          <SpreadsheetDetailHeader
+            projectId={projectId}
+            projectName={projectName}
+            spreadsheetName={spreadsheet?.name ?? ''}
+            saving={renamingSpreadsheetSaving}
+            onRename={handleRenameSpreadsheet}
+            loading={loading}
+          />
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              {activeSheet ? (
+                <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    <SpreadsheetGrid
+                      ref={gridRef}
+                      spreadsheetId={Number(spreadsheetId)}
+                      sheetId={activeSheet.id}
+                      spreadsheetName={spreadsheet?.name ?? undefined}
+                      sheetName={activeSheet.name}
+                      frozenRowCount={activeSheet.frozen_row_count ?? 0}
+                      onFreezeHeaderChange={(val) => {
+                        setSheets((prev) =>
+                          prev.map((s) =>
+                            s.id === activeSheet.id ? { ...s, frozen_row_count: val } : s
+                          )
+                        );
+                      }}
+                      onFormulaCommit={handleFormulaCommit}
+                      onHeaderRenameCommit={handleHeaderRenameCommit}
+                      onHighlightCommit={handleHighlightCommit}
+                      onInsertRowCommit={(payload: InsertRowParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: createStepId(),
+                            type: 'INSERT_ROW',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onInsertColumnCommit={(payload: InsertColumnParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: createStepId(),
+                            type: 'INSERT_COLUMN',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onDeleteColumnCommit={(payload: DeleteColumnParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: createStepId(),
+                            type: 'DELETE_COLUMN',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      onFillCommit={(payload: FillSeriesParams) => {
+                        updateAgentSteps((prev) => [
+                          ...prev,
+                          {
+                            id: createStepId(),
+                            type: 'FILL_SERIES',
+                            params: payload,
+                            disabled: false,
+                            createdAt: new Date().toISOString(),
+                          },
+                        ]);
+                      }}
+                      highlightCell={highlightCell}
+                      onHydrationStatusChange={(status) => setSheetHydrationReady(status === 'ready')}
+                      onOpenPivotBuilder={handleCreatePivotSheet}
+                    />
+                  </div>
+                  {isPivotSheet && showPivotEditor ? (
+                    <PivotEditorPanel
+                      config={
+                        pivotConfigsBySheet[activeSheet.id] ||
+                        createEmptyPivotConfig(pivotSourceDataBySheet[activeSheet.id]?.sourceSheetId || 0)
+                      }
+                      sourceSheetName={pivotSourceDataBySheet[activeSheet.id]?.sourceSheetName || 'Unknown'}
+                      sourceColumns={(() => {
+                        const sd = pivotSourceDataBySheet[activeSheet.id];
+                        if (!sd) return [];
+                        const cols: SourceColumn[] = [];
+                        for (let col = 0; col < sd.colCount; col++) {
+                          const cell = sd.cells.get(`0:${col}`);
+                          const header = (cell?.rawInput ?? '').trim();
+                          if (header) cols.push({ index: col, header });
+                        }
+                        return cols;
+                      })()}
+                      sourceRowCount={(() => {
+                        const sd = pivotSourceDataBySheet[activeSheet.id];
+                        if (!sd) return 0;
+                        let count = 0;
+                        for (let row = 1; row < sd.rowCount; row++) {
+                          for (let col = 0; col < sd.colCount; col++) {
+                            const cell = sd.cells.get(`${row}:${col}`);
+                            if ((cell?.rawInput ?? '').trim()) {
+                              count++;
+                              break;
+                            }
+                          }
+                        }
+                        return count;
+                      })()}
+                      onConfigChange={handlePivotConfigChange}
+                      onClose={() => setShowPivotEditor(false)}
+                      onRefresh={handleRefreshPivot}
+                    />
+                  ) : (
+                    <PatternAgentPanelV2
+                      loading={patternsLoading}
+                      items={agentSteps}
+                      patterns={patterns}
+                      selectedPatternId={selectedPattern?.id ?? null}
+                      applySteps={applySteps}
+                      applyError={applyError}
+                      applyFailedIndex={applyFailedIndex}
+                      isApplying={isApplying}
+                      exporting={exportingPattern}
+                      onReorder={updateAgentSteps}
+                      onUpdateStep={(id, updates) =>
+                        updateAgentSteps((prev) => updateTimelineItemById(prev, id, updates))
+                      }
+                      onDeleteStep={(id) =>
+                        updateAgentSteps((prev) => deleteTimelineItemById(prev, id))
+                      }
+                      onMoveStepOutOfGroup={(groupId, step) =>
+                        updateAgentSteps((prev) => moveStepOutOfGroup(prev, groupId, step))
+                      }
+                      onHoverStep={(step) => {
+                        if (step.type === 'APPLY_FORMULA') {
+                          setHighlightCell({ row: step.target.row - 1, col: step.target.col - 1 });
+                        }
+                      }}
+                      onClearHover={() => setHighlightCell(null)}
+                      onExportPattern={handleExportPattern}
+                      onSelectPattern={loadPatternDetail}
+                      onDeletePattern={handleDeletePattern}
+                      onApplyPattern={applyPatternSteps}
+                      onRetryApply={applyPatternSteps}
+                      disableApplyPattern={!sheetHydrationReady}
+                      applyJobStatus={patternJobStatus}
+                      applyJobProgress={patternJobProgress}
+                      applyJobError={patternJobError}
+                    />
+                  )}
+                </div>
+              ) : loading ? (
+                <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white" />
+                  <PatternAgentPanelV2
+                    loading
+                    items={[]}
+                    patterns={[]}
+                    selectedPatternId={null}
+                    applySteps={[]}
+                    applyError={null}
+                    applyFailedIndex={null}
+                    isApplying={false}
+                    exporting={false}
+                    onReorder={() => undefined}
+                    onUpdateStep={() => undefined}
+                    onDeleteStep={() => undefined}
+                    onMoveStepOutOfGroup={() => undefined}
+                    onHoverStep={() => undefined}
+                    onClearHover={() => undefined}
+                    onExportPattern={async () => false}
+                    onSelectPattern={() => undefined}
+                    onDeletePattern={() => undefined}
+                    onApplyPattern={() => undefined}
+                    onRetryApply={() => undefined}
+                    applyJobStatus={null}
+                    applyJobProgress={0}
+                    applyJobError={null}
+                  />
+                </div>
+              ) : sheets.length === 0 ? (
+                <div className="flex h-full w-full items-center justify-center p-10">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <FileSpreadsheet className="h-10 w-10 text-gray-300" aria-hidden="true" />
+                    <p className="mt-3 text-sm font-semibold text-gray-900">No sheets yet</p>
+                    <p className="mt-1 text-xs text-gray-500">Create a sheet to start editing.</p>
+                    <button
+                      type="button"
+                      onClick={() => setCreateSheetOpen(true)}
+                      className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
+                    >
+                      Create sheet
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <SheetTabBarBottom
+              sheets={sheets}
+              activeSheetId={activeSheetId}
+              onSelect={setActiveSheetId}
+              onCreate={() => {
+                setCreateSheetDefaultName(getNextSheetName(sheets));
+                setCreateSheetOpen(true);
+              }}
+              onRename={handleRenameSheet}
+              onRequestDelete={setDeleteConfirmSheet}
+              canDelete={(sheet) => sheets.length > 1 || sheet.id !== activeSheetId}
+              renaming={renaming}
+              loading={loading}
+            />
+          </div>
+        </div>
+
+        <CreateSheetDialog
+          open={createSheetOpen}
+          onOpenChange={setCreateSheetOpen}
+          defaultName={createSheetDefaultName}
+          existingNames={sheets.map((s) => s.name)}
+          onSubmit={handleSubmitCreateSheet}
         />
 
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
-          <div className="flex flex-1 min-h-0 overflow-hidden">
-          {activeSheet ? (
-            <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
-              <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
-                <SpreadsheetGrid
-                  ref={gridRef}
-                  spreadsheetId={Number(spreadsheetId)}
-                  sheetId={activeSheet.id}
-                  spreadsheetName={spreadsheet.name}
-                  sheetName={activeSheet.name}
-                  frozenRowCount={activeSheet.frozen_row_count ?? 0}
-                  onFreezeHeaderChange={(val) => {
-                    setSheets((prev) =>
-                      prev.map((s) =>
-                        s.id === activeSheet.id ? { ...s, frozen_row_count: val } : s
-                      )
-                    );
-                  }}
-                  onFormulaCommit={handleFormulaCommit}
-                  onHeaderRenameCommit={handleHeaderRenameCommit}
-                  onHighlightCommit={handleHighlightCommit}
-                  onInsertRowCommit={(payload: InsertRowParams) => {
-                    updateAgentSteps((prev) => [
-                      ...prev,
-                      {
-                        id: createStepId(),
-                        type: 'INSERT_ROW',
-                        params: payload,
-                        disabled: false,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ]);
-                  }}
-                  onInsertColumnCommit={(payload: InsertColumnParams) => {
-                    updateAgentSteps((prev) => [
-                      ...prev,
-                      {
-                        id: createStepId(),
-                        type: 'INSERT_COLUMN',
-                        params: payload,
-                        disabled: false,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ]);
-                  }}
-                  onDeleteColumnCommit={(payload: DeleteColumnParams) => {
-                    updateAgentSteps((prev) => [
-                      ...prev,
-                      {
-                        id: createStepId(),
-                        type: 'DELETE_COLUMN',
-                        params: payload,
-                        disabled: false,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ]);
-                  }}
-                  onFillCommit={(payload: FillSeriesParams) => {
-                    updateAgentSteps((prev) => [
-                      ...prev,
-                      {
-                        id: createStepId(),
-                        type: 'FILL_SERIES',
-                        params: payload,
-                        disabled: false,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ]);
-                  }}
-                  highlightCell={highlightCell}
-                  onHydrationStatusChange={(status) => setSheetHydrationReady(status === 'ready')}
-                  onOpenPivotBuilder={handleCreatePivotSheet}
-                />
-              </div>
-              {isPivotSheet && showPivotEditor ? (
-                <PivotEditorPanel
-                  config={
-                    pivotConfigsBySheet[activeSheet.id] ||
-                    createEmptyPivotConfig(pivotSourceDataBySheet[activeSheet.id]?.sourceSheetId || 0)
-                  }
-                  sourceSheetName={pivotSourceDataBySheet[activeSheet.id]?.sourceSheetName || 'Unknown'}
-                  sourceColumns={(() => {
-                    const sd = pivotSourceDataBySheet[activeSheet.id];
-                    if (!sd) return [];
-                    const cols: SourceColumn[] = [];
-                    for (let col = 0; col < sd.colCount; col++) {
-                      const cell = sd.cells.get(`0:${col}`);
-                      const header = (cell?.rawInput ?? '').trim();
-                      if (header) cols.push({ index: col, header });
-                    }
-                    return cols;
-                  })()}
-                  sourceRowCount={(() => {
-                    const sd = pivotSourceDataBySheet[activeSheet.id];
-                    if (!sd) return 0;
-                    let count = 0;
-                    for (let row = 1; row < sd.rowCount; row++) {
-                      for (let col = 0; col < sd.colCount; col++) {
-                        const cell = sd.cells.get(`${row}:${col}`);
-                        if ((cell?.rawInput ?? '').trim()) {
-                          count++;
-                          break;
-                        }
-                      }
-                    }
-                    return count;
-                  })()}
-                  onConfigChange={handlePivotConfigChange}
-                  onClose={() => setShowPivotEditor(false)}
-                  onRefresh={handleRefreshPivot}
-                />
-              ) : (
-                <PatternAgentPanelV2
-                  items={agentSteps}
-                  patterns={patterns}
-                  selectedPatternId={selectedPattern?.id ?? null}
-                  applySteps={applySteps}
-                  applyError={applyError}
-                  applyFailedIndex={applyFailedIndex}
-                  isApplying={isApplying}
-                  exporting={exportingPattern}
-                  onReorder={updateAgentSteps}
-                  onUpdateStep={(id, updates) =>
-                    updateAgentSteps((prev) => updateTimelineItemById(prev, id, updates))
-                  }
-                  onDeleteStep={(id) =>
-                    updateAgentSteps((prev) => deleteTimelineItemById(prev, id))
-                  }
-                  onMoveStepOutOfGroup={(groupId, step) =>
-                    updateAgentSteps((prev) => moveStepOutOfGroup(prev, groupId, step))
-                  }
-                  onHoverStep={(step) => {
-                    if (step.type === 'APPLY_FORMULA') {
-                      setHighlightCell({ row: step.target.row - 1, col: step.target.col - 1 });
-                    }
-                  }}
-                  onClearHover={() => setHighlightCell(null)}
-                  onExportPattern={handleExportPattern}
-                  onSelectPattern={loadPatternDetail}
-                  onDeletePattern={handleDeletePattern}
-                  onApplyPattern={applyPatternSteps}
-                  onRetryApply={applyPatternSteps}
-                  disableApplyPattern={!sheetHydrationReady}
-                  applyJobStatus={patternJobStatus}
-                  applyJobProgress={patternJobProgress}
-                  applyJobError={patternJobError}
-                />
-              )}
-            </div>
-          ) : sheets.length === 0 ? (
-            <div className="flex h-full w-full items-center justify-center p-10">
-              <div className="flex flex-col items-center justify-center text-center">
-                <FileSpreadsheet className="h-10 w-10 text-gray-300" aria-hidden="true" />
-                <p className="mt-3 text-sm font-semibold text-gray-900">No sheets yet</p>
-                <p className="mt-1 text-xs text-gray-500">Create a sheet to start editing.</p>
-                <button
-                  type="button"
-                  onClick={() => setCreateSheetOpen(true)}
-                  className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
-                >
-                  Create sheet
-                </button>
-              </div>
-            </div>
-          ) : null}
-          </div>
-          <SheetTabBarBottom
-            sheets={sheets}
-            activeSheetId={activeSheetId}
-            onSelect={setActiveSheetId}
-            onCreate={() => {
-              setCreateSheetDefaultName(getNextSheetName(sheets));
-              setCreateSheetOpen(true);
-            }}
-            onRename={handleRenameSheet}
-            onRequestDelete={setDeleteConfirmSheet}
-            canDelete={(sheet) => sheets.length > 1 || sheet.id !== activeSheetId}
-            renaming={renaming}
-          />
-        </div>
-      </div>
-
-      <CreateSheetDialog
-        open={createSheetOpen}
-        onOpenChange={setCreateSheetOpen}
-        defaultName={createSheetDefaultName}
-        existingNames={sheets.map((s) => s.name)}
-        onSubmit={handleSubmitCreateSheet}
-      />
-
-      <ConfirmDialog
-        isOpen={!!deleteConfirmSheet}
-        type="danger"
-        title="Delete sheet?"
-        message={`"${deleteConfirmSheet?.name ?? ''}" will be hidden. This cannot be undone from the UI.`}
-        confirmText={deletingSheet ? 'Deleting…' : 'Delete'}
-        cancelText="Cancel"
-        onConfirm={handleConfirmDeleteSheet}
-        onCancel={() => setDeleteConfirmSheet(null)}
-      />
-    </DashboardLayout>
+        <ConfirmDialog
+          isOpen={!!deleteConfirmSheet}
+          type="danger"
+          title="Delete sheet?"
+          message={`"${deleteConfirmSheet?.name ?? ''}" will be hidden. This cannot be undone from the UI.`}
+          confirmText={deletingSheet ? 'Deleting…' : 'Delete'}
+          cancelText="Cancel"
+          onConfirm={handleConfirmDeleteSheet}
+          onCancel={() => setDeleteConfirmSheet(null)}
+        />
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }

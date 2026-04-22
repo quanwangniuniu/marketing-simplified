@@ -11,6 +11,7 @@ import PriorityPill from './pills/PriorityPill';
 import TypeBadge from './pills/TypeBadge';
 import FSMActionBar from './FSMActionBar';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function buildIssueKey(projectName?: string, taskId?: number) {
   const prefix = (projectName || 'TASK')
@@ -27,6 +28,7 @@ interface Props {
   onUpdated: () => void | Promise<void>;
   onMutated: () => void | Promise<void>;
   onDelete: () => void;
+  loading?: boolean;
 }
 
 export default function TaskDetailHeader({
@@ -36,6 +38,7 @@ export default function TaskDetailHeader({
   onUpdated,
   onMutated,
   onDelete,
+  loading = false,
 }: Props) {
   const [value, setValue] = useState(task.summary || '');
   const [saving, setSaving] = useState(false);
@@ -121,36 +124,58 @@ export default function TaskDetailHeader({
       </div>
 
       <div className="px-6 py-5">
-        {saving && (
+        {saving && !loading && (
           <div className="mb-1 text-[11px] text-gray-400">Saving…</div>
         )}
-        <input
-          type="text"
-          className="-mx-1 w-[calc(100%+0.5rem)] rounded-md border-0 border-b-2 border-transparent bg-transparent px-1 py-1 text-[22px] font-semibold leading-tight text-gray-900 outline-none transition placeholder:text-gray-300 focus:border-[#3CCED7] disabled:opacity-70"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          disabled={readOnly}
-          placeholder="Task title"
-        />
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill status={task.status} />
-          <PriorityPill priority={priority} />
-          <TypeBadge type={task.type} />
-          <span className="text-[11px] text-gray-400">
-            Owner: {task.owner?.username || task.owner?.email || 'Unassigned'}
-          </span>
-        </div>
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-72" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-24 rounded-full" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
+        ) : (
+          <input
+            type="text"
+            className="-mx-1 w-[calc(100%+0.5rem)] rounded-md border-0 border-b-2 border-transparent bg-transparent px-1 py-1 text-[22px] font-semibold leading-tight text-gray-900 outline-none transition placeholder:text-gray-300 focus:border-[#3CCED7] disabled:opacity-70"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            disabled={readOnly}
+            placeholder="Task title"
+          />
+        )}
+        {!loading && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <StatusPill status={task.status} />
+            <PriorityPill priority={priority} />
+            <TypeBadge type={task.type} />
+            <span className="text-[11px] text-gray-400">
+              Owner: {task.owner?.username || task.owner?.email || 'Unassigned'}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-gray-100 bg-gray-50/40 px-6 py-3">
-        <FSMActionBar task={task} members={members} onMutated={onMutated} />
+        {loading ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-8 w-28 rounded-md" />
+            <Skeleton className="h-8 w-24 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        ) : (
+          <FSMActionBar task={task} members={members} onMutated={onMutated} />
+        )}
       </div>
     </section>
   );

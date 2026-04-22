@@ -92,6 +92,7 @@ export default function DashboardLayout({
   hideRightPanel = false,
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
@@ -102,17 +103,27 @@ export default function DashboardLayout({
     router.push(parent);
   };
   const activeProject = useProjectStore((s) => s.activeProject);
+  const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
   const [autoMeetings, setAutoMeetings] = useState<MeetingListItem[]>([]);
   const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
 
   useEffect(() => {
-    if (useExplicit) return;
+    if (useExplicit) {
+      setMeetingsLoading(false);
+      return;
+    }
     const projectId = activeProject?.id;
+    if (!hasProjectStoreHydrated) {
+      setMeetingsLoading(true);
+      return;
+    }
     if (!projectId) {
       setAutoMeetings([]);
+      setMeetingsLoading(false);
       return;
     }
     let cancelled = false;
+    setMeetingsLoading(true);
     MeetingsAPI.listMeetingsPaginated(projectId, {
       ordering: '-created_at',
       page: 1,
@@ -124,11 +135,14 @@ export default function DashboardLayout({
       })
       .catch(() => {
         if (!cancelled) setAutoMeetings([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMeetingsLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [activeProject?.id, useExplicit]);
+  }, [activeProject?.id, hasProjectStoreHydrated, useExplicit]);
 
   const meetingsForPanel = useExplicit ? upcomingMeetings! : autoMeetings;
 
@@ -182,7 +196,11 @@ export default function DashboardLayout({
       </div>
 
       {!hideRightPanel && (
-        <UpcomingMeetingsPanel meetings={meetingsForPanel} isOpen={isPanelOpen} />
+        <UpcomingMeetingsPanel
+          meetings={meetingsForPanel}
+          isOpen={isPanelOpen}
+          loading={meetingsLoading}
+        />
       )}
     </div>
   );

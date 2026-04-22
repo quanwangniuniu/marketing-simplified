@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, List, Plus } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import SheetKindPill from '@/components/spreadsheets-v2/pills/SheetKindPill';
 import SheetTabContextMenu from './SheetTabContextMenu';
 import type { SheetData } from '@/types/spreadsheet';
@@ -16,6 +17,7 @@ interface Props {
   onRequestDelete: (sheet: SheetData) => void;
   canDelete?: (sheet: SheetData) => boolean;
   renaming?: boolean;
+  loading?: boolean;
 }
 
 export default function SheetTabBarBottom({
@@ -27,6 +29,7 @@ export default function SheetTabBarBottom({
   onRequestDelete,
   canDelete,
   renaming = false,
+  loading = false,
 }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
@@ -62,6 +65,7 @@ export default function SheetTabBarBottom({
         onClick={onCreate}
         aria-label="Add sheet"
         title="Add sheet"
+        disabled={loading}
         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-600 transition hover:bg-white hover:text-[#0E8A96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]/30"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -73,6 +77,7 @@ export default function SheetTabBarBottom({
             type="button"
             aria-label="All sheets"
             title="All sheets"
+            disabled={loading}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-600 transition hover:bg-white hover:text-[#0E8A96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]/30"
           >
             <List className="h-3.5 w-3.5" aria-hidden="true" />
@@ -112,6 +117,19 @@ export default function SheetTabBarBottom({
 
       <div className="flex-1 overflow-x-auto">
         <div className="flex items-center gap-1">
+          {loading &&
+            Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={`sheet-loading-tab-${index}`}
+                className="inline-flex h-7 items-center rounded-md bg-white px-2.5 py-1 shadow-sm ring-1 ring-gray-200"
+              >
+                <Skeleton
+                  className={`h-3.5 rounded-full ${
+                    index % 3 === 0 ? 'w-16' : index % 2 === 0 ? 'w-20' : 'w-12'
+                  }`}
+                />
+              </div>
+            ))}
           {sheets.map((sheet) => {
             const active = sheet.id === activeSheetId;
             const editing = editingId === sheet.id;

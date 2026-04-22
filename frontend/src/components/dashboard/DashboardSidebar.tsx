@@ -15,6 +15,7 @@ import {
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/lib/authStore';
 import useAuth from '@/hooks/useAuth';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -144,7 +145,10 @@ export default function DashboardSidebar() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const { projects, loading, fetchProjects } = useProjects();
   const activeProject = useProjectStore((state) => state.activeProject);
+  const hasProjectStoreHydrated = useProjectStore((state) => state.hasHydrated);
   const user = useAuthStore((state) => state.user);
+  const authLoading = useAuthStore((state) => state.loading);
+  const authInitialized = useAuthStore((state) => state.initialized);
   const { logout } = useAuth();
 
   const userDisplayName = useMemo(() => {
@@ -163,6 +167,8 @@ export default function DashboardSidebar() {
     () => (isAdminRole(user?.roles) ? [...navGroups, adminGroup] : navGroups),
     [user?.roles],
   );
+  const projectHeaderLoading = !hasProjectStoreHydrated || (loading && !activeProject);
+  const userCardLoading = !authInitialized || authLoading;
 
   useEffect(() => {
     if (projects.length === 0) fetchProjects();
@@ -197,13 +203,22 @@ export default function DashboardSidebar() {
         title="Switch project"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-bold">
-              {activeProject ? getInitials(activeProject.name) : '—'}
-            </span>
-          </div>
+          {projectHeaderLoading ? (
+            <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
+              <span className="text-white text-xs font-bold">
+                {activeProject ? getInitials(activeProject.name) : '—'}
+              </span>
+            </div>
+          )}
           <div className="min-w-0 flex-1">
-            {activeProject ? (
+            {projectHeaderLoading ? (
+              <div className="space-y-2 py-0.5">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            ) : activeProject ? (
               <>
                 <div className="text-sm font-medium text-gray-900 truncate">
                   {activeProject.name}
@@ -301,20 +316,33 @@ export default function DashboardSidebar() {
           <button
             className="px-4 py-3 border-t border-gray-100 w-full hover:bg-gray-50 transition-colors text-left focus:outline-none focus:bg-gray-50"
             title="Account menu"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
-                <span className="text-white text-sm font-semibold">
-                  {getInitials(userDisplayName)}
-                </span>
-              </div>
+        >
+          <div className="flex items-center gap-3">
+              {userCardLoading ? (
+                <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
+                  <span className="text-white text-sm font-semibold">
+                    {getInitials(userDisplayName)}
+                  </span>
+                </div>
+              )}
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-gray-900 truncate">
-                  {userDisplayName || 'Not signed in'}
-                </div>
-                <div className="text-xs text-gray-400 truncate">
-                  {userRole || user?.email || 'User'}
-                </div>
+                {userCardLoading ? (
+                  <div className="space-y-2 py-0.5">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {userDisplayName || 'Not signed in'}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">
+                      {userRole || user?.email || 'User'}
+                    </div>
+                  </>
+                )}
               </div>
               <ChevronsUpDown className="w-4 h-4 text-gray-400 shrink-0" />
             </div>
