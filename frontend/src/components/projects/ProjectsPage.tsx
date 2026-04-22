@@ -8,6 +8,7 @@ import Layout from '@/components/layout/Layout';
 import { DerivedProjectStatus, ProjectFilter, useProjects } from '@/hooks/useProjects';
 import { ProjectAPI, ProjectData, ProjectInvitationData } from '@/lib/api/projectApi';
 import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
+import { ArrowRight } from 'lucide-react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -203,8 +204,8 @@ const ProjectCard = ({
             onClick={() => onToggleActive(project.id, !!project.isActiveResolved)}
             disabled={updating}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${project.isActiveResolved
-                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
-                : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70'
+              ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
+              : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70'
               }`}
           >
             {updating && <Loader2 className="h-4 w-4 animate-spin" />}
