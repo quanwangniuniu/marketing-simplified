@@ -30,7 +30,9 @@ export const googleCalendarApi = {
     last_import_at?: string | null;
     last_export_at?: string | null;
   }> => {
-    const response = await api.post("/api/google-calendar/sync/");
+    const response = await api.post("/api/google-calendar/sync/", null, {
+      timeout: 120000,
+    });
     return response.data;
   },
 };

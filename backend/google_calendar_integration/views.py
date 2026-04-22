@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlparse, urlunparse
 
 import requests
 from django.conf import settings
@@ -34,6 +35,17 @@ User = get_user_model()
 
 GOOGLE_CALENDAR_STATE_SALT = "google-calendar-oauth-state"
 GOOGLE_CALENDAR_STATE_MAX_AGE_SECONDS = 600
+
+
+def _frontend_origin() -> str:
+    """Browser redirect base: scheme + host (+ port) only. Ignores any path in FRONTEND_URL."""
+    raw = (getattr(settings, "FRONTEND_URL", None) or "").strip()
+    if not raw:
+        raw = "http://localhost:3000"
+    parts = urlparse(raw)
+    if parts.netloc:
+        return urlunparse((parts.scheme or "http", parts.netloc, "", "", "", "")).rstrip("/")
+    return raw.rstrip("/")
 
 
 def _build_oauth_state(user) -> str:
@@ -105,7 +117,7 @@ class GoogleCalendarCallbackView(APIView):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=missing_code")
+            return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=missing_code")
 
         try:
             payload = signing.loads(
@@ -114,13 +126,13 @@ class GoogleCalendarCallbackView(APIView):
                 max_age=GOOGLE_CALENDAR_STATE_MAX_AGE_SECONDS,
             )
         except signing.SignatureExpired:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=state_expired")
+            return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=state_expired")
         except signing.BadSignature:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=invalid_state")
+            return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=invalid_state")
 
         user_id = payload.get("user_id")
         if not user_id:
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=invalid_state")
+            return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=invalid_state")
 
         try:
             token_data = exchange_code_for_token(code)
@@ -130,7 +142,7 @@ class GoogleCalendarCallbackView(APIView):
             email = fetch_google_email(access_token)
             user = User.objects.filter(id=user_id).first()
             if not user:
-                return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=invalid_state")
+                return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=invalid_state")
 
             cal = ensure_import_calendar(user, email)
             promote_google_import_calendar_to_primary(cal)
@@ -155,9 +167,9 @@ class GoogleCalendarCallbackView(APIView):
             transaction.on_commit(lambda cid=connection.pk: import_for_connection_task.delay(cid))
         except (requests.RequestException, ValueError) as exc:
             logger.warning("Google Calendar callback failed: %s", exc)
-            return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=token_exchange_failed")
+            return redirect(f"{_frontend_origin()}/integrations?google_calendar_error=token_exchange_failed")
 
-        return redirect(f"{settings.FRONTEND_URL}/settings?open_google_calendar=1")
+        return redirect(f"{_frontend_origin()}/integrations?open_google_calendar=1")
 
 
 class GoogleCalendarDisconnectView(APIView):
@@ -172,7 +184,6 @@ class GoogleCalendarSyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        print("DEBUG sync view reached", request.user.id, flush=True)
         connection = GoogleCalendarConnection.objects.filter(
             user=request.user,
             is_active=True,
@@ -189,11 +200,8 @@ class GoogleCalendarSyncView(APIView):
                 {"error": "Sync failed. Check connection status and try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        print("DEBUG import finished", flush=True)
         logger.info("google sync: starting export for user=%s", request.user.id)
-        print("DEBUG before export", flush=True)
         export_primary_calendar_events_to_google(connection)
-        print("DEBUG after export", flush=True)
         connection.refresh_from_db()
         return Response(
             {

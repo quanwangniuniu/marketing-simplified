@@ -419,14 +419,14 @@ export default function CalendarPageContent() {
         <div className="mx-4 mt-2 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
           <span>
             {gcalStatus.last_error_message ||
-              "Google Calendar authorization expired or was revoked. Reconnect in Settings."}
+              "Google Calendar authorization expired or was revoked. Reconnect in Integrations."}
           </span>
           <button
             type="button"
-            onClick={() => router.push("/settings")}
+            onClick={() => router.push("/integrations")}
             className="shrink-0 rounded-md bg-amber-700 px-3 py-1 text-xs font-medium text-white hover:bg-amber-800"
           >
-            Open Settings
+            Open Integrations
           </button>
         </div>
       ) : null}

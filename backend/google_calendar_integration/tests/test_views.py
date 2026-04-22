@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 
 from core.models import Organization
 from google_calendar_integration.models import GoogleCalendarConnection
-from google_calendar_integration.views import _build_oauth_state
+from google_calendar_integration.views import _build_oauth_state, _frontend_origin
 
 User = get_user_model()
 
@@ -191,12 +191,14 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"state": "s"})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=missing_code", r["Location"])
 
     def test_redirects_when_state_missing(self):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "c"})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=missing_code", r["Location"])
 
     @patch("google_calendar_integration.views.signing.loads", side_effect=signing.BadSignature)
@@ -204,6 +206,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "c", "state": "bad"})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=invalid_state", r["Location"])
 
     @patch("google_calendar_integration.views.signing.loads", side_effect=signing.SignatureExpired)
@@ -211,6 +214,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "c", "state": "old"})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=state_expired", r["Location"])
 
     @patch("google_calendar_integration.views.signing.loads", return_value={})
@@ -218,6 +222,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "c", "state": "ignored"})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=invalid_state", r["Location"])
 
     @patch("google_calendar_integration.tasks.import_for_connection_task.delay")
@@ -259,6 +264,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "auth-code", "state": state})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("open_google_calendar=1", r["Location"])
         conn = GoogleCalendarConnection.objects.get(user=self.user)
         self.assertEqual(conn.google_email, "g@mail.com")
@@ -275,6 +281,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         url = reverse("google-calendar-callback")
         r = self.client.get(url, {"code": "auth-code", "state": state})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=token_exchange_failed", r["Location"])
 
     def test_redirects_when_no_access_token_in_exchange_payload(self):
@@ -286,6 +293,7 @@ class GoogleCalendarCallbackViewTests(TestCase):
         ):
             r = self.client.get(url, {"code": "x", "state": state})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=token_exchange_failed", r["Location"])
 
     def test_redirects_when_user_id_in_state_no_longer_exists(self):
@@ -308,4 +316,24 @@ class GoogleCalendarCallbackViewTests(TestCase):
             ):
                 r = self.client.get(url, {"code": "c", "state": state})
         self.assertEqual(r.status_code, 302)
+        self.assertIn("/integrations?", r["Location"])
         self.assertIn("google_calendar_error=invalid_state", r["Location"])
+
+
+@override_settings(FRONTEND_URL="http://frontend.test/settings")
+class GoogleCalendarFrontendOriginTests(TestCase):
+    """FRONTEND_URL must not append a path segment that leaves users on /settings/."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_frontend_origin_strips_path(self):
+        self.assertEqual(_frontend_origin(), "http://frontend.test")
+
+    def test_missing_code_redirect_uses_integrations_not_settings_path(self):
+        url = reverse("google-calendar-callback")
+        r = self.client.get(url, {"state": "s"})
+        self.assertEqual(r.status_code, 302)
+        loc = r["Location"]
+        self.assertTrue(loc.startswith("http://frontend.test/integrations?"), loc)
+        self.assertNotIn("/settings/", loc)

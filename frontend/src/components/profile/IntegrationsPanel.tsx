@@ -7,16 +7,18 @@ import { ChevronRight } from 'lucide-react';
 import SlackIntegrationModal from '@/components/slack/SlackIntegrationModal';
 import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
 import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
+import GoogleCalendarIntegrationModal from '@/components/google-calendar/GoogleCalendarIntegrationModal';
 import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
 import { zoomApi } from '@/lib/api/zoomApi';
 import { googleDocsApi } from '@/lib/api/googleDocsApi';
+import { googleCalendarApi, type GoogleCalendarStatus } from '@/lib/api/googleCalendarApi';
 import { useProjectStore } from '@/lib/projectStore';
 
 interface IntegrationsPanelProps {
   userId: number | string | null;
 }
 
-type IntegrationId = 'slack' | 'zoom' | 'gdocs';
+type IntegrationId = 'slack' | 'zoom' | 'gdocs' | 'gcal';
 
 interface IntegrationRow {
   id: IntegrationId;
@@ -60,6 +62,17 @@ const INTEGRATIONS: IntegrationRow[] = [
       </svg>
     ),
   },
+  {
+    id: 'gcal',
+    name: 'Google Calendar',
+    description: 'Scheduling and sync',
+    iconBg: '#4285F4',
+    iconNode: (
+      <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
@@ -70,22 +83,26 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
   const [isSlackModalOpen, setIsSlackModalOpen] = useState(false);
   const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
   const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
+  const [isGoogleCalendarModalOpen, setIsGoogleCalendarModalOpen] = useState(false);
 
   const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
   const [zoomConnected, setZoomConnected] = useState<boolean | null>(null);
   const [googleDocsConnected, setGoogleDocsConnected] = useState<boolean | null>(null);
   const [googleDocsEmail, setGoogleDocsEmail] = useState<string | null>(null);
+  const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   const hasOpenedSlackRef = useRef(false);
   const hasOpenedZoomRef = useRef(false);
   const hasOpenedGoogleDocsRef = useRef(false);
+  const hasOpenedGoogleCalendarRef = useRef(false);
 
   useEffect(() => {
     if (!userId) {
       setSlackStatus(null);
       setZoomConnected(null);
       setGoogleDocsConnected(null);
+      setGcalStatus(null);
       setLoading(false);
       return;
     }
@@ -94,10 +111,11 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
     const context = activeProject?.id ? { projectId: activeProject.id } : undefined;
 
     const loadAll = async () => {
-      const [slackRes, zoomRes, gdocsRes] = await Promise.allSettled([
+      const [slackRes, zoomRes, gdocsRes, gcalRes] = await Promise.allSettled([
         slackApi.getStatus(context),
         zoomApi.getStatus(),
         googleDocsApi.getStatus(),
+        googleCalendarApi.getStatus(),
       ]);
       if (!isActive) return;
       if (slackRes.status === 'fulfilled') {
@@ -115,6 +133,11 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
         setGoogleDocsEmail(gdocsRes.value.google_email ?? null);
       } else {
         setGoogleDocsConnected(false);
+      }
+      if (gcalRes.status === 'fulfilled') {
+        setGcalStatus(gcalRes.value);
+      } else {
+        setGcalStatus({ connected: false, needs_reconnect: false });
       }
       setLoading(false);
     };
@@ -150,6 +173,11 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       hasOpenedGoogleDocsRef.current = true;
       stripParam('open_google_docs');
     }
+    if (searchParams.get('open_google_calendar') === '1' && !hasOpenedGoogleCalendarRef.current) {
+      setIsGoogleCalendarModalOpen(true);
+      hasOpenedGoogleCalendarRef.current = true;
+      stripParam('open_google_calendar');
+    }
 
     const zoomError = searchParams.get('zoom_error');
     if (zoomError) {
@@ -175,14 +203,31 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       toast.error(messages[googleDocsError] ?? 'Google Docs connection failed. Please try again.');
       stripParam('google_docs_error');
     }
+    const googleCalendarError = searchParams.get('google_calendar_error');
+    if (googleCalendarError) {
+      const messages: Record<string, string> = {
+        missing_code: 'Google Calendar connection failed: missing callback code.',
+        state_expired: 'Google Calendar connection failed: authorization expired. Please try again.',
+        invalid_state: 'Google Calendar connection failed: invalid state.',
+        token_exchange_failed: 'Google Calendar connection failed: token exchange failed.',
+      };
+      toast.error(messages[googleCalendarError] ?? 'Google Calendar connection failed. Please try again.');
+      stripParam('google_calendar_error');
+    }
   }, [slackStatus, loading, searchParams, router]);
 
   const canManageSlack = !!slackStatus?.can_manage_slack;
   const slackConnected = !!slackStatus?.is_connected && !!slackStatus?.is_active;
   const slackDisabled = loading || !canManageSlack;
 
-  const statusFor = (id: IntegrationId) => {
-    if (loading) return { connected: null as boolean | null, label: 'Loading...' };
+  type RowStatus = {
+    connected: boolean | null;
+    label: string;
+    labelEmphasis?: 'warning';
+  };
+
+  const statusFor = (id: IntegrationId): RowStatus => {
+    if (loading) return { connected: null, label: 'Loading...' };
     switch (id) {
       case 'slack':
         if (!canManageSlack) return { connected: null, label: 'Admin only' };
@@ -197,6 +242,29 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
         return googleDocsConnected
           ? { connected: true, label: googleDocsEmail ? `Connected · ${googleDocsEmail}` : 'Connected' }
           : { connected: false, label: 'Not connected' };
+      case 'gcal': {
+        if (!gcalStatus) {
+          return { connected: false, label: 'Not connected' };
+        }
+        if (gcalStatus.needs_reconnect) {
+          return {
+            connected: false,
+            label: gcalStatus.google_email
+              ? `Reconnect required · ${gcalStatus.google_email}`
+              : 'Reconnect required',
+            labelEmphasis: 'warning',
+          };
+        }
+        if (gcalStatus.connected) {
+          return {
+            connected: true,
+            label: gcalStatus.google_email
+              ? `Connected · ${gcalStatus.google_email}`
+              : 'Connected',
+          };
+        }
+        return { connected: false, label: 'Not connected' };
+      }
     }
   };
 
@@ -206,8 +274,10 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       setIsSlackModalOpen(true);
     } else if (id === 'zoom') {
       setIsZoomModalOpen(true);
-    } else {
+    } else if (id === 'gdocs') {
       setIsGoogleDocsModalOpen(true);
+    } else {
+      setIsGoogleCalendarModalOpen(true);
     }
   };
 
@@ -216,14 +286,15 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Integrations</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Connect external services to automate notifications, video meetings, and document workflows.
+          Connect external services to automate notifications, video meetings, document workflows, and calendar
+          sync.
         </p>
       </div>
 
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
         <ul className="divide-y divide-gray-100">
           {INTEGRATIONS.map((item) => {
-            const { connected, label } = statusFor(item.id);
+            const { connected, label, labelEmphasis } = statusFor(item.id);
             const isDisabled = item.id === 'slack' ? slackDisabled : false;
             const dotClass =
               connected === true
@@ -231,6 +302,15 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
                 : connected === false
                   ? 'bg-gray-300'
                   : 'bg-gray-200';
+
+            const labelClass =
+              labelEmphasis === 'warning'
+                ? 'text-amber-700 font-medium'
+                : connected === true
+                  ? 'text-[#3CCED7] font-medium'
+                  : connected === false
+                    ? 'text-gray-500'
+                    : 'text-gray-400';
 
             return (
               <li key={item.id}>
@@ -254,15 +334,7 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`w-2 h-2 rounded-full ${dotClass}`} aria-hidden />
-                    <span
-                      className={`text-xs truncate max-w-[200px] ${
-                        connected === true
-                          ? 'text-[#3CCED7] font-medium'
-                          : connected === false
-                            ? 'text-gray-500'
-                            : 'text-gray-400'
-                      }`}
-                    >
+                    <span className={`text-xs truncate max-w-[200px] ${labelClass}`}>
                       {label}
                     </span>
                   </div>
@@ -280,6 +352,10 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       <GoogleDocsIntegrationModal
         isOpen={isGoogleDocsModalOpen}
         onClose={() => setIsGoogleDocsModalOpen(false)}
+      />
+      <GoogleCalendarIntegrationModal
+        isOpen={isGoogleCalendarModalOpen}
+        onClose={() => setIsGoogleCalendarModalOpen(false)}
       />
     </div>
   );
