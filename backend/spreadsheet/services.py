@@ -261,118 +261,84 @@ class SheetService:
         """
         Ensure sheet has at least the specified number of rows and columns.
         Creates missing rows and columns as needed.
-        
+
         Args:
             sheet: Sheet instance
             row_count: Target number of rows (0-indexed, so row_count=10 means rows 0-9)
             column_count: Target number of columns (0-indexed, so column_count=5 means columns 0-4)
-            
+
         Returns:
             Dict with rows_created, columns_created, total_rows, total_columns
         """
         if row_count < 0 or column_count < 0:
             raise ValidationError("row_count and column_count must be non-negative integers")
-        
-        # Get existing rows and columns
-        # Include deleted rows in max position calculation to avoid reusing deleted positions
-        # This matches the behavior of _get_next_sheet_position for sheets
-        all_rows = set(
-            SheetRow.objects.filter(
-                sheet=sheet
-            ).values_list('position', flat=True)
-        )
-        
-        existing_rows = set(
-            SheetRow.objects.filter(
-                sheet=sheet,
-                is_deleted=False
-            ).values_list('position', flat=True)
-        )
-        
-        existing_columns = set(
-            SheetColumn.objects.filter(
-                sheet=sheet,
-                is_deleted=False
-            ).values_list('position', flat=True)
-        )
-        
-        # Calculate max positions including deleted (to avoid reusing deleted positions)
-        max_row_position = max(all_rows) if all_rows else -1
-        max_column_position = max(
-            SheetColumn.objects.filter(sheet=sheet).values_list('position', flat=True)
-        ) if SheetColumn.objects.filter(sheet=sheet).exists() else -1
-        
-        # Calculate rows and columns to create
-        # row_count=10 means rows 0-9 (10 rows total), so we need range(row_count)
-        # Important: Do NOT reuse deleted positions - always create at max_position + 1
-        rows_to_create = []
-        for position in range(row_count):
-            # Only create if position is not in existing_rows (non-deleted)
-            if position not in existing_rows:
-                # Don't reuse deleted positions - if position exists in all_rows (deleted),
-                # skip it and create at max_position + 1 instead
-                if position in all_rows:
-                    # Position was deleted, don't reuse - will be created at max_position + 1 later
-                    continue
-                # Position never existed, create it
-                rows_to_create.append(position)
-        
-        # If we need more rows beyond max_position (due to deleted positions not being reused),
-        # create new rows starting from max_position + 1
-        target_total_active = row_count
-        current_active_count = len(existing_rows)
-        needed_new_positions = target_total_active - current_active_count - len(rows_to_create)
-        
-        if needed_new_positions > 0:
-            # Create new rows starting from max_row_position + 1
-            # Don't reuse deleted positions - always create at positions beyond max
-            next_position = max_row_position + 1
-            for i in range(needed_new_positions):
-                new_pos = next_position + i
-                # Ensure we don't add duplicates
-                if new_pos not in rows_to_create:
-                    rows_to_create.append(new_pos)
-        
-        columns_to_create = []
-        for position in range(column_count):
-            if position not in existing_columns:
-                columns_to_create.append(position)
-        
-        # Create rows
-        rows_created = 0
-        for position in rows_to_create:
-            SheetRow.objects.create(
-                sheet=sheet,
-                position=position
+
+        # Fetch row state in ONE query (was 3 separate queries + a max() call)
+        row_qs = SheetRow.objects.filter(sheet=sheet).values_list('position', 'is_deleted')
+        all_row_positions: set = set()
+        active_row_positions: set = set()
+        for pos, deleted in row_qs:
+            all_row_positions.add(pos)
+            if not deleted:
+                active_row_positions.add(pos)
+
+        # Fetch column state in ONE query (was 2 separate queries)
+        col_qs = SheetColumn.objects.filter(sheet=sheet).values_list('position', 'is_deleted')
+        active_col_positions: set = set()
+        for pos, deleted in col_qs:
+            if not deleted:
+                active_col_positions.add(pos)
+
+        # --- Rows ---
+        # Set arithmetic replaces the O(N) Python loop over range(row_count).
+        # Deleted positions are not reused; extras go beyond the current max.
+        target_row_positions = set(range(row_count))
+        fresh_row_positions = sorted(target_row_positions - all_row_positions)
+        deleted_in_range = len(target_row_positions & (all_row_positions - active_row_positions))
+
+        max_row_pos = max(all_row_positions) if all_row_positions else -1
+        extra_row_start = max_row_pos + 1
+        extra_row_positions = list(range(extra_row_start, extra_row_start + deleted_in_range))
+
+        rows_to_create_positions = fresh_row_positions + extra_row_positions
+        rows_created = len(rows_to_create_positions)
+        if rows_to_create_positions:
+            # ONE bulk INSERT replaces N individual INSERT statements (e.g. 3 000 rows → 6 batches)
+            SheetRow.objects.bulk_create(
+                [SheetRow(sheet=sheet, position=p, is_deleted=False) for p in rows_to_create_positions],
+                batch_size=500,
+                ignore_conflicts=True,
             )
-            rows_created += 1
-        
-        # Create columns
-        columns_created = 0
-        for position in columns_to_create:
-            SheetColumn.objects.create(
-                sheet=sheet,
-                name=SheetService._generate_column_name(position),
-                position=position
+
+        # --- Columns ---
+        # Original logic: create at any position absent from active columns (including
+        # previously-deleted positions, which have a partial unique index so they can be recreated).
+        cols_to_create_positions = sorted(set(range(column_count)) - active_col_positions)
+        columns_created = len(cols_to_create_positions)
+        if cols_to_create_positions:
+            SheetColumn.objects.bulk_create(
+                [
+                    SheetColumn(
+                        sheet=sheet,
+                        position=p,
+                        name=SheetService._generate_column_name(p),
+                        is_deleted=False,
+                    )
+                    for p in cols_to_create_positions
+                ],
+                batch_size=500,
+                ignore_conflicts=True,
             )
-            columns_created += 1
-        
-        # Get total counts
-        total_rows = SheetRow.objects.filter(
-            sheet=sheet,
-            is_deleted=False
-        ).count()
-        
-        total_columns = SheetColumn.objects.filter(
-            sheet=sheet,
-            is_deleted=False
-        ).count()
-        
+
+        # Compute totals from already-fetched sets (avoids 2 extra COUNT queries)
+        total_rows = len(active_row_positions) + rows_created
+        total_columns = len(active_col_positions) + columns_created
+
         return {
             'rows_created': rows_created,
             'columns_created': columns_created,
             'total_rows': total_rows,
-            'total_columns': total_columns
+            'total_columns': total_columns,
         }
 
     @staticmethod
@@ -1478,7 +1444,11 @@ class CellService:
         # When auto_expand is disabled we need to verify each op's (row, column) already
         # exists. Instead of issuing two .exists() queries per op (O(N) round-trips), fetch
         # all present positions once and do O(1) set lookups below.
-        if not auto_expand:
+        if not auto_expand and not import_mode:
+            # Validate that every target position already exists.
+            # Skipped in import_mode: resize_sheet already created all required rows/columns
+            # before the first chunk fires, so this full-table scan is redundant and runs
+            # once per chunk (e.g. 30 chunks × 2 queries = 60 unnecessary queries).
             existing_row_positions = set(
                 SheetRow.objects.filter(sheet=sheet, is_deleted=False)
                 .values_list('position', flat=True)
@@ -1576,7 +1546,9 @@ class CellService:
 
                     # Auto-expand collection only when raw_input is non-empty
                     if raw_input_stripped:
-                        if not auto_expand:
+                        if not auto_expand and existing_row_positions is not None:
+                            # import_mode skips this check (existing_row_positions is None):
+                            # resize_sheet already created all rows/columns before chunks fire.
                             if row_pos not in existing_row_positions:
                                 validation_errors.append({
                                     'index': index,
@@ -1596,7 +1568,7 @@ class CellService:
                                     'message': f'Column {col_pos} does not exist and auto_expand is disabled'
                                 })
                                 continue
-                        else:
+                        elif auto_expand:
                             rows_to_create.add(row_pos)
                             columns_to_create.add(col_pos)
                     if 'value_type' not in op:
@@ -1678,7 +1650,9 @@ class CellService:
                 if value_type != CellValueType.EMPTY:
                     # Check if row/column exists (for non-auto-expand mode).
                     # Uses the set snapshot built above for O(1) lookup (no per-op SQL).
-                    if not auto_expand:
+                    # import_mode skips this check (existing_row_positions is None):
+                    # resize_sheet already created all rows/columns before chunks fire.
+                    if not auto_expand and existing_row_positions is not None:
                         if row_pos not in existing_row_positions:
                             validation_errors.append({
                                 'index': index,
@@ -1698,7 +1672,7 @@ class CellService:
                                 'message': f'Column {col_pos} does not exist and auto_expand is disabled'
                             })
                             continue
-                    else:
+                    elif auto_expand:
                         # Track rows/columns to create (only for validated non-EMPTY 'set' operations)
                         rows_to_create.add(row_pos)
                         columns_to_create.add(col_pos)

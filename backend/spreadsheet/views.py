@@ -860,9 +860,16 @@ class CellBatchUpdateView(APIView):
         """
         spreadsheet = get_object_or_404(Spreadsheet, id=spreadsheet_id, is_deleted=False)
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
-        
+
         serializer = CellBatchUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.warning(
+                "CellBatchUpdateSerializer validation failed sheet_id=%s ops_count=%s errors=%s",
+                sheet_id,
+                len(request.data.get('operations', [])) if isinstance(request.data, dict) else '?',
+                serializer.errors,
+            )
+            raise ValidationError(serializer.errors)
         
         import_id = serializer.validated_data.get('import_id')
         chunk_index = serializer.validated_data.get('chunk_index')

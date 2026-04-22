@@ -369,7 +369,7 @@ class CellOperationSerializer(serializers.Serializer):
 
 class CellBatchUpdateSerializer(serializers.Serializer):
     """Serializer for batch cell update"""
-    operations = CellOperationSerializer(many=True, min_length=1, max_length=1000)
+    operations = CellOperationSerializer(many=True, min_length=1, max_length=2000)
     auto_expand = serializers.BooleanField(default=True)
     import_id = serializers.UUIDField(required=False, allow_null=True)
     chunk_index = serializers.IntegerField(required=False, allow_null=True, min_value=0)
@@ -379,8 +379,8 @@ class CellBatchUpdateSerializer(serializers.Serializer):
         """Validate operations array"""
         if not value or len(value) == 0:
             raise serializers.ValidationError("Operations array must contain at least one operation")
-        if len(value) > 1000:
-            raise serializers.ValidationError("Operations array cannot exceed 1000 operations")
+        if len(value) > 2000:
+            raise serializers.ValidationError("Operations array cannot exceed 2000 operations")
         return value
 
 

@@ -250,7 +250,7 @@ const TILE_COLUMNS = 20;
 const ADD_ROWS_TRIGGER_DISTANCE = 100; // Show "Add rows" UI when within this many pixels of bottom
 const PREFETCH_ROWS_PER_CHUNK = 100; // Rows per request during post-import hydration
 const PREFETCH_CONCURRENCY = 2; // Max concurrent readCellRange requests during hydration
-const IMPORT_BATCH_CONCURRENCY = 4; // Max concurrent batch uploads during import. After A2 chunks no longer create rows/cols (auto_expand=false), so Row/Column lock contention is gone and 4 is safe. Each chunk only writes disjoint cells.
+const IMPORT_BATCH_CONCURRENCY = 6; // Max concurrent batch uploads during import. After A2 chunks no longer create rows/cols (auto_expand=false), so Row/Column lock contention is gone. 6 is safe since each chunk writes disjoint cells.
 const DEFAULT_NUMBER_FORMAT: NumberFormat = { type: 'GENERAL' };
 
 const DEFAULT_CELL_FORMAT: CellFormat = {
@@ -4185,7 +4185,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       const { operations, maxRow, maxCol } = buildCellOperations(matrix, startRow, startCol);
       const normalizedOperations = operations.map((op) => {
         const normalized = normalizeCommittedValue(op.raw_input || '');
-        if (normalized.valueType !== 'number') {
+        // Only annotate as number when the value is a finite JS number.
+        // Infinity / NaN would be serialized as null by JSON.stringify, which
+        // makes the backend reject the chunk with 400 (number_value required).
+        if (normalized.valueType !== 'number' || !Number.isFinite(normalized.numberValue ?? NaN)) {
           return op;
         }
         return {
@@ -4231,18 +4234,26 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       // Step 2: record the reverse history entry (prev -> next) so the user can undo,
       // AND so we have the prevValue list available if we need to roll back the
       // optimistic apply when the backend resize call fails.
+      //
+      // For large imports (>5 000 ops) skip the per-cell getCellRawInput scan: it would
+      // call getCellRawInput ~30 000 times on the main thread and build a 30 000-element
+      // array just to enable undo. Undo is not a realistic action after a bulk import and
+      // the memory overhead outweighs the benefit.
+      const HISTORY_OP_THRESHOLD = 5000;
       const changes: CellChange[] = [];
-      operations.forEach((op) => {
-        const prevValue = getCellRawInput(op.row, op.column);
-        const nextValue = op.raw_input || '';
-        if (prevValue === nextValue) return;
-        changes.push({
-          row: op.row,
-          col: op.column,
-          prevValue,
-          nextValue,
+      if (operations.length <= HISTORY_OP_THRESHOLD) {
+        operations.forEach((op) => {
+          const prevValue = getCellRawInput(op.row, op.column);
+          const nextValue = op.raw_input || '';
+          if (prevValue === nextValue) return;
+          changes.push({
+            row: op.row,
+            col: op.column,
+            prevValue,
+            nextValue,
+          });
         });
-      });
+      }
 
       if (changes.length) {
         pushHistoryEntry({ changes });
@@ -4262,10 +4273,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
 
       // Step 5: also prepare chunks locally while the network call is in flight; this
       // work is free (pure in-memory) and lets chunks fire as soon as resize lands.
-      // chunk size 1000: the old Q() OR bug that blew up at ~1000 has been replaced
-      // with row_id__in + column_id__in, so 1000 is safe again. Larger chunks halve
-      // network round-trips vs the 500 we temporarily used during the A2 rollout.
-      const chunks = chunkOperations<CellOperation>(normalizedOperations, 1000);
+      // chunk size 2000: row_id__in + column_id__in avoids the old Q() OR recursion limit,
+      // so larger chunks are safe. 2000 halves round-trips vs the previous 1000.
+      const chunks = chunkOperations<CellOperation>(normalizedOperations, 2000);
       setImportProgress({ current: 0, total: chunks.length });
 
       const importId =
