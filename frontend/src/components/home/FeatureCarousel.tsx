@@ -496,12 +496,16 @@ export default function FeatureCarousel() {
               setTransitionEnabled(true)
               setCurrentIndex(i)
             }}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              i === activeDot
-                ? "w-8 bg-brand-gradient"
-                : "w-2 bg-gray-300 hover:bg-gray-400"
-            }`}
-          />
+            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal/40"
+          >
+            <span
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === activeDot
+                  ? "w-8 bg-brand-gradient"
+                  : "w-2 bg-gray-300 hover:bg-gray-400"
+              }`}
+            />
+          </button>
         ))}
       </div>
     </section>
