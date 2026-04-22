@@ -80,13 +80,14 @@ export default function SelectProjectPage() {
       });
   }, [projects, search]);
 
-  const handleSelect = (id: number) => {
-    void setActiveProject(id, false);
+  const handleSelect = async (id: number) => {
+    setDefaultProjectId(id);
+    return setActiveProject(id, false);
   };
 
-  const handleSetDefault = (id: number) => {
+  const handleSetDefault = async (id: number) => {
     setDefaultProjectId(id);
-    void setActiveProject(id, false);
+    return setActiveProject(id, false);
   };
 
   // The second arg to setActiveProject is hard-coded `false` on this page:

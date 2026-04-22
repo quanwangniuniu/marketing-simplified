@@ -23,6 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { useProjectStore } from '@/lib/projectStore';
 
 const getInitials = (name?: string | null): string => {
   if (!name) return '?';
@@ -142,6 +143,7 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<string[]>([]);
   const { projects, loading, fetchProjects } = useProjects();
+  const activeProject = useProjectStore((state) => state.activeProject);
   const user = useAuthStore((state) => state.user);
   const { logout } = useAuth();
 
@@ -165,14 +167,6 @@ export default function DashboardSidebar() {
   useEffect(() => {
     if (projects.length === 0) fetchProjects();
   }, [projects.length, fetchProjects]);
-
-  const activeProject = useMemo(
-    () =>
-      projects.find((p) => p.isActiveResolved) ||
-      projects.find((p) => p.is_active) ||
-      null,
-    [projects]
-  );
 
   const toggle = (label: string) => {
     setExpanded((prev) =>
