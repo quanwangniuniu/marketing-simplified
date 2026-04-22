@@ -743,6 +743,37 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     [sheetId]
   );
 
+  /**
+   * Batched variant of applyCellValueLocal. Used by large imports where calling
+   * the per-cell helper N times would clone the cells Map N times (O(n^2)).
+   * Applies all entries with a single setCells + single cellCache write.
+   */
+  const applyCellValuesLocalBatch = useCallback(
+    (entries: Array<{ row: number; col: number; value: string }>) => {
+      if (!entries.length) return;
+      setCells((prev) => {
+        const next = new Map(prev);
+        const cachedCells = cellCache.get(sheetId) || new Map();
+        for (const entry of entries) {
+          const key = getCellKey(entry.row, entry.col);
+          const cellData: CellData = {
+            rawInput: entry.value,
+            computedType: null,
+            computedNumber: null,
+            computedString: null,
+            errorCode: null,
+            isLoaded: true,
+          };
+          next.set(key, cellData);
+          cachedCells.set(key, cellData);
+        }
+        cellCache.set(sheetId, cachedCells);
+        return next;
+      });
+    },
+    [sheetId]
+  );
+
   // True when a cell editor is mounted and active.
   // In this mode, we must NOT handle grid-level keyboard shortcuts so that
   // native text editing (typing, Backspace/Delete, Ctrl/Cmd+Z, etc.) works.
@@ -914,7 +945,12 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
    * @returns true if resize succeeded, false if clamped to max
    */
   const resizeGrid = useCallback(
-    async (targetRows: number, targetCols: number, persistToBackend: boolean = true): Promise<boolean> => {
+    async (
+      targetRows: number,
+      targetCols: number,
+      persistToBackend: boolean = true,
+      immediate: boolean = false
+    ): Promise<boolean> => {
       const clampedRows = Math.min(MAX_ROWS, Math.max(0, targetRows));
       const clampedCols = Math.min(MAX_COLUMNS, Math.max(0, targetCols));
       const wasClamped = clampedRows < targetRows || clampedCols < targetCols;
@@ -924,18 +960,34 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       dimensionsCache.set(sheetId, { rowCount: clampedRows, colCount: clampedCols });
 
       if (persistToBackend) {
-        // Debounced resize API call
-        if (resizeDebounceTimerRef.current) {
-          clearTimeout(resizeDebounceTimerRef.current);
-        }
-        resizeDebounceTimerRef.current = setTimeout(async () => {
+        if (immediate) {
+          // Skip debounce and await the backend call. Used by the import path which
+          // needs all SheetRow/SheetColumn records to exist before firing data chunks,
+          // so chunks can pass auto_expand=false and skip all row/col creation work.
+          if (resizeDebounceTimerRef.current) {
+            clearTimeout(resizeDebounceTimerRef.current);
+            resizeDebounceTimerRef.current = null;
+          }
           try {
             await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
           } catch (error: any) {
             console.error('Failed to persist sheet dimensions:', error);
-            // Non-blocking error - dimensions are still updated locally
+            return false;
           }
-        }, RESIZE_DEBOUNCE_MS);
+        } else {
+          // Debounced resize API call (normal editing path)
+          if (resizeDebounceTimerRef.current) {
+            clearTimeout(resizeDebounceTimerRef.current);
+          }
+          resizeDebounceTimerRef.current = setTimeout(async () => {
+            try {
+              await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
+            } catch (error: any) {
+              console.error('Failed to persist sheet dimensions:', error);
+              // Non-blocking error - dimensions are still updated locally
+            }
+          }, RESIZE_DEBOUNCE_MS);
+        }
       }
 
       return !wasClamped;
@@ -4118,17 +4170,21 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         return;
       }
 
-      // Auto-resize grid once to fit import (if needed)
-      const needsRowResize = requiredRows > rowCount;
-      const needsColResize = requiredCols > colCount;
-      if (needsRowResize || needsColResize) {
-        const newRowCount = Math.max(rowCount, requiredRows);
-        const newColCount = Math.max(colCount, requiredCols);
-        const success = await resizeGrid(newRowCount, newColCount, true);
-        if (!success) {
-          toast.error('Failed to resize grid for import');
-          return;
-        }
+      // Ensure backend has all SheetRow/SheetColumn records for the imported region
+      // BEFORE firing chunks. We use immediate=true to skip the debounce so each
+      // chunk can pass auto_expand=false and avoid redundant row/col existence
+      // checks and bulk_create attempts on the server.
+      const targetRowCount = Math.max(rowCount, requiredRows);
+      const targetColCount = Math.max(colCount, requiredCols);
+      const resizeSucceeded = await resizeGrid(
+        targetRowCount,
+        targetColCount,
+        /* persistToBackend */ true,
+        /* immediate */ true,
+      );
+      if (!resizeSucceeded) {
+        toast.error('Failed to resize grid for import');
+        return;
       }
 
       const chunks = chunkOperations<CellOperation>(normalizedOperations, 500);
@@ -4159,10 +4215,13 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         pushHistoryEntry({ changes });
       }
 
-      // Optimistically apply to UI (sparse)
-      operations.forEach((op) => {
-        applyCellValueLocal(op.row, op.column, op.raw_input || '');
-      });
+      // Optimistically apply to UI (sparse) in a single batched setCells call.
+      // Calling the per-cell applyCellValueLocal N times would clone the cells Map
+      // N times -> O(n^2). For a 100k-cell import that freezes the browser for minutes;
+      // the batched helper keeps this to a single Map clone.
+      applyCellValuesLocalBatch(
+        operations.map((op) => ({ row: op.row, col: op.column, value: op.raw_input || '' }))
+      );
 
       // Error reporting strategy:
       // - `firstError` owns the single reported failure. Concurrent in-flight requests
@@ -4187,8 +4246,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       try {
         const chunkTasks = chunks.map((chunk, i) => async () => {
           if (signal.aborted) return;
+          // auto_expand=false: rows/cols were already created by the immediate
+          // resize above, so the server can skip existence checks and bulk_create.
           const runOnce = () =>
-            SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, true, {
+            SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, false, {
               importId,
               chunkIndex: i,
               importMode: true,
@@ -4226,9 +4287,39 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         await runWithConcurrency(chunkTasks, IMPORT_BATCH_CONCURRENCY);
         if (firstError) throw firstError;
 
-        // All chunks complete: finalize (recalc formulas), then hydrate
+        // All chunks complete: finalize (recalc formulas) on the server.
         await SpreadsheetAPI.finalizeImport(spreadsheetId, sheetId, importId);
-        await runPostImportHydration(maxRow, maxCol);
+
+        // Hydration strategy:
+        // - Pure data imports (no '=' prefixed ops): the optimistic local apply already
+        //   holds every raw_input we just pushed. A full re-fetch would be ~100 range
+        //   requests returning identical data. Skip it.
+        // - Imports containing formulas: the server may have computed values we don't
+        //   have locally. Fetch ONCE over the bounding box of formula ops rather than
+        //   slicing the whole region into many 100-row requests.
+        const formulaOps = operations.filter((op) => (op.raw_input || '').startsWith('='));
+        if (formulaOps.length === 0) {
+          setHydrationStatus('ready');
+        } else {
+          let fMinRow = Infinity;
+          let fMaxRow = -Infinity;
+          let fMinCol = Infinity;
+          let fMaxCol = -Infinity;
+          for (const op of formulaOps) {
+            if (op.row < fMinRow) fMinRow = op.row;
+            if (op.row > fMaxRow) fMaxRow = op.row;
+            if (op.column < fMinCol) fMinCol = op.column;
+            if (op.column > fMaxCol) fMaxCol = op.column;
+          }
+          setHydrationStatus('hydrating');
+          try {
+            await loadCellRange(fMinRow, fMaxRow, fMinCol, fMaxCol, true);
+          } catch (err) {
+            console.error('[Hydration] Formula bbox fetch failed:', err);
+          } finally {
+            setHydrationStatus('ready');
+          }
+        }
         importAbortControllerRef.current = null;
       } catch (error: any) {
         importAbortControllerRef.current = null;
@@ -4288,7 +4379,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       }
     },
     [
-      applyCellValueLocal,
+      applyCellValuesLocalBatch,
       getCellRawInput,
       pushHistoryEntry,
       spreadsheetId,
@@ -4297,7 +4388,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       parseImportError,
       reconcileImport,
       loadCellRange,
-      runPostImportHydration,
       runWithConcurrency,
       visibleRange,
       resizeGrid,

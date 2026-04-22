@@ -2523,3 +2523,76 @@ class CellBatchUpdateConcurrentColumnCreateTest(TestCase):
             Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
             15,
         )
+
+
+class CellBatchUpdateAutoExpandFalseTest(TestCase):
+    """auto_expand=False fast path used by import after a synchronous resize.
+
+    Phase 1 precomputes existing (row, col) positions once and does O(1) lookup
+    per op rather than two .exists() queries. Phase 2 has nothing to bulk_create
+    (all positions already exist).
+    """
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _batch(self, operations, auto_expand):
+        url = f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        payload = {
+            'operations': operations,
+            'auto_expand': auto_expand,
+            'import_mode': True,
+            'import_id': 'imp',
+            'chunk_index': 0,
+        }
+        return self.client.post(url, payload, format='json')
+
+    def test_auto_expand_false_missing_row_returns_400(self):
+        # Only column 0 pre-created, no rows.
+        SheetColumn.objects.create(sheet=self.sheet, position=0, name='A', is_deleted=False)
+        response = self._batch(
+            [{'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'}],
+            auto_expand=False,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        detail = response.data.get('detail', response.data)
+        self.assertEqual(detail.get('code'), 'INVALID_ARGUMENT')
+        fields = [d.get('field') for d in detail.get('details', [])]
+        self.assertIn('row', fields)
+
+    def test_auto_expand_false_missing_column_returns_400(self):
+        SheetRow.objects.create(sheet=self.sheet, position=0, is_deleted=False)
+        response = self._batch(
+            [{'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'}],
+            auto_expand=False,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        detail = response.data.get('detail', response.data)
+        fields = [d.get('field') for d in detail.get('details', [])]
+        self.assertIn('column', fields)
+
+    def test_auto_expand_false_all_present_succeeds_with_no_expansion(self):
+        for r in range(3):
+            SheetRow.objects.create(sheet=self.sheet, position=r, is_deleted=False)
+        for c in range(3):
+            SheetColumn.objects.create(sheet=self.sheet, position=c, name=f'C{c}', is_deleted=False)
+
+        operations = [
+            {'operation': 'set', 'row': r, 'column': c, 'raw_input': f'{r},{c}'}
+            for r in range(3)
+            for c in range(3)
+        ]
+        response = self._batch(operations, auto_expand=False)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['rows_expanded'], 0)
+        self.assertEqual(response.data['columns_expanded'], 0)
+        self.assertEqual(
+            Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
+            9,
+        )

@@ -1474,7 +1474,23 @@ class CellService:
         validation_errors = []
         rows_to_create = set()
         columns_to_create = set()
-        
+
+        # When auto_expand is disabled we need to verify each op's (row, column) already
+        # exists. Instead of issuing two .exists() queries per op (O(N) round-trips), fetch
+        # all present positions once and do O(1) set lookups below.
+        if not auto_expand:
+            existing_row_positions = set(
+                SheetRow.objects.filter(sheet=sheet, is_deleted=False)
+                .values_list('position', flat=True)
+            )
+            existing_col_positions = set(
+                SheetColumn.objects.filter(sheet=sheet, is_deleted=False)
+                .values_list('position', flat=True)
+            )
+        else:
+            existing_row_positions = None
+            existing_col_positions = None
+
         for index, op in enumerate(operations):
             # Validate required fields
             if 'operation' not in op:
@@ -1561,13 +1577,7 @@ class CellService:
                     # Auto-expand collection only when raw_input is non-empty
                     if raw_input_stripped:
                         if not auto_expand:
-                            row_exists = SheetRow.objects.filter(
-                                sheet=sheet,
-                                position=row_pos,
-                                is_deleted=False
-                            ).exists()
-
-                            if not row_exists:
+                            if row_pos not in existing_row_positions:
                                 validation_errors.append({
                                     'index': index,
                                     'row': row_pos,
@@ -1577,13 +1587,7 @@ class CellService:
                                 })
                                 continue
 
-                            col_exists = SheetColumn.objects.filter(
-                                sheet=sheet,
-                                position=col_pos,
-                                is_deleted=False
-                            ).exists()
-
-                            if not col_exists:
+                            if col_pos not in existing_col_positions:
                                 validation_errors.append({
                                     'index': index,
                                     'row': row_pos,
@@ -1672,15 +1676,10 @@ class CellService:
                 # Auto-expand collection: only AFTER value_type is validated and confirmed != EMPTY
                 # set+EMPTY must never trigger expansion (treated as clear)
                 if value_type != CellValueType.EMPTY:
-                    # Check if row/column exists (for non-auto-expand mode)
+                    # Check if row/column exists (for non-auto-expand mode).
+                    # Uses the set snapshot built above for O(1) lookup (no per-op SQL).
                     if not auto_expand:
-                        row_exists = SheetRow.objects.filter(
-                            sheet=sheet,
-                            position=row_pos,
-                            is_deleted=False
-                        ).exists()
-                        
-                        if not row_exists:
+                        if row_pos not in existing_row_positions:
                             validation_errors.append({
                                 'index': index,
                                 'row': row_pos,
@@ -1689,14 +1688,8 @@ class CellService:
                                 'message': f'Row {row_pos} does not exist and auto_expand is disabled'
                             })
                             continue
-                        
-                        col_exists = SheetColumn.objects.filter(
-                            sheet=sheet,
-                            position=col_pos,
-                            is_deleted=False
-                        ).exists()
-                        
-                        if not col_exists:
+
+                        if col_pos not in existing_col_positions:
                             validation_errors.append({
                                 'index': index,
                                 'row': row_pos,
