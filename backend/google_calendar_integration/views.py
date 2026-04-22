@@ -25,6 +25,7 @@ from .services import (
     fetch_primary_calendar_id,
     get_calendar_redirect_uri,
     import_events_for_connection,
+    promote_google_import_calendar_to_primary,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,7 @@ class GoogleCalendarCallbackView(APIView):
                 return redirect(f"{settings.FRONTEND_URL}/settings?google_calendar_error=invalid_state")
 
             cal = ensure_import_calendar(user, email)
+            promote_google_import_calendar_to_primary(cal)
             primary_id = fetch_primary_calendar_id(access_token)
 
             connection, _ = GoogleCalendarConnection.objects.get_or_create(user_id=user_id)
@@ -170,6 +172,7 @@ class GoogleCalendarSyncView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        print("DEBUG sync view reached", request.user.id, flush=True)
         connection = GoogleCalendarConnection.objects.filter(
             user=request.user,
             is_active=True,
@@ -186,7 +189,11 @@ class GoogleCalendarSyncView(APIView):
                 {"error": "Sync failed. Check connection status and try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+        print("DEBUG import finished", flush=True)
+        logger.info("google sync: starting export for user=%s", request.user.id)
+        print("DEBUG before export", flush=True)
         export_primary_calendar_events_to_google(connection)
+        print("DEBUG after export", flush=True)
         connection.refresh_from_db()
         return Response(
             {

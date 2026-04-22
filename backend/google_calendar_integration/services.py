@@ -178,6 +178,20 @@ def ensure_import_calendar(user, google_email: str | None) -> Calendar:
     )
 
 
+def promote_google_import_calendar_to_primary(google_calendar: Calendar) -> None:
+    """
+    Mark the Google-linked local calendar ("Google (email)") as the user's primary calendar.
+
+    Google Calendar integration uses this single calendar for both import (events land here)
+    and export (eligible events are read from primary). Calendar.save demotes any other
+    primary for the same owner/organization (see calendars.Calendar.save).
+    """
+    if google_calendar.is_deleted or not google_calendar.owner_id:
+        return
+    google_calendar.is_primary = True
+    google_calendar.save(update_fields=["is_primary", "updated_at"])
+
+
 def _google_time_to_platform(start: dict, end: dict) -> tuple[datetime, datetime, bool, str]:
     tz = "UTC"
     if "dateTime" in start:
@@ -223,11 +237,22 @@ def upsert_imported_event(
     if status == "cancelled":
         external_id = google_event.get("id")
         if external_id:
+            now = timezone.now()
+            org_id = connection.import_calendar.organization_id
             Event.objects.filter(
-                organization_id=connection.import_calendar.organization_id,
+                organization_id=org_id,
                 calendar_id=connection.import_calendar_id,
                 external_id=external_id,
-            ).update(is_deleted=True, status="cancelled")
+                is_deleted=False,
+            ).update(is_deleted=True, status="cancelled", updated_at=now)
+            # Platform-primary copy that was exported to Google (same calendar as import source)
+            Event.objects.filter(
+                organization_id=org_id,
+                calendar__owner=connection.user,
+                calendar__is_primary=True,
+                is_deleted=False,
+                metadata__google_calendar_event_id=external_id,
+            ).update(is_deleted=True, status="cancelled", updated_at=now)
         return
 
     start = google_event.get("start") or {}
@@ -288,15 +313,81 @@ def upsert_imported_event(
         event.save()
 
 
+def reconcile_removed_events_after_google_import(
+    connection: GoogleCalendarConnection,
+    google_event_ids: set[str],
+    window_start,
+    window_end,
+) -> None:
+    """
+    Soft-delete local copies for Google events that no longer appear in the synced window.
+
+    Import uses a time-bounded events.list; we only reconcile rows that intersect that
+    same window so events outside the fetch range are not mistaken for deleted remotely.
+    """
+    if not connection.import_calendar_id:
+        return
+    org_id = connection.import_calendar.organization_id
+    imp_cal_id = connection.import_calendar_id
+    now = timezone.now()
+
+    base_imp = Event.objects.filter(
+        organization_id=org_id,
+        calendar_id=imp_cal_id,
+        is_deleted=False,
+        start_datetime__lt=window_end,
+        end_datetime__gt=window_start,
+    ).exclude(external_id__isnull=True).exclude(external_id="")
+    base_imp = base_imp.filter(metadata__source=METADATA_SOURCE_GOOGLE_CALENDAR)
+
+    stale_external_ids = [
+        eid
+        for eid in base_imp.values_list("external_id", flat=True).distinct()
+        if eid and eid not in google_event_ids
+    ]
+    if stale_external_ids:
+        Event.objects.filter(
+            organization_id=org_id,
+            calendar_id=imp_cal_id,
+            external_id__in=stale_external_ids,
+            is_deleted=False,
+        ).update(is_deleted=True, status="cancelled", updated_at=now)
+
+    primary_qs = Event.objects.filter(
+        organization_id=org_id,
+        calendar__owner=connection.user,
+        calendar__is_primary=True,
+        is_deleted=False,
+        start_datetime__lt=window_end,
+        end_datetime__gt=window_start,
+    ).select_related("calendar")
+
+    primary_ids = []
+    for ev in primary_qs.iterator(chunk_size=200):
+        gid = (ev.metadata or {}).get(METADATA_GOOGLE_EVENT_ID_KEY)
+        if gid and gid not in google_event_ids:
+            primary_ids.append(ev.pk)
+    if primary_ids:
+        Event.objects.filter(pk__in=primary_ids).update(
+            is_deleted=True, status="cancelled", updated_at=now
+        )
+
+
 def import_events_for_connection(connection: GoogleCalendarConnection) -> None:
     if not connection.is_active or not connection.primary_calendar_id:
         return
     if not connection.import_calendar_id:
         return
 
+    cal = Calendar.objects.filter(pk=connection.import_calendar_id, is_deleted=False).first()
+    if cal:
+        promote_google_import_calendar_to_primary(cal)
+
     now = timezone.now()
-    time_min = (now - timedelta(days=90)).isoformat()
-    time_max = (now + timedelta(days=365)).isoformat()
+    window_start = now - timedelta(days=90)
+    window_end = now + timedelta(days=365)
+    time_min = window_start.isoformat()
+    time_max = window_end.isoformat()
 
     def _list_page(token: str, page_token: str | None = None):
         params: dict[str, Any] = {
@@ -305,6 +396,8 @@ def import_events_for_connection(connection: GoogleCalendarConnection) -> None:
             "singleEvents": "true",
             "orderBy": "startTime",
             "maxResults": 250,
+            # Include cancelled/deleted so we can mark matching platform rows (see upsert_imported_event)
+            "showDeleted": "true",
         }
         if page_token:
             params["pageToken"] = page_token
@@ -319,6 +412,7 @@ def import_events_for_connection(connection: GoogleCalendarConnection) -> None:
         return r.json()
 
     try:
+        google_event_ids: set[str] = set()
         page_token = None
         while True:
             pt = page_token
@@ -328,10 +422,16 @@ def import_events_for_connection(connection: GoogleCalendarConnection) -> None:
 
             data = run_google_calendar_api(connection, _call)
             for item in data.get("items", []):
+                g_eid = item.get("id")
+                if g_eid:
+                    google_event_ids.add(g_eid)
                 upsert_imported_event(connection, item)
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
+        reconcile_removed_events_after_google_import(
+            connection, google_event_ids, window_start, window_end
+        )
         connection.last_import_at = timezone.now()
         connection.needs_reconnect = False
         connection.last_error_message = None
@@ -373,12 +473,23 @@ def platform_event_to_google_body(event: Event) -> dict[str, Any]:
 
 
 def should_export_event_to_google(event: Event) -> bool:
-    if not event.calendar or not event.calendar.is_primary:
+    if not event.calendar:
+        logger.info("google export: skip event=%s: no calendar on event", event.id)
+        return False
+    if not event.calendar.is_primary:
+        logger.info(
+            "google export: skip event=%s: not primary calendar (calendar_id=%s is_primary=%s)",
+            event.id,
+            event.calendar_id,
+            event.calendar.is_primary,
+        )
         return False
     if event.is_recurring:
+        logger.info("google export: skip event=%s: recurring events are not exported", event.id)
         return False
     meta = event.metadata or {}
     if meta.get(METADATA_SOURCE_KEY) == METADATA_SOURCE_GOOGLE_CALENDAR:
+        logger.info("google export: skip event=%s: metadata source is google_calendar import copy", event.id)
         return False
     return True
 
@@ -388,12 +499,24 @@ def export_event_to_google(event: Event) -> None:
         return
     owner = event.calendar.owner
     if not owner:
+        logger.info("google export: skip event=%s: calendar has no owner", event.id)
         return
     try:
         connection = GoogleCalendarConnection.objects.get(user=owner, is_active=True)
     except GoogleCalendarConnection.DoesNotExist:
+        logger.info(
+            "google export: skip event=%s: no active GoogleCalendarConnection for owner=%s",
+            event.id,
+            owner.id,
+        )
         return
     if connection.needs_reconnect or not connection.primary_calendar_id:
+        logger.info(
+            "google export: skip event=%s: connection needs_reconnect=%s primary_calendar_id=%s",
+            event.id,
+            connection.needs_reconnect,
+            connection.primary_calendar_id,
+        )
         return
 
     cid = connection.primary_calendar_id
@@ -495,6 +618,10 @@ def export_primary_calendar_events_to_google(connection: GoogleCalendarConnectio
     """Push eligible primary-calendar platform events to Google (same rules as export_event_to_google)."""
     org = get_user_organization(connection.user)
     if not org:
+        logger.info(
+            "google export: no organization for user=%s; skipping export",
+            connection.user_id,
+        )
         return
     primary = (
         Calendar.objects.filter(
@@ -505,13 +632,24 @@ def export_primary_calendar_events_to_google(connection: GoogleCalendarConnectio
         )
         .first()
     )
+    logger.info(
+        "google export: found primary calendar=%s for user=%s",
+        primary.id if primary else None,
+        connection.user_id,
+    )
     if not primary:
+        logger.info(
+            "google export: no primary calendar row for org=%s user=%s; skipping export",
+            org.id,
+            connection.user_id,
+        )
         return
     for event in (
         Event.objects.filter(calendar=primary)
         .select_related("calendar", "calendar__owner")
         .iterator(chunk_size=50)
     ):
+        logger.info("google export: checking event=%s title=%s", event.id, event.title)
         export_event_to_google(event)
 
 
