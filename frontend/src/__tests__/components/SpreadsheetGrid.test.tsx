@@ -1,17 +1,21 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SpreadsheetGrid, { SpreadsheetGridHandle } from '@/components/spreadsheets/SpreadsheetGrid';
 
 const readCellRangeMock = jest.fn().mockResolvedValue({ cells: [] });
 const deleteRowsMock = jest.fn().mockResolvedValue({ operation_id: 1 });
 const deleteColumnsMock = jest.fn().mockResolvedValue({ operation_id: 1 });
+const batchUpdateCellsMock = jest.fn().mockResolvedValue({});
+const resizeSheetMock = jest.fn().mockResolvedValue({});
+const finalizeImportMock = jest.fn().mockResolvedValue({ status: 'ok' });
 
 jest.mock('@/lib/api/spreadsheetApi', () => ({
   SpreadsheetAPI: {
     readCellRange: (...args: any[]) => readCellRangeMock(...args),
-    batchUpdateCells: jest.fn().mockResolvedValue({}),
-    resizeSheet: jest.fn().mockResolvedValue({}),
+    batchUpdateCells: (...args: any[]) => batchUpdateCellsMock(...args),
+    resizeSheet: (...args: any[]) => resizeSheetMock(...args),
+    finalizeImport: (...args: any[]) => finalizeImportMock(...args),
     getHighlights: jest.fn().mockResolvedValue({ highlights: [] }),
     batchUpdateHighlights: jest.fn().mockResolvedValue({ updated: 0, deleted: 0 }),
     deleteRows: (...args: any[]) => deleteRowsMock(...args),
@@ -377,6 +381,98 @@ describe('SpreadsheetGrid delete row/column', () => {
     expect(deleteRowsMock).toHaveBeenCalled();
     expect(toastError).toHaveBeenCalled();
     expect(toastError.mock.calls[0][0]).toContain('Server error');
+  });
+});
+
+
+describe('SpreadsheetGrid import error handling', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    readCellRangeMock.mockReset();
+    readCellRangeMock.mockResolvedValue({ cells: [] });
+    batchUpdateCellsMock.mockReset();
+    resizeSheetMock.mockReset();
+    resizeSheetMock.mockResolvedValue({});
+    finalizeImportMock.mockReset();
+    finalizeImportMock.mockResolvedValue({ status: 'ok' });
+    toastSuccess.mockClear();
+    toastError.mockClear();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
+  });
+
+  const uploadCsv = async (container: HTMLElement, csv: string) => {
+    const file = new File([csv], 'test.csv', { type: 'text/csv' });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+  };
+
+  it('emits exactly one toast when batch chunks fail persistently', async () => {
+    // 500 is the chunk size; 600 rows x 1 col -> 2 chunks (500 + 100).
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    // Every call to batchUpdateCells rejects with HTTP 500 so retry also fails.
+    batchUpdateCellsMock.mockRejectedValue({
+      response: { status: 500, data: { detail: 'boom' } },
+      message: 'Request failed with status code 500',
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // Wait for retry + abort + outer catch to resolve (retry backoff is 500ms).
+    await waitFor(
+      () => {
+        expect(toastError).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+    // Give any trailing aborted chunks time to settle without surfacing extra toasts.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).not.toHaveBeenCalled();
+    // finalizeImport must NOT be called because we aborted before all chunks finished.
+    expect(finalizeImportMock).not.toHaveBeenCalled();
+  });
+
+  it('does not finalize the import when batch chunks fail', async () => {
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    batchUpdateCellsMock.mockRejectedValue({
+      response: { status: 500, data: { detail: 'boom' } },
+      message: 'Request failed with status code 500',
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled(), { timeout: 3000 });
+
+    expect(finalizeImportMock).not.toHaveBeenCalled();
   });
 });
 

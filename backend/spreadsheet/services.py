@@ -1138,6 +1138,10 @@ class CellService:
         """
         Recalculate all formula cells in a sheet. Used after import finalize when
         import_mode deferred formula computation.
+
+        Also rebuilds dependency edges for each formula cell here, because
+        batch_update_cells skips _update_dependencies under import_mode to avoid
+        N+1 work per chunk.
         """
         formula_cells = list(
             Cell.objects.filter(
@@ -1150,6 +1154,8 @@ class CellService:
             ).select_related('sheet', 'row', 'column')
         )
         if formula_cells:
+            for cell in formula_cells:
+                CellService._update_dependencies(cell)
             CellService._recalculate_formula_cells(formula_cells)
 
     @staticmethod
@@ -1712,15 +1718,18 @@ class CellService:
             })
         
         # PHASE 2: EXECUTION (bulk writes - no per-cell save/update_or_create)
+        # Note: previously this section called _log_position_duplicates once per unique
+        # row/col position for diagnostics, which issued hundreds of extra queries per
+        # chunk during import. The low-traffic _get_or_create_row/_column paths still
+        # log duplicates, so diagnostic coverage is preserved.
         row_positions = {op['row'] for op in operations}
         column_positions = {op['column'] for op in operations}
 
-        for row_pos in row_positions:
-            CellService._log_position_duplicates(SheetRow, sheet, row_pos, 'row')
-        for col_pos in column_positions:
-            CellService._log_position_duplicates(SheetColumn, sheet, col_pos, 'column')
-
         # --- Bulk create missing rows (1 query fetch + 1 bulk_create) ---
+        # Use ignore_conflicts=True so concurrent chunks racing to create the same
+        # (sheet, position) row do not trigger IntegrityError against the partial
+        # unique constraint `unique_row_position_per_sheet_active`. Re-SELECT afterwards
+        # because ignore_conflicts=True does not backfill primary keys.
         existing_rows_list = list(
             SheetRow.objects.filter(
                 sheet=sheet,
@@ -1736,9 +1745,16 @@ class CellService:
                 SheetRow(sheet=sheet, position=p, is_deleted=False)
                 for p in missing_row_positions
             ]
-            SheetRow.objects.bulk_create(new_rows, batch_size=1000)
-            rows_expanded = len(new_rows)
-            for r in new_rows:
+            SheetRow.objects.bulk_create(new_rows, batch_size=500, ignore_conflicts=True)
+            refreshed_rows = list(
+                SheetRow.objects.filter(
+                    sheet=sheet,
+                    position__in=missing_row_positions,
+                    is_deleted=False,
+                ).select_related('sheet')
+            )
+            rows_expanded = len(refreshed_rows)
+            for r in refreshed_rows:
                 existing_rows[r.position] = r
 
         # --- Bulk create missing columns (1 query fetch + 1 bulk_create) ---
@@ -1762,23 +1778,49 @@ class CellService:
                 )
                 for p in missing_col_positions
             ]
-            SheetColumn.objects.bulk_create(new_cols, batch_size=1000)
-            columns_expanded = len(new_cols)
-            for c in new_cols:
+            SheetColumn.objects.bulk_create(new_cols, batch_size=500, ignore_conflicts=True)
+            refreshed_cols = list(
+                SheetColumn.objects.filter(
+                    sheet=sheet,
+                    position__in=missing_col_positions,
+                    is_deleted=False,
+                ).select_related('sheet')
+            )
+            columns_expanded = len(refreshed_cols)
+            for c in refreshed_cols:
                 existing_columns[c.position] = c
 
         # --- Bulk fetch all existing cells for (row_pos, col_pos) in operations ---
+        # Use row_id__in + column_id__in instead of a giant OR of Q(row__position=, column__position=)
+        # to (1) keep the Q tree shallow (avoids RecursionError for large batches), and
+        # (2) hit the (sheet, row, column) composite index directly without JOINs to SheetRow/SheetColumn.
         op_keys = {(op['row'], op['column']) for op in operations}
-        q_objects = Q()
-        for (rp, cp) in op_keys:
-            q_objects |= Q(row__position=rp, column__position=cp)
-        all_existing_cells = list(
-            Cell.objects.filter(sheet=sheet).filter(q_objects)
-            .select_related('row', 'column')
-        )
+        row_ids = [r.id for r in existing_rows.values()]
+        col_ids = [c.id for c in existing_columns.values()]
         cell_by_pos: Dict[Tuple[int, int], Cell] = {}
-        for cell in all_existing_cells:
-            cell_by_pos[(cell.row.position, cell.column.position)] = cell
+        if row_ids and col_ids:
+            all_existing_cells = list(
+                Cell.objects.filter(
+                    sheet=sheet,
+                    row_id__in=row_ids,
+                    column_id__in=col_ids,
+                ).only(
+                    'id', 'sheet_id', 'row_id', 'column_id', 'is_deleted',
+                    'value_type', 'string_value', 'number_value',
+                    'boolean_value', 'formula_value', 'raw_input',
+                    'computed_type', 'computed_number', 'computed_string', 'error_code',
+                    'updated_at',
+                )
+            )
+            row_pos_by_id = {r.id: p for p, r in existing_rows.items()}
+            col_pos_by_id = {c.id: p for p, c in existing_columns.items()}
+            for cell in all_existing_cells:
+                rp = row_pos_by_id.get(cell.row_id)
+                cp = col_pos_by_id.get(cell.column_id)
+                if rp is None or cp is None:
+                    continue
+                if (rp, cp) in op_keys:
+                    cell_by_pos[(rp, cp)] = cell
 
         # --- Split into to_clear, to_update, to_create (last op per cell wins) ---
         to_clear: List[Cell] = []
@@ -1906,14 +1948,18 @@ class CellService:
                 updated_cells[c.id] = c
 
         # --- Preserve formula behavior: update dependencies for formula cells ---
-        formula_cells = [
-            c for c in (to_update + to_create)
-            if (c.raw_input or '').startswith('=') or (
-                c.value_type == CellValueType.FORMULA and (c.formula_value or '').startswith('=')
-            )
-        ]
-        for cell in formula_cells:
-            CellService._update_dependencies(cell)
+        # In import_mode, defer dependency rebuilding to recalculate_sheet_formulas
+        # (called from ImportFinalizeView). This avoids per-cell get_or_create churn
+        # while ingesting large CSV/XLSX imports that typically have no formulas.
+        if not import_mode:
+            formula_cells = [
+                c for c in (to_update + to_create)
+                if (c.raw_input or '').startswith('=') or (
+                    c.value_type == CellValueType.FORMULA and (c.formula_value or '').startswith('=')
+                )
+            ]
+            for cell in formula_cells:
+                CellService._update_dependencies(cell)
 
         updated = len(to_update) + len(to_create)
         cleared = len(to_clear)
@@ -1935,11 +1981,14 @@ class CellService:
             result['cells'] = []
 
         # After successful batch update, recompute any pivot sheets depending on this sheet.
-        try:
-            from .pivot_service import recompute_pivots_for_source_sheet
-            recompute_pivots_for_source_sheet(sheet)
-        except Exception:
-            logger.exception("Pivot recompute after batch_update_cells failed for sheet_id=%s", sheet.id)
+        # Skip during import_mode: per-chunk recompute would rerun the full pivot for every chunk
+        # which is O(N) expensive; ImportFinalizeView runs a single recompute at the end instead.
+        if not import_mode:
+            try:
+                from .pivot_service import recompute_pivots_for_source_sheet
+                recompute_pivots_for_source_sheet(sheet)
+            except Exception:
+                logger.exception("Pivot recompute after batch_update_cells failed for sheet_id=%s", sheet.id)
 
         return result
 

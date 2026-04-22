@@ -249,7 +249,7 @@ const TILE_COLUMNS = 20;
 const ADD_ROWS_TRIGGER_DISTANCE = 100; // Show "Add rows" UI when within this many pixels of bottom
 const PREFETCH_ROWS_PER_CHUNK = 100; // Rows per request during post-import hydration
 const PREFETCH_CONCURRENCY = 2; // Max concurrent readCellRange requests during hydration
-const IMPORT_BATCH_CONCURRENCY = 4; // Max concurrent batch uploads during import (higher can hurt DB)
+const IMPORT_BATCH_CONCURRENCY = 2; // Max concurrent batch uploads during import (higher can hurt DB; 2 hides RTT while avoiding lock contention)
 const DEFAULT_NUMBER_FORMAT: NumberFormat = { type: 'GENERAL' };
 
 const DEFAULT_CELL_FORMAT: CellFormat = {
@@ -4131,7 +4131,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         }
       }
 
-      const chunks = chunkOperations<CellOperation>(normalizedOperations, 1000);
+      const chunks = chunkOperations<CellOperation>(normalizedOperations, 500);
       setImportProgress({ current: 0, total: chunks.length });
 
       const importId =
@@ -4164,31 +4164,67 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         applyCellValueLocal(op.row, op.column, op.raw_input || '');
       });
 
-      let lastError: any = null;
+      // Error reporting strategy:
+      // - `firstError` owns the single reported failure. Concurrent in-flight requests
+      //   that are later aborted should stay silent so the user sees one toast / one log.
+      // - On the first failure of a chunk, retry that chunk serially once before giving up
+      //   (covers transient network blips and DB lock contention). Only on a second failure
+      //   do we abort siblings and surface the error.
+      let firstError: any = null;
       let lastChunkIndex = -1;
+
+      const isCancelError = (err: any): boolean => {
+        const name = err?.name;
+        const code = err?.code;
+        return (
+          name === 'CanceledError' ||
+          name === 'AbortError' ||
+          name === 'Cancel' ||
+          code === 'ERR_CANCELED'
+        );
+      };
 
       try {
         const chunkTasks = chunks.map((chunk, i) => async () => {
-          if (signal.aborted) throw new DOMException('Import cancelled', 'AbortError');
-          try {
-            await SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, true, {
+          if (signal.aborted) return;
+          const runOnce = () =>
+            SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, true, {
               importId,
               chunkIndex: i,
               importMode: true,
               signal,
             });
+
+          let succeeded = false;
+          try {
+            await runOnce();
+            succeeded = true;
+          } catch (err: any) {
+            if (signal.aborted && isCancelError(err)) return;
+            if (firstError) return;
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              if (signal.aborted) return;
+              await runOnce();
+              succeeded = true;
+            } catch (retryErr: any) {
+              if (signal.aborted && isCancelError(retryErr)) return;
+              if (!firstError) {
+                firstError = retryErr;
+                lastChunkIndex = i;
+                importAbortControllerRef.current?.abort();
+              }
+              return;
+            }
+          }
+          if (succeeded) {
             setImportProgress((prev) =>
               prev ? { current: prev.current + 1, total: prev.total } : prev
             );
-            return;
-          } catch (err: any) {
-            lastChunkIndex = i;
-            lastError = err;
-            importAbortControllerRef.current?.abort();
-            throw err;
           }
         });
         await runWithConcurrency(chunkTasks, IMPORT_BATCH_CONCURRENCY);
+        if (firstError) throw firstError;
 
         // All chunks complete: finalize (recalc formulas), then hydrate
         await SpreadsheetAPI.finalizeImport(spreadsheetId, sheetId, importId);

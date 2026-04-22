@@ -927,6 +927,13 @@ class ImportFinalizeView(APIView):
         except Exception as e:
             logger.exception("Import finalize recalc failed: %s", e)
             raise ValidationError({'detail': 'Formula recalculation failed'})
+        # After finalize, run pivot recompute once for the whole import. batch_update_cells
+        # skips this under import_mode to avoid N recomputes (one per chunk).
+        try:
+            from .pivot_service import recompute_pivots_for_source_sheet
+            recompute_pivots_for_source_sheet(sheet)
+        except Exception:
+            logger.exception("Import finalize pivot recompute failed for sheet_id=%s", sheet.id)
         return Response({'status': 'ok'})
 
 
