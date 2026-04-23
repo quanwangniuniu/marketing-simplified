@@ -32,6 +32,7 @@ import {
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Skeleton } from '@/components/ui/skeleton';
+import AccountPicker from '@/components/meta-ads/AccountPicker';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
@@ -142,6 +143,8 @@ const LEVEL_LABEL: Record<string, string> = {
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
+const SELECTED_ACCOUNT_STORAGE_KEY = 'meta-ads:selected-ad-account';
+
 export default function MetaAdsPage() {
   return (
     <ProtectedRoute>
@@ -179,8 +182,14 @@ function MetaAdsContent() {
         const accounts = status.ad_accounts ?? [];
         setAdAccounts(accounts);
         if (accounts.length > 0) {
+          const stored =
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY)
+              : null;
+          const storedId = stored ? Number(stored) : NaN;
+          const storedMatch = accounts.find((a) => a.id === storedId);
           const owned = accounts.find((a) => a.is_owned);
-          setSelectedId((owned ?? accounts[0]).id);
+          setSelectedId((storedMatch ?? owned ?? accounts[0]).id);
         }
       })
       .catch(() => setConnected(false))
@@ -189,6 +198,13 @@ function MetaAdsContent() {
       active = false;
     };
   }, []);
+
+  const handleSelectAccount = (id: number) => {
+    setSelectedId(id);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, String(id));
+    }
+  };
 
   useEffect(() => {
     if (!selectedId) return;
@@ -351,18 +367,11 @@ function MetaAdsContent() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={selectedId ?? ''}
-            onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-          >
-            {adAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name || `act_${a.meta_account_id}`} · {a.currency}
-                {a.is_owned ? ' · owned' : ''}
-              </option>
-            ))}
-          </select>
+          <AccountPicker
+            accounts={adAccounts}
+            selectedId={selectedId}
+            onSelect={handleSelectAccount}
+          />
           <button
             onClick={handleSync}
             disabled={syncing}

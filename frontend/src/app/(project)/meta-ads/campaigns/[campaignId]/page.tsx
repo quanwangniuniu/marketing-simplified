@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ChevronRight, ExternalLink, Target } from 'lucide-react';
 
@@ -80,6 +81,7 @@ export default function CampaignDetailPage({
 }
 
 function CampaignDetailContent({ campaignId }: { campaignId: number }) {
+  const router = useRouter();
   const [days, setDays] = useState<number>(28);
   const [detail, setDetail] = useState<MetaCampaignDetail | null>(null);
   const [series, setSeries] = useState<MetaCampaignTimeseries | null>(null);
@@ -167,13 +169,14 @@ function CampaignDetailContent({ campaignId }: { campaignId: number }) {
       </nav>
 
       <header className="flex flex-wrap items-start gap-4">
-        <Link
-          href="/meta-ads"
+        <button
+          type="button"
+          onClick={() => router.back()}
           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
-          aria-label="Back to Meta Ads"
+          aria-label="Go back"
         >
           <ArrowLeft className="h-4 w-4" />
-        </Link>
+        </button>
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[#1a9ba3]">
             Campaign
