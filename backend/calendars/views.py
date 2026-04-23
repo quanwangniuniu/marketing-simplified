@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import uuid
 from datetime import datetime, timedelta, date
 
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -47,6 +48,8 @@ from .serializers import (
     EventReminderSerializer,
 )
 from .exceptions import calendar_error_response
+
+from google_calendar_integration.tasks import export_event_to_google_task
 
 
 class CalendarViewSet(viewsets.ModelViewSet):
@@ -448,6 +451,8 @@ class EventViewSet(viewsets.ModelViewSet):
             organization=target_calendar.organization,
             created_by=request.user if request.user.is_authenticated else None,
         )
+        eid = str(event.id)
+        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
         output_serializer = EventSerializer(event)
         headers = self.get_success_headers(output_serializer.data)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -473,6 +478,8 @@ class EventViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         event = serializer.save()
+        eid = str(event.id)
+        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
         output_serializer = EventSerializer(event)
         return Response(output_serializer.data)
 
@@ -481,8 +488,10 @@ class EventViewSet(viewsets.ModelViewSet):
         return self.update(request, *args, **kwargs)
 
     def perform_destroy(self, instance: Event):
+        eid = str(instance.id)
         instance.is_deleted = True
         instance.save(update_fields=["is_deleted", "updated_at"])
+        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
 
 
 class EventSearchView(generics.ListAPIView):

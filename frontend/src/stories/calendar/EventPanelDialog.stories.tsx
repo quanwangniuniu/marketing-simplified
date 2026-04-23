@@ -30,6 +30,7 @@ export const ViewMode: Story = {
         end={new Date(events[0].end_datetime)}
         event={events[0]}
         calendars={calendars}
+        primaryCalendar={calendars.find((c) => c.is_primary) ?? null}
         preferredCalendarId={calendars[0].id}
         position={{ top: 24, left: 24 }}
         onSave={async () => {}}
@@ -51,6 +52,7 @@ export const EditMode: Story = {
         end={new Date(events[0].end_datetime)}
         event={events[0]}
         calendars={calendars}
+        primaryCalendar={calendars.find((c) => c.is_primary) ?? null}
         preferredCalendarId={calendars[0].id}
         position={{ top: 24, left: 24 }}
         onSave={async () => {}}

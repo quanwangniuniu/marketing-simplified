@@ -1,16 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import Layout from '@/components/layout/Layout';
 import { DerivedProjectStatus, ProjectFilter, useProjects } from '@/hooks/useProjects';
 import { ProjectAPI, ProjectData, ProjectInvitationData } from '@/lib/api/projectApi';
+import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
+import { ArrowRight } from 'lucide-react';
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   FileSpreadsheet,
   FolderOpen,
@@ -90,6 +93,8 @@ const ProjectCard = ({
   onManageMembers,
   updating,
   deleting,
+  isExpanded,
+  onToggleExpand,
 }: {
   project: ProjectWithStatus;
   onToggleActive: (projectId: number, isActive: boolean) => void;
@@ -98,6 +103,8 @@ const ProjectCard = ({
   onManageMembers: (project: ProjectWithStatus) => void;
   updating: boolean;
   deleting: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) => {
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -152,11 +159,10 @@ const ProjectCard = ({
         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
           <button
             onClick={() => onToggleCompleted(project.id)}
-            className={`rounded-full px-3 py-1 font-semibold transition ${
-              project.isCompletedResolved
-                ? 'bg-slate-800 text-white hover:bg-slate-900'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            className={`rounded-full px-3 py-1 font-semibold transition ${project.isCompletedResolved
+              ? 'bg-slate-800 text-white hover:bg-slate-900'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
           >
             {project.isCompletedResolved ? 'Completed' : 'Completed'}
           </button>
@@ -197,11 +203,10 @@ const ProjectCard = ({
           <button
             onClick={() => onToggleActive(project.id, !!project.isActiveResolved)}
             disabled={updating}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
-              project.isActiveResolved
-                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
-                : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70'
-            }`}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${project.isActiveResolved
+              ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
+              : 'bg-[#3CCED7] text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-70'
+              }`}
           >
             {updating && <Loader2 className="h-4 w-4 animate-spin" />}
             {project.isActiveResolved ? 'Active' : 'Mark active'}
@@ -234,6 +239,8 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
   const [invitesError, setInvitesError] = useState<string | null>(null);
   const [acceptingInviteId, setAcceptingInviteId] = useState<number | null>(null);
   const [deleteConfirmProject, setDeleteConfirmProject] = useState<{ id: number; name: string } | null>(null);
+  // Tracks which project's workspace dashboard is currently expanded
+  const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -273,15 +280,12 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
 
   const filteredProjects = useMemo(() => {
     let list = decoratedProjects;
-
     if (filter === 'active') {
       list = list.filter((item) => item.derivedStatus === 'active');
     } else if (filter === 'completed') {
       list = list.filter((item) => item.derivedStatus === 'completed');
     }
-
     if (!search.trim()) return list;
-
     const term = search.toLowerCase();
     return list.filter((item) => {
       const name = item.name?.toLowerCase() || '';
@@ -314,14 +318,8 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
   }, [membersModalOpen, projects, selectedProject]);
 
   const handleAcceptInvite = async (invite: ProjectInvitationData) => {
-    if (!invite.token) {
-      toast.error('Missing invitation token.');
-      return;
-    }
-    if (!invite.approved) {
-      toast.error('Invitation is pending approval.');
-      return;
-    }
+    if (!invite.token) { toast.error('Missing invitation token.'); return; }
+    if (!invite.approved) { toast.error('Invitation is pending approval.'); return; }
     try {
       setAcceptingInviteId(invite.id);
       await ProjectAPI.acceptInvitation(invite.token);
@@ -329,11 +327,7 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
       await fetchProjects();
       await loadPendingInvites();
     } catch (err: any) {
-      const message =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to accept invitation.';
+      const message = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Failed to accept invitation.';
       toast.error(message);
     } finally {
       setAcceptingInviteId(null);
@@ -359,31 +353,21 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         </div>
       );
     }
-
     if (invitesError) {
       return (
         <div className="mb-6 flex items-center justify-between rounded-2xl border border-red-200 bg-white px-4 py-4 text-sm text-red-600 shadow-sm">
           <span>{invitesError}</span>
-          <button
-            onClick={loadPendingInvites}
-            className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
+          <button onClick={loadPendingInvites} className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">Retry</button>
         </div>
       );
     }
-
     if (pendingInvites.length === 0) return null;
-
     return (
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-gray-900">Pending invitations</p>
-            <p className="text-xs text-gray-500">
-              Accept to join the project and appear in member lists.
-            </p>
+            <p className="text-xs text-gray-500">Accept to join the project and appear in member lists.</p>
           </div>
           <button
             onClick={loadPendingInvites}
@@ -394,32 +378,17 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         </div>
         <div className="mt-4 space-y-3">
           {pendingInvites.map((invite) => (
-            <div
-              key={invite.id}
-              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
-            >
+            <div key={invite.id} className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-semibold text-gray-900">
-                  {invite.project?.name || 'Project'}
-                </p>
+                <p className="text-sm font-semibold text-gray-900">{invite.project?.name || 'Project'}</p>
                 <div className="mt-1 flex items-center gap-2">
                   <span className="text-xs text-gray-500">Role:</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getRoleBadgeClasses(
-                      invite.role
-                    )}`}
-                  >
-                    {invite.role}
-                  </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getRoleBadgeClasses(invite.role)}`}>{invite.role}</span>
                   {!invite.approved && (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                      Pending approval
-                    </span>
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">Pending approval</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Invited by {invite.invited_by?.name || invite.invited_by?.email || 'Owner'}
-                </p>
+                <p className="text-xs text-gray-500">Invited by {invite.invited_by?.name || invite.invited_by?.email || 'Owner'}</p>
               </div>
               <button
                 onClick={() => handleAcceptInvite(invite)}
@@ -446,35 +415,25 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
         </div>
       );
     }
-
     if (error) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
           <AlertCircle className="h-6 w-6" />
           <p className="mt-3 font-semibold">Could not load projects</p>
           <p className="text-sm text-red-500">{error}</p>
-          <button
-            onClick={() => fetchProjects()}
-            className="mt-4 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
+          <button onClick={() => fetchProjects()} className="mt-4 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Retry</button>
         </div>
       );
     }
-
     if (filter === 'completed') {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-600">
           <FolderOpen className="h-7 w-7 text-gray-400" />
           <p className="mt-3 font-semibold text-gray-900">No completed projects yet</p>
-          <p className="text-sm text-gray-500">
-            Projects will show up here once the backend marks them as completed or archived.
-          </p>
+          <p className="text-sm text-gray-500">Projects will show up here once the backend marks them as completed or archived.</p>
         </div>
       );
     }
-
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-600">
         <FolderOpen className="h-7 w-7 text-gray-400" />
@@ -556,21 +515,47 @@ const ProjectsPage = ({ title, description, filter }: ProjectsPageProps) => {
                 <div className="sm:col-span-2">{renderEmptyState()}</div>
               ) : (
                 filteredProjects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    onToggleActive={setActiveProject}
-                    onDelete={() => {
-                      setDeleteConfirmProject({
-                        id: project.id,
-                        name: project.name || 'this project',
-                      });
-                    }}
-                    onToggleCompleted={toggleCompletedProjectId}
-                    onManageMembers={handleOpenMembers}
-                    updating={updatingProjectId === project.id}
-                    deleting={deletingProjectId === project.id}
-                  />
+                  <Fragment key={project.id}>
+                    <ProjectCard
+                      project={project}
+                      onToggleActive={setActiveProject}
+                      onDelete={() => {
+                        setDeleteConfirmProject({
+                          id: project.id,
+                          name: project.name || 'this project',
+                        });
+                      }}
+                      onToggleCompleted={toggleCompletedProjectId}
+                      onManageMembers={handleOpenMembers}
+                      updating={updatingProjectId === project.id}
+                      deleting={deletingProjectId === project.id}
+                      isExpanded={expandedProjectId === project.id}
+                      onToggleExpand={() =>
+                        setExpandedProjectId(
+                          expandedProjectId === project.id ? null : project.id
+                        )
+                      }
+                    />
+                    {/* Full-width workspace dashboard — spans both columns when expanded */}
+                    {expandedProjectId === project.id && (
+                      <div className="sm:col-span-2 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            {project.name} — Workspace
+                          </h3>
+                          <button
+                            onClick={() => setExpandedProjectId(null)}
+                            className="text-xs text-gray-400 hover:text-gray-600"
+                          >
+                            ✕ Close
+                          </button>
+                        </div>
+                        <div className="p-6">
+                          <WorkspaceDashboard projectId={project.id} />
+                        </div>
+                      </div>
+                    )}
+                  </Fragment>
                 ))
               )}
             </div>

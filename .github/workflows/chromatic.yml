@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Cache node modules
         uses: actions/cache@v4
@@ -47,7 +47,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: |
+          npm ci || (echo "npm ci failed, retrying once (e.g. esbuild ETXTBSY)..." && rm -rf node_modules && sleep 2 && npm ci)
 
       - name: Run Chromatic Tests (PR only - patch build, no baseline update)
         if: github.event_name == 'pull_request'

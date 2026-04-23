@@ -29,8 +29,9 @@ export default function HeaderSection({
               <Image
                 src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
-                width={400}
-                height={100}
+                width={898}
+                height={423}
+                sizes="212px"
                 className="h-20 w-auto"
                 priority
               />
@@ -46,7 +47,7 @@ export default function HeaderSection({
             {isAuthenticated ? (
               <button
                 onClick={onLoginClick}
-                className="max-w-[250px] px-6 py-2 text-brand-teal border border-brand-teal/40 rounded-full hover:bg-brand-teal/10 transition-all inline-flex items-center cursor-pointer"
+                className="max-w-[250px] px-6 py-2 text-teal-700 border border-teal-700/40 rounded-full hover:bg-teal-50 transition-all inline-flex items-center cursor-pointer"
               >
                 <span className="inline-flex items-center gap-2 min-w-0">
                   <User className="w-4 h-4 flex-shrink-0" />
@@ -57,7 +58,7 @@ export default function HeaderSection({
             ) : (
               <button
                 onClick={onLoginClick}
-                className="px-6 py-2 text-brand-teal border border-brand-teal/40 rounded-full hover:bg-brand-teal/10 transition-all inline-flex items-center cursor-pointer"
+                className="px-6 py-2 text-teal-700 border border-teal-700/40 rounded-full hover:bg-teal-50 transition-all inline-flex items-center cursor-pointer"
               >
                 Log in
               </button>
@@ -71,6 +72,7 @@ export default function HeaderSection({
             <button
               onClick={onRedirectToLogin}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition"
+              aria-label="Open app launcher"
             >
               <Grid3x3 className="w-5 h-5" />
             </button>
@@ -86,8 +88,9 @@ export default function HeaderSection({
               <Image
                 src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
-                width={340}
-                height={85}
+                width={898}
+                height={423}
+                sizes="136px"
                 className="h-16 w-auto"
                 priority
               />

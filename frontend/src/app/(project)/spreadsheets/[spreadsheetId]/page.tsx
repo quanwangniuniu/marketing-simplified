@@ -156,6 +156,12 @@ export default function SpreadsheetsV2DetailPage() {
   const applyStepsRef = useRef<typeof applySteps>([]);
   const applyHighlightStepsRef = useRef<(steps: WorkflowPatternStepRecord[]) => void>(() => {});
   const isReplayingRef = useRef(false);
+  // Promise cache for the auto-create "Sheet1" call. React Strict Mode fires the
+  // loader effect twice in dev, and the two async coroutines can both observe an
+  // empty sheet list before either has POSTed. Caching the in-flight promise
+  // guarantees only ONE POST /sheets/ is sent per mount — concurrent callers
+  // await the same promise and share its result (or error).
+  const firstSheetPromiseRef = useRef<Promise<SheetData | null> | null>(null);
 
   useEffect(() => {
     if (!projectId) {
@@ -254,16 +260,35 @@ export default function SpreadsheetsV2DetailPage() {
 
   const ensureFirstSheet = async (existingSheets: SheetData[]) => {
     if (!spreadsheetId || existingSheets.length > 0) return null;
-    try {
-      return await SpreadsheetAPI.createSheet(Number(spreadsheetId), { name: 'Sheet1' });
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 400) {
-        const retry = await SpreadsheetAPI.listSheets(Number(spreadsheetId));
-        if (retry.results && retry.results.length > 0) return retry.results[0];
-      }
-      throw err;
+
+    // Dedupe concurrent callers (React Strict Mode double-invoke, remount races,
+    // etc.) by sharing one in-flight Promise. Without this, each caller fires
+    // its own POST, the backend serializes them, and the second one 400s with
+    // "Sheet1 already exists" — noisy in devtools and occasionally flaky in UI.
+    if (firstSheetPromiseRef.current) {
+      return firstSheetPromiseRef.current;
     }
+
+    const promise: Promise<SheetData | null> = (async () => {
+      try {
+        return await SpreadsheetAPI.createSheet(Number(spreadsheetId), { name: 'Sheet1' });
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 400) {
+          const retry = await SpreadsheetAPI.listSheets(Number(spreadsheetId));
+          if (retry.results && retry.results.length > 0) return retry.results[0];
+        }
+        throw err;
+      }
+    })();
+
+    firstSheetPromiseRef.current = promise;
+    void promise.finally(() => {
+      if (firstSheetPromiseRef.current === promise) {
+        firstSheetPromiseRef.current = null;
+      }
+    });
+    return promise;
   };
 
   useEffect(() => {

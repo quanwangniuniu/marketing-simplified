@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'meetings.apps.MeetingsConfig',
     'zoom_integration.apps.ZoomIntegrationConfig',
     'google_docs_integration.apps.GoogleDocsIntegrationConfig',
+    'google_calendar_integration.apps.GoogleCalendarIntegrationConfig',
 ]
 
 MIDDLEWARE = [
@@ -99,6 +100,10 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Compress JSON/text responses (big win for bulk endpoints like spreadsheet
+    # readCellRange and batch responses). axios sends Accept-Encoding: gzip by
+    # default so no frontend change needed. Must be placed before CommonMiddleware.
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -248,11 +253,12 @@ AGENT_CSV_DIR = config(
     default=os.path.join(BASE_DIR, 'agent_data')
 )
 
-# Dify LLM Platform integration (optional)
-# Base config
+# Gemini API (replaces Dify for all LLM workflow calls)
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+
+# Dify LLM Platform integration (kept for reference / backward compat)
 DIFY_API_URL = config('DIFY_API_URL', default='')
 DIFY_API_KEY = config('DIFY_API_KEY', default='')
-# Per-workflow keys
 DIFY_CHAT_API_KEY = config('DIFY_CHAT_API_KEY', default='')
 DIFY_MIRO_API_KEY = config('DIFY_MIRO_API_KEY', default='')
 DIFY_CALENDAR_API_KEY = config('DIFY_CALENDAR_API_KEY', default='')
@@ -370,6 +376,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'tiktok.tasks.cleanup_expired_previews',
         'schedule': crontab(hour=2, minute=0),  # Run daily at 02:00 UTC (low traffic period)
         'options': {'timezone': 'UTC'}
+    },
+    'google-calendar-import-every-15-min': {
+        'task': 'google_calendar_integration.tasks.sync_all_google_calendar_imports',
+        'schedule': timedelta(minutes=15),
+        'options': {'timezone': 'UTC'},
     },
 }
 
@@ -518,6 +529,10 @@ def _get_google_env(primary_key, fallback_key):
 GOOGLE_OAUTH_CLIENT_ID = _get_google_env('GOOGLE_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = _get_google_env('GOOGLE_CLIENT_SECRET', 'GOOGLE_OAUTH_CLIENT_SECRET')
 GOOGLE_OAUTH_REDIRECT_URI = _get_google_env('GOOGLE_OAUTH_REDIRECT_URI', 'GOOGLE_REDIRECT_URI')
+GOOGLE_CALENDAR_OAUTH_REDIRECT_URI = config(
+    'GOOGLE_CALENDAR_OAUTH_REDIRECT_URI',
+    default='http://localhost:8000/api/google-calendar/callback/',
+).strip()
 
 # Logging Configuration
 import logging

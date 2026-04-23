@@ -196,7 +196,7 @@ def test_create_miro_board_executor_persists_board_and_snapshot(mock_create_boar
 
 
 @patch("agent.miro_board_service.create_board_from_snapshot")
-@patch("agent.miro_generation.call_dify_miro_generator")
+@patch("agent.miro_generation.call_gemini_miro_generator")
 @patch("agent.miro_generation.build_miro_generation_context_from_run")
 def test_generate_miro_board_for_workflow_run_updates_run(
     mock_build_context,
@@ -309,11 +309,9 @@ def test_normalize_miro_snapshot_layout_pushes_overlapping_items_down():
     assert action["y"] + action["height"] <= frame["y"] + frame["height"] - 24
 
 
-@patch("agent.miro_generation.run_dify_workflow")
-@patch("agent.miro_generation._get_board_dify_config")
-def test_call_dify_miro_generator_normalizes_layout_before_validation(mock_config, mock_run_workflow):
-    mock_config.return_value = {"url": "https://api.dify.ai", "key": "app-test"}
-    mock_run_workflow.return_value = _overlapping_snapshot()
+@patch("agent.gemini_client.call_gemini_json")
+def test_call_dify_miro_generator_normalizes_layout_before_validation(mock_call_gemini):
+    mock_call_gemini.return_value = _overlapping_snapshot()
 
     snapshot = call_dify_miro_generator({"analysis": {"anomalies": []}}, user_id=1)
     title = snapshot["items"][1]

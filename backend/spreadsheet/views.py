@@ -59,7 +59,7 @@ from .serializers import (
     PivotConfigSerializer,
     PivotConfigCreateUpdateSerializer,
 )
-from .services import SpreadsheetService, SheetService, CellService
+from .services import SpreadsheetService, SheetService, CellService, CellBatchArgumentError
 from .models import SheetStructureOperation
 from core.models import Project
 from .tasks import apply_pattern_job
@@ -832,7 +832,10 @@ class CellRangeReadView(APIView):
                 start_row=serializer.validated_data['start_row'],
                 end_row=serializer.validated_data['end_row'],
                 start_column=serializer.validated_data['start_column'],
-                end_column=serializer.validated_data['end_column']
+                end_column=serializer.validated_data['end_column'],
+                include_sheet_dimensions=serializer.validated_data.get(
+                    'include_sheet_dimensions', True
+                ),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
@@ -860,9 +863,16 @@ class CellBatchUpdateView(APIView):
         """
         spreadsheet = get_object_or_404(Spreadsheet, id=spreadsheet_id, is_deleted=False)
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
-        
+
         serializer = CellBatchUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.warning(
+                "CellBatchUpdateSerializer validation failed sheet_id=%s ops_count=%s errors=%s",
+                sheet_id,
+                len(request.data.get('operations', [])) if isinstance(request.data, dict) else '?',
+                serializer.errors,
+            )
+            raise ValidationError(serializer.errors)
         
         import_id = serializer.validated_data.get('import_id')
         chunk_index = serializer.validated_data.get('chunk_index')
@@ -879,6 +889,11 @@ class CellBatchUpdateView(APIView):
                 operations=serializer.validated_data['operations'],
                 auto_expand=serializer.validated_data.get('auto_expand', True),
                 import_mode=import_mode
+            )
+        except CellBatchArgumentError as e:
+            return Response(
+                {'code': e.code, 'details': e.details},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except DjangoValidationError as e:
             # Django's ValidationError has message_dict / messages / str(); it does NOT have .detail
@@ -927,6 +942,13 @@ class ImportFinalizeView(APIView):
         except Exception as e:
             logger.exception("Import finalize recalc failed: %s", e)
             raise ValidationError({'detail': 'Formula recalculation failed'})
+        # After finalize, run pivot recompute once for the whole import. batch_update_cells
+        # skips this under import_mode to avoid N recomputes (one per chunk).
+        try:
+            from .pivot_service import recompute_pivots_for_source_sheet
+            recompute_pivots_for_source_sheet(sheet)
+        except Exception:
+            logger.exception("Import finalize pivot recompute failed for sheet_id=%s", sheet.id)
         return Response({'status': 'ok'})
 
 
