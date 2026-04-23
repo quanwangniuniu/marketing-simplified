@@ -247,9 +247,11 @@ class CreateTasksExecutor(BaseStepExecutor):
             created_ids = []
             for task_data in tasks_data:
                 summary = task_data.get('summary', 'AI Agent Generated Task')[:255]
+                ai_description = (task_data.get('description') or '').strip()
+                description = ai_description or f"Auto-generated from AI analysis{desc_suffix}"
                 task = Task.objects.create(
                     summary=summary,
-                    description=f"Auto-generated from AI analysis{desc_suffix}",
+                    description=description,
                     type=task_data.get('type', 'optimization'),
                     priority=task_data.get('priority', 'MEDIUM'),
                     project=project,
@@ -706,12 +708,47 @@ def _compute_column_stats(values: list, value_type: str) -> dict:
     }
 
 
-class GenerateCriteriaExecutor(BaseStepExecutor):
-    """Call the Dify Column Criteria Generator workflow.
+_CRITERIA_SYSTEM_PROMPT = """\
+You are a data analysis expert specialising in digital advertising and marketing performance data.
 
-    Sends the column names extracted from the uploaded file to Dify and
+You will receive a JSON array of spreadsheet column names. Your task is to:
+1. Identify what type of dataset this is (e.g. Meta Ads Performance, Google Ads, GA4, etc.).
+2. For each column, define what valid data looks like and what anomaly rules to apply during analysis.
+3. List the key analysis goals for this dataset.
+
+Return ONLY valid JSON with this exact structure (no markdown, no explanation):
+
+{
+  "schema_type": "brief name for this dataset type",
+  "key_columns": ["list", "of", "most", "important", "columns"],
+  "criteria": [
+    {
+      "column": "exact column name from input",
+      "required": true,
+      "data_type": "one of: numeric, string, date, boolean",
+      "expectation": "description of what valid values look like",
+      "anomaly_rule": "description of what counts as suspicious or invalid"
+    }
+  ],
+  "analysis_goals": [
+    "specific analysis objective inferred from these columns"
+  ]
+}
+
+Rules:
+- Only include columns that are analytically meaningful (skip pure identifiers like IDs and names unless they are needed for scope).
+- For financial columns (spend, cost, revenue, ROAS), always set required: true.
+- For ratio columns (CTR, CVR, ROAS), anomaly_rule should specify sensible thresholds (e.g. CTR > 10% is suspicious for most campaigns).
+- Return ONLY the JSON object, nothing else.\
+"""
+
+
+class GenerateCriteriaExecutor(BaseStepExecutor):
+    """Call Gemini to generate per-column success criteria.
+
+    Sends the column names extracted from the uploaded file to Gemini and
     receives a structured success_criteria JSON that tells the downstream
-    analysis workflow what to look for and how to judge the data.
+    analysis step what to look for and how to judge the data.
 
     The criteria are stored on workflow_run.success_criteria so they persist
     across step boundaries and are forwarded in output_data for the next step.
@@ -719,19 +756,10 @@ class GenerateCriteriaExecutor(BaseStepExecutor):
 
     def execute(self, input_data):
         import json
-        from django.conf import settings
-        from .dify_workflows import run_dify_workflow
+        from .gemini_client import call_gemini_json, _get_api_key as _gemini_key
 
-        api_url = getattr(settings, 'DIFY_API_URL', '') or os.environ.get('DIFY_API_URL', '')
-        api_key = (
-            getattr(settings, 'DIFY_CRITERIA_API_KEY', '')
-            or os.environ.get('DIFY_CRITERIA_API_KEY', '')
-        )
-
-        if not api_key:
-            logger.warning(
-                "GenerateCriteriaExecutor: DIFY_CRITERIA_API_KEY not set; skipping"
-            )
+        if not _gemini_key():
+            logger.warning("GenerateCriteriaExecutor: GEMINI_API_KEY not set; skipping")
             return StepResult(
                 success=True,
                 output_data=input_data,
@@ -760,22 +788,15 @@ class GenerateCriteriaExecutor(BaseStepExecutor):
             )
 
         try:
-            outputs = run_dify_workflow(
-                api_url=api_url,
-                api_key=api_key,
-                inputs={'column_names': json.dumps(column_names)},
-                user_id=str(self.orchestrator.user.id),
-                timeout=60,
+            criteria = call_gemini_json(
+                system_prompt=_CRITERIA_SYSTEM_PROMPT,
+                user_prompt=(
+                    f"Column names:\n{json.dumps(column_names)}\n\n"
+                    f"Generate success criteria for these columns now."
+                ),
+                temperature=0.2,
+                timeout=120,
             )
-
-            raw = outputs.get('text') or outputs.get('result') or ''
-            raw = raw.strip()
-            if raw.startswith('```'):
-                import re
-                raw = re.sub(r'^```(?:json)?\n?', '', raw)
-                raw = re.sub(r'\n?```$', '', raw)
-
-            criteria = json.loads(raw) if raw else {}
 
             # Persist on the workflow run so downstream steps can always access it
             self.workflow_run.success_criteria = criteria

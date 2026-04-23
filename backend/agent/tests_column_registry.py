@@ -173,28 +173,25 @@ class RuleBasedDetectionTests(SimpleTestCase):
 # LLM fallback
 # ---------------------------------------------------------------------------
 
-_DIFY_SETTINGS = dict(
-    DIFY_COLUMN_DETECTION_API_KEY='test-key',
-    DIFY_API_URL='http://dify.test',
-)
+_GEMINI_SETTINGS = dict(GEMINI_API_KEY='test-key')
 
 
 class LLMFallbackTests(SimpleTestCase):
     databases = ('default',)
 
-    def _make_dify_response(self, columns_list, schema_name='Custom Report', confidence=0.8):
-        """Return the dict that run_dify_workflow would return for a successful call."""
-        return {'text': json.dumps({
+    def _make_gemini_response(self, columns_list, schema_name='Custom Report', confidence=0.8):
+        """Return the dict that call_gemini_json would return for a successful call."""
+        return {
             'schema_name': schema_name,
             'confidence': confidence,
             'columns': columns_list,
-        })}
+        }
 
-    @override_settings(**_DIFY_SETTINGS)
-    @patch('agent.dify_workflows.run_dify_workflow')
+    @override_settings(**_GEMINI_SETTINGS)
+    @patch('agent.gemini_client.call_gemini_json')
     def test_llm_fallback_success(self, mock_run):
         headers = ['Revenue', 'Sessions', 'Bounce Rate']
-        mock_run.return_value = self._make_dify_response([
+        mock_run.return_value = self._make_gemini_response([
             {'original': 'Revenue', 'canonical': 'revenue', 'category': 'financial', 'confidence': 0.95},
             {'original': 'Sessions', 'canonical': 'sessions', 'category': 'engagement', 'confidence': 0.9},
             {'original': 'Bounce Rate', 'canonical': 'bounce_rate', 'category': 'performance_ratio', 'confidence': 0.8},
@@ -210,42 +207,41 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertEqual(result.column_confidences['Sessions'], 0.9)
         self.assertEqual(result.column_confidences['Bounce Rate'], 0.8)
 
-    @override_settings(**_DIFY_SETTINGS)
-    @patch('agent.dify_workflows.run_dify_workflow')
+    @override_settings(**_GEMINI_SETTINGS)
+    @patch('agent.gemini_client.call_gemini_json')
     def test_llm_fallback_includes_sample_rows_in_prompt(self, mock_run):
         headers = ['Revenue']
         sample_rows = [{'Revenue': 1000}, {'Revenue': 2000}]
-        mock_run.return_value = self._make_dify_response([
+        mock_run.return_value = self._make_gemini_response([
             {'original': 'Revenue', 'canonical': 'revenue', 'category': 'financial', 'confidence': 0.9},
         ])
 
         detect_columns(headers, sample_rows=sample_rows)
 
         call_kwargs = mock_run.call_args
-        inputs = call_kwargs[1]['inputs']
-        # Sample rows must be serialised into the inputs sent to Dify
-        self.assertIn('1000', inputs['sample_rows'])
+        user_prompt = call_kwargs[1].get('user_prompt') or call_kwargs[0][1]
+        # Sample rows must be serialised into the user prompt sent to Gemini
+        self.assertIn('1000', user_prompt)
 
-    @override_settings(**_DIFY_SETTINGS)
+    @override_settings(**_GEMINI_SETTINGS)
     @patch('agent.column_registry._try_db_template_match', return_value=None)
-    @patch('agent.dify_workflows.run_dify_workflow')
+    @patch('agent.gemini_client.call_gemini_json')
     def test_llm_fallback_strips_markdown_fences(self, mock_run, _mock_db):
         headers = ['xyzUnknownMetric999']
-        inner = json.dumps({
+        mock_run.return_value = {
             'schema_name': 'Custom', 'confidence': 0.8,
             'columns': [{'original': 'xyzUnknownMetric999', 'canonical': 'xyz_metric', 'category': 'financial', 'confidence': 0.9}],
-        })
-        mock_run.return_value = {'text': f'```json\n{inner}\n```'}
+        }
 
         result = detect_columns(headers)
         self.assertEqual(result.source, 'llm')
         self.assertEqual(result.mappings['xyzUnknownMetric999'], 'xyz_metric')
 
-    @override_settings(**_DIFY_SETTINGS)
-    @patch('agent.dify_workflows.run_dify_workflow')
+    @override_settings(**_GEMINI_SETTINGS)
+    @patch('agent.gemini_client.call_gemini_json')
     def test_llm_unknown_columns_labeled_unknown(self, mock_run):
         headers = ['WeirdCol1', 'WeirdCol2']
-        mock_run.return_value = self._make_dify_response([
+        mock_run.return_value = self._make_gemini_response([
             {'original': 'WeirdCol1', 'canonical': 'unknown', 'category': 'unknown', 'confidence': 0.0},
             {'original': 'WeirdCol2', 'canonical': 'unknown', 'category': 'unknown', 'confidence': 0.0},
         ])
@@ -258,8 +254,8 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertEqual(result.column_confidences['WeirdCol1'], 0.0)
         self.assertEqual(result.column_confidences['WeirdCol2'], 0.0)
 
-    @override_settings(**_DIFY_SETTINGS)
-    @patch('agent.dify_workflows.run_dify_workflow')
+    @override_settings(**_GEMINI_SETTINGS)
+    @patch('agent.gemini_client.call_gemini_json')
     def test_llm_exception_falls_back_to_all_unknown(self, mock_run):
         headers = ['ColA', 'ColB']
         mock_run.side_effect = Exception('network error')
@@ -269,9 +265,10 @@ class LLMFallbackTests(SimpleTestCase):
         self.assertEqual(result.confidence, 0.0)
         self.assertTrue(all(v == CAT_UNKNOWN for v in result.mappings.values()))
 
+    @patch.dict('os.environ', {'GEMINI_API_KEY': ''})
     def test_llm_skipped_when_no_api_key(self):
         headers = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']
-        with override_settings(DIFY_COLUMN_DETECTION_API_KEY='', DIFY_API_URL='http://dify.test'):
+        with override_settings(GEMINI_API_KEY=''):
             result = detect_columns(headers)
         # Should return unknown result (no LLM, no rule match)
         self.assertIn(result.source, ('none', 'rule'))
