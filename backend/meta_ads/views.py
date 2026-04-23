@@ -1065,6 +1065,432 @@ class MetaCreativeInsightTimeseriesView(APIView):
         })
 
 
+class MetaCampaignDetailView(APIView):
+    """Full metadata for a single campaign plus its adsets, with window aggregates.
+
+    Used by the campaign detail page. Aggregates rolling-window performance
+    at the campaign level (summed across every descendant ad) so the page
+    can render KPIs without an extra round-trip.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, campaign_id: int):
+        campaign = get_object_or_404(
+            MetaCampaign,
+            pk=campaign_id,
+            ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        agg = MetaInsightDaily.objects.filter(
+            ad__adset__campaign=campaign,
+            date__gte=since,
+            date__lte=today,
+        ).aggregate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            reach=Sum("reach"),
+            leads=Sum("leads"),
+            calls=Sum("calls"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+        )
+        agg = {k: (v if v is not None else 0) for k, v in agg.items()}
+        spend = agg["spend"] or Decimal("0")
+        revenue = agg["revenue"] or Decimal("0")
+        impressions = agg["impressions"] or 0
+        aggregates = {
+            "spend": str(spend),
+            "impressions": impressions,
+            "clicks": agg["clicks"] or 0,
+            "reach": agg["reach"] or 0,
+            "leads": agg["leads"] or 0,
+            "calls": agg["calls"] or 0,
+            "purchases": agg["purchases"] or 0,
+            "revenue": str(revenue),
+            "ctr": str(_safe_ratio(agg["clicks"], impressions) * Decimal("100")),
+            "cpc": str(_safe_ratio(spend, agg["clicks"])),
+            "cpm": str(_safe_ratio(spend, impressions) * Decimal("1000")),
+            "cpl": str(_safe_ratio(spend, agg["leads"])),
+            "cpa": str(_safe_ratio(spend, agg["purchases"])),
+            "roas": str(_safe_ratio(revenue, spend)),
+        }
+
+        linked_adsets = MetaAdSet.objects.filter(campaign=campaign).annotate(
+            total_spend=Sum(
+                "ads__insights_daily__spend",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_impressions=Sum(
+                "ads__insights_daily__impressions",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_clicks=Sum(
+                "ads__insights_daily__clicks",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_leads=Sum(
+                "ads__insights_daily__leads",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_purchases=Sum(
+                "ads__insights_daily__purchases",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_revenue=Sum(
+                "ads__insights_daily__revenue",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+        )
+        adset_rows = []
+        for a in linked_adsets:
+            a_spend = a.total_spend or Decimal("0")
+            a_rev = a.total_revenue or Decimal("0")
+            adset_rows.append({
+                "id": a.id,
+                "meta_adset_id": a.meta_adset_id,
+                "name": a.name,
+                "effective_status": a.effective_status,
+                "optimization_goal": a.optimization_goal,
+                "daily_budget_cents": a.daily_budget_cents,
+                "lifetime_budget_cents": a.lifetime_budget_cents,
+                "spend": str(a_spend),
+                "impressions": a.total_impressions or 0,
+                "clicks": a.total_clicks or 0,
+                "leads": a.total_leads or 0,
+                "purchases": a.total_purchases or 0,
+                "revenue": str(a_rev),
+                "roas": str(_safe_ratio(a_rev, a_spend)),
+            })
+        adset_rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
+
+        return Response({
+            "id": campaign.id,
+            "meta_campaign_id": campaign.meta_campaign_id,
+            "ad_account_id": campaign.ad_account_id,
+            "currency": campaign.ad_account.currency,
+            "name": campaign.name,
+            "objective": campaign.objective,
+            "status": campaign.status,
+            "effective_status": campaign.effective_status,
+            "start_time": campaign.start_time.isoformat() if campaign.start_time else None,
+            "stop_time": campaign.stop_time.isoformat() if campaign.stop_time else None,
+            "daily_budget_cents": campaign.daily_budget_cents,
+            "lifetime_budget_cents": campaign.lifetime_budget_cents,
+            "special_ad_categories": campaign.special_ad_categories or [],
+            "created_at": campaign.created_at.isoformat(),
+            "updated_at": campaign.updated_at.isoformat(),
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "aggregates": aggregates,
+            "linked_adsets": adset_rows,
+            "linked_adsets_count": len(adset_rows),
+        })
+
+
+class MetaCampaignInsightTimeseriesView(APIView):
+    """Daily aggregates for a campaign — summed across every descendant ad."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, campaign_id: int):
+        campaign = get_object_or_404(
+            MetaCampaign,
+            pk=campaign_id,
+            ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        daily = MetaInsightDaily.objects.filter(
+            ad__adset__campaign=campaign,
+            date__gte=since,
+            date__lte=today,
+        ).values("date").annotate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            leads=Sum("leads"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+        )
+        by_date = {row["date"]: row for row in daily}
+
+        points = []
+        cur = since
+        while cur <= today:
+            r = by_date.get(cur)
+            points.append({
+                "date": cur.isoformat(),
+                "spend": str((r["spend"] if r else Decimal("0")) or Decimal("0")),
+                "impressions": (r["impressions"] if r else 0) or 0,
+                "clicks": (r["clicks"] if r else 0) or 0,
+                "leads": (r["leads"] if r else 0) or 0,
+                "purchases": (r["purchases"] if r else 0) or 0,
+                "revenue": str((r["revenue"] if r else Decimal("0")) or Decimal("0")),
+            })
+            cur += _dt.timedelta(days=1)
+
+        return Response({
+            "campaign_id": campaign.id,
+            "meta_campaign_id": campaign.meta_campaign_id,
+            "currency": campaign.ad_account.currency,
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "points": points,
+        })
+
+
+class MetaAdSetDetailView(APIView):
+    """Full metadata for a single adset plus its ads, with window aggregates."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, adset_id: int):
+        adset = get_object_or_404(
+            MetaAdSet.objects.select_related("campaign", "campaign__ad_account"),
+            pk=adset_id,
+            campaign__ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        agg = MetaInsightDaily.objects.filter(
+            ad__adset=adset,
+            date__gte=since,
+            date__lte=today,
+        ).aggregate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            reach=Sum("reach"),
+            leads=Sum("leads"),
+            calls=Sum("calls"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+            video_p25=Sum("video_p25"),
+            video_p75=Sum("video_p75"),
+            video_p100=Sum("video_p100"),
+        )
+        agg = {k: (v if v is not None else 0) for k, v in agg.items()}
+        spend = agg["spend"] or Decimal("0")
+        revenue = agg["revenue"] or Decimal("0")
+        impressions = agg["impressions"] or 0
+        p25 = agg["video_p25"] or 0
+        p75 = agg["video_p75"] or 0
+        aggregates = {
+            "spend": str(spend),
+            "impressions": impressions,
+            "clicks": agg["clicks"] or 0,
+            "reach": agg["reach"] or 0,
+            "leads": agg["leads"] or 0,
+            "calls": agg["calls"] or 0,
+            "purchases": agg["purchases"] or 0,
+            "revenue": str(revenue),
+            "ctr": str(_safe_ratio(agg["clicks"], impressions) * Decimal("100")),
+            "cpc": str(_safe_ratio(spend, agg["clicks"])),
+            "cpm": str(_safe_ratio(spend, impressions) * Decimal("1000")),
+            "cpl": str(_safe_ratio(spend, agg["leads"])),
+            "cpa": str(_safe_ratio(spend, agg["purchases"])),
+            "roas": str(_safe_ratio(revenue, spend)),
+            "hook_rate": str(_safe_ratio(p25, impressions) * Decimal("100")),
+            "hold_rate": str(_safe_ratio(p75, p25) * Decimal("100")),
+        }
+
+        linked_ads = MetaAd.objects.filter(adset=adset).select_related("creative").annotate(
+            total_spend=Sum(
+                "insights_daily__spend",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+            total_impressions=Sum(
+                "insights_daily__impressions",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+            total_clicks=Sum(
+                "insights_daily__clicks",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+            total_leads=Sum(
+                "insights_daily__leads",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+            total_purchases=Sum(
+                "insights_daily__purchases",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+            total_revenue=Sum(
+                "insights_daily__revenue",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                ),
+            ),
+        )
+        ad_rows = []
+        for ad in linked_ads:
+            a_spend = ad.total_spend or Decimal("0")
+            a_rev = ad.total_revenue or Decimal("0")
+            ad_rows.append({
+                "id": ad.id,
+                "meta_ad_id": ad.meta_ad_id,
+                "name": ad.name,
+                "effective_status": ad.effective_status,
+                "creative": (
+                    {
+                        "id": ad.creative.id,
+                        "meta_creative_id": ad.creative.meta_creative_id,
+                        "title": ad.creative.title,
+                        "thumbnail_url": ad.creative.thumbnail_url,
+                    }
+                    if ad.creative
+                    else None
+                ),
+                "spend": str(a_spend),
+                "impressions": ad.total_impressions or 0,
+                "clicks": ad.total_clicks or 0,
+                "leads": ad.total_leads or 0,
+                "purchases": ad.total_purchases or 0,
+                "revenue": str(a_rev),
+                "roas": str(_safe_ratio(a_rev, a_spend)),
+            })
+        ad_rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
+
+        return Response({
+            "id": adset.id,
+            "meta_adset_id": adset.meta_adset_id,
+            "ad_account_id": adset.campaign.ad_account_id,
+            "currency": adset.campaign.ad_account.currency,
+            "name": adset.name,
+            "status": adset.status,
+            "effective_status": adset.effective_status,
+            "optimization_goal": adset.optimization_goal,
+            "billing_event": adset.billing_event,
+            "bid_amount_cents": adset.bid_amount_cents,
+            "daily_budget_cents": adset.daily_budget_cents,
+            "lifetime_budget_cents": adset.lifetime_budget_cents,
+            "campaign": {
+                "id": adset.campaign_id,
+                "meta_campaign_id": adset.campaign.meta_campaign_id,
+                "name": adset.campaign.name,
+            },
+            "created_at": adset.created_at.isoformat(),
+            "updated_at": adset.updated_at.isoformat(),
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "aggregates": aggregates,
+            "linked_ads": ad_rows,
+            "linked_ads_count": len(ad_rows),
+        })
+
+
+class MetaAdSetInsightTimeseriesView(APIView):
+    """Daily aggregates for an adset — summed across every descendant ad."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, adset_id: int):
+        adset = get_object_or_404(
+            MetaAdSet,
+            pk=adset_id,
+            campaign__ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        daily = MetaInsightDaily.objects.filter(
+            ad__adset=adset,
+            date__gte=since,
+            date__lte=today,
+        ).values("date").annotate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            leads=Sum("leads"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+            video_p25=Sum("video_p25"),
+            video_p75=Sum("video_p75"),
+            video_p100=Sum("video_p100"),
+        )
+        by_date = {row["date"]: row for row in daily}
+
+        points = []
+        cur = since
+        while cur <= today:
+            r = by_date.get(cur)
+            imp = (r["impressions"] if r else 0) or 0
+            p25 = (r["video_p25"] if r else 0) or 0
+            p75 = (r["video_p75"] if r else 0) or 0
+            points.append({
+                "date": cur.isoformat(),
+                "spend": str((r["spend"] if r else Decimal("0")) or Decimal("0")),
+                "impressions": imp,
+                "clicks": (r["clicks"] if r else 0) or 0,
+                "leads": (r["leads"] if r else 0) or 0,
+                "purchases": (r["purchases"] if r else 0) or 0,
+                "revenue": str((r["revenue"] if r else Decimal("0")) or Decimal("0")),
+                "video_p25": p25,
+                "video_p75": p75,
+                "video_p100": (r["video_p100"] if r else 0) or 0,
+                "hook_rate": str(_safe_ratio(p25, imp) * Decimal("100")),
+                "hold_rate": str(_safe_ratio(p75, p25) * Decimal("100")),
+            })
+            cur += _dt.timedelta(days=1)
+
+        return Response({
+            "adset_id": adset.id,
+            "meta_adset_id": adset.meta_adset_id,
+            "currency": adset.campaign.ad_account.currency,
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "points": points,
+        })
+
+
 class MetaAdInsightTimeseriesView(APIView):
     """Daily insights for a single ad — the "stock chart" data source.
 

@@ -336,6 +336,143 @@ export interface MetaCreativeTimeseries {
   points: MetaAdInsightPoint[];
 }
 
+export interface MetaCampaignDetailAggregates {
+  spend: string;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  leads: number;
+  calls: number;
+  purchases: number;
+  revenue: string;
+  ctr: string;
+  cpc: string;
+  cpm: string;
+  cpl: string;
+  cpa: string;
+  roas: string;
+}
+
+export interface MetaCampaignDetailLinkedAdSet {
+  id: number;
+  meta_adset_id: string;
+  name: string;
+  effective_status: string;
+  optimization_goal: string;
+  daily_budget_cents: number | null;
+  lifetime_budget_cents: number | null;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: string;
+  roas: string;
+}
+
+export interface MetaCampaignDetail {
+  id: number;
+  meta_campaign_id: string;
+  ad_account_id: number;
+  currency: string;
+  name: string;
+  objective: string;
+  status: string;
+  effective_status: string;
+  start_time: string | null;
+  stop_time: string | null;
+  daily_budget_cents: number | null;
+  lifetime_budget_cents: number | null;
+  special_ad_categories: string[];
+  created_at: string;
+  updated_at: string;
+  days: number;
+  window: { since: string; until: string };
+  aggregates: MetaCampaignDetailAggregates;
+  linked_adsets: MetaCampaignDetailLinkedAdSet[];
+  linked_adsets_count: number;
+}
+
+export interface MetaCampaignTimeseriesPoint {
+  date: string;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: string;
+}
+
+export interface MetaCampaignTimeseries {
+  campaign_id: number;
+  meta_campaign_id: string;
+  currency: string;
+  days: number;
+  window: { since: string; until: string };
+  points: MetaCampaignTimeseriesPoint[];
+}
+
+export interface MetaAdSetDetailAggregates extends MetaCampaignDetailAggregates {
+  hook_rate: string;
+  hold_rate: string;
+}
+
+export interface MetaAdSetDetailLinkedAd {
+  id: number;
+  meta_ad_id: string;
+  name: string;
+  effective_status: string;
+  creative: {
+    id: number;
+    meta_creative_id: string;
+    title: string;
+    thumbnail_url: string;
+  } | null;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: string;
+  roas: string;
+}
+
+export interface MetaAdSetDetail {
+  id: number;
+  meta_adset_id: string;
+  ad_account_id: number;
+  currency: string;
+  name: string;
+  status: string;
+  effective_status: string;
+  optimization_goal: string;
+  billing_event: string;
+  bid_amount_cents: number | null;
+  daily_budget_cents: number | null;
+  lifetime_budget_cents: number | null;
+  campaign: {
+    id: number;
+    meta_campaign_id: string;
+    name: string;
+  };
+  created_at: string;
+  updated_at: string;
+  days: number;
+  window: { since: string; until: string };
+  aggregates: MetaAdSetDetailAggregates;
+  linked_ads: MetaAdSetDetailLinkedAd[];
+  linked_ads_count: number;
+}
+
+export interface MetaAdSetTimeseries {
+  adset_id: number;
+  meta_adset_id: string;
+  currency: string;
+  days: number;
+  window: { since: string; until: string };
+  points: MetaAdInsightPoint[];
+}
+
 export const facebookApi = {
   getStatus: async (): Promise<FacebookStatus> => {
     const response = await api.get("/api/facebook_integration/status/");
@@ -486,6 +623,48 @@ export const facebookApi = {
   ): Promise<MetaCreativeTimeseries> => {
     const response = await api.get(
       `/api/meta_ads/creatives/${creativeId}/performance_timeseries/`,
+      { params: { days } }
+    );
+    return response.data;
+  },
+
+  getMetaCampaignDetail: async (
+    campaignId: number,
+    days: number
+  ): Promise<MetaCampaignDetail> => {
+    const response = await api.get(`/api/meta_ads/campaigns/${campaignId}/`, {
+      params: { days },
+    });
+    return response.data;
+  },
+
+  getMetaCampaignTimeseries: async (
+    campaignId: number,
+    days: number
+  ): Promise<MetaCampaignTimeseries> => {
+    const response = await api.get(
+      `/api/meta_ads/campaigns/${campaignId}/performance_timeseries/`,
+      { params: { days } }
+    );
+    return response.data;
+  },
+
+  getMetaAdSetDetail: async (
+    adsetId: number,
+    days: number
+  ): Promise<MetaAdSetDetail> => {
+    const response = await api.get(`/api/meta_ads/adsets/${adsetId}/`, {
+      params: { days },
+    });
+    return response.data;
+  },
+
+  getMetaAdSetTimeseries: async (
+    adsetId: number,
+    days: number
+  ): Promise<MetaAdSetTimeseries> => {
+    const response = await api.get(
+      `/api/meta_ads/adsets/${adsetId}/performance_timeseries/`,
       { params: { days } }
     );
     return response.data;

@@ -4,7 +4,11 @@ from .views import (
     MetaAdInsightTimeseriesView,
     MetaAdListView,
     MetaAdPerformanceView,
+    MetaAdSetDetailView,
+    MetaAdSetInsightTimeseriesView,
     MetaAdSetPerformanceView,
+    MetaCampaignDetailView,
+    MetaCampaignInsightTimeseriesView,
     MetaCampaignListView,
     MetaCampaignPerformanceView,
     MetaCreativeDetailView,
@@ -73,6 +77,26 @@ urlpatterns = [
         "summary/",
         MetaSummaryView.as_view(),
         name="meta-summary",
+    ),
+    path(
+        "campaigns/<int:campaign_id>/",
+        MetaCampaignDetailView.as_view(),
+        name="meta-campaign-detail",
+    ),
+    path(
+        "campaigns/<int:campaign_id>/performance_timeseries/",
+        MetaCampaignInsightTimeseriesView.as_view(),
+        name="meta-campaign-timeseries",
+    ),
+    path(
+        "adsets/<int:adset_id>/",
+        MetaAdSetDetailView.as_view(),
+        name="meta-adset-detail",
+    ),
+    path(
+        "adsets/<int:adset_id>/performance_timeseries/",
+        MetaAdSetInsightTimeseriesView.as_view(),
+        name="meta-adset-timeseries",
     ),
     path(
         "creatives/<int:creative_id>/",

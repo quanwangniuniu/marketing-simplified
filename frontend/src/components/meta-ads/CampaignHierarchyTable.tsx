@@ -160,9 +160,12 @@ export default function CampaignHierarchyTable({
                         </span>
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="max-w-[420px] truncate text-xs font-medium text-gray-900">
+                        <Link
+                          href={`/meta-ads/campaigns/${c.id}`}
+                          className="block max-w-[420px] truncate text-xs font-medium text-gray-900 hover:text-[#1a9ba3]"
+                        >
                           {c.name || c.meta_campaign_id}
-                        </div>
+                        </Link>
                         <div className="mt-0.5 text-[10px] text-gray-400">
                           {c.objective.replace('OUTCOME_', '')}
                         </div>
@@ -327,9 +330,12 @@ function AdSetInset({
                       </button>
                     </td>
                     <td className="px-3 py-1.5">
-                      <div className="max-w-[420px] truncate text-xs text-gray-900">
+                      <Link
+                        href={`/meta-ads/adsets/${a.id}`}
+                        className="block max-w-[420px] truncate text-xs text-gray-900 hover:text-[#1a9ba3]"
+                      >
                         {a.name || a.meta_adset_id}
-                      </div>
+                      </Link>
                       <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-400">
                         <span
                           className={`rounded-full px-1.5 py-0.5 font-medium ${statusBadgeClass(a.effective_status)}`}
