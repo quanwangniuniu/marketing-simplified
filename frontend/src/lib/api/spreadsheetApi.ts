@@ -12,7 +12,7 @@ import {
 } from '@/types/spreadsheet';
 
 /** Timeout for long-running spreadsheet requests (import batch, large range read). Default axios 10s is too short. */
-const SPREADSHEET_LONG_REQUEST_TIMEOUT_MS = 120000; // 2 minutes
+const SPREADSHEET_LONG_REQUEST_TIMEOUT_MS = 300000; // 5 minutes (safety net; optimized batch writes should finish in <5s)
 
 export const SpreadsheetAPI = {
   // List spreadsheets for a project
@@ -180,7 +180,8 @@ export const SpreadsheetAPI = {
     startRow: number,
     endRow: number,
     startColumn: number,
-    endColumn: number
+    endColumn: number,
+    options?: { includeSheetDimensions?: boolean }
   ): Promise<{
     cells: Array<{
       id: number;
@@ -230,6 +231,9 @@ export const SpreadsheetAPI = {
         end_row: endRow,
         start_column: startColumn,
         end_column: endColumn,
+        ...(options?.includeSheetDimensions === false
+          ? { include_sheet_dimensions: false }
+          : {}),
       },
       { timeout: SPREADSHEET_LONG_REQUEST_TIMEOUT_MS }
     );

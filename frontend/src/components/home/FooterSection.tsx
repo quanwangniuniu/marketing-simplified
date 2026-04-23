@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 
 const footerLinks: Record<string, { label: string; href: string }[]> = {
   Product: [
@@ -40,9 +41,12 @@ export default function FooterSection() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <img
+              <Image
                 src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
+                width={898}
+                height={423}
+                sizes="212px"
                 className="h-20 w-auto"
               />
             </Link>

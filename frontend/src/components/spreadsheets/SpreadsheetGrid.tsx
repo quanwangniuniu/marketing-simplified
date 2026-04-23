@@ -243,15 +243,17 @@ const DEBOUNCE_MS = 500; // Debounce delay for batch writes
 const RESIZE_DEBOUNCE_MS = 500; // Debounce delay for resize API calls
 const MAX_ROWS = 100000; // Hard cap for grid size
 const MAX_COLUMNS = 702; // ZZZ (26 * 27) - hard cap for grid size
-// Tile configuration for range loading. Viewports are quantized into these tiles
-// so that small scroll differences map to stable range keys, enabling effective
-// caching and in-flight request deduplication.
+// Fixed tile size for range loading: the visible viewport is covered by one or more
+// tiles; each tile is cached and fetched independently so scrolling only requests
+// newly entered tiles (not a shifting bounding box over the same region).
 const TILE_ROWS = 50;
 const TILE_COLUMNS = 20;
+/** Max parallel range/tile read requests to avoid swarming the network / browser connection pool */
+const RANGE_TILE_READ_CONCURRENCY = 3;
 const ADD_ROWS_TRIGGER_DISTANCE = 100; // Show "Add rows" UI when within this many pixels of bottom
 const PREFETCH_ROWS_PER_CHUNK = 100; // Rows per request during post-import hydration
 const PREFETCH_CONCURRENCY = 2; // Max concurrent readCellRange requests during hydration
-const IMPORT_BATCH_CONCURRENCY = 4; // Max concurrent batch uploads during import (higher can hurt DB)
+const IMPORT_BATCH_CONCURRENCY = 6; // Max concurrent batch uploads during import. After A2 chunks no longer create rows/cols (auto_expand=false), so Row/Column lock contention is gone. 6 is safe since each chunk writes disjoint cells.
 const DEFAULT_NUMBER_FORMAT: NumberFormat = { type: 'GENERAL' };
 
 const DEFAULT_CELL_FORMAT: CellFormat = {
@@ -423,53 +425,65 @@ type NormalizedRange = {
   endColumn: number;
 };
 
-const normalizeRangeToTile = (
+const makeRangeKey = (range: NormalizedRange): string =>
+  `${range.startRow}-${range.endRow}-${range.startColumn}-${range.endColumn}`;
+
+/**
+ * Split a row/column range into non-overlapping fixed tiles (TILE_ROWS × TILE_COLUMNS).
+ * Used so scroll hits per-tile cache: moving the viewport fetches only newly entered tiles.
+ */
+const enumerateTilesInRange = (
   startRow: number,
   endRow: number,
   startColumn: number,
   endColumn: number,
   rowLimit: number,
   colLimit: number
-): NormalizedRange => {
-  // Clamp to current sheet dimensions to keep keys bounded.
-  const effectiveMaxRow = Math.max(0, Math.min(rowLimit - 1, MAX_ROWS - 1));
-  const effectiveMaxCol = Math.max(0, Math.min(colLimit - 1, MAX_COLUMNS - 1));
+): NormalizedRange[] => {
+  const maxRow = Math.max(0, Math.min(rowLimit - 1, MAX_ROWS - 1));
+  const maxCol = Math.max(0, Math.min(colLimit - 1, MAX_COLUMNS - 1));
+  const sr = Math.max(0, Math.min(startRow, maxRow));
+  const er = Math.max(sr, Math.min(endRow, maxRow));
+  const sc = Math.max(0, Math.min(startColumn, maxCol));
+  const ec = Math.max(sc, Math.min(endColumn, maxCol));
+  if (sr > er || sc > ec) return [];
 
-  const safeStartRow = Math.max(0, Math.min(startRow, effectiveMaxRow));
-  const safeEndRow = Math.max(safeStartRow, Math.min(endRow, effectiveMaxRow));
-  const safeStartColumn = Math.max(0, Math.min(startColumn, effectiveMaxCol));
-  const safeEndColumn = Math.max(safeStartColumn, Math.min(endColumn, effectiveMaxCol));
-
-  const tileStartRow = Math.floor(safeStartRow / TILE_ROWS) * TILE_ROWS;
-  const tileEndRow = Math.min(
-    effectiveMaxRow,
-    Math.ceil((safeEndRow + 1) / TILE_ROWS) * TILE_ROWS - 1
-  );
-
-  const tileStartColumn = Math.floor(safeStartColumn / TILE_COLUMNS) * TILE_COLUMNS;
-  const tileEndColumn = Math.min(
-    effectiveMaxCol,
-    Math.ceil((safeEndColumn + 1) / TILE_COLUMNS) * TILE_COLUMNS - 1
-  );
-
-  return {
-    startRow: tileStartRow,
-    endRow: tileEndRow,
-    startColumn: tileStartColumn,
-    endColumn: tileEndColumn,
-  };
+  const firstRowTile = Math.floor(sr / TILE_ROWS);
+  const lastRowTile = Math.floor(er / TILE_ROWS);
+  const firstColTile = Math.floor(sc / TILE_COLUMNS);
+  const lastColTile = Math.floor(ec / TILE_COLUMNS);
+  const out: NormalizedRange[] = [];
+  for (let r = firstRowTile; r <= lastRowTile; r += 1) {
+    for (let c = firstColTile; c <= lastColTile; c += 1) {
+      const startR = r * TILE_ROWS;
+      const endR = Math.min(maxRow, (r + 1) * TILE_ROWS - 1);
+      const startC = c * TILE_COLUMNS;
+      const endC = Math.min(maxCol, (c + 1) * TILE_COLUMNS - 1);
+      out.push({ startRow: startR, endRow: endR, startColumn: startC, endColumn: endC });
+    }
+  }
+  return out;
 };
 
-const makeRangeKey = (range: NormalizedRange): string =>
-  `${range.startRow}-${range.endRow}-${range.startColumn}-${range.endColumn}`;
+async function runTileReadTasks(tasks: Array<() => Promise<void>>): Promise<void> {
+  if (tasks.length === 0) return;
+  const n = Math.min(RANGE_TILE_READ_CONCURRENCY, tasks.length);
+  let index = 0;
+  const worker = async () => {
+    while (index < tasks.length) {
+      const i = index;
+      index += 1;
+      await tasks[i]();
+    }
+  };
+  await Promise.all(Array.from({ length: n }, () => worker()));
+}
 
 // Cache cells per sheetId to maintain isolation
 const cellCache = new Map<number, Map<CellKey, CellData>>();
-const loadedRangesCache = new Map<number, Set<string>>(); // Set of normalized range keys
+const loadedRangesCache = new Map<number, Set<string>>(); // Set of per-tile range keys (makeRangeKey)
 // Track in-flight range requests per sheet so multiple callers share the same promise (keyed by tile)
 const inFlightRangeRequests = new Map<number, Map<string, Promise<void>>>();
-// Track in-flight requests keyed by the exact viewport payload for hard dedup of identical calls
-const inFlightExactRequests = new Map<string, Promise<void>>();
 // Cache dimensions per sheetId
 const dimensionsCache = new Map<number, { rowCount: number; colCount: number }>();
 
@@ -749,6 +763,37 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     [sheetId]
   );
 
+  /**
+   * Batched variant of applyCellValueLocal. Used by large imports where calling
+   * the per-cell helper N times would clone the cells Map N times (O(n^2)).
+   * Applies all entries with a single setCells + single cellCache write.
+   */
+  const applyCellValuesLocalBatch = useCallback(
+    (entries: Array<{ row: number; col: number; value: string }>) => {
+      if (!entries.length) return;
+      setCells((prev) => {
+        const next = new Map(prev);
+        const cachedCells = cellCache.get(sheetId) || new Map();
+        for (const entry of entries) {
+          const key = getCellKey(entry.row, entry.col);
+          const cellData: CellData = {
+            rawInput: entry.value,
+            computedType: null,
+            computedNumber: null,
+            computedString: null,
+            errorCode: null,
+            isLoaded: true,
+          };
+          next.set(key, cellData);
+          cachedCells.set(key, cellData);
+        }
+        cellCache.set(sheetId, cachedCells);
+        return next;
+      });
+    },
+    [sheetId]
+  );
+
   // True when a cell editor is mounted and active.
   // In this mode, we must NOT handle grid-level keyboard shortcuts so that
   // native text editing (typing, Backspace/Delete, Ctrl/Cmd+Z, etc.) works.
@@ -919,34 +964,99 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
    * @param persistToBackend Whether to persist to backend (default: true)
    * @returns true if resize succeeded, false if clamped to max
    */
-  const resizeGrid = useCallback(
-    async (targetRows: number, targetCols: number, persistToBackend: boolean = true): Promise<boolean> => {
+  /**
+   * Synchronously update the local grid dimensions (rowCount / colCount) and the
+   * module-level dimensionsCache. Returns the effective (clamped) dimensions and
+   * whether clamping occurred, so callers can decide what to persist.
+   *
+   * No backend call is made here. Callers that also want to persist should pair this
+   * with `persistResizeToBackend`, or use the composite `resizeGrid` wrapper below.
+   */
+  const updateGridDimensionsLocal = useCallback(
+    (
+      targetRows: number,
+      targetCols: number,
+    ): { clampedRows: number; clampedCols: number; wasClamped: boolean } => {
       const clampedRows = Math.min(MAX_ROWS, Math.max(0, targetRows));
       const clampedCols = Math.min(MAX_COLUMNS, Math.max(0, targetCols));
-      const wasClamped = clampedRows < targetRows || clampedCols < targetCols;
+      const wasClamped = clampedRows !== targetRows || clampedCols !== targetCols;
 
       setRowCount(clampedRows);
       setColCount(clampedCols);
       dimensionsCache.set(sheetId, { rowCount: clampedRows, colCount: clampedCols });
 
-      if (persistToBackend) {
-        // Debounced resize API call
+      return { clampedRows, clampedCols, wasClamped };
+    },
+    [sheetId]
+  );
+
+  /**
+   * Persist the given sheet dimensions to the backend.
+   * - `immediate=false` (default): debounce the POST so rapid edits coalesce.
+   * - `immediate=true`: skip debounce, await the POST, return true on success and
+   *   false if the call errored. Used by the import path.
+   */
+  const persistResizeToBackend = useCallback(
+    async (clampedRows: number, clampedCols: number, immediate: boolean = false): Promise<boolean> => {
+      if (immediate) {
         if (resizeDebounceTimerRef.current) {
           clearTimeout(resizeDebounceTimerRef.current);
+          resizeDebounceTimerRef.current = null;
         }
-        resizeDebounceTimerRef.current = setTimeout(async () => {
-          try {
-            await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
-          } catch (error: any) {
-            console.error('Failed to persist sheet dimensions:', error);
-            // Non-blocking error - dimensions are still updated locally
-          }
-        }, RESIZE_DEBOUNCE_MS);
+        try {
+          await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
+          return true;
+        } catch (error: any) {
+          console.error('Failed to persist sheet dimensions:', error);
+          return false;
+        }
       }
 
+      if (resizeDebounceTimerRef.current) {
+        clearTimeout(resizeDebounceTimerRef.current);
+      }
+      resizeDebounceTimerRef.current = setTimeout(async () => {
+        try {
+          await SpreadsheetAPI.resizeSheet(spreadsheetId, sheetId, clampedRows, clampedCols);
+        } catch (error: any) {
+          console.error('Failed to persist sheet dimensions:', error);
+          // Non-blocking error - dimensions are still updated locally
+        }
+      }, RESIZE_DEBOUNCE_MS);
+      return true;
+    },
+    [sheetId, spreadsheetId]
+  );
+
+  /**
+   * Composite helper that keeps the original single-call API: update local state
+   * first, then kick off the backend persist. Used by existing (non-import) call
+   * sites so they do not need to change.
+   *
+   * Returns false only when:
+   *   - the requested dimensions were clamped by MAX_ROWS / MAX_COLUMNS, OR
+   *   - `immediate=true` and the backend call failed.
+   */
+  const resizeGrid = useCallback(
+    async (
+      targetRows: number,
+      targetCols: number,
+      persistToBackend: boolean = true,
+      immediate: boolean = false
+    ): Promise<boolean> => {
+      const { clampedRows, clampedCols, wasClamped } = updateGridDimensionsLocal(targetRows, targetCols);
+
+      if (!persistToBackend) {
+        return !wasClamped;
+      }
+
+      const persisted = await persistResizeToBackend(clampedRows, clampedCols, immediate);
+      if (immediate && !persisted) {
+        return false;
+      }
       return !wasClamped;
     },
-    [rowCount, colCount, sheetId, spreadsheetId]
+    [updateGridDimensionsLocal, persistResizeToBackend]
   );
 
   /**
@@ -1049,44 +1159,14 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     };
   }, [rowCount, colCount, getRowIndexAtOffset, getColumnIndexAtOffset, totalRowHeight, safeDefaultRange]);
 
-  // Check if a (possibly non-tile-aligned) range is already fully loaded by
-  // normalizing it to a tile-aligned key and consulting the cache.
-  const isRangeLoaded = useCallback(
-    (startRow: number, endRow: number, startColumn: number, endColumn: number): boolean => {
-      const normalized = normalizeRangeToTile(
-        startRow,
-        endRow,
-        startColumn,
-        endColumn,
-        Math.max(1, rowCount),
-        Math.max(1, colCount)
-      );
-      const rangeKey = makeRangeKey(normalized);
-      const loadedRanges = loadedRangesCache.get(sheetId);
-      return loadedRanges?.has(rangeKey) || false;
-    },
-    [sheetId, rowCount, colCount]
-  );
-
-  // Mark a range as loaded by recording its normalized tile-aligned key.
-  const markRangeLoaded = useCallback(
-    (startRow: number, endRow: number, startColumn: number, endColumn: number) => {
-      const normalized = normalizeRangeToTile(
-        startRow,
-        endRow,
-        startColumn,
-        endColumn,
-        Math.max(1, rowCount),
-        Math.max(1, colCount)
-      );
-      const rangeKey = makeRangeKey(normalized);
-      const loadedRanges = loadedRangesCache.get(sheetId);
-      if (loadedRanges) {
-        loadedRanges.add(rangeKey);
-      }
-    },
-    [sheetId, rowCount, colCount]
-  );
+  // Mark one fixed tile (aligned bounds) as loaded.
+  const markTileLoaded = useCallback((tile: NormalizedRange) => {
+    const rangeKey = makeRangeKey(tile);
+    const loadedRanges = loadedRangesCache.get(sheetId);
+    if (loadedRanges) {
+      loadedRanges.add(rangeKey);
+    }
+  }, [sheetId]);
 
   // Load cells from backend for a range
   const loadCellRange = useCallback(
@@ -1095,145 +1175,154 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       endRow: number,
       startColumn: number,
       endColumn: number,
-      force: boolean = false
+      force: boolean = false,
+      loadOptions?: { includeSheetDimensions?: boolean }
     ) => {
-      const viewportKey = `${sheetId}:${startRow}-${endRow}-${startColumn}-${endColumn}`;
-      const normalized = normalizeRangeToTile(
-        startRow,
-        endRow,
-        startColumn,
-        endColumn,
-        Math.max(1, rowCount),
-        Math.max(1, colCount)
-      );
-      const rangeKey = makeRangeKey(normalized);
+      const wantSheetDimensions = loadOptions?.includeSheetDimensions !== false;
 
-    let inFlightForSheet = inFlightRangeRequests.get(sheetId);
+      let inFlightForSheet = inFlightRangeRequests.get(sheetId);
       if (!inFlightForSheet) {
         inFlightForSheet = new Map<string, Promise<void>>();
         inFlightRangeRequests.set(sheetId, inFlightForSheet);
       }
 
       const loadedRanges = loadedRangesCache.get(sheetId);
-      const cacheHit = !force && !!loadedRanges && loadedRanges.has(rangeKey);
+      const rLimit = Math.max(1, rowCount);
+      const cLimit = Math.max(1, colCount);
+      const tiles = enumerateTilesInRange(startRow, endRow, startColumn, endColumn, rLimit, cLimit);
+      if (tiles.length === 0) return;
 
-      // First-tier dedup: exact payload (even when force=true we can still share the same in-flight call).
-      const existingExact = inFlightExactRequests.get(viewportKey);
-      const inFlightExactHit = !!existingExact;
+      if (force) {
+        for (const t of tiles) {
+          const k = makeRangeKey(t);
+          loadedRanges?.delete(k);
+        }
+      }
 
-      // Second-tier dedup: tile-based (normalized) in-flight sharing.
-      const existingTile = inFlightForSheet.get(rangeKey);
-      const inFlightTileHit = !!existingTile;
+      const toAwait: Promise<void>[] = [];
+      const newTileTasks: Array<() => Promise<void>> = [];
+      let willSendSheetDimensions = wantSheetDimensions;
 
       if (process.env.NODE_ENV === 'development') {
         // eslint-disable-next-line no-console
         console.debug('[SpreadsheetGrid][RangeLoad]', {
           sheetId,
           viewport: { startRow, endRow, startColumn, endColumn },
-          normalized,
-          viewportKey,
-          rangeKey,
-          cacheHit,
-          inFlightExactHit,
-          inFlightTileHit,
+          tileCount: tiles.length,
           force,
+          wantSheetDimensions,
         });
       }
 
-      if (!force && cacheHit) {
-        return; // Already loaded tile
-      }
+      for (const tile of tiles) {
+        const rangeKey = makeRangeKey(tile);
+        const cacheHit = !force && !!loadedRanges && loadedRanges.has(rangeKey);
+        if (cacheHit) {
+          continue;
+        }
 
-      // Reuse any existing in-flight request for this exact payload.
-      if (existingExact) {
-        return existingExact;
-      }
+        const inFlight = inFlightForSheet.get(rangeKey);
+        if (inFlight) {
+          toAwait.push(inFlight);
+          continue;
+        }
 
-      // Or reuse tile-level in-flight (same normalized tile).
-      if (existingTile) {
-        return existingTile;
-      }
+        const includeThisDimension = willSendSheetDimensions;
+        if (includeThisDimension) {
+          willSendSheetDimensions = false;
+        }
 
-      const requestPromise = (async () => {
-        try {
-          const response = await SpreadsheetAPI.readCellRange(
-            spreadsheetId,
-            sheetId,
-            normalized.startRow,
-            normalized.endRow,
-            normalized.startColumn,
-            normalized.endColumn
-          );
-          
-          // Sync grid dimensions from full sheet size (sheet_row_count/sheet_column_count). Enforce minimum DEFAULT_ROWS×DEFAULT_COLUMNS so new/empty sheets are 1000×26 and scrollable.
-          const res = response as typeof response & { sheet_row_count?: number | null; sheet_column_count?: number | null };
-          const sheetRows = res.sheet_row_count != null ? res.sheet_row_count : null;
-          const sheetCols = res.sheet_column_count != null ? res.sheet_column_count : null;
-          if (sheetRows != null && sheetCols != null) {
-            const backendRowCount = Math.min(MAX_ROWS, Math.max(DEFAULT_ROWS, sheetRows));
-            const backendColCount = Math.min(MAX_COLUMNS, Math.max(DEFAULT_COLUMNS, sheetCols));
-            if (backendRowCount !== rowCount || backendColCount !== colCount) {
-              setRowCount(backendRowCount);
-              setColCount(backendColCount);
-              dimensionsCache.set(sheetId, { rowCount: backendRowCount, colCount: backendColCount });
-            }
-            // If backend has fewer columns/rows than we need (e.g. new sheet), persist resize so insert works
-            if (backendRowCount > sheetRows || backendColCount > sheetCols) {
-              void resizeGrid(backendRowCount, backendColCount, true);
-            }
-          }
+        // Register a placeholder immediately so concurrent loadCellRange calls dedupe
+        // on the same tile, while the HTTP request only starts when a worker runs
+        // (RANGE_TILE_READ_CONCURRENCY limits in-flight reads).
+        let completeTileRead!: () => void;
+        const p = new Promise<void>((resolve) => {
+          completeTileRead = resolve;
+        });
+        inFlightForSheet.set(rangeKey, p);
 
-          // Update cells from response
-          setCells((prev) => {
-            const next = new Map(prev);
-            const cachedCells = cellCache.get(sheetId) || new Map();
+        newTileTasks.push(async () => {
+          try {
+            const response = await SpreadsheetAPI.readCellRange(
+              spreadsheetId,
+              sheetId,
+              tile.startRow,
+              tile.endRow,
+              tile.startColumn,
+              tile.endColumn,
+              { includeSheetDimensions: includeThisDimension }
+            );
 
-            response.cells.forEach((cell) => {
-              const key = getCellKey(cell.row_position, cell.column_position);
-              const fallbackRawInput =
-                cell.raw_input ??
-                cell.formula_value ??
-                cell.string_value ??
-                (cell.number_value != null ? String(cell.number_value) : '') ??
-                (cell.boolean_value != null ? (cell.boolean_value ? 'TRUE' : 'FALSE') : '');
-              const cellData: CellData = {
-                rawInput: fallbackRawInput,
-                computedType: cell.computed_type ?? null,
-                computedNumber: cell.computed_number ?? null,
-                computedString: cell.computed_string ?? null,
-                errorCode: cell.error_code ?? null,
-                isLoaded: true,
+            if (includeThisDimension) {
+              const res = response as typeof response & {
+                sheet_row_count?: number | null;
+                sheet_column_count?: number | null;
               };
-              next.set(key, cellData);
-              cachedCells.set(key, cellData);
+              const sheetRows = res.sheet_row_count != null ? res.sheet_row_count : null;
+              const sheetCols = res.sheet_column_count != null ? res.sheet_column_count : null;
+              if (sheetRows != null && sheetCols != null) {
+                const backendRowCount = Math.min(MAX_ROWS, Math.max(DEFAULT_ROWS, sheetRows));
+                const backendColCount = Math.min(MAX_COLUMNS, Math.max(DEFAULT_COLUMNS, sheetCols));
+                if (backendRowCount !== rowCount || backendColCount !== colCount) {
+                  setRowCount(backendRowCount);
+                  setColCount(backendColCount);
+                  dimensionsCache.set(sheetId, { rowCount: backendRowCount, colCount: backendColCount });
+                }
+                if (backendRowCount > sheetRows || backendColCount > sheetCols) {
+                  void resizeGrid(backendRowCount, backendColCount, true);
+                }
+              }
+            }
+
+            setCells((prev) => {
+              const next = new Map(prev);
+              const cachedCells = cellCache.get(sheetId) || new Map();
+
+              response.cells.forEach((cell) => {
+                const key = getCellKey(cell.row_position, cell.column_position);
+                const fallbackRawInput =
+                  cell.raw_input ??
+                  cell.formula_value ??
+                  cell.string_value ??
+                  (cell.number_value != null ? String(cell.number_value) : '') ??
+                  (cell.boolean_value != null ? (cell.boolean_value ? 'TRUE' : 'FALSE') : '');
+                const cellData: CellData = {
+                  rawInput: fallbackRawInput,
+                  computedType: cell.computed_type ?? null,
+                  computedNumber: cell.computed_number ?? null,
+                  computedString: cell.computed_string ?? null,
+                  errorCode: cell.error_code ?? null,
+                  isLoaded: true,
+                };
+                next.set(key, cellData);
+                cachedCells.set(key, cellData);
+              });
+
+              cellCache.set(sheetId, cachedCells);
+              return next;
             });
 
-            cellCache.set(sheetId, cachedCells);
-            return next;
-          });
-
-          // Mark the full tile as loaded so subsequent viewports within this tile hit cache.
-          markRangeLoaded(normalized.startRow, normalized.endRow, normalized.startColumn, normalized.endColumn);
-        } catch (error: any) {
-          console.error('Failed to load cell range:', error);
-          // Don't show toast for background loading errors
-        } finally {
-          // Clean up in-flight tracking regardless of success/failure
-          inFlightExactRequests.delete(viewportKey);
-          const currentForSheet = inFlightRangeRequests.get(sheetId);
-          if (currentForSheet) {
-            currentForSheet.delete(rangeKey);
+            markTileLoaded(tile);
+          } catch (error: any) {
+            console.error('Failed to load cell range:', error);
+          } finally {
+            const currentForSheet = inFlightRangeRequests.get(sheetId);
+            if (currentForSheet) {
+              currentForSheet.delete(rangeKey);
+            }
+            completeTileRead();
           }
-        }
-      })();
+        });
+      }
 
-      // Track in-flight for both exact payload and normalized tile so callers can reuse the same promise.
-      inFlightExactRequests.set(viewportKey, requestPromise);
-      inFlightForSheet.set(rangeKey, requestPromise);
-
-      return requestPromise;
+      if (newTileTasks.length > 0) {
+        await runTileReadTasks(newTileTasks);
+      }
+      if (toAwait.length > 0) {
+        await Promise.all(toAwait);
+      }
     },
-    [spreadsheetId, sheetId, isRangeLoaded, markRangeLoaded, resizeGrid, rowCount, colCount]
+    [spreadsheetId, sheetId, markTileLoaded, resizeGrid, rowCount, colCount]
   );
 
   const applyCellsFromResponse = useCallback(
@@ -2048,7 +2137,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       scrollRafIdRef.current = null;
 
       const range = computeVisibleRange();
-      loadCellRange(range.startRow, range.endRow, range.startColumn, range.endColumn);
+      loadCellRange(range.startRow, range.endRow, range.startColumn, range.endColumn, false, {
+        includeSheetDimensions: false,
+      });
       setVisibleRange({
         startRow: range.startRow,
         endRow: range.endRow,
@@ -4093,7 +4184,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       setHydrationStatus('hydrating');
       try {
         // 1) Fetch sheet meta (rowCount, colCount) via a small range read; backend returns sheet_row_count / sheet_column_count
-        await loadCellRange(0, Math.min(0, usedMaxRow), 0, Math.min(0, usedMaxCol), true);
+        await loadCellRange(0, Math.min(0, usedMaxRow), 0, Math.min(0, usedMaxCol), true, {
+          includeSheetDimensions: true,
+        });
 
         // 2) Prefetch all cells in used range in deterministic chunks (e.g. 100 rows per request), concurrency 2
         const chunkTasks: Array<() => Promise<void>> = [];
@@ -4107,7 +4200,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           const er = endRow;
           const sc = 0;
           const ec = usedMaxCol;
-          chunkTasks.push(() => loadCellRange(sr, er, sc, ec, true));
+          chunkTasks.push(() =>
+            loadCellRange(sr, er, sc, ec, true, { includeSheetDimensions: false })
+          );
         }
         await runWithConcurrency(chunkTasks, PREFETCH_CONCURRENCY);
       } catch (err) {
@@ -4134,7 +4229,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       const { operations, maxRow, maxCol } = buildCellOperations(matrix, startRow, startCol);
       const normalizedOperations = operations.map((op) => {
         const normalized = normalizeCommittedValue(op.raw_input || '');
-        if (normalized.valueType !== 'number') {
+        // Only annotate as number when the value is a finite JS number.
+        // Infinity / NaN would be serialized as null by JSON.stringify, which
+        // makes the backend reject the chunk with 400 (number_value required).
+        if (normalized.valueType !== 'number' || !Number.isFinite(normalized.numberValue ?? NaN)) {
           return op;
         }
         return {
@@ -4164,20 +4262,64 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         return;
       }
 
-      // Auto-resize grid once to fit import (if needed)
-      const needsRowResize = requiredRows > rowCount;
-      const needsColResize = requiredCols > colCount;
-      if (needsRowResize || needsColResize) {
-        const newRowCount = Math.max(rowCount, requiredRows);
-        const newColCount = Math.max(colCount, requiredCols);
-        const success = await resizeGrid(newRowCount, newColCount, true);
-        if (!success) {
-          toast.error('Failed to resize grid for import');
-          return;
-        }
+      // Step 1: update the grid's local dimensions synchronously so optimistic apply
+      // below can render into the newly expanded area without waiting on the network.
+      const targetRowCount = Math.max(rowCount, requiredRows);
+      const targetColCount = Math.max(colCount, requiredCols);
+      const { clampedRows, clampedCols, wasClamped } = updateGridDimensionsLocal(
+        targetRowCount,
+        targetColCount,
+      );
+      if (wasClamped) {
+        toast.error('Failed to resize grid for import');
+        return;
       }
 
-      const chunks = chunkOperations<CellOperation>(normalizedOperations, 1000);
+      // Step 2: record the reverse history entry (prev -> next) so the user can undo,
+      // AND so we have the prevValue list available if we need to roll back the
+      // optimistic apply when the backend resize call fails.
+      //
+      // For large imports (>5 000 ops) skip the per-cell getCellRawInput scan: it would
+      // call getCellRawInput ~30 000 times on the main thread and build a 30 000-element
+      // array just to enable undo. Undo is not a realistic action after a bulk import and
+      // the memory overhead outweighs the benefit.
+      const HISTORY_OP_THRESHOLD = 5000;
+      const changes: CellChange[] = [];
+      if (operations.length <= HISTORY_OP_THRESHOLD) {
+        operations.forEach((op) => {
+          const prevValue = getCellRawInput(op.row, op.column);
+          const nextValue = op.raw_input || '';
+          if (prevValue === nextValue) return;
+          changes.push({
+            row: op.row,
+            col: op.column,
+            prevValue,
+            nextValue,
+          });
+        });
+      }
+
+      if (changes.length) {
+        pushHistoryEntry({ changes });
+      }
+
+      // Step 3: optimistic UI apply. One batched setCells, so the user sees the
+      // imported data IMMEDIATELY (before the backend resize network call).
+      applyCellValuesLocalBatch(
+        operations.map((op) => ({ row: op.row, col: op.column, value: op.raw_input || '' }))
+      );
+
+      // Step 4: start the backend resize (don't await yet). Chunks need the server-side
+      // SheetRow / SheetColumn rows to exist before they can be safely written with
+      // auto_expand=false, so we must await this before the first chunk fires - but
+      // NOT before the optimistic display.
+      const resizePromise = persistResizeToBackend(clampedRows, clampedCols, /* immediate */ true);
+
+      // Step 5: also prepare chunks locally while the network call is in flight; this
+      // work is free (pure in-memory) and lets chunks fire as soon as resize lands.
+      // chunk size 2000: row_id__in + column_id__in avoids the old Q() OR recursion limit,
+      // so larger chunks are safe. 2000 halves round-trips vs the previous 1000.
+      const chunks = chunkOperations<CellOperation>(normalizedOperations, 2000);
       setImportProgress({ current: 0, total: chunks.length });
 
       const importId =
@@ -4188,57 +4330,129 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       importAbortControllerRef.current = abortController;
       const signal = abortController.signal;
 
-      const changes: CellChange[] = [];
-      operations.forEach((op) => {
-        const prevValue = getCellRawInput(op.row, op.column);
-        const nextValue = op.raw_input || '';
-        if (prevValue === nextValue) return;
-        changes.push({
-          row: op.row,
-          col: op.column,
-          prevValue,
-          nextValue,
-        });
-      });
+      // Step 6: now actually wait for the backend to finish building rows/columns.
+      const resizePersisted = await resizePromise;
+      if (!resizePersisted) {
+        // Roll back the optimistic apply so the user does not see "fake" data that
+        // was never written to the backend.
+        // - For smaller imports we have precise pre-import values in `changes`.
+        // - For larger imports `changes` may be intentionally empty, so fall back to
+        //   clearing the optimistically populated cells touched by this import.
+        const rollbackUpdates =
+          changes.length > 0
+            ? changes.map((c) => ({ row: c.row, col: c.col, value: c.prevValue }))
+            : Array.from(
+                operations.reduce((acc, op) => {
+                  acc.set(`${op.row}:${op.column}`, { row: op.row, col: op.column, value: '' });
+                  return acc;
+                }, new Map<string, { row: number; col: number; value: string }>()),
+              ).map(([, cell]) => cell);
 
-      if (changes.length) {
-        pushHistoryEntry({ changes });
+        if (rollbackUpdates.length > 0) {
+          applyCellValuesLocalBatch(rollbackUpdates);
+        }
+        importAbortControllerRef.current = null;
+        toast.error('Failed to resize grid for import');
+        return;
       }
 
-      // Optimistically apply to UI (sparse)
-      operations.forEach((op) => {
-        applyCellValueLocal(op.row, op.column, op.raw_input || '');
-      });
-
-      let lastError: any = null;
+      // Error reporting strategy:
+      // - `firstError` owns the single reported failure. Concurrent in-flight requests
+      //   that are later aborted should stay silent so the user sees one toast / one log.
+      // - On the first failure of a chunk, retry that chunk serially once before giving up
+      //   (covers transient network blips and DB lock contention). Only on a second failure
+      //   do we abort siblings and surface the error.
+      let firstError: any = null;
       let lastChunkIndex = -1;
+
+      const isCancelError = (err: any): boolean => {
+        const name = err?.name;
+        const code = err?.code;
+        return (
+          name === 'CanceledError' ||
+          name === 'AbortError' ||
+          name === 'Cancel' ||
+          code === 'ERR_CANCELED'
+        );
+      };
 
       try {
         const chunkTasks = chunks.map((chunk, i) => async () => {
-          if (signal.aborted) throw new DOMException('Import cancelled', 'AbortError');
-          try {
-            await SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, true, {
+          if (signal.aborted) return;
+          // auto_expand=false: rows/cols were already created by the immediate
+          // resize above, so the server can skip existence checks and bulk_create.
+          const runOnce = () =>
+            SpreadsheetAPI.batchUpdateCells(spreadsheetId, sheetId, chunk, false, {
               importId,
               chunkIndex: i,
               importMode: true,
               signal,
             });
+
+          let succeeded = false;
+          try {
+            await runOnce();
+            succeeded = true;
+          } catch (err: any) {
+            if (signal.aborted && isCancelError(err)) return;
+            if (firstError) return;
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              if (signal.aborted) return;
+              await runOnce();
+              succeeded = true;
+            } catch (retryErr: any) {
+              if (signal.aborted && isCancelError(retryErr)) return;
+              if (!firstError) {
+                firstError = retryErr;
+                lastChunkIndex = i;
+                importAbortControllerRef.current?.abort();
+              }
+              return;
+            }
+          }
+          if (succeeded) {
             setImportProgress((prev) =>
               prev ? { current: prev.current + 1, total: prev.total } : prev
             );
-            return;
-          } catch (err: any) {
-            lastChunkIndex = i;
-            lastError = err;
-            importAbortControllerRef.current?.abort();
-            throw err;
           }
         });
         await runWithConcurrency(chunkTasks, IMPORT_BATCH_CONCURRENCY);
+        if (firstError) throw firstError;
 
-        // All chunks complete: finalize (recalc formulas), then hydrate
+        // All chunks complete: finalize (recalc formulas) on the server.
         await SpreadsheetAPI.finalizeImport(spreadsheetId, sheetId, importId);
-        await runPostImportHydration(maxRow, maxCol);
+
+        // Hydration strategy:
+        // - Pure data imports (no '=' prefixed ops): the optimistic local apply already
+        //   holds every raw_input we just pushed. A full re-fetch would be ~100 range
+        //   requests returning identical data. Skip it.
+        // - Imports containing formulas: the server may have computed values we don't
+        //   have locally. Fetch ONCE over the bounding box of formula ops rather than
+        //   slicing the whole region into many 100-row requests.
+        const formulaOps = operations.filter((op) => (op.raw_input || '').startsWith('='));
+        if (formulaOps.length === 0) {
+          setHydrationStatus('ready');
+        } else {
+          let fMinRow = Infinity;
+          let fMaxRow = -Infinity;
+          let fMinCol = Infinity;
+          let fMaxCol = -Infinity;
+          for (const op of formulaOps) {
+            if (op.row < fMinRow) fMinRow = op.row;
+            if (op.row > fMaxRow) fMaxRow = op.row;
+            if (op.column < fMinCol) fMinCol = op.column;
+            if (op.column > fMaxCol) fMaxCol = op.column;
+          }
+          setHydrationStatus('hydrating');
+          try {
+            await loadCellRange(fMinRow, fMaxRow, fMinCol, fMaxCol, true);
+          } catch (err) {
+            console.error('[Hydration] Formula bbox fetch failed:', err);
+          } finally {
+            setHydrationStatus('ready');
+          }
+        }
         importAbortControllerRef.current = null;
       } catch (error: any) {
         importAbortControllerRef.current = null;
@@ -4298,7 +4512,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       }
     },
     [
-      applyCellValueLocal,
+      applyCellValuesLocalBatch,
       getCellRawInput,
       pushHistoryEntry,
       spreadsheetId,
@@ -4307,10 +4521,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       parseImportError,
       reconcileImport,
       loadCellRange,
-      runPostImportHydration,
       runWithConcurrency,
       visibleRange,
-      resizeGrid,
+      updateGridDimensionsLocal,
+      persistResizeToBackend,
       rowCount,
       colCount,
     ]

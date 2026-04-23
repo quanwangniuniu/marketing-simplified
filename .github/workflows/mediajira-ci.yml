@@ -54,14 +54,16 @@ jobs:
       - name: Setup Node 
         uses: actions/setup-node@v4 
         with: 
-          node-version: '18'
+          node-version: '20'
       # Install dependencies using npm ci
       # npm ci is strict:
       # - Fails if package-lock.json and package.json are out of sync
       # - Fails if dependencies are missing
       # - Ensures reproducible builds
       - name: Install dependencies (strict mode)
-        run: cd frontend && npm ci
+        run: |
+          cd frontend
+          npm ci || (echo "npm ci failed, retrying once (e.g. esbuild ETXTBSY)..." && rm -rf node_modules && sleep 2 && npm ci)
       # Install depcheck globally
       # depcheck detects:
       # - Missing dependencies (used in code but not in package.json)

@@ -271,10 +271,10 @@ function AIAgentPreview({ module }: { module: Module }) {
             <span
               className={`text-xs px-2 py-0.5 rounded-full ${
                 item.status === "completed"
-                  ? "bg-brand-lime/15 text-brand-lime"
+                  ? "bg-emerald-100 text-emerald-800"
                   : item.status === "in-progress"
-                    ? "bg-brand-teal/15 text-brand-teal"
-                    : "bg-gray-100 text-gray-500"
+                    ? "bg-teal-100 text-teal-800"
+                    : "bg-gray-200 text-gray-700"
               }`}
             >
               {item.status === "completed" ? "Done" : item.status === "in-progress" ? "Running" : "Queued"}
@@ -465,7 +465,7 @@ export default function HeroSection({ onGetStartedClick }: HeroSectionProps) {
             >
               <div className="absolute -top-3 left-6 z-10">
                 <motion.div
-                  className={`${activeModule.color} text-white px-4 py-1.5 rounded-full text-sm font-medium shadow-lg flex items-center gap-2`}
+                  className={`${activeModule.id === "ai-agent" ? "bg-teal-700" : activeModule.color} text-white px-4 py-1.5 rounded-full text-sm font-medium shadow-lg flex items-center gap-2`}
                   layout
                   key={activeModule.id}
                 >

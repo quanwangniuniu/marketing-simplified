@@ -345,7 +345,7 @@ class OrchestratorTests(TestCase):
         self.assertEqual(workflow_run.status, 'completed')
 
 
-    @patch('agent.services._call_dify_chat')
+    @patch('agent.services._call_gemini_chat')
     def test_follow_up_completed_marks_run_and_passes_project_members(self, mock_call_dify_chat):
         teammate = CustomUser.objects.create_user(
             email='alice@test.com',
@@ -398,7 +398,7 @@ class OrchestratorTests(TestCase):
         self.assertIn('alice', usernames)
         self.assertNotIn('agent-bot', usernames)
 
-    @patch('agent.services._call_dify_chat')
+    @patch('agent.services._call_gemini_chat')
     def test_follow_up_needs_clarification_keeps_run_open(self, mock_call_dify_chat):
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
@@ -472,7 +472,7 @@ class OrchestratorTests(TestCase):
         self.assertFalse(workflow_run.chat_follow_up_started)
         self.assertFalse(workflow_run.chat_followed_up)
 
-    @patch('agent.services._call_dify_chat')
+    @patch('agent.services._call_gemini_chat')
     def test_follow_up_requires_explicit_start(self, mock_call_dify_chat):
         AgentWorkflowRun.objects.create(
             session=self.session,
@@ -869,15 +869,11 @@ class CalendarAgentTests(TestCase):
     # handle_message routing                                              #
     # ------------------------------------------------------------------ #
 
-    @patch.dict('os.environ', {'DIFY_CALENDAR_API_KEY': 'test-key'})
-    @patch('agent.services.requests.post')
-    def test_handle_message_routes_to_calendar_when_context_provided(self, mock_post):
-        """handle_message with calendar_context skips general chat and calls Dify calendar."""
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {'data': {'outputs': {'answer': '{"answer": "You have 1 event.", "create_events": []}'}}},
-        )
-        mock_post.return_value.raise_for_status = lambda: None
+    @patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'})
+    @patch('agent.gemini_client.call_gemini')
+    def test_handle_message_routes_to_calendar_when_context_provided(self, mock_call_gemini):
+        """handle_message with calendar_context skips general chat and calls Gemini calendar."""
+        mock_call_gemini.return_value = '{"answer": "You have 1 event.", "create_events": []}'
 
         calendar_context = {'type': 'calendar', 'calendarIds': [], 'currentView': 'week'}
         chunks = list(self.orchestrator.handle_message(
@@ -887,8 +883,7 @@ class CalendarAgentTests(TestCase):
         types = [c['type'] for c in chunks]
         self.assertIn('text', types)
         self.assertIn('done', types)
-        # Dify calendar endpoint must have been called
-        self.assertTrue(mock_post.called)
+        self.assertTrue(mock_call_gemini.called)
 
     @patch('agent.services.requests.post')
     def test_handle_message_without_calendar_context_skips_calendar(self, mock_post):
@@ -953,15 +948,11 @@ class CalendarAgentTests(TestCase):
     # answer_calendar_question — Dify response handling                  #
     # ------------------------------------------------------------------ #
 
-    @patch.dict('os.environ', {'DIFY_CALENDAR_API_KEY': 'test-key'})
-    @patch('agent.services.requests.post')
-    def test_answer_calendar_question_yields_text_chunk(self, mock_post):
-        """A successful Dify response yields a text chunk with the answer."""
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {'data': {'outputs': {'answer': '{"answer": "You have 2 events this week.", "create_events": []}'}}},
-        )
-        mock_post.return_value.raise_for_status = lambda: None
+    @patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'})
+    @patch('agent.gemini_client.call_gemini')
+    def test_answer_calendar_question_yields_text_chunk(self, mock_call_gemini):
+        """A successful Gemini response yields a text chunk with the answer."""
+        mock_call_gemini.return_value = '{"answer": "You have 2 events this week.", "create_events": []}'
 
         self._make_calendar_and_event(days_offset=1)
         context = {'type': 'calendar', 'calendarIds': []}
@@ -969,15 +960,15 @@ class CalendarAgentTests(TestCase):
         text_chunks = [c for c in chunks if c['type'] == 'text' and 'events this week' in c.get('content', '')]
         self.assertTrue(len(text_chunks) > 0)
 
-    @patch.dict('os.environ', {'DIFY_CALENDAR_API_KEY': 'test-key'})
-    @patch('agent.services.requests.post')
-    def test_answer_calendar_question_creates_event_from_dify(self, mock_post):
-        """When Dify returns create_events, the events are created in the DB."""
+    @patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'})
+    @patch('agent.gemini_client.call_gemini')
+    def test_answer_calendar_question_creates_event_from_dify(self, mock_call_gemini):
+        """When Gemini returns create_events, the events are created in the DB."""
         from calendars.models import Calendar as CalendarModel, Event as EventModel
         CalendarModel.objects.create(
             organization=self.org, owner=self.user, name='My Calendar',
         )
-        dify_answer = json.dumps({
+        mock_call_gemini.return_value = json.dumps({
             'answer': 'I have scheduled a meeting for you.',
             'create_events': [{
                 'title': 'AI Scheduled Meeting',
@@ -986,11 +977,6 @@ class CalendarAgentTests(TestCase):
                 'end_datetime': '2026-04-01T11:00:00+00:00',
             }]
         })
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {'data': {'outputs': {'answer': dify_answer}}},
-        )
-        mock_post.return_value.raise_for_status = lambda: None
 
         before_count = EventModel.objects.filter(organization=self.org).count()
         context = {'type': 'calendar', 'calendarIds': []}
@@ -998,29 +984,24 @@ class CalendarAgentTests(TestCase):
         after_count = EventModel.objects.filter(organization=self.org).count()
         self.assertEqual(after_count, before_count + 1)
 
-    @patch('agent.services.requests.post')
-    def test_answer_calendar_question_dify_error_yields_error_chunk(self, mock_post):
-        """A Dify network error yields an error chunk without raising."""
-        mock_post.side_effect = Exception('Network timeout')
+    @patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'})
+    @patch('agent.gemini_client.call_gemini')
+    def test_answer_calendar_question_dify_error_yields_error_chunk(self, mock_call_gemini):
+        """A Gemini error yields an error chunk without raising."""
+        mock_call_gemini.side_effect = Exception('Network timeout')
         context = {'type': 'calendar', 'calendarIds': []}
         chunks = list(self.orchestrator.answer_calendar_question('What is on my calendar?', context))
         error_chunks = [c for c in chunks if c['type'] == 'error']
         self.assertTrue(len(error_chunks) > 0)
 
-    @override_settings(DIFY_CALENDAR_API_KEY='')
-    @patch.dict('os.environ', {}, clear=False)
+    @override_settings(GEMINI_API_KEY='')
+    @patch.dict('os.environ', {'GEMINI_API_KEY': ''}, clear=False)
     def test_answer_calendar_question_no_api_key_yields_error(self):
-        """Missing DIFY_CALENDAR_API_KEY yields a configuration error chunk."""
-        import os
-        original = os.environ.pop('DIFY_CALENDAR_API_KEY', None)
-        try:
-            context = {'type': 'calendar', 'calendarIds': []}
-            chunks = list(self.orchestrator.answer_calendar_question('Any events?', context))
-            error_chunks = [c for c in chunks if c['type'] == 'error']
-            self.assertTrue(len(error_chunks) > 0)
-        finally:
-            if original is not None:
-                os.environ['DIFY_CALENDAR_API_KEY'] = original
+        """Missing GEMINI_API_KEY yields a configuration error chunk."""
+        context = {'type': 'calendar', 'calendarIds': []}
+        chunks = list(self.orchestrator.answer_calendar_question('Any events?', context))
+        error_chunks = [c for c in chunks if c['type'] == 'error']
+        self.assertTrue(len(error_chunks) > 0)
 
 
 def _create_default_workflow():
