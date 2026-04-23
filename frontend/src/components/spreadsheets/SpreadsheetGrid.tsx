@@ -1381,12 +1381,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       inFlightForSheet.clear();
       inFlightRangeRequests.delete(sheetId);
     }
-    // Clear any exact in-flight requests for this sheet
-    for (const key of Array.from(inFlightExactRequests.keys())) {
-      if (key.startsWith(`${sheetId}:`)) {
-        inFlightExactRequests.delete(key);
-      }
-    }
     if (!options?.preserveCells) {
       setCells(new Map());
     }
