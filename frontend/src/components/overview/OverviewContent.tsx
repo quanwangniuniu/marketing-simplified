@@ -1,10 +1,9 @@
 'use client';
 
-import TaskStatusCard from './TaskStatusCard';
-import DecisionsCard from './DecisionsCard';
 import MeetingsCard from './MeetingsCard';
 import RecentActivityCard from './RecentActivityCard';
 import TeamManagementSection from './TeamManagementSection';
+import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
 import type { OverviewMock } from '@/types/overview';
 
 interface OverviewContentProps {
@@ -20,8 +19,15 @@ export default function OverviewContent({
 }: OverviewContentProps) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <TaskStatusCard summary={data.taskSummary} />
-      <DecisionsCard pending={data.pendingDecisions} drafts={data.myDrafts} />
+      <div className="xl:col-span-2">
+        {projectId ? (
+          <WorkspaceDashboard projectId={projectId} />
+        ) : (
+          <div className="rounded-xl border-[0.5px] border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+            No active project selected.
+          </div>
+        )}
+      </div>
       <MeetingsCard upcoming={data.upcomingMeetings} actions={data.actionItems} />
       <RecentActivityCard activities={data.taskSummary.recent_activity} />
       <div className="xl:col-span-2">
