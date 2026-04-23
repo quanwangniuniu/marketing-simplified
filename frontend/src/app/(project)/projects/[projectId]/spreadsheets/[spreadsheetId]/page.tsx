@@ -57,7 +57,6 @@ import {
   timelineItemsToCreateSteps,
   updateTimelineItemById,
 } from '@/lib/spreadsheets/timelineItems';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 export default function SpreadsheetDetailPage() {
   const params = useParams();
@@ -125,7 +124,7 @@ export default function SpreadsheetDetailPage() {
   // await the same promise and share its result (or error).
   const firstSheetPromiseRef = useRef<Promise<SheetData | null> | null>(null);
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
-  const delayedLoading = useMinimumLoading(loading);
+  const isPageLoading = loading;
 
   useEffect(() => {
     if (activeSheetId == null) return;
@@ -1269,7 +1268,7 @@ export default function SpreadsheetDetailPage() {
     );
   }
 
-  if (!spreadsheet && !delayedLoading) {
+  if (!spreadsheet && !isPageLoading) {
     return (
       <ProtectedRoute renderChildrenWhileLoading>
         <Layout>
@@ -1353,7 +1352,7 @@ export default function SpreadsheetDetailPage() {
                           Cancel
                         </button>
                       </div>
-                    ) : delayedLoading ? (
+                    ) : isPageLoading ? (
                       <Skeleton className="h-7 w-48" />
                     ) : (
                       <h1
@@ -1361,7 +1360,7 @@ export default function SpreadsheetDetailPage() {
                         onDoubleClick={beginRenameSpreadsheetTitle}
                         title="Double-click to rename"
                       >
-                        {spreadsheet.name}
+                        {spreadsheet?.name ?? ''}
                       </h1>
                     )}
                   </div>
@@ -1504,7 +1503,7 @@ export default function SpreadsheetDetailPage() {
 
           {/* Spreadsheet Content Area: flex-1 + min-h-0 so it gets bounded height and grid scrolls inside. */}
           <div className="flex-1 min-h-0 overflow-hidden bg-gray-50 flex flex-col">
-            {activeSheet || delayedLoading ? (
+            {activeSheet || isPageLoading ? (
               <div className="flex-1 min-h-0 min-w-0 flex h-full overflow-hidden">
                   {/* Center column: grid container. min-w-0 is critical to prevent it from forcing the flex row wider than the viewport. */}
                   <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
@@ -1512,7 +1511,7 @@ export default function SpreadsheetDetailPage() {
                       ref={gridRef}
                       spreadsheetId={Number(spreadsheetId)}
                       sheetId={activeSheet?.id ?? 0}
-                      loading={delayedLoading || !activeSheet}
+                      loading={isPageLoading || !activeSheet}
                       spreadsheetName={spreadsheet?.name}
                       sheetName={activeSheet?.name}
                       frozenRowCount={activeSheet?.frozen_row_count ?? 0}
@@ -1628,7 +1627,7 @@ export default function SpreadsheetDetailPage() {
                     />
                   ) : (
                     <PatternAgentPanel
-                      loading={delayedLoading || patternsLoading}
+                      loading={isPageLoading || patternsLoading}
                       items={activeSheet ? agentSteps : []}
                       patterns={patterns}
                       selectedPatternId={selectedPattern?.id ?? null}
@@ -1666,7 +1665,7 @@ export default function SpreadsheetDetailPage() {
                   )}
                 </div>
             ) : null}
-            {sheets.length === 0 && !delayedLoading ? (
+            {sheets.length === 0 && !isPageLoading ? (
               <div className="flex items-center justify-center flex-1">
                 <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white p-12 text-center">
                   <FileSpreadsheet className="h-12 w-12 text-gray-400 mb-4" />

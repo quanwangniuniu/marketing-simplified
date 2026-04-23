@@ -92,7 +92,9 @@ export default function DashboardLayout({
   hideRightPanel = false,
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
-  const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [meetingsLoading, setMeetingsLoading] = useState(
+    () => !(upcomingMeetings && upcomingMeetings.length > 0)
+  );
   const pathname = usePathname();
   const router = useRouter();
   const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);

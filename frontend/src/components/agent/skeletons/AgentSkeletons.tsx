@@ -42,10 +42,6 @@ export function AgentDecisionListSkeleton({
   )
 }
 
-export function AgentListSkeleton(props: { rows?: number; compact?: boolean }) {
-  return <AgentDecisionListSkeleton {...props} />
-}
-
 export function AgentAlertListSkeleton({
   rows = 4,
   compact = false,
@@ -210,17 +206,6 @@ export function AgentCampaignPerformanceSkeleton({ rows = 10 }: { rows?: number 
   )
 }
 
-export function AgentSpreadsheetHeaderSkeleton() {
-  return (
-    <div className="flex items-center justify-between gap-4 pb-4 border-b border-border">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-10 w-[280px]" />
-        <Skeleton className="h-9 w-9" />
-      </div>
-    </div>
-  )
-}
-
 export function AgentSpreadsheetTableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden">
@@ -259,44 +244,6 @@ export function AgentSpreadsheetTableSkeleton({ rows = 6 }: { rows?: number }) {
         <Skeleton className="h-4 w-12 justify-self-end" />
       </div>
     </div>
-  )
-}
-
-export function AgentAnalysisCardSkeleton() {
-  return (
-    <Card className="bg-card border-border">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-5 w-36" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 w-4" />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={`agent-analysis-skeleton-${index}`} className="rounded-lg border border-border p-3">
-            <div className="flex items-start gap-2">
-              <Skeleton className="mt-0.5 h-4 w-4 rounded-full shrink-0" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-3/4" />
-                <div className="flex items-center gap-3 pt-1">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-3.5 w-3.5 rounded-sm" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-6 w-16" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-        <Skeleton className="h-9 w-full" />
-      </CardContent>
-    </Card>
   )
 }
 

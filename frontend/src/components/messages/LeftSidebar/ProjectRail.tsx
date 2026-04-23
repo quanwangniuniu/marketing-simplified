@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 interface ProjectRailProps {
   loading?: boolean;
@@ -29,7 +28,7 @@ export default function ProjectRail({
 }: ProjectRailProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const delayedLoading = useMinimumLoading(loading || isLoading);
+  const projectRailLoading = loading || isLoading;
 
   useEffect(() => {
     if (loading) return;
@@ -66,7 +65,7 @@ export default function ProjectRail({
       </div>
 
       <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-        {delayedLoading ? (
+        {projectRailLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, idx) => (
               <Skeleton

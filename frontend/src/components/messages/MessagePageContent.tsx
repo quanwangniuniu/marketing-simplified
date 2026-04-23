@@ -13,7 +13,6 @@ import ProjectSelector from './ProjectSelector';
 import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 interface MessagePageContentProps {
   loading?: boolean;
@@ -51,7 +50,6 @@ export default function MessagePageContent({
     projectId: selectedProjectId || undefined,
     autoFetch: false,
   });
-  const delayedChatLoading = useMinimumLoading(isLoading);
   
   // Connect to WebSocket for real-time updates
   const { connected } = useChatSocket(userId, {

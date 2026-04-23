@@ -12,7 +12,6 @@ import { AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Plus, Search, Trash2 
 import Modal from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import toast from 'react-hot-toast';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 const UNTITLED_BASE = 'Untitled spreadsheet';
 const spreadsheetLoadingRows = [
@@ -47,7 +46,7 @@ export default function SpreadsheetsListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const delayedLoading = useMinimumLoading(loading);
+  const isPageLoading = loading;
 
   useEffect(() => {
     const loadProject = async () => {
@@ -272,7 +271,7 @@ export default function SpreadsheetsListPage() {
     );
   };
 
-  const showTable = delayedLoading || (!error && spreadsheets.length > 0);
+  const showTable = isPageLoading || (!error && spreadsheets.length > 0);
 
   return (
     <ProtectedRoute renderChildrenWhileLoading>
@@ -364,7 +363,7 @@ export default function SpreadsheetsListPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {delayedLoading ? (
+                        {isPageLoading ? (
                           spreadsheetLoadingRows.map((row, index) => (
                             <tr key={`spreadsheet-loading-row-${index}`} className="border-b border-gray-200">
                               <td className="px-4 py-3">

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, FolderOpen, Check } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 interface ProjectSelectorProps {
   loading?: boolean;
@@ -22,7 +21,7 @@ export default function ProjectSelector({
   const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const onSelectProjectRef = useRef(onSelectProject);
-  const delayedLoading = useMinimumLoading(loading || isLoading);
+  const projectSelectorLoading = loading || isLoading;
 
   useEffect(() => {
     onSelectProjectRef.current = onSelectProject;
@@ -91,7 +90,7 @@ export default function ProjectSelector({
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
-  if (delayedLoading) {
+  if (projectSelectorLoading) {
     return (
       <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
         <Skeleton className="w-5 h-5 rounded" />

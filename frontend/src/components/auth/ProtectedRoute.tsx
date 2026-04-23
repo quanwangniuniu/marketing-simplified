@@ -2,10 +2,8 @@
 
 import React from 'react';
 import { useAuthStore } from '../../lib/authStore';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { getAuthLoadingRoutePolicy } from '@/lib/authLoadingPolicy';
-import { useMinimumLoading } from '@/hooks/useMinimumLoading';
 
 // Props for ProtectedRoute component
 interface ProtectedRouteProps {
@@ -14,7 +12,6 @@ interface ProtectedRouteProps {
   requiredRoles?: string[]; // Required roles for access
   fallback?: string; // Redirect path if access is denied
   loadingComponent?: React.ReactNode; // Custom loading component
-  minimumLoadingMs?: number;
   renderChildrenWhileLoading?: boolean;
 }
 
@@ -25,18 +22,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles = [],
   fallback = '/login',
   loadingComponent,
-  minimumLoadingMs = 0,
   renderChildrenWhileLoading = false,
 }) => {
   const { isAuthenticated, user, loading, initialized } = useAuthStore();
   const router = useRouter();
-  const pathname = usePathname();
-  const { suppressProtectedRouteLoading } = getAuthLoadingRoutePolicy(pathname);
   const authIsBooting = !initialized || loading;
-  const shouldShowLoadingState = useMinimumLoading(
-    authIsBooting,
-    minimumLoadingMs
-  );
 
   const hasRequiredRoles =
     requiredRoles.length === 0 ||
@@ -62,11 +52,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }, [isAuthenticated, authIsBooting, requiredAuth, requiredRoles, router, fallback, hasRequiredRoles]);
 
   // Show loading while authentication is being initialized
-  if (shouldShowLoadingState) {
+  if (authIsBooting) {
     if (renderChildrenWhileLoading) {
       return <>{children}</>;
     }
-    if (loadingComponent && !suppressProtectedRouteLoading) {
+    if (loadingComponent) {
       return <>{loadingComponent}</>;
     }
     return null;

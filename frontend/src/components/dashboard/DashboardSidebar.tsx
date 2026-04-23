@@ -143,6 +143,7 @@ export default function DashboardSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [projectHeaderChecking, setProjectHeaderChecking] = useState(true);
   const { projects, loading, fetchProjects } = useProjects();
   const activeProject = useProjectStore((state) => state.activeProject);
   const hasProjectStoreHydrated = useProjectStore((state) => state.hasHydrated);
@@ -167,12 +168,27 @@ export default function DashboardSidebar() {
     () => (isAdminRole(user?.roles) ? [...navGroups, adminGroup] : navGroups),
     [user?.roles],
   );
-  const projectHeaderLoading = !hasProjectStoreHydrated || (loading && !activeProject);
+  const projectHeaderLoading =
+    !hasProjectStoreHydrated || loading || (projectHeaderChecking && !activeProject);
   const userCardLoading = !authInitialized || authLoading;
 
   useEffect(() => {
-    if (projects.length === 0) fetchProjects();
-  }, [projects.length, fetchProjects]);
+    if (!hasProjectStoreHydrated) return;
+    if (projects.length > 0 || activeProject) {
+      setProjectHeaderChecking(false);
+      return;
+    }
+
+    let cancelled = false;
+    setProjectHeaderChecking(true);
+    fetchProjects().finally(() => {
+      if (!cancelled) setProjectHeaderChecking(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject, hasProjectStoreHydrated, projects.length, fetchProjects]);
 
   const toggle = (label: string) => {
     setExpanded((prev) =>
@@ -214,7 +230,7 @@ export default function DashboardSidebar() {
           )}
           <div className="min-w-0 flex-1">
             {projectHeaderLoading ? (
-              <div className="space-y-2 py-0.5">
+              <div className="space-y-2">
                 <Skeleton className="h-4 w-28" />
                 <Skeleton className="h-3 w-20" />
               </div>
@@ -329,7 +345,7 @@ export default function DashboardSidebar() {
               )}
               <div className="min-w-0 flex-1">
                 {userCardLoading ? (
-                  <div className="space-y-2 py-0.5">
+                  <div className="space-y-2">
                     <Skeleton className="h-4 w-24" />
                     <Skeleton className="h-3 w-32" />
                   </div>
