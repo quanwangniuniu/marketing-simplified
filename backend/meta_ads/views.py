@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 from facebook_integration.models import MetaAdAccount
 
+from .meta_client import MetaApiError, graph_get
 from .models import MetaAd, MetaAdCreative, MetaCampaign, MetaInsightDaily, MetaSyncRun
 from .serializers import (
     MetaAdSerializer,
@@ -594,6 +595,331 @@ class MetaAdPerformanceView(APIView):
             "days": days,
             "window": {"since": since.isoformat(), "until": today.isoformat()},
             "ads": rows,
+        })
+
+
+class MetaCreativeDetailView(APIView):
+    """Full metadata for a single creative plus the ads that reference it.
+
+    Used by the creative detail page. Aggregates rolling-window performance
+    at the creative level (summed across every linked ad) so the page can
+    render KPIs without an extra round-trip.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, creative_id: int):
+        creative = get_object_or_404(
+            MetaAdCreative,
+            pk=creative_id,
+            ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        linked_ads = (
+            MetaAd.objects.filter(creative=creative)
+            .select_related("adset", "adset__campaign")
+            .annotate(
+                total_spend=Sum(
+                    "insights_daily__spend",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+                total_impressions=Sum(
+                    "insights_daily__impressions",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+                total_clicks=Sum(
+                    "insights_daily__clicks",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+                total_leads=Sum(
+                    "insights_daily__leads",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+                total_purchases=Sum(
+                    "insights_daily__purchases",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+                total_revenue=Sum(
+                    "insights_daily__revenue",
+                    filter=models.Q(
+                        insights_daily__date__gte=since,
+                        insights_daily__date__lte=today,
+                    ),
+                ),
+            )
+        )
+
+        agg = MetaInsightDaily.objects.filter(
+            ad__creative=creative,
+            date__gte=since,
+            date__lte=today,
+        ).aggregate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            reach=Sum("reach"),
+            leads=Sum("leads"),
+            calls=Sum("calls"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+            video_p25=Sum("video_p25"),
+            video_p50=Sum("video_p50"),
+            video_p75=Sum("video_p75"),
+            video_p100=Sum("video_p100"),
+        )
+        agg = {k: (v if v is not None else 0) for k, v in agg.items()}
+        spend = agg["spend"] or Decimal("0")
+        revenue = agg["revenue"] or Decimal("0")
+        impressions = agg["impressions"] or 0
+        p25 = agg["video_p25"] or 0
+        p50 = agg["video_p50"] or 0
+        p75 = agg["video_p75"] or 0
+        p100 = agg["video_p100"] or 0
+        aggregates = {
+            "spend": str(spend),
+            "impressions": impressions,
+            "clicks": agg["clicks"] or 0,
+            "reach": agg["reach"] or 0,
+            "leads": agg["leads"] or 0,
+            "calls": agg["calls"] or 0,
+            "purchases": agg["purchases"] or 0,
+            "revenue": str(revenue),
+            "ctr": str(_safe_ratio(agg["clicks"], impressions) * Decimal("100")),
+            "cpc": str(_safe_ratio(spend, agg["clicks"])),
+            "cpm": str(_safe_ratio(spend, impressions) * Decimal("1000")),
+            "cpl": str(_safe_ratio(spend, agg["leads"])),
+            "cpa": str(_safe_ratio(spend, agg["purchases"])),
+            "roas": str(_safe_ratio(revenue, spend)),
+            "video_p25": p25,
+            "video_p50": p50,
+            "video_p75": p75,
+            "video_p100": p100,
+            "hook_rate": str(_safe_ratio(p25, impressions) * Decimal("100")),
+            "hold_rate": str(_safe_ratio(p75, p25) * Decimal("100")),
+            "completion_rate": str(_safe_ratio(p100, p25) * Decimal("100")),
+        }
+
+        linked_ads_payload = []
+        for ad in linked_ads:
+            ad_spend = ad.total_spend or Decimal("0")
+            ad_rev = ad.total_revenue or Decimal("0")
+            linked_ads_payload.append({
+                "id": ad.id,
+                "meta_ad_id": ad.meta_ad_id,
+                "name": ad.name,
+                "effective_status": ad.effective_status,
+                "campaign_name": ad.adset.campaign.name if ad.adset and ad.adset.campaign else "",
+                "adset_name": ad.adset.name if ad.adset else "",
+                "spend": str(ad_spend),
+                "impressions": ad.total_impressions or 0,
+                "clicks": ad.total_clicks or 0,
+                "leads": ad.total_leads or 0,
+                "purchases": ad.total_purchases or 0,
+                "revenue": str(ad_rev),
+                "roas": str(_safe_ratio(ad_rev, ad_spend)),
+            })
+        linked_ads_payload.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
+
+        return Response({
+            "id": creative.id,
+            "meta_creative_id": creative.meta_creative_id,
+            "ad_account_id": creative.ad_account_id,
+            "currency": creative.ad_account.currency,
+            "name": creative.name,
+            "title": creative.title,
+            "body": creative.body,
+            "image_url": creative.image_url,
+            "thumbnail_url": creative.thumbnail_url,
+            "video_id": creative.video_id,
+            "object_type": creative.object_type,
+            "call_to_action_type": creative.call_to_action_type,
+            "asset_feed_spec": creative.asset_feed_spec or {},
+            "created_at": creative.created_at.isoformat(),
+            "updated_at": creative.updated_at.isoformat(),
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "aggregates": aggregates,
+            "linked_ads": linked_ads_payload,
+            "linked_ads_count": len(linked_ads_payload),
+        })
+
+
+class MetaCreativeVideoSourceView(APIView):
+    """Return a Meta-rendered ad preview iframe URL for the creative.
+
+    Directly fetching `/{video_id}?fields=source` requires `ads_management`
+    scope which our app does not have. The Ad Previews API works with the
+    `ads_read` scope we do have, and returns an iframe that Meta renders
+    (video autoplay + body + CTA) — functionally the same as seeing the ad
+    in Ads Manager's preview panel.
+
+    We need *an ad* to ask for a preview of, so we pick the first ad that
+    references this creative. Creatives with no linked ad (a known FK gap
+    in the sync, G-01) return 400 with a specific detail message.
+    """
+
+    permission_classes = [IsAuthenticated]
+    VALID_FORMATS = {
+        "MOBILE_FEED_STANDARD",
+        "DESKTOP_FEED_STANDARD",
+        "FACEBOOK_STORY_MOBILE",
+        "INSTAGRAM_STANDARD",
+        "INSTAGRAM_STORY",
+        "FACEBOOK_REELS_MOBILE",
+    }
+
+    def get(self, request, creative_id: int):
+        creative = get_object_or_404(
+            MetaAdCreative,
+            pk=creative_id,
+            ad_account__connection__user=request.user,
+        )
+        ad = creative.ads.order_by("-updated_at").first()
+        if ad is None:
+            return Response(
+                {
+                    "detail": (
+                        "No ad references this creative in the synced data, "
+                        "so no preview can be rendered. Try re-running sync."
+                    ),
+                    "code": "no_linked_ad",
+                },
+                status=400,
+            )
+        token = creative.ad_account.connection.get_access_token()
+        if not token:
+            return Response(
+                {"detail": "Meta connection is missing its access token."},
+                status=400,
+            )
+
+        requested_format = request.query_params.get("ad_format", "MOBILE_FEED_STANDARD")
+        if requested_format not in self.VALID_FORMATS:
+            requested_format = "MOBILE_FEED_STANDARD"
+
+        try:
+            payload = graph_get(
+                f"/{ad.meta_ad_id}/previews",
+                token,
+                params={"ad_format": requested_format},
+            )
+        except MetaApiError as err:
+            return Response(
+                {
+                    "detail": f"Graph API error: {err}",
+                    "status_code": err.status_code,
+                },
+                status=502,
+            )
+
+        previews = payload.get("data") or []
+        if not previews:
+            return Response(
+                {"detail": "Meta returned no preview for this ad."},
+                status=502,
+            )
+
+        body = previews[0].get("body", "")
+        import re as _re
+        match = _re.search(r'src="([^"]+)"', body)
+        iframe_src = match.group(1).replace("&amp;", "&") if match else ""
+
+        return Response({
+            "creative_id": creative.id,
+            "video_id": creative.video_id,
+            "meta_ad_id": ad.meta_ad_id,
+            "ad_name": ad.name,
+            "ad_format": requested_format,
+            "iframe_src": iframe_src,
+            "iframe_html": body,
+            "thumbnail_url": creative.thumbnail_url,
+            "permalink_url": "",
+        })
+
+
+class MetaCreativeInsightTimeseriesView(APIView):
+    """Daily aggregates for a creative — summed across every linked ad."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, creative_id: int):
+        creative = get_object_or_404(
+            MetaAdCreative,
+            pk=creative_id,
+            ad_account__connection__user=request.user,
+        )
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        qs = MetaInsightDaily.objects.filter(
+            ad__creative=creative,
+            date__gte=since,
+            date__lte=today,
+        )
+        daily = qs.values("date").annotate(
+            spend=Sum("spend"),
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            leads=Sum("leads"),
+            purchases=Sum("purchases"),
+            revenue=Sum("revenue"),
+            video_p25=Sum("video_p25"),
+            video_p75=Sum("video_p75"),
+            video_p100=Sum("video_p100"),
+        )
+        by_date = {row["date"]: row for row in daily}
+
+        points = []
+        cur = since
+        while cur <= today:
+            r = by_date.get(cur)
+            imp = (r["impressions"] if r else 0) or 0
+            p25 = (r["video_p25"] if r else 0) or 0
+            p75 = (r["video_p75"] if r else 0) or 0
+            points.append({
+                "date": cur.isoformat(),
+                "spend": str((r["spend"] if r else Decimal("0")) or Decimal("0")),
+                "impressions": imp,
+                "clicks": (r["clicks"] if r else 0) or 0,
+                "leads": (r["leads"] if r else 0) or 0,
+                "purchases": (r["purchases"] if r else 0) or 0,
+                "revenue": str((r["revenue"] if r else Decimal("0")) or Decimal("0")),
+                "video_p25": p25,
+                "video_p75": p75,
+                "video_p100": (r["video_p100"] if r else 0) or 0,
+                "hook_rate": str(_safe_ratio(p25, imp) * Decimal("100")),
+                "hold_rate": str(_safe_ratio(p75, p25) * Decimal("100")),
+            })
+            cur += _dt.timedelta(days=1)
+
+        return Response({
+            "creative_id": creative.id,
+            "meta_creative_id": creative.meta_creative_id,
+            "currency": creative.ad_account.currency,
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "points": points,
         })
 
 

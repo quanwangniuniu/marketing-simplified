@@ -212,6 +212,98 @@ export interface MetaAdInsightTimeseries {
   points: MetaAdInsightPoint[];
 }
 
+export interface MetaCreativeDetailLinkedAd {
+  id: number;
+  meta_ad_id: string;
+  name: string;
+  effective_status: string;
+  campaign_name: string;
+  adset_name: string;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: string;
+  roas: string;
+}
+
+export interface MetaCreativeDetailAggregates {
+  spend: string;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  leads: number;
+  calls: number;
+  purchases: number;
+  revenue: string;
+  ctr: string;
+  cpc: string;
+  cpm: string;
+  cpl: string;
+  cpa: string;
+  roas: string;
+  video_p25: number;
+  video_p50: number;
+  video_p75: number;
+  video_p100: number;
+  hook_rate: string;
+  hold_rate: string;
+  completion_rate: string;
+}
+
+export interface MetaCreativeDetail {
+  id: number;
+  meta_creative_id: string;
+  ad_account_id: number;
+  currency: string;
+  name: string;
+  title: string;
+  body: string;
+  image_url: string;
+  thumbnail_url: string;
+  video_id: string;
+  object_type: string;
+  call_to_action_type: string;
+  asset_feed_spec: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  days: number;
+  window: { since: string; until: string };
+  aggregates: MetaCreativeDetailAggregates;
+  linked_ads: MetaCreativeDetailLinkedAd[];
+  linked_ads_count: number;
+}
+
+export type MetaAdPreviewFormat =
+  | "MOBILE_FEED_STANDARD"
+  | "DESKTOP_FEED_STANDARD"
+  | "FACEBOOK_STORY_MOBILE"
+  | "INSTAGRAM_STANDARD"
+  | "INSTAGRAM_STORY"
+  | "FACEBOOK_REELS_MOBILE";
+
+export interface MetaCreativePreview {
+  creative_id: number;
+  video_id: string;
+  meta_ad_id: string;
+  ad_name: string;
+  ad_format: MetaAdPreviewFormat;
+  iframe_src: string;
+  iframe_html: string;
+  thumbnail_url: string;
+  permalink_url: string;
+}
+
+export interface MetaCreativeTimeseries {
+  creative_id: number;
+  meta_creative_id: string;
+  currency: string;
+  days: number;
+  window: { since: string; until: string };
+  points: MetaAdInsightPoint[];
+}
+
 export const facebookApi = {
   getStatus: async (): Promise<FacebookStatus> => {
     const response = await api.get("/api/facebook_integration/status/");
@@ -312,6 +404,38 @@ export const facebookApi = {
   ): Promise<MetaAdInsightTimeseries> => {
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/ads/${adId}/insights_timeseries/`,
+      { params: { days } }
+    );
+    return response.data;
+  },
+
+  getMetaCreativeDetail: async (
+    creativeId: number,
+    days: number
+  ): Promise<MetaCreativeDetail> => {
+    const response = await api.get(`/api/meta_ads/creatives/${creativeId}/`, {
+      params: { days },
+    });
+    return response.data;
+  },
+
+  getMetaCreativePreview: async (
+    creativeId: number,
+    format: MetaAdPreviewFormat = "MOBILE_FEED_STANDARD"
+  ): Promise<MetaCreativePreview> => {
+    const response = await api.get(
+      `/api/meta_ads/creatives/${creativeId}/video_source/`,
+      { params: { ad_format: format } }
+    );
+    return response.data;
+  },
+
+  getMetaCreativeTimeseries: async (
+    creativeId: number,
+    days: number
+  ): Promise<MetaCreativeTimeseries> => {
+    const response = await api.get(
+      `/api/meta_ads/creatives/${creativeId}/performance_timeseries/`,
       { params: { days } }
     );
     return response.data;

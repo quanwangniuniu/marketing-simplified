@@ -6,7 +6,10 @@ from .views import (
     MetaAdPerformanceView,
     MetaCampaignListView,
     MetaCampaignPerformanceView,
+    MetaCreativeDetailView,
+    MetaCreativeInsightTimeseriesView,
     MetaCreativePerformanceView,
+    MetaCreativeVideoSourceView,
     MetaInsightListView,
     MetaSummaryView,
     MetaSyncRunListView,
@@ -64,5 +67,20 @@ urlpatterns = [
         "summary/",
         MetaSummaryView.as_view(),
         name="meta-summary",
+    ),
+    path(
+        "creatives/<int:creative_id>/",
+        MetaCreativeDetailView.as_view(),
+        name="meta-creative-detail",
+    ),
+    path(
+        "creatives/<int:creative_id>/video_source/",
+        MetaCreativeVideoSourceView.as_view(),
+        name="meta-creative-video-source",
+    ),
+    path(
+        "creatives/<int:creative_id>/performance_timeseries/",
+        MetaCreativeInsightTimeseriesView.as_view(),
+        name="meta-creative-timeseries",
     ),
 ]

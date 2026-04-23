@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Image as ImageIcon,
+  Play,
   Video,
 } from 'lucide-react';
 
@@ -26,6 +28,7 @@ import {
   holdRateBandClass,
   thumbnailOrFallback,
 } from './metaAdsUtils';
+import VideoModal from './VideoModal';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
@@ -54,6 +57,8 @@ export default function CreativesPanel({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [sortKey, setSortKey] = useState<SortKey>('spend');
   const [hidePerfEmpty, setHidePerfEmpty] = useState(true);
+  const [previewCreativeId, setPreviewCreativeId] = useState<number | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>('');
 
   useEffect(() => {
     let active = true;
@@ -150,13 +155,14 @@ export default function CreativesPanel({
               <th className="px-4 py-2 font-medium text-right">Purch.</th>
               <th className="px-4 py-2 font-medium text-right">Revenue</th>
               <th className="px-4 py-2 font-medium text-right">ROAS</th>
+              <th className="px-2 py-2 font-medium" aria-label="View details"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   {rows.length === 0
@@ -166,12 +172,27 @@ export default function CreativesPanel({
               </tr>
             ) : (
               paged.map((c) => (
-                <CreativeRow key={c.id} c={c} currency={currency} />
+                <CreativeRow
+                  key={c.id}
+                  c={c}
+                  currency={currency}
+                  onPlay={() => {
+                    setPreviewTitle(c.title || c.name || c.meta_creative_id);
+                    setPreviewCreativeId(c.id);
+                  }}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      <VideoModal
+        creativeId={previewCreativeId}
+        open={previewCreativeId !== null}
+        title={previewTitle}
+        onClose={() => setPreviewCreativeId(null)}
+      />
 
       {filtered.length > 0 && (
         <PaginationBar
@@ -190,17 +211,25 @@ export default function CreativesPanel({
 function CreativeRow({
   c,
   currency,
+  onPlay,
 }: {
   c: MetaCreativePerformanceRow;
   currency: string;
+  onPlay: () => void;
 }) {
   const thumb = thumbnailOrFallback(c.thumbnail_url);
   const isVideo = c.object_type === 'VIDEO' || !!c.video_id;
+  const detailHref = `/meta-ads/creatives/${c.id}`;
   return (
     <tr className="align-top hover:bg-gray-50/60">
       <td className="px-4 py-3">
         <div className="flex items-start gap-3">
-          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+          <button
+            type="button"
+            onClick={onPlay}
+            aria-label={isVideo ? 'Play video preview' : 'Preview creative'}
+            className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50 transition-shadow hover:border-[#3CCED7]/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]/50"
+          >
             {thumb ? (
               <img
                 src={thumb}
@@ -214,14 +243,22 @@ function CreativeRow({
                 <ImageIcon className="h-5 w-5" />
               </div>
             )}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/35">
+              <span className="flex h-7 w-7 translate-y-0 scale-90 items-center justify-center rounded-full bg-white/0 text-white shadow-lg opacity-0 transition-all group-hover:scale-100 group-hover:bg-white group-hover:text-[#1a9ba3] group-hover:opacity-100">
+                <Play className="h-3.5 w-3.5 fill-current" />
+              </span>
+            </div>
             {isVideo && (
-              <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 py-0.5 text-[9px] font-medium text-white">
-                <Video className="h-2.5 w-2.5 inline -mt-px" />
+              <span className="pointer-events-none absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 py-0.5 text-[9px] font-medium text-white">
+                <Video className="-mt-px inline h-2.5 w-2.5" />
               </span>
             )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="max-w-[360px] truncate text-xs font-medium text-gray-900">
+          </button>
+          <Link
+            href={detailHref}
+            className="group/body min-w-0 flex-1 rounded-md px-1 -ml-1 py-0.5 -my-0.5 transition-colors hover:bg-gray-100/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]/40"
+          >
+            <div className="max-w-[360px] truncate text-xs font-medium text-gray-900 group-hover/body:text-[#1a9ba3]">
               {c.title || c.name || c.meta_creative_id}
             </div>
             {c.body && (
@@ -244,7 +281,7 @@ function CreativeRow({
                 </span>
               )}
             </div>
-          </div>
+          </Link>
         </div>
       </td>
       <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
@@ -270,6 +307,15 @@ function CreativeRow({
       </td>
       <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {Number(c.roas) > 0 ? `${formatRatio(c.roas)}x` : '—'}
+      </td>
+      <td className="px-2 py-3 text-right">
+        <Link
+          href={detailHref}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-gray-400 transition-colors hover:border-gray-200 hover:bg-gray-50 hover:text-[#1a9ba3]"
+          aria-label="Open creative detail"
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
       </td>
     </tr>
   );
