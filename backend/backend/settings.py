@@ -35,6 +35,7 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0').s
     'lipographic-damon-unshrinkable.ngrok-free.dev',
     'volar-probankruptcy-orval.ngrok-free.dev',
     'christeen-gawkiest-carmelia.ngrok-free.dev',
+    'upload-rinsing-tracing.ngrok-free.dev',
 ]
 
 
@@ -91,6 +92,8 @@ INSTALLED_APPS = [
     'zoom_integration.apps.ZoomIntegrationConfig',
     'google_docs_integration.apps.GoogleDocsIntegrationConfig',
     'google_calendar_integration.apps.GoogleCalendarIntegrationConfig',
+    'facebook_integration.apps.FacebookIntegrationConfig',
+    'meta_ads.apps.MetaAdsConfig',
 ]
 
 MIDDLEWARE = [
@@ -280,6 +283,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://lipographic-damon-unshrinkable.ngrok-free.dev",
     "http://volar-probankruptcy-orval.ngrok-free.dev",
     "http://christeen-gawkiest-carmelia.ngrok-free.dev",
+    "https://upload-rinsing-tracing.ngrok-free.dev",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -293,6 +297,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://christeen-gawkiest-carmelia.ngrok-free.dev",
     "http://lipographic-damon-unshrinkable.ngrok-free.dev",
     "http://volar-probankruptcy-orval.ngrok-free.dev",
+    "https://upload-rinsing-tracing.ngrok-free.dev",
 ]
 
 # Session Configuration for OAuth
@@ -380,6 +385,11 @@ CELERY_BEAT_SCHEDULE = {
     'google-calendar-import-every-15-min': {
         'task': 'google_calendar_integration.tasks.sync_all_google_calendar_imports',
         'schedule': timedelta(minutes=15),
+        'options': {'timezone': 'UTC'},
+    },
+    'meta-ads-hourly-sync': {
+        'task': 'meta_ads.tasks.sync_all_meta_connections',
+        'schedule': crontab(minute=7),  # offset from other :00 hourly tasks
         'options': {'timezone': 'UTC'},
     },
 }
@@ -635,6 +645,13 @@ SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', default='')
 SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET', default='')
 SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', default='')
 SLACK_REDIRECT_URI = config('SLACK_REDIRECT_URI', default='http://localhost/slack/callback')
+
+# Facebook / Meta Integration (Marketing API + Facebook Login for Business)
+FB_APP_ID = config('FB_APP_ID', default='')
+FB_APP_SECRET = config('FB_APP_SECRET', default='')
+FB_CONFIG_ID = config('FB_CONFIG_ID', default='')
+FB_API_VERSION = config('FB_API_VERSION', default='v22.0')
+FB_REDIRECT_URI = config('FB_REDIRECT_URI', default='http://localhost/api/facebook_integration/callback/')
 
 # Meetings (SMP-484): when True, creating a meeting requires at least one participant_user_ids entry
 MEETINGS_REQUIRE_PARTICIPANTS_AT_CREATE = config(

@@ -26,9 +26,12 @@ from spreadsheet import views as spreadsheet_views
 def health_check(request):
     return HttpResponse("OK", content_type="text/plain")
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health_check'),
+    path('api/facebook_integration/', include('facebook_integration.urls')),
+    path('api/meta_ads/', include('meta_ads.urls')),
     path('api/access_control/', include('access_control.urls')),
     path('api/teams/', include('teams.urls')),
     path('auth/', include('authentication.urls')),
