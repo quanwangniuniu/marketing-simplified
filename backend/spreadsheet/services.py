@@ -22,6 +22,16 @@ from core.models import Project
 
 logger = logging.getLogger(__name__)
 
+
+class CellBatchArgumentError(Exception):
+    """Structured batch cell validation failure (maps to HTTP 400 in views)."""
+
+    def __init__(self, details: List[Dict[str, Any]]):
+        self.code = 'INVALID_ARGUMENT'
+        self.details = details
+        super().__init__(self.code)
+
+
 class SpreadsheetService:
     """Service class for handling spreadsheet business logic"""
     
@@ -261,118 +271,84 @@ class SheetService:
         """
         Ensure sheet has at least the specified number of rows and columns.
         Creates missing rows and columns as needed.
-        
+
         Args:
             sheet: Sheet instance
             row_count: Target number of rows (0-indexed, so row_count=10 means rows 0-9)
             column_count: Target number of columns (0-indexed, so column_count=5 means columns 0-4)
-            
+
         Returns:
             Dict with rows_created, columns_created, total_rows, total_columns
         """
         if row_count < 0 or column_count < 0:
             raise ValidationError("row_count and column_count must be non-negative integers")
-        
-        # Get existing rows and columns
-        # Include deleted rows in max position calculation to avoid reusing deleted positions
-        # This matches the behavior of _get_next_sheet_position for sheets
-        all_rows = set(
-            SheetRow.objects.filter(
-                sheet=sheet
-            ).values_list('position', flat=True)
-        )
-        
-        existing_rows = set(
-            SheetRow.objects.filter(
-                sheet=sheet,
-                is_deleted=False
-            ).values_list('position', flat=True)
-        )
-        
-        existing_columns = set(
-            SheetColumn.objects.filter(
-                sheet=sheet,
-                is_deleted=False
-            ).values_list('position', flat=True)
-        )
-        
-        # Calculate max positions including deleted (to avoid reusing deleted positions)
-        max_row_position = max(all_rows) if all_rows else -1
-        max_column_position = max(
-            SheetColumn.objects.filter(sheet=sheet).values_list('position', flat=True)
-        ) if SheetColumn.objects.filter(sheet=sheet).exists() else -1
-        
-        # Calculate rows and columns to create
-        # row_count=10 means rows 0-9 (10 rows total), so we need range(row_count)
-        # Important: Do NOT reuse deleted positions - always create at max_position + 1
-        rows_to_create = []
-        for position in range(row_count):
-            # Only create if position is not in existing_rows (non-deleted)
-            if position not in existing_rows:
-                # Don't reuse deleted positions - if position exists in all_rows (deleted),
-                # skip it and create at max_position + 1 instead
-                if position in all_rows:
-                    # Position was deleted, don't reuse - will be created at max_position + 1 later
-                    continue
-                # Position never existed, create it
-                rows_to_create.append(position)
-        
-        # If we need more rows beyond max_position (due to deleted positions not being reused),
-        # create new rows starting from max_position + 1
-        target_total_active = row_count
-        current_active_count = len(existing_rows)
-        needed_new_positions = target_total_active - current_active_count - len(rows_to_create)
-        
-        if needed_new_positions > 0:
-            # Create new rows starting from max_row_position + 1
-            # Don't reuse deleted positions - always create at positions beyond max
-            next_position = max_row_position + 1
-            for i in range(needed_new_positions):
-                new_pos = next_position + i
-                # Ensure we don't add duplicates
-                if new_pos not in rows_to_create:
-                    rows_to_create.append(new_pos)
-        
-        columns_to_create = []
-        for position in range(column_count):
-            if position not in existing_columns:
-                columns_to_create.append(position)
-        
-        # Create rows
-        rows_created = 0
-        for position in rows_to_create:
-            SheetRow.objects.create(
-                sheet=sheet,
-                position=position
+
+        # Fetch row state in ONE query (was 3 separate queries + a max() call)
+        row_qs = SheetRow.objects.filter(sheet=sheet).values_list('position', 'is_deleted')
+        all_row_positions: set = set()
+        active_row_positions: set = set()
+        for pos, deleted in row_qs:
+            all_row_positions.add(pos)
+            if not deleted:
+                active_row_positions.add(pos)
+
+        # Fetch column state in ONE query (was 2 separate queries)
+        col_qs = SheetColumn.objects.filter(sheet=sheet).values_list('position', 'is_deleted')
+        active_col_positions: set = set()
+        for pos, deleted in col_qs:
+            if not deleted:
+                active_col_positions.add(pos)
+
+        # --- Rows ---
+        # Set arithmetic replaces the O(N) Python loop over range(row_count).
+        # Deleted positions are not reused; extras go beyond the current max.
+        target_row_positions = set(range(row_count))
+        fresh_row_positions = sorted(target_row_positions - all_row_positions)
+        deleted_in_range = len(target_row_positions & (all_row_positions - active_row_positions))
+
+        max_row_pos = max(all_row_positions) if all_row_positions else -1
+        extra_row_start = max_row_pos + 1
+        extra_row_positions = list(range(extra_row_start, extra_row_start + deleted_in_range))
+
+        rows_to_create_positions = fresh_row_positions + extra_row_positions
+        rows_created = len(rows_to_create_positions)
+        if rows_to_create_positions:
+            # ONE bulk INSERT replaces N individual INSERT statements (e.g. 3 000 rows → 6 batches)
+            SheetRow.objects.bulk_create(
+                [SheetRow(sheet=sheet, position=p, is_deleted=False) for p in rows_to_create_positions],
+                batch_size=500,
+                ignore_conflicts=True,
             )
-            rows_created += 1
-        
-        # Create columns
-        columns_created = 0
-        for position in columns_to_create:
-            SheetColumn.objects.create(
-                sheet=sheet,
-                name=SheetService._generate_column_name(position),
-                position=position
+
+        # --- Columns ---
+        # Original logic: create at any position absent from active columns (including
+        # previously-deleted positions, which have a partial unique index so they can be recreated).
+        cols_to_create_positions = sorted(set(range(column_count)) - active_col_positions)
+        columns_created = len(cols_to_create_positions)
+        if cols_to_create_positions:
+            SheetColumn.objects.bulk_create(
+                [
+                    SheetColumn(
+                        sheet=sheet,
+                        position=p,
+                        name=SheetService._generate_column_name(p),
+                        is_deleted=False,
+                    )
+                    for p in cols_to_create_positions
+                ],
+                batch_size=500,
+                ignore_conflicts=True,
             )
-            columns_created += 1
-        
-        # Get total counts
-        total_rows = SheetRow.objects.filter(
-            sheet=sheet,
-            is_deleted=False
-        ).count()
-        
-        total_columns = SheetColumn.objects.filter(
-            sheet=sheet,
-            is_deleted=False
-        ).count()
-        
+
+        # Compute totals from already-fetched sets (avoids 2 extra COUNT queries)
+        total_rows = len(active_row_positions) + rows_created
+        total_columns = len(active_col_positions) + columns_created
+
         return {
             'rows_created': rows_created,
             'columns_created': columns_created,
             'total_rows': total_rows,
-            'total_columns': total_columns
+            'total_columns': total_columns,
         }
 
     @staticmethod
@@ -1138,6 +1114,10 @@ class CellService:
         """
         Recalculate all formula cells in a sheet. Used after import finalize when
         import_mode deferred formula computation.
+
+        Also rebuilds dependency edges for each formula cell here, because
+        batch_update_cells skips _update_dependencies under import_mode to avoid
+        N+1 work per chunk.
         """
         formula_cells = list(
             Cell.objects.filter(
@@ -1150,6 +1130,8 @@ class CellService:
             ).select_related('sheet', 'row', 'column')
         )
         if formula_cells:
+            for cell in formula_cells:
+                CellService._update_dependencies(cell)
             CellService._recalculate_formula_cells(formula_cells)
 
     @staticmethod
@@ -1357,7 +1339,8 @@ class CellService:
         start_row: int,
         end_row: int,
         start_column: int,
-        end_column: int
+        end_column: int,
+        include_sheet_dimensions: bool = True,
     ) -> Dict[str, Any]:
         """
         Read cells within a specified range.
@@ -1369,7 +1352,9 @@ class CellService:
             end_row: Ending row position (inclusive)
             start_column: Starting column position (inclusive)
             end_column: Ending column position (inclusive)
-            
+            include_sheet_dimensions: When False, skip full-sheet Max(position) queries;
+                sheet_row_count / sheet_column_count are None (faster for scroll/tile reads).
+
         Returns:
             Dict with cells array, row_count, and column_count
         """
@@ -1407,13 +1392,17 @@ class CellService:
         ).exclude(
             value_type=CellValueType.EMPTY
         ).select_related('sheet', 'row', 'column')
-        
-        # Full sheet dimensions (so the client can size the grid to the whole sheet, not just the requested range)
-        row_agg = SheetRow.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
-        col_agg = SheetColumn.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
-        sheet_row_count = (row_agg['position__max'] + 1) if row_agg['position__max'] is not None else 0
-        sheet_column_count = (col_agg['position__max'] + 1) if col_agg['position__max'] is not None else 0
-        
+
+        if include_sheet_dimensions:
+            # Full sheet dimensions (so the client can size the grid to the whole sheet, not just the requested range)
+            row_agg = SheetRow.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
+            col_agg = SheetColumn.objects.filter(sheet=sheet, is_deleted=False).aggregate(Max('position'))
+            sheet_row_count = (row_agg['position__max'] + 1) if row_agg['position__max'] is not None else 0
+            sheet_column_count = (col_agg['position__max'] + 1) if col_agg['position__max'] is not None else 0
+        else:
+            sheet_row_count = None
+            sheet_column_count = None
+
         return {
             'cells': list(cells),
             'row_count': end_row - start_row + 1,
@@ -1468,7 +1457,25 @@ class CellService:
         validation_errors = []
         rows_to_create = set()
         columns_to_create = set()
-        
+
+        # When auto_expand is disabled we must verify each op's (row, column) already exists.
+        # This runs even when import_mode=True: real imports call resize_sheet first so every
+        # target position exists and these checks are cheap no-ops; callers that skip resize
+        # still get a clear 400 instead of silently skipping cell writes.
+        # Two queries total (not per-op).
+        if not auto_expand:
+            existing_row_positions = set(
+                SheetRow.objects.filter(sheet=sheet, is_deleted=False)
+                .values_list('position', flat=True)
+            )
+            existing_col_positions = set(
+                SheetColumn.objects.filter(sheet=sheet, is_deleted=False)
+                .values_list('position', flat=True)
+            )
+        else:
+            existing_row_positions = None
+            existing_col_positions = None
+
         for index, op in enumerate(operations):
             # Validate required fields
             if 'operation' not in op:
@@ -1554,14 +1561,8 @@ class CellService:
 
                     # Auto-expand collection only when raw_input is non-empty
                     if raw_input_stripped:
-                        if not auto_expand:
-                            row_exists = SheetRow.objects.filter(
-                                sheet=sheet,
-                                position=row_pos,
-                                is_deleted=False
-                            ).exists()
-
-                            if not row_exists:
+                        if not auto_expand and existing_row_positions is not None:
+                            if row_pos not in existing_row_positions:
                                 validation_errors.append({
                                     'index': index,
                                     'row': row_pos,
@@ -1571,13 +1572,7 @@ class CellService:
                                 })
                                 continue
 
-                            col_exists = SheetColumn.objects.filter(
-                                sheet=sheet,
-                                position=col_pos,
-                                is_deleted=False
-                            ).exists()
-
-                            if not col_exists:
+                            if col_pos not in existing_col_positions:
                                 validation_errors.append({
                                     'index': index,
                                     'row': row_pos,
@@ -1586,7 +1581,7 @@ class CellService:
                                     'message': f'Column {col_pos} does not exist and auto_expand is disabled'
                                 })
                                 continue
-                        else:
+                        elif auto_expand:
                             rows_to_create.add(row_pos)
                             columns_to_create.add(col_pos)
                     if 'value_type' not in op:
@@ -1666,15 +1661,10 @@ class CellService:
                 # Auto-expand collection: only AFTER value_type is validated and confirmed != EMPTY
                 # set+EMPTY must never trigger expansion (treated as clear)
                 if value_type != CellValueType.EMPTY:
-                    # Check if row/column exists (for non-auto-expand mode)
-                    if not auto_expand:
-                        row_exists = SheetRow.objects.filter(
-                            sheet=sheet,
-                            position=row_pos,
-                            is_deleted=False
-                        ).exists()
-                        
-                        if not row_exists:
+                    # Check if row/column exists (for non-auto-expand mode).
+                    # Uses the set snapshot built above for O(1) lookup (no per-op SQL).
+                    if not auto_expand and existing_row_positions is not None:
+                        if row_pos not in existing_row_positions:
                             validation_errors.append({
                                 'index': index,
                                 'row': row_pos,
@@ -1683,14 +1673,8 @@ class CellService:
                                 'message': f'Row {row_pos} does not exist and auto_expand is disabled'
                             })
                             continue
-                        
-                        col_exists = SheetColumn.objects.filter(
-                            sheet=sheet,
-                            position=col_pos,
-                            is_deleted=False
-                        ).exists()
-                        
-                        if not col_exists:
+
+                        if col_pos not in existing_col_positions:
                             validation_errors.append({
                                 'index': index,
                                 'row': row_pos,
@@ -1699,28 +1683,30 @@ class CellService:
                                 'message': f'Column {col_pos} does not exist and auto_expand is disabled'
                             })
                             continue
-                    else:
+                    elif auto_expand:
                         # Track rows/columns to create (only for validated non-EMPTY 'set' operations)
                         rows_to_create.add(row_pos)
                         columns_to_create.add(col_pos)
         
-        # If validation errors exist, raise before any DB writes (triggers rollback)
+        # If validation errors exist, raise before any DB writes (triggers rollback).
+        # Do not use django.core.exceptions.ValidationError for structured payloads:
+        # Django flattens nested dicts/lists into ErrorDetail/strings and breaks API clients.
         if validation_errors:
-            raise ValidationError({
-                'code': 'INVALID_ARGUMENT',
-                'details': validation_errors
-            })
+            raise CellBatchArgumentError(validation_errors)
         
         # PHASE 2: EXECUTION (bulk writes - no per-cell save/update_or_create)
+        # Note: previously this section called _log_position_duplicates once per unique
+        # row/col position for diagnostics, which issued hundreds of extra queries per
+        # chunk during import. The low-traffic _get_or_create_row/_column paths still
+        # log duplicates, so diagnostic coverage is preserved.
         row_positions = {op['row'] for op in operations}
         column_positions = {op['column'] for op in operations}
 
-        for row_pos in row_positions:
-            CellService._log_position_duplicates(SheetRow, sheet, row_pos, 'row')
-        for col_pos in column_positions:
-            CellService._log_position_duplicates(SheetColumn, sheet, col_pos, 'column')
-
         # --- Bulk create missing rows (1 query fetch + 1 bulk_create) ---
+        # Use ignore_conflicts=True so concurrent chunks racing to create the same
+        # (sheet, position) row do not trigger IntegrityError against the partial
+        # unique constraint `unique_row_position_per_sheet_active`. Re-SELECT afterwards
+        # because ignore_conflicts=True does not backfill primary keys.
         existing_rows_list = list(
             SheetRow.objects.filter(
                 sheet=sheet,
@@ -1736,9 +1722,16 @@ class CellService:
                 SheetRow(sheet=sheet, position=p, is_deleted=False)
                 for p in missing_row_positions
             ]
-            SheetRow.objects.bulk_create(new_rows, batch_size=1000)
-            rows_expanded = len(new_rows)
-            for r in new_rows:
+            SheetRow.objects.bulk_create(new_rows, batch_size=500, ignore_conflicts=True)
+            refreshed_rows = list(
+                SheetRow.objects.filter(
+                    sheet=sheet,
+                    position__in=missing_row_positions,
+                    is_deleted=False,
+                ).select_related('sheet')
+            )
+            rows_expanded = len(refreshed_rows)
+            for r in refreshed_rows:
                 existing_rows[r.position] = r
 
         # --- Bulk create missing columns (1 query fetch + 1 bulk_create) ---
@@ -1762,23 +1755,49 @@ class CellService:
                 )
                 for p in missing_col_positions
             ]
-            SheetColumn.objects.bulk_create(new_cols, batch_size=1000)
-            columns_expanded = len(new_cols)
-            for c in new_cols:
+            SheetColumn.objects.bulk_create(new_cols, batch_size=500, ignore_conflicts=True)
+            refreshed_cols = list(
+                SheetColumn.objects.filter(
+                    sheet=sheet,
+                    position__in=missing_col_positions,
+                    is_deleted=False,
+                ).select_related('sheet')
+            )
+            columns_expanded = len(refreshed_cols)
+            for c in refreshed_cols:
                 existing_columns[c.position] = c
 
         # --- Bulk fetch all existing cells for (row_pos, col_pos) in operations ---
+        # Use row_id__in + column_id__in instead of a giant OR of Q(row__position=, column__position=)
+        # to (1) keep the Q tree shallow (avoids RecursionError for large batches), and
+        # (2) hit the (sheet, row, column) composite index directly without JOINs to SheetRow/SheetColumn.
         op_keys = {(op['row'], op['column']) for op in operations}
-        q_objects = Q()
-        for (rp, cp) in op_keys:
-            q_objects |= Q(row__position=rp, column__position=cp)
-        all_existing_cells = list(
-            Cell.objects.filter(sheet=sheet).filter(q_objects)
-            .select_related('row', 'column')
-        )
+        row_ids = [r.id for r in existing_rows.values()]
+        col_ids = [c.id for c in existing_columns.values()]
         cell_by_pos: Dict[Tuple[int, int], Cell] = {}
-        for cell in all_existing_cells:
-            cell_by_pos[(cell.row.position, cell.column.position)] = cell
+        if row_ids and col_ids:
+            all_existing_cells = list(
+                Cell.objects.filter(
+                    sheet=sheet,
+                    row_id__in=row_ids,
+                    column_id__in=col_ids,
+                ).only(
+                    'id', 'sheet_id', 'row_id', 'column_id', 'is_deleted',
+                    'value_type', 'string_value', 'number_value',
+                    'boolean_value', 'formula_value', 'raw_input',
+                    'computed_type', 'computed_number', 'computed_string', 'error_code',
+                    'updated_at',
+                )
+            )
+            row_pos_by_id = {r.id: p for p, r in existing_rows.items()}
+            col_pos_by_id = {c.id: p for p, c in existing_columns.items()}
+            for cell in all_existing_cells:
+                rp = row_pos_by_id.get(cell.row_id)
+                cp = col_pos_by_id.get(cell.column_id)
+                if rp is None or cp is None:
+                    continue
+                if (rp, cp) in op_keys:
+                    cell_by_pos[(rp, cp)] = cell
 
         # --- Split into to_clear, to_update, to_create (last op per cell wins) ---
         to_clear: List[Cell] = []
@@ -1906,14 +1925,18 @@ class CellService:
                 updated_cells[c.id] = c
 
         # --- Preserve formula behavior: update dependencies for formula cells ---
-        formula_cells = [
-            c for c in (to_update + to_create)
-            if (c.raw_input or '').startswith('=') or (
-                c.value_type == CellValueType.FORMULA and (c.formula_value or '').startswith('=')
-            )
-        ]
-        for cell in formula_cells:
-            CellService._update_dependencies(cell)
+        # In import_mode, defer dependency rebuilding to recalculate_sheet_formulas
+        # (called from ImportFinalizeView). This avoids per-cell get_or_create churn
+        # while ingesting large CSV/XLSX imports that typically have no formulas.
+        if not import_mode:
+            formula_cells = [
+                c for c in (to_update + to_create)
+                if (c.raw_input or '').startswith('=') or (
+                    c.value_type == CellValueType.FORMULA and (c.formula_value or '').startswith('=')
+                )
+            ]
+            for cell in formula_cells:
+                CellService._update_dependencies(cell)
 
         updated = len(to_update) + len(to_create)
         cleared = len(to_clear)
@@ -1935,11 +1958,14 @@ class CellService:
             result['cells'] = []
 
         # After successful batch update, recompute any pivot sheets depending on this sheet.
-        try:
-            from .pivot_service import recompute_pivots_for_source_sheet
-            recompute_pivots_for_source_sheet(sheet)
-        except Exception:
-            logger.exception("Pivot recompute after batch_update_cells failed for sheet_id=%s", sheet.id)
+        # Skip during import_mode: per-chunk recompute would rerun the full pivot for every chunk
+        # which is O(N) expensive; ImportFinalizeView runs a single recompute at the end instead.
+        if not import_mode:
+            try:
+                from .pivot_service import recompute_pivots_for_source_sheet
+                recompute_pivots_for_source_sheet(sheet)
+            except Exception:
+                logger.exception("Pivot recompute after batch_update_cells failed for sheet_id=%s", sheet.id)
 
         return result
 

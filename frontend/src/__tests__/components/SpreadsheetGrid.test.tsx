@@ -1,17 +1,21 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SpreadsheetGrid, { SpreadsheetGridHandle } from '@/components/spreadsheets/SpreadsheetGrid';
 
 const readCellRangeMock = jest.fn().mockResolvedValue({ cells: [] });
 const deleteRowsMock = jest.fn().mockResolvedValue({ operation_id: 1 });
 const deleteColumnsMock = jest.fn().mockResolvedValue({ operation_id: 1 });
+const batchUpdateCellsMock = jest.fn().mockResolvedValue({});
+const resizeSheetMock = jest.fn().mockResolvedValue({});
+const finalizeImportMock = jest.fn().mockResolvedValue({ status: 'ok' });
 
 jest.mock('@/lib/api/spreadsheetApi', () => ({
   SpreadsheetAPI: {
     readCellRange: (...args: any[]) => readCellRangeMock(...args),
-    batchUpdateCells: jest.fn().mockResolvedValue({}),
-    resizeSheet: jest.fn().mockResolvedValue({}),
+    batchUpdateCells: (...args: any[]) => batchUpdateCellsMock(...args),
+    resizeSheet: (...args: any[]) => resizeSheetMock(...args),
+    finalizeImport: (...args: any[]) => finalizeImportMock(...args),
     getHighlights: jest.fn().mockResolvedValue({ highlights: [] }),
     batchUpdateHighlights: jest.fn().mockResolvedValue({ updated: 0, deleted: 0 }),
     deleteRows: (...args: any[]) => deleteRowsMock(...args),
@@ -378,5 +382,338 @@ describe('SpreadsheetGrid delete row/column', () => {
     expect(toastError).toHaveBeenCalled();
     expect(toastError.mock.calls[0][0]).toContain('Server error');
   });
+});
+
+
+describe('SpreadsheetGrid import error handling', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    readCellRangeMock.mockReset();
+    readCellRangeMock.mockResolvedValue({ cells: [] });
+    batchUpdateCellsMock.mockReset();
+    resizeSheetMock.mockReset();
+    resizeSheetMock.mockResolvedValue({});
+    finalizeImportMock.mockReset();
+    finalizeImportMock.mockResolvedValue({ status: 'ok' });
+    toastSuccess.mockClear();
+    toastError.mockClear();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
+  });
+
+  const uploadCsv = async (container: HTMLElement, csv: string) => {
+    const file = new File([csv], 'test.csv', { type: 'text/csv' });
+    // jsdom's File does not implement Blob.text(); the import code path calls
+    // `await file.text()` in parseCSVFile, so we polyfill it per-instance here.
+    Object.defineProperty(file, 'text', {
+      configurable: true,
+      value: () => Promise.resolve(csv),
+    });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+  };
+
+  it('emits exactly one toast when batch chunks fail persistently', async () => {
+    // 500 is the chunk size; 600 rows x 1 col -> 2 chunks (500 + 100).
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    // Every call to batchUpdateCells rejects with HTTP 500 so retry also fails.
+    batchUpdateCellsMock.mockRejectedValue({
+      response: { status: 500, data: { detail: 'boom' } },
+      message: 'Request failed with status code 500',
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // Wait for retry + abort + outer catch to resolve (retry backoff is 500ms).
+    await waitFor(
+      () => {
+        expect(toastError).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
+    // Give any trailing aborted chunks time to settle without surfacing extra toasts.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).not.toHaveBeenCalled();
+    // finalizeImport must NOT be called because we aborted before all chunks finished.
+    expect(finalizeImportMock).not.toHaveBeenCalled();
+  });
+
+  it('does not finalize the import when batch chunks fail', async () => {
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    batchUpdateCellsMock.mockRejectedValue({
+      response: { status: 500, data: { detail: 'boom' } },
+      message: 'Request failed with status code 500',
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled(), { timeout: 3000 });
+
+    expect(finalizeImportMock).not.toHaveBeenCalled();
+  });
+
+  it('awaits backend resize before firing chunks, and chunks use auto_expand=false', async () => {
+    // 1100 rows x 1 col forces a resize because DEFAULT_ROWS is 1000.
+    const rows: string[] = [];
+    for (let r = 0; r < 1100; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    const callOrder: string[] = [];
+    resizeSheetMock.mockImplementation(async () => {
+      callOrder.push('resize');
+      // Give the batch task a micro-task to accidentally jump the queue if the
+      // code failed to await; if the order is strict the batch call will still
+      // land after this resolves.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return {
+        rows_created: 100,
+        columns_created: 0,
+        total_rows: 1100,
+        total_columns: 26,
+      };
+    });
+    batchUpdateCellsMock.mockImplementation(async () => {
+      callOrder.push('batch');
+      return {
+        updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+      };
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+
+    // resize must come before the first chunk upload.
+    expect(callOrder[0]).toBe('resize');
+    expect(callOrder.indexOf('batch')).toBeGreaterThan(0);
+
+    // Every chunk call passes auto_expand=false (arg index 3 in
+    // batchUpdateCells(spreadsheetId, sheetId, chunk, autoExpand, options)).
+    const allAutoExpand = batchUpdateCellsMock.mock.calls.map((args) => args[3]);
+    expect(allAutoExpand.every((v) => v === false)).toBe(true);
+  }, 15000);
+
+  it('shows imported values optimistically before the backend resize resolves', async () => {
+    // 1200 rows x 1 col forces a backend resize (DEFAULT_ROWS is 1000). We gate the
+    // resize mock on an external promise so it stays in-flight while we check the UI.
+    const rows: string[] = [];
+    for (let r = 0; r < 1200; r += 1) rows.push(`optimistic-${r}`);
+    const csv = rows.join('\n');
+
+    let releaseResize: (() => void) | undefined;
+    const resizeHeld = new Promise<void>((resolve) => {
+      releaseResize = resolve;
+    });
+    resizeSheetMock.mockImplementation(async () => {
+      await resizeHeld;
+      return {
+        rows_created: 200,
+        columns_created: 0,
+        total_rows: 1200,
+        total_columns: 26,
+      };
+    });
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // While resizeSheet is still pending, the optimistic cell value should already
+    // be rendered and no chunk upload should have fired yet.
+    await waitFor(() => expect(screen.getByText('optimistic-0')).toBeInTheDocument(), {
+      timeout: 2000,
+    });
+    expect(resizeSheetMock).toHaveBeenCalled();
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+
+    // Release the resize; chunks should now flow and the import should finalize.
+    releaseResize?.();
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+  }, 15000);
+
+  it('rolls back the optimistic apply when the backend resize fails', async () => {
+    const rows: string[] = [];
+    for (let r = 0; r < 1200; r += 1) rows.push(`rollback-${r}`);
+    const csv = rows.join('\n');
+
+    resizeSheetMock.mockRejectedValue(new Error('resize network error'));
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+
+    // We briefly display optimistic data, then the resize failure triggers a rollback
+    // and the error toast. After rollback, the cell must no longer contain the
+    // imported text.
+    await waitFor(
+      () => expect(toastError).toHaveBeenCalled(),
+      { timeout: 5000 },
+    );
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('rollback-0')).not.toBeInTheDocument();
+    expect(finalizeImportMock).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('skips post-import hydration when there are no formulas', async () => {
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+    readCellRangeMock.mockResolvedValue({ cells: [] });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const beforeRangeCalls = readCellRangeMock.mock.calls.length;
+    await uploadCsv(container, csv);
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+    // Let any lingering microtasks drain before asserting no new range fetches.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(readCellRangeMock.mock.calls.length).toBe(beforeRangeCalls);
+  }, 15000);
+
+  it('fetches hydration data when formulas are present', async () => {
+    // Plain data in most cells, one formula. runImportMatrix should detect the
+    // formula and issue at least one readCellRange AFTER finalize to pick up the
+    // server-computed result. We cannot assert the exact bbox because
+    // loadCellRange snaps to tile boundaries, but we can assert that at least
+    // one fetch happens post-finalize.
+    const rows: string[] = [];
+    for (let r = 0; r < 20; r += 1) {
+      const cols: string[] = [];
+      for (let c = 0; c < 4; c += 1) {
+        if (r === 5 && c === 2) {
+          cols.push('=A1+B1');
+        } else {
+          cols.push(`d${r}${c}`);
+        }
+      }
+      rows.push(cols.join(','));
+    }
+    const csv = rows.join('\n');
+
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0, cleared: 0, rows_expanded: 0, columns_expanded: 0, cells: [],
+    });
+    readCellRangeMock.mockResolvedValue({ cells: [] });
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Baseline: the grid performs at least one viewport fetch on mount. Snapshot
+    // the count BEFORE we upload the CSV.
+    const beforeRangeCalls = readCellRangeMock.mock.calls.length;
+
+    await uploadCsv(container, csv);
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+    // Allow the formula bbox fetch to dispatch after finalize resolves.
+    await waitFor(
+      () => expect(readCellRangeMock.mock.calls.length).toBeGreaterThan(beforeRangeCalls),
+      { timeout: 3000 },
+    );
+  }, 15000);
+
+  it('applies imported values to the grid in a batched pass (no O(n^2) freeze)', async () => {
+    // 600 rows x 1 col mirrors the shape used in the failure-path tests above.
+    // If the batched apply were not active, 600 sequential setCells(new Map(prev))
+    // calls would still succeed functionally but much slower; we primarily assert
+    // correctness (finalizeImport reached, imported values visible).
+    const rows: string[] = [];
+    for (let r = 0; r < 600; r += 1) rows.push(`v${r}`);
+    const csv = rows.join('\n');
+
+    batchUpdateCellsMock.mockImplementation(async () => ({
+      updated: 0,
+      cleared: 0,
+      rows_expanded: 0,
+      columns_expanded: 0,
+      cells: [],
+    }));
+
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await uploadCsv(container, csv);
+    await waitFor(
+      () => expect(batchUpdateCellsMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+    await waitFor(
+      () => expect(finalizeImportMock).toHaveBeenCalled(),
+      { timeout: 10000 },
+    );
+
+    // Imported values from the top of the file should be visible in the viewport.
+    expect(screen.getByText('v0')).toBeInTheDocument();
+  }, 15000);
 });
 
