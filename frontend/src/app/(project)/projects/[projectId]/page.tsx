@@ -1,5 +1,8 @@
 'use client';
 
+// SMP-472: Project Workspace Dashboard — replaces the old project hub page.
+// This page is the default view when a user enters a project.
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -8,6 +11,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
 
 function parsePositiveProjectId(raw: string | undefined): number | null {
   if (!raw) return null;
@@ -29,11 +33,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
   );
 }
 
-/**
- * Project “home” for /projects/:id — meetings/spreadsheets/miro used to link here
- * but no page existed (Next.js 404 + dev overlay removeChild noise).
- */
-export default function ProjectHubPage() {
+export default function ProjectWorkspacePage() {
   const params = useParams();
   const rawId = params?.projectId as string | undefined;
   const projectId = parsePositiveProjectId(rawId);
@@ -65,30 +65,30 @@ export default function ProjectHubPage() {
     };
 
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [projectId]);
-
-  const pid = projectId ?? 0;
 
   return (
     <ProtectedRoute>
       <Layout mainScrollMode="page">
-        <div className="mx-auto max-w-3xl px-4 py-8">
-          <div className="mb-6">
-            <Link href="/projects" className="text-sm text-[#3CCED7] hover:underline">
+        <div className="mx-auto max-w-6xl px-4 py-8">
+
+          {/* Back link */}
+          <div className="mb-4">
+            <Link href="/projects" className="text-sm text-blue-600 hover:underline">
               ← All projects
             </Link>
           </div>
 
+          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-gray-500">
-              <Loader2 className="h-8 w-8 animate-spin text-[#3CCED7]" />
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
               <p className="mt-3 text-sm font-medium text-gray-900">Loading project…</p>
             </div>
           )}
 
+          {/* Error */}
           {!loading && error && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
               <AlertCircle className="h-8 w-8" />
@@ -97,44 +97,22 @@ export default function ProjectHubPage() {
             </div>
           )}
 
-          {!loading && !error && project && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h1 className="text-2xl font-semibold text-gray-900">{project.name}</h1>
-              {project.description ? (
-                <p className="mt-2 text-sm text-gray-600">{project.description}</p>
-              ) : null}
+          {/* Main content */}
+          {!loading && !error && project && projectId && (
+            <>
+              {/* Project header */}
+              <div className="mb-6">
+                <h1 className="text-2xl font-semibold text-gray-900">{project.name}</h1>
+                {project.description && (
+                  <p className="mt-1 text-sm text-gray-500">{project.description}</p>
+                )}
+              </div>
 
-              <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Open in this project
-              </h2>
-              <ul className="mt-3 flex flex-col gap-2 text-sm">
-                <li>
-                  <Link
-                    href={`/projects/${pid}/meetings`}
-                    className="font-medium text-[#3CCED7] hover:underline"
-                  >
-                    Meetings
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href={`/projects/${pid}/spreadsheets`}
-                    className="font-medium text-[#3CCED7] hover:underline"
-                  >
-                    Spreadsheets
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href={`/projects/${pid}/miro`}
-                    className="font-medium text-[#3CCED7] hover:underline"
-                  >
-                    Miro
-                  </Link>
-                </li>
-              </ul>
-            </div>
+              {/* Dashboard — three zones */}
+              <WorkspaceDashboard projectId={projectId} />
+            </>
           )}
+
         </div>
       </Layout>
     </ProtectedRoute>
