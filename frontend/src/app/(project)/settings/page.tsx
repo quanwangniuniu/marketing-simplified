@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import SlackIntegrationModal from '@/components/slack/SlackIntegrationModal';
 import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
 import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
+import GoogleCalendarIntegrationModal from '@/components/google-calendar/GoogleCalendarIntegrationModal';
 import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
 import { useProjectStore } from '@/lib/projectStore';
 
@@ -21,11 +22,13 @@ function SettingsPageContent() {
     const [isSlackModalOpen, setIsSlackModalOpen] = useState(false);
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
     const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
+    const [isGoogleCalendarModalOpen, setIsGoogleCalendarModalOpen] = useState(false);
     const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
     const [slackStatusLoading, setSlackStatusLoading] = useState(true);
     const hasOpenedSlackRef = useRef(false);
     const hasOpenedZoomRef = useRef(false);
     const hasOpenedGoogleDocsRef = useRef(false);
+    const hasOpenedGoogleCalendarRef = useRef(false);
     const userId = user?.id ?? null;
 
     // Refresh user data once on mount only — not in a loop.
@@ -115,6 +118,18 @@ function SettingsPageContent() {
             router.replace(newUrl, { scroll: false });
         }
 
+        if (searchParams.get('open_google_calendar') === '1' && !hasOpenedGoogleCalendarRef.current) {
+            setIsGoogleCalendarModalOpen(true);
+            hasOpenedGoogleCalendarRef.current = true;
+
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('open_google_calendar');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
+
         const zoomError = searchParams.get('zoom_error');
         if (zoomError) {
             const messages: Record<string, string> = {
@@ -145,6 +160,23 @@ function SettingsPageContent() {
             toast.error(messages[googleDocsError] ?? 'Google Docs connection failed. Please try again.');
             const newParams = new URLSearchParams(searchParams.toString());
             newParams.delete('google_docs_error');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
+
+        const googleCalendarError = searchParams.get('google_calendar_error');
+        if (googleCalendarError) {
+            const messages: Record<string, string> = {
+                missing_code: 'Google Calendar connection failed: missing callback code.',
+                state_expired: 'Google Calendar connection failed: authorization expired. Please try again.',
+                invalid_state: 'Google Calendar connection failed: invalid state.',
+                token_exchange_failed: 'Google Calendar connection failed: token exchange failed.',
+            };
+            toast.error(messages[googleCalendarError] ?? 'Google Calendar connection failed. Please try again.');
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('google_calendar_error');
             const newUrl = newParams.toString()
                 ? `${window.location.pathname}?${newParams.toString()}`
                 : window.location.pathname;
@@ -194,7 +226,7 @@ function SettingsPageContent() {
                         {/* Integrations Section */}
                         <section>
                             <h2 className="text-lg font-semibold text-gray-900 mb-4">Integrations</h2>
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
                                 {/* Slack Card */}
                                 <div className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm transition-all ${isSlackCardDisabled ? 'opacity-75' : 'hover:shadow-md'}`}>
                                     <div className="flex items-start justify-between mb-4">
@@ -284,6 +316,32 @@ function SettingsPageContent() {
                                         Configure
                                     </button>
                                 </div>
+
+                                {/* Google Calendar Card */}
+                                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-[#4285F4] rounded-lg flex items-center justify-center">
+                                                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900">Google Calendar</h3>
+                                                <p className="text-sm text-gray-500">Scheduling and sync</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                                        Import Google events and sync your primary platform calendar with Google Calendar.
+                                    </p>
+                                    <button
+                                        onClick={() => setIsGoogleCalendarModalOpen(true)}
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                                    >
+                                        Configure
+                                    </button>
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -300,6 +358,10 @@ function SettingsPageContent() {
             <GoogleDocsIntegrationModal
                 isOpen={isGoogleDocsModalOpen}
                 onClose={() => setIsGoogleDocsModalOpen(false)}
+            />
+            <GoogleCalendarIntegrationModal
+                isOpen={isGoogleCalendarModalOpen}
+                onClose={() => setIsGoogleCalendarModalOpen(false)}
             />
         </Layout>
     );
