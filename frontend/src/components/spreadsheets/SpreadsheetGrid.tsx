@@ -24,6 +24,7 @@ import BrandSelect from '@/components/ui/BrandSelect';
 interface SpreadsheetGridProps {
   spreadsheetId: number;
   sheetId: number;
+  loading?: boolean;
   spreadsheetName?: string;
   sheetName?: string;
   /** Number of rows to freeze (0 = none, 1 = freeze first row). Sheet-level property. */
@@ -498,6 +499,7 @@ const parseTSV = (text: string): string[][] => {
 const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(({
   spreadsheetId,
   sheetId,
+  loading = false,
   spreadsheetName,
   sheetName,
   onFormulaCommit,
@@ -513,6 +515,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   onFreezeHeaderChange,
   onOpenPivotBuilder,
 }: SpreadsheetGridProps, ref) => {
+  const isGridLoading = loading || sheetId <= 0;
   const [rowCount, setRowCount] = useState(DEFAULT_ROWS);
   const [colCount, setColCount] = useState(DEFAULT_COLUMNS);
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
@@ -612,7 +615,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     endCol: Math.min(10, DEFAULT_COLUMNS - 1),
   });
   const [isImporting, setIsImporting] = useState(false);
-  /** Covers the cell canvas until the first viewport range load finishes for this sheet (cache hit = immediate). */
+  /** Tracks first-viewport loading so visible cells can render inline placeholders without blocking the sheet shell. */
   const [cellCanvasLoading, setCellCanvasLoading] = useState(true);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [xlsxImport, setXlsxImport] = useState<XLSXParseResult | null>(null);
@@ -1279,8 +1282,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     [sheetId]
   );
 
-  const resetSheetCaches = useCallback(() => {
-    cellCache.set(sheetId, new Map());
+  const resetSheetCaches = useCallback((options?: { preserveCells?: boolean }) => {
+    if (!options?.preserveCells) {
+      cellCache.set(sheetId, new Map());
+    }
     loadedRangesCache.set(sheetId, new Set());
     const inFlightForSheet = inFlightRangeRequests.get(sheetId);
     if (inFlightForSheet) {
@@ -1293,10 +1298,13 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         inFlightExactRequests.delete(key);
       }
     }
-    setCells(new Map());
+    if (!options?.preserveCells) {
+      setCells(new Map());
+    }
   }, [sheetId]);
 
   useEffect(() => {
+    if (isGridLoading) return;
     let cancelled = false;
     const loadHighlights = async () => {
       try {
@@ -1325,9 +1333,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     return () => {
       cancelled = true;
     };
-  }, [spreadsheetId, sheetId]);
+  }, [isGridLoading, spreadsheetId, sheetId]);
 
   useEffect(() => {
+    if (isGridLoading) return;
     let cancelled = false;
     const loadCellFormats = async () => {
       try {
@@ -1363,10 +1372,12 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     return () => {
       cancelled = true;
     };
-  }, [spreadsheetId, sheetId]);
+  }, [isGridLoading, spreadsheetId, sheetId]);
 
   const refreshSheet = useCallback(() => {
-    resetSheetCaches();
+    if (isGridLoading) return;
+    setCellCanvasLoading(true);
+    resetSheetCaches({ preserveCells: true });
     const range = computeVisibleRange();
     setVisibleRange({
       startRow: range.startRow,
@@ -1374,7 +1385,19 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       startCol: range.startColumn,
       endCol: range.endColumn,
     });
-    loadCellRange(range.startRow, range.endRow, range.startColumn, range.endColumn, true);
+    const maybePromise = loadCellRange(
+      range.startRow,
+      range.endRow,
+      range.startColumn,
+      range.endColumn,
+      true
+    );
+    const finishLoading = () => setCellCanvasLoading(false);
+    if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+      void (maybePromise as Promise<void>).finally(finishLoading);
+    } else {
+      finishLoading();
+    }
 
     // Also reload highlights and cell formats from the backend so that
     // decoration changes made by background jobs (e.g. pattern apply)
@@ -1429,7 +1452,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       .catch((error) => {
         console.error('Failed to load cell formats on refresh:', error);
       });
-  }, [resetSheetCaches, computeVisibleRange, loadCellRange]);
+  }, [isGridLoading, resetSheetCaches, computeVisibleRange, loadCellRange]);
 
   const handleAddRows = useCallback(async () => {
     const rowsToAdd = parseInt(addRowsInputValue, 10);
@@ -1966,6 +1989,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   // Load initial visible range on mount and when sheetId changes
   useEffect(() => {
     setCellCanvasLoading(true);
+    if (isGridLoading) return;
     let cancelled = false;
 
     // Reset scroll position to top when switching sheets (only on sheetId change)
@@ -2007,12 +2031,13 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [sheetId, spreadsheetId, computeVisibleRange, loadCellRange]);
+  }, [isGridLoading, sheetId, spreadsheetId, computeVisibleRange, loadCellRange]);
 
   // Handle scroll to load more cells (no auto-expand). We schedule work in
   // requestAnimationFrame so we compute the viewport and trigger range loads
   // at most once per frame even if the browser fires many scroll events.
   const handleScroll = useCallback(() => {
+    if (isGridLoading) return;
     if (!gridRef.current) return;
 
     if (scrollRafIdRef.current != null) {
@@ -2049,7 +2074,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         }
       }
     });
-  }, [computeVisibleRange, loadCellRange, rowCount]);
+  }, [isGridLoading, computeVisibleRange, loadCellRange, rowCount]);
 
   // Recompute visible range if dimensions change (e.g., after expansion)
   // But preserve scroll position - don't reset it
@@ -5070,8 +5095,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   const isFrozenRow = (row: number): boolean =>
     frozenRowCount > 0 && row < frozenRowCount;
 
+  const showGridSpinner = isGridLoading || cellCanvasLoading;
+
   return (
-    <div className="relative h-full w-full flex flex-col">
+    <div className={`relative h-full w-full flex flex-col${isGridLoading ? ' pointer-events-none' : ''}`}>
       {/* Save status indicator */}
       {saveError && (
         <div className="absolute top-2 right-2 z-30 bg-red-50 border border-red-200 text-red-700 px-3 py-1 rounded text-xs">
@@ -5835,13 +5862,20 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           overflowY: 'auto',
           position: 'relative',
         }}
-        onScroll={handleScroll}
-        onKeyDown={handleKeyDown}
-        onCopy={handleCopy}
-        onPaste={handlePaste}
-        tabIndex={0}
-        aria-busy={cellCanvasLoading}
+        onScroll={isGridLoading ? undefined : handleScroll}
+        onKeyDown={isGridLoading ? undefined : handleKeyDown}
+        onCopy={isGridLoading ? undefined : handleCopy}
+        onPaste={isGridLoading ? undefined : handlePaste}
+        tabIndex={isGridLoading ? -1 : 0}
+        aria-busy={cellCanvasLoading || isGridLoading}
       >
+        {showGridSpinner ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white/95 shadow-sm backdrop-blur-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-[#0E8A96]" />
+            </div>
+          </div>
+        ) : null}
         {/* Column headers in separate table to avoid thead/tbody gap with sticky. */}
         <div className="sticky top-0 z-10 shrink-0 bg-gray-200">
           <table

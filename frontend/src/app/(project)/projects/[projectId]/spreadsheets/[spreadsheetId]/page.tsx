@@ -1484,18 +1484,19 @@ export default function SpreadsheetDetailPage() {
 
           {/* Spreadsheet Content Area: flex-1 + min-h-0 so it gets bounded height and grid scrolls inside. */}
           <div className="flex-1 min-h-0 overflow-hidden bg-gray-50 flex flex-col">
-            {activeSheet ? (
+            {activeSheet || delayedLoading ? (
               <div className="flex-1 min-h-0 min-w-0 flex h-full overflow-hidden">
                   {/* Center column: grid container. min-w-0 is critical to prevent it from forcing the flex row wider than the viewport. */}
                   <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
                     <SpreadsheetGrid
                       ref={gridRef}
                       spreadsheetId={Number(spreadsheetId)}
-                      sheetId={activeSheet.id}
-                      spreadsheetName={spreadsheet.name}
-                      sheetName={activeSheet.name}
-                      frozenRowCount={activeSheet.frozen_row_count ?? 0}
-                      onFreezeHeaderChange={(val) => {
+                      sheetId={activeSheet?.id ?? 0}
+                      loading={delayedLoading || !activeSheet}
+                      spreadsheetName={spreadsheet?.name}
+                      sheetName={activeSheet?.name}
+                      frozenRowCount={activeSheet?.frozen_row_count ?? 0}
+                      onFreezeHeaderChange={activeSheet ? ((val) => {
                         setSheets((prev) =>
                           prev.map((s) =>
                             s.id === activeSheet.id
@@ -1503,7 +1504,7 @@ export default function SpreadsheetDetailPage() {
                               : s
                           )
                         );
-                      }}
+                      }) : undefined}
                       onFormulaCommit={handleFormulaCommit}
                       onHeaderRenameCommit={handleHeaderRenameCommit}
                       onHighlightCommit={handleHighlightCommit}
@@ -1569,7 +1570,7 @@ export default function SpreadsheetDetailPage() {
                     />
                   </div>
                   {/* Right column: Show Pivot Editor for pivot sheets, Pattern panel for regular sheets */}
-                  {isPivotSheet && showPivotEditor ? (
+                  {activeSheet && isPivotSheet && showPivotEditor ? (
                     <PivotEditorPanel
                       config={pivotConfigsBySheet[activeSheet.id] || createEmptyPivotConfig(pivotSourceDataBySheet[activeSheet.id]?.sourceSheetId || 0)}
                       sourceSheetName={pivotSourceDataBySheet[activeSheet.id]?.sourceSheetName || 'Unknown'}
@@ -1608,7 +1609,7 @@ export default function SpreadsheetDetailPage() {
                   ) : (
                     <PatternAgentPanel
                       loading={delayedLoading || patternsLoading}
-                      items={agentSteps}
+                      items={activeSheet ? agentSteps : []}
                       patterns={patterns}
                       selectedPatternId={selectedPattern?.id ?? null}
                       applySteps={applySteps}
@@ -1644,34 +1645,6 @@ export default function SpreadsheetDetailPage() {
                     />
                   )}
                 </div>
-            ) : delayedLoading ? (
-              <div className="flex-1 min-h-0 min-w-0 flex h-full overflow-hidden">
-                <div className="flex-1 min-h-0 min-w-0" />
-                <PatternAgentPanel
-                  loading
-                  items={[]}
-                  patterns={[]}
-                  selectedPatternId={null}
-                  applySteps={[]}
-                  applyError={null}
-                  applyFailedIndex={null}
-                  isApplying={false}
-                  exporting={false}
-                  applyJobStatus={null}
-                  applyJobProgress={0}
-                  applyJobError={null}
-                  onReorder={() => {}}
-                  onUpdateStep={() => {}}
-                  onDeleteStep={() => {}}
-                  onHoverStep={() => {}}
-                  onClearHover={() => {}}
-                  onExportPattern={async () => false}
-                  onSelectPattern={() => {}}
-                  onDeletePattern={() => {}}
-                  onApplyPattern={() => {}}
-                  onRetryApply={() => {}}
-                />
-              </div>
             ) : null}
             {sheets.length === 0 && !delayedLoading ? (
               <div className="flex items-center justify-center flex-1">

@@ -173,11 +173,43 @@ export const useProjects = () => {
     async (projectId: number) => {
       setDeletingProjectId(projectId);
       try {
+        const remainingProjects = projects.filter((project) => project.id !== projectId);
+        const nextActiveProject =
+          activeProject?.id === projectId ? remainingProjects[0] ?? null : null;
+
         await ProjectAPI.deleteProject(projectId);
-        setProjects((prev) => prev.filter((project) => project.id !== projectId));
-        setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
-        setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+        let nextProjects = remainingProjects;
+
         setCompletedProjectIds((prev) => prev.filter((id) => id !== projectId));
+
+        if (nextActiveProject) {
+          try {
+            await ProjectAPI.setActiveProject(nextActiveProject.id);
+            nextProjects = remainingProjects.map((project) => ({
+              ...project,
+              is_active: project.id === nextActiveProject.id,
+              isActiveResolved: project.id === nextActiveProject.id,
+            }));
+            setStoreActiveProject({ ...nextActiveProject, is_active: true });
+            setActiveProjectIds([nextActiveProject.id]);
+            setInactiveProjectIds((prev) =>
+              prev.filter((id) => id !== projectId && id !== nextActiveProject.id)
+            );
+          } catch {
+            setStoreActiveProject(null);
+            setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+            setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+            toast.error('Project deleted, but failed to set a new active project.');
+          }
+        } else {
+          setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+          setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+          if (activeProject?.id === projectId) {
+            setStoreActiveProject(null);
+          }
+        }
+
+        setProjects(nextProjects);
         toast.success('Project deleted');
       } catch (err: any) {
         const status = err?.response?.status;
@@ -185,13 +217,12 @@ export const useProjects = () => {
           status === 403 || status === 401
             ? 'You do not have permission to delete this project.'
             : getErrorMessage(err);
-        setError(message);
         toast.error(message);
       } finally {
         setDeletingProjectId(null);
       }
     },
-    [setActiveProjectIds, setInactiveProjectIds, setCompletedProjectIds]
+    [projects, activeProject?.id, setStoreActiveProject, setActiveProjectIds, setInactiveProjectIds, setCompletedProjectIds]
   );
 
   const derivedProjects = useMemo(

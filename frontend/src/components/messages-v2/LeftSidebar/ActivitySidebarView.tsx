@@ -127,20 +127,31 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
         <div className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">
           Activity
         </div>
-        <div className="space-y-3 p-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={`messages-activity-skeleton-${index}`}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2"
-            >
-              <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                <Skeleton className="h-3.5 w-3.5 rounded-full" />
-                <Skeleton className="h-3 w-28" />
+        <div className="space-y-5 p-3">
+          {[
+            { key: 'messages-activity-skeleton-day-1', cards: [true, false] },
+            { key: 'messages-activity-skeleton-day-2', cards: [false] },
+          ].map((group) => (
+            <div key={group.key}>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600">
+                <Skeleton className="h-3.5 w-3.5 rounded-sm" />
+                <Skeleton className="h-5 w-28" />
               </div>
-              <div className="mt-2 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-24" />
+              <div className="mt-2 space-y-3">
+                {group.cards.map((showDescription, index) => (
+                  <div
+                    key={`${group.key}-card-${index}`}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Skeleton className="mt-0.5 h-6 w-16 rounded-sm" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-7 w-40" />
+                        {showDescription ? <Skeleton className="h-5 w-32" /> : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

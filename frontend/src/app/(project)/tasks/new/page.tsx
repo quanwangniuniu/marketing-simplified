@@ -425,23 +425,20 @@ export default function CreateTaskPage() {
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Approver
               </p>
-              {membersLoading ? (
-                <Skeleton className="h-10 w-full rounded-md" />
-              ) : (
-                <select
-                  value={approverId}
-                  onChange={(e) => setApproverId(e.target.value)}
-                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.username || m.user.name || `User ${m.user.id}`}
-                      {m.user.email ? ` · ${m.user.email}` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                value={approverId}
+                onChange={(e) => setApproverId(e.target.value)}
+                disabled={membersLoading}
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20 disabled:cursor-wait disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">{membersLoading ? 'Loading approvers…' : 'Unassigned'}</option>
+                {members.map((m) => (
+                  <option key={m.user.id} value={m.user.id}>
+                    {m.user.username || m.user.name || `User ${m.user.id}`}
+                    {m.user.email ? ` · ${m.user.email}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-8 py-4">

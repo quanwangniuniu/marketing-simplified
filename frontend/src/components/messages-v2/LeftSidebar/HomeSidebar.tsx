@@ -74,23 +74,27 @@ function Section({
 function SidebarRowsSkeleton({
   rows = 4,
   withHeading = false,
+  variant = 'chat',
 }: {
   rows?: number;
   withHeading?: boolean;
+  variant?: 'chat' | 'member';
 }) {
+  const isMember = variant === 'member';
   return (
     <div className="px-3 py-2">
       {withHeading ? <Skeleton className="mb-3 h-3 w-24" /> : null}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {Array.from({ length: rows }).map((_, index) => (
           <div
             key={`messages-sidebar-skeleton-${index}`}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5"
+            className="flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1.5"
+            data-testid="messages-sidebar-skeleton-row"
+            data-skeleton-variant={variant}
           >
-            <Skeleton className="h-6 w-6 rounded-full" />
+            <Skeleton className={isMember ? 'h-6 w-6 rounded-full' : 'h-4 w-4 rounded'} />
             <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-24" />
             </div>
           </div>
         ))}
@@ -119,6 +123,7 @@ export default function HomeSidebar({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [starredOrder, setStarredOrder] = useState<number[]>([]);
   const [starLoading, setStarLoading] = useState(false);
+  const [hasLoadedStarred, setHasLoadedStarred] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
 
   const { groupChats, privateChats } = useMemo(() => {
@@ -171,25 +176,35 @@ export default function HomeSidebar({
   );
 
   const loadStarred = useCallback(async () => {
-    if (!selectedProjectId || view !== 'home') {
+    if (!selectedProjectId) {
       setStarredOrder([]);
+      setHasLoadedStarred(false);
       return;
     }
     try {
       setStarLoading(true);
       const rows = await listStarredChats(selectedProjectId);
       setStarredOrder(rows.map((r) => r.chat.id));
+      setHasLoadedStarred(true);
     } catch {
       toast.error('Could not load starred chats');
       setStarredOrder([]);
+      setHasLoadedStarred(true);
     } finally {
       setStarLoading(false);
     }
-  }, [selectedProjectId, view]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
-    void loadStarred();
-  }, [loadStarred]);
+    if (view === 'home' && selectedProjectId) {
+      void loadStarred();
+    }
+  }, [loadStarred, selectedProjectId, view]);
+
+  useEffect(() => {
+    setStarredOrder([]);
+    setHasLoadedStarred(false);
+  }, [selectedProjectId]);
 
   const starredChatsOrdered = useMemo(() => {
     return starredOrder
@@ -307,25 +322,25 @@ export default function HomeSidebar({
         <div className="pb-2">
           {showHome && (
             <Section title="Starred" icon={<Star className="w-3.5 h-3.5" />}>
-              <SidebarRowsSkeleton rows={2} />
+              <SidebarRowsSkeleton rows={1} />
             </Section>
           )}
 
           {showHome && (
             <Section title="Channels" icon={<Hash className="w-3.5 h-3.5" />}>
-              <SidebarRowsSkeleton rows={4} />
+              <SidebarRowsSkeleton rows={1} />
             </Section>
           )}
 
           {(showHome || showDmsOnly) && (
             <Section title="Direct messages" icon={<Users className="w-3.5 h-3.5" />}>
-              <SidebarRowsSkeleton rows={4} />
+              <SidebarRowsSkeleton rows={1} />
             </Section>
           )}
 
           {(showHome || showDmsOnly) && selectedProjectId && (
             <Section title="Project members" icon={<User className="w-3.5 h-3.5" />}>
-              <SidebarRowsSkeleton rows={4} />
+              <SidebarRowsSkeleton rows={1} variant="member" />
             </Section>
           )}
         </div>
@@ -385,7 +400,9 @@ export default function HomeSidebar({
               ) : null
             }
           >
-            {starredChatsOrdered.length === 0 ? (
+            {starLoading && !hasLoadedStarred ? (
+              <SidebarRowsSkeleton rows={1} />
+            ) : starredChatsOrdered.length === 0 && hasLoadedStarred ? (
               <div
                 className="px-3 py-6 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg mx-1 min-h-[4rem] flex items-center justify-center text-center"
                 onDragOver={handleDragOver}

@@ -866,23 +866,24 @@ export default function SpreadsheetsV2DetailPage() {
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              {activeSheet ? (
+              {activeSheet || loading ? (
                 <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <SpreadsheetGrid
                       ref={gridRef}
                       spreadsheetId={Number(spreadsheetId)}
-                      sheetId={activeSheet.id}
+                      sheetId={activeSheet?.id ?? 0}
+                      loading={loading || !activeSheet}
                       spreadsheetName={spreadsheet?.name ?? undefined}
-                      sheetName={activeSheet.name}
-                      frozenRowCount={activeSheet.frozen_row_count ?? 0}
-                      onFreezeHeaderChange={(val) => {
+                      sheetName={activeSheet?.name}
+                      frozenRowCount={activeSheet?.frozen_row_count ?? 0}
+                      onFreezeHeaderChange={activeSheet ? ((val) => {
                         setSheets((prev) =>
                           prev.map((s) =>
                             s.id === activeSheet.id ? { ...s, frozen_row_count: val } : s
                           )
                         );
-                      }}
+                      }) : undefined}
                       onFormulaCommit={handleFormulaCommit}
                       onHeaderRenameCommit={handleHeaderRenameCommit}
                       onHighlightCommit={handleHighlightCommit}
@@ -939,7 +940,7 @@ export default function SpreadsheetsV2DetailPage() {
                       onOpenPivotBuilder={handleCreatePivotSheet}
                     />
                   </div>
-                  {isPivotSheet && showPivotEditor ? (
+                  {activeSheet && isPivotSheet && showPivotEditor ? (
                     <PivotEditorPanel
                       config={
                         pivotConfigsBySheet[activeSheet.id] ||
@@ -978,8 +979,8 @@ export default function SpreadsheetsV2DetailPage() {
                     />
                   ) : (
                     <PatternAgentPanelV2
-                      loading={patternsLoading}
-                      items={agentSteps}
+                      loading={loading || patternsLoading}
+                      items={activeSheet ? agentSteps : []}
                       patterns={patterns}
                       selectedPatternId={selectedPattern?.id ?? null}
                       applySteps={applySteps}
@@ -1014,35 +1015,6 @@ export default function SpreadsheetsV2DetailPage() {
                       applyJobError={patternJobError}
                     />
                   )}
-                </div>
-              ) : loading ? (
-                <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white" />
-                  <PatternAgentPanelV2
-                    loading
-                    items={[]}
-                    patterns={[]}
-                    selectedPatternId={null}
-                    applySteps={[]}
-                    applyError={null}
-                    applyFailedIndex={null}
-                    isApplying={false}
-                    exporting={false}
-                    onReorder={() => undefined}
-                    onUpdateStep={() => undefined}
-                    onDeleteStep={() => undefined}
-                    onMoveStepOutOfGroup={() => undefined}
-                    onHoverStep={() => undefined}
-                    onClearHover={() => undefined}
-                    onExportPattern={async () => false}
-                    onSelectPattern={() => undefined}
-                    onDeletePattern={() => undefined}
-                    onApplyPattern={() => undefined}
-                    onRetryApply={() => undefined}
-                    applyJobStatus={null}
-                    applyJobProgress={0}
-                    applyJobError={null}
-                  />
                 </div>
               ) : sheets.length === 0 ? (
                 <div className="flex h-full w-full items-center justify-center p-10">
