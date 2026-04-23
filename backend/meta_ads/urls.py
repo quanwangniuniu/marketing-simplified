@@ -4,6 +4,7 @@ from .views import (
     MetaAdInsightTimeseriesView,
     MetaAdListView,
     MetaAdPerformanceView,
+    MetaAdSetPerformanceView,
     MetaCampaignListView,
     MetaCampaignPerformanceView,
     MetaCreativeDetailView,
@@ -32,6 +33,11 @@ urlpatterns = [
         "ad_accounts/<int:ad_account_id>/creative_performance/",
         MetaCreativePerformanceView.as_view(),
         name="meta-creative-performance",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/adset_performance/",
+        MetaAdSetPerformanceView.as_view(),
+        name="meta-adset-performance",
     ),
     path(
         "ad_accounts/<int:ad_account_id>/ad_performance/",

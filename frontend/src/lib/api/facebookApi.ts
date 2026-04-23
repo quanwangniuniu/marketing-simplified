@@ -295,6 +295,38 @@ export interface MetaCreativePreview {
   permalink_url: string;
 }
 
+export interface MetaAdSetPerformanceRow {
+  id: number;
+  meta_adset_id: string;
+  name: string;
+  effective_status: string;
+  optimization_goal: string;
+  daily_budget_cents: number | null;
+  lifetime_budget_cents: number | null;
+  campaign_id: number;
+  campaign_name: string;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: string;
+  ctr: string;
+  cpc: string;
+  cpl: string;
+  cpa: string;
+  roas: string;
+}
+
+export interface MetaAdSetPerformance {
+  ad_account_id: number;
+  currency: string;
+  days: number;
+  window: { since: string; until: string };
+  campaign_id: number | null;
+  adsets: MetaAdSetPerformanceRow[];
+}
+
 export interface MetaCreativeTimeseries {
   creative_id: number;
   meta_creative_id: string;
@@ -388,11 +420,29 @@ export const facebookApi = {
 
   getMetaAdPerformance: async (
     adAccountId: number,
-    days: number
+    days: number,
+    filters?: { campaignId?: number | null; adsetId?: number | null }
   ): Promise<MetaAdPerformance> => {
+    const params: Record<string, number> = { days };
+    if (filters?.campaignId) params.campaign_id = filters.campaignId;
+    if (filters?.adsetId) params.adset_id = filters.adsetId;
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/`,
-      { params: { days } }
+      { params }
+    );
+    return response.data;
+  },
+
+  getMetaAdSetPerformance: async (
+    adAccountId: number,
+    days: number,
+    campaignId?: number | null
+  ): Promise<MetaAdSetPerformance> => {
+    const params: Record<string, number> = { days };
+    if (campaignId) params.campaign_id = campaignId;
+    const response = await api.get(
+      `/api/meta_ads/ad_accounts/${adAccountId}/adset_performance/`,
+      { params }
     );
     return response.data;
   },

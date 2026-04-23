@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from facebook_integration.models import MetaAdAccount
 
-from .meta_client import MetaApiError, graph_paged
+from .meta_client import MetaApiError, graph_get, graph_paged
 from .models import (
     MetaAd,
     MetaAdCreative,
@@ -83,6 +83,9 @@ def sync_ad_account(ad_account: MetaAdAccount, access_token: str, *, days: int =
         counts["adsets"] = sync_adsets(ad_account, access_token)
         counts["creatives"] = sync_creatives(ad_account, access_token)
         counts["ads"] = sync_ads(ad_account, access_token)
+        counts["creative_fk_backfilled"] = backfill_missing_creative_fks(
+            ad_account, access_token
+        )
         counts["insights_rows"] = sync_insights(ad_account, access_token, days=days)
         status = "ok"
     except MetaApiError as err:
@@ -231,6 +234,80 @@ def sync_ads(ad_account: MetaAdAccount, access_token: str) -> int:
         )
         count += 1
     return count
+
+
+def backfill_missing_creative_fks(
+    ad_account: MetaAdAccount, access_token: str, *, max_ads: int = 2000
+) -> int:
+    """Second-pass creative linker for ads that came back without a creative id.
+
+    Meta's batch `/act_<id>/ads?fields=creative{id}` endpoint omits the
+    creative for dynamic (DCO) ads. A per-ad GET does return it. We walk
+    over every unlinked ad for this account and patch the FK. Creatives
+    referenced by the results that we haven't synced yet are pulled in
+    with a minimal upsert so the FK never dangles.
+    """
+    unlinked = MetaAd.objects.filter(
+        adset__campaign__ad_account=ad_account,
+        creative__isnull=True,
+    ).select_related("adset__campaign")[:max_ads]
+    if not unlinked:
+        return 0
+
+    creative_cache: dict[str, MetaAdCreative] = {
+        c.meta_creative_id: c
+        for c in MetaAdCreative.objects.filter(ad_account=ad_account)
+    }
+
+    fixed = 0
+    for ad in unlinked:
+        try:
+            payload = graph_get(
+                f"/{ad.meta_ad_id}",
+                access_token,
+                params={"fields": "creative{id,name}"},
+            )
+        except MetaApiError as err:
+            logger.debug("creative FK backfill skip ad=%s err=%s", ad.meta_ad_id, err)
+            continue
+        creative_ref = (payload or {}).get("creative") or {}
+        meta_creative_id = str(creative_ref.get("id") or "").strip()
+        if not meta_creative_id:
+            continue
+        creative = creative_cache.get(meta_creative_id)
+        if creative is None:
+            try:
+                full = graph_get(
+                    f"/{meta_creative_id}",
+                    access_token,
+                    params={"fields": CREATIVE_FIELDS},
+                )
+            except MetaApiError as err:
+                logger.debug(
+                    "creative FK backfill creative pull failed id=%s err=%s",
+                    meta_creative_id,
+                    err,
+                )
+                continue
+            creative, _ = MetaAdCreative.objects.update_or_create(
+                ad_account=ad_account,
+                meta_creative_id=meta_creative_id,
+                defaults={
+                    "name": full.get("name", "") or creative_ref.get("name", "") or "",
+                    "title": full.get("title", "") or "",
+                    "body": full.get("body", "") or "",
+                    "image_url": full.get("image_url", "") or "",
+                    "video_id": full.get("video_id", "") or "",
+                    "thumbnail_url": full.get("thumbnail_url", "") or "",
+                    "object_type": full.get("object_type", "") or "",
+                    "call_to_action_type": full.get("call_to_action_type", "") or "",
+                    "asset_feed_spec": full.get("asset_feed_spec") or {},
+                },
+            )
+            creative_cache[meta_creative_id] = creative
+        MetaAd.objects.filter(pk=ad.pk).update(creative=creative)
+        fixed += 1
+    return fixed
 
 
 def sync_insights(ad_account: MetaAdAccount, access_token: str, *, days: int = 30) -> int:

@@ -9,6 +9,8 @@ import {
   facebookApi,
   type MetaAdInsightTimeseries,
   type MetaAdPerformanceRow,
+  type MetaAdSetPerformanceRow,
+  type MetaCampaignPerformanceRow,
 } from '@/lib/api/facebookApi';
 import AdStockChart, { STOCK_METRIC_LABEL, type StockMetric } from './AdStockChart';
 import {
@@ -48,16 +50,53 @@ export default function AdsDrilldownPanel({
   const [seriesLoading, setSeriesLoading] = useState(false);
   const [metric, setMetric] = useState<StockMetric>('spend');
   const [compareMetric, setCompareMetric] = useState<StockMetric | null>(null);
+  const [campaignFilterId, setCampaignFilterId] = useState<number | null>(null);
+  const [adsetFilterId, setAdsetFilterId] = useState<number | null>(null);
+  const [campaignOptions, setCampaignOptions] = useState<
+    MetaCampaignPerformanceRow[]
+  >([]);
+  const [adsetOptions, setAdsetOptions] = useState<MetaAdSetPerformanceRow[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    facebookApi
+      .getMetaCampaignPerformance(adAccountId, days)
+      .then((d) => active && setCampaignOptions(d.campaigns))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [adAccountId, days]);
+
+  useEffect(() => {
+    let active = true;
+    facebookApi
+      .getMetaAdSetPerformance(adAccountId, days, campaignFilterId)
+      .then((d) => active && setAdsetOptions(d.adsets))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [adAccountId, days, campaignFilterId]);
+
+  useEffect(() => {
+    if (adsetFilterId === null) return;
+    if (!adsetOptions.some((a) => a.id === adsetFilterId)) {
+      setAdsetFilterId(null);
+    }
+  }, [adsetOptions, adsetFilterId]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     facebookApi
-      .getMetaAdPerformance(adAccountId, days)
+      .getMetaAdPerformance(adAccountId, days, {
+        campaignId: campaignFilterId,
+        adsetId: adsetFilterId,
+      })
       .then((d) => {
         if (!active) return;
         setRows(d.ads);
-        // auto-select first ad with spend on first load or when data changes
         const firstWithSpend = d.ads.find((a) => Number(a.spend) > 0);
         if (firstWithSpend) {
           setSelectedAdId((prev) =>
@@ -77,7 +116,7 @@ export default function AdsDrilldownPanel({
     return () => {
       active = false;
     };
-  }, [adAccountId, days]);
+  }, [adAccountId, days, campaignFilterId, adsetFilterId]);
 
   useEffect(() => {
     if (!selectedAdId) return;
@@ -132,7 +171,74 @@ export default function AdsDrilldownPanel({
   return (
     <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
       <aside className="rounded-xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-100 px-3 py-2">
+        <div className="space-y-1.5 border-b border-gray-100 px-3 py-2">
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between text-[10px] uppercase tracking-wide text-gray-500">
+              <span>Campaign</span>
+              {campaignFilterId !== null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCampaignFilterId(null);
+                    setAdsetFilterId(null);
+                  }}
+                  className="text-[10px] font-medium text-[#1a9ba3] hover:underline"
+                >
+                  clear
+                </button>
+              )}
+            </label>
+            <select
+              value={campaignFilterId ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCampaignFilterId(v ? Number(v) : null);
+                setAdsetFilterId(null);
+              }}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
+            >
+              <option value="">All campaigns ({campaignOptions.length})</option>
+              {campaignOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.meta_campaign_id}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between text-[10px] uppercase tracking-wide text-gray-500">
+              <span>Ad set</span>
+              {adsetFilterId !== null && (
+                <button
+                  type="button"
+                  onClick={() => setAdsetFilterId(null)}
+                  className="text-[10px] font-medium text-[#1a9ba3] hover:underline"
+                >
+                  clear
+                </button>
+              )}
+            </label>
+            <select
+              value={adsetFilterId ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAdsetFilterId(v ? Number(v) : null);
+              }}
+              disabled={adsetOptions.length === 0}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="">
+                {campaignFilterId
+                  ? `All ad sets in campaign (${adsetOptions.length})`
+                  : `All ad sets (${adsetOptions.length})`}
+              </option>
+              {adsetOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.meta_adset_id}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
             <input
@@ -142,7 +248,7 @@ export default function AdsDrilldownPanel({
               className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-7 pr-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
             />
           </div>
-          <div className="mt-1.5 text-[10px] text-gray-400">
+          <div className="text-[10px] text-gray-400">
             {filteredRows.length} / {rows.length} ads — click to drill in
           </div>
         </div>

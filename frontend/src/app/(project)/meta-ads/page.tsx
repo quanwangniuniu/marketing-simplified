@@ -33,6 +33,7 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Skeleton } from '@/components/ui/skeleton';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
+import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
 import {
   facebookApi,
@@ -165,8 +166,6 @@ function MetaAdsContent() {
   const [metricTab, setMetricTab] = useState<MetricKey>('spend');
   const [syncing, setSyncing] = useState(false);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
-  const [pageSize, setPageSize] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [viewTab, setViewTab] = useState<ViewKey>('overview');
 
   useEffect(() => {
@@ -292,19 +291,7 @@ function MetaAdsContent() {
   }, [summary]);
 
   const currency = summary?.currency || perf?.currency || 'USD';
-
   const campaigns = perf?.campaigns ?? [];
-  const totalCampaigns = campaigns.length;
-  const totalPages = Math.max(1, Math.ceil(totalCampaigns / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const pagedCampaigns = useMemo(
-    () => campaigns.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [campaigns, safePage, pageSize]
-  );
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [days, pageSize, selectedId, totalCampaigns]);
 
   if (loadingStatus) {
     return (
@@ -501,55 +488,14 @@ function MetaAdsContent() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">
-                Campaign performance · {totalCampaigns} campaigns
-              </h2>
-              <p className="text-xs text-gray-500">Sorted by spend (desc)</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-[11px] uppercase text-gray-500">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Status</th>
-                    <th className="px-4 py-2 font-medium">Campaign</th>
-                    <th className="px-4 py-2 font-medium text-right">Spend</th>
-                    <th className="px-4 py-2 font-medium text-right">CTR</th>
-                    <th className="px-4 py-2 font-medium text-right">CPC</th>
-                    <th className="px-4 py-2 font-medium text-right">Leads</th>
-                    <th className="px-4 py-2 font-medium text-right">CPL</th>
-                    <th className="px-4 py-2 font-medium text-right">Purchases</th>
-                    <th className="px-4 py-2 font-medium text-right">Revenue</th>
-                    <th className="px-4 py-2 font-medium text-right">ROAS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {totalCampaigns === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-xs text-gray-400">
-                        No campaign data. Try refreshing.
-                      </td>
-                    </tr>
-                  ) : (
-                    pagedCampaigns.map((c) => (
-                      <CampaignRow key={c.id} c={c} currency={currency} />
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {totalCampaigns > 0 && (
-              <PaginationBar
-                pageSize={pageSize}
-                onPageSizeChange={setPageSize}
-                currentPage={safePage}
-                totalPages={totalPages}
-                total={totalCampaigns}
-                onPageChange={setCurrentPage}
-              />
-            )}
-          </section>
+          {selectedId && (
+            <CampaignHierarchyTable
+              campaigns={campaigns}
+              currency={currency}
+              adAccountId={selectedId}
+              days={days}
+            />
+          )}
         </>
       )}
 

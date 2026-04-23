@@ -19,7 +19,14 @@ from rest_framework.views import APIView
 from facebook_integration.models import MetaAdAccount
 
 from .meta_client import MetaApiError, graph_get
-from .models import MetaAd, MetaAdCreative, MetaCampaign, MetaInsightDaily, MetaSyncRun
+from .models import (
+    MetaAd,
+    MetaAdCreative,
+    MetaAdSet,
+    MetaCampaign,
+    MetaInsightDaily,
+    MetaSyncRun,
+)
 from .serializers import (
     MetaAdSerializer,
     MetaCampaignSerializer,
@@ -462,12 +469,12 @@ class MetaCreativePerformanceView(APIView):
         })
 
 
-class MetaAdPerformanceView(APIView):
-    """Ad-level leaderboard used by the drill-down tab.
+class MetaAdSetPerformanceView(APIView):
+    """AdSet-level leaderboard — the missing middle layer of the hierarchy.
 
-    Returns one row per ad with rolling-window metrics plus the attached
-    creative summary — so the frontend picker can show thumbnails and
-    core perf in a single list without a second round-trip.
+    Accepts an optional `campaign_id` query param so the frontend can
+    narrow the list to just the adsets under a specific campaign (used
+    when expanding a campaign row in the Overview table).
     """
 
     permission_classes = [IsAuthenticated]
@@ -479,8 +486,143 @@ class MetaAdPerformanceView(APIView):
         today = _dt.date.today()
         since = today - _dt.timedelta(days=days - 1)
 
+        qs = MetaAdSet.objects.filter(
+            campaign__ad_account=ad_account
+        ).select_related("campaign").annotate(
+            total_spend=Sum(
+                "ads__insights_daily__spend",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_impressions=Sum(
+                "ads__insights_daily__impressions",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_clicks=Sum(
+                "ads__insights_daily__clicks",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_leads=Sum(
+                "ads__insights_daily__leads",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_purchases=Sum(
+                "ads__insights_daily__purchases",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_revenue=Sum(
+                "ads__insights_daily__revenue",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+        )
+
+        campaign_id = request.query_params.get("campaign_id")
+        if campaign_id:
+            try:
+                qs = qs.filter(campaign_id=int(campaign_id))
+            except ValueError:
+                return Response(
+                    {"detail": "campaign_id must be an integer."}, status=400
+                )
+
+        rows = []
+        for adset in qs:
+            spend = adset.total_spend or Decimal("0")
+            rev = adset.total_revenue or Decimal("0")
+            imp = adset.total_impressions or 0
+            clicks = adset.total_clicks or 0
+            leads = adset.total_leads or 0
+            purchases = adset.total_purchases or 0
+            rows.append({
+                "id": adset.id,
+                "meta_adset_id": adset.meta_adset_id,
+                "name": adset.name,
+                "effective_status": adset.effective_status,
+                "optimization_goal": adset.optimization_goal,
+                "daily_budget_cents": adset.daily_budget_cents,
+                "lifetime_budget_cents": adset.lifetime_budget_cents,
+                "campaign_id": adset.campaign_id,
+                "campaign_name": adset.campaign.name if adset.campaign else "",
+                "spend": str(spend),
+                "impressions": imp,
+                "clicks": clicks,
+                "leads": leads,
+                "purchases": purchases,
+                "revenue": str(rev),
+                "ctr": str(_safe_ratio(clicks, imp) * Decimal("100")),
+                "cpc": str(_safe_ratio(spend, clicks)),
+                "cpl": str(_safe_ratio(spend, leads)),
+                "cpa": str(_safe_ratio(spend, purchases)),
+                "roas": str(_safe_ratio(rev, spend)),
+            })
+        rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
+        return Response({
+            "ad_account_id": ad_account.id,
+            "currency": ad_account.currency,
+            "days": days,
+            "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "campaign_id": int(campaign_id) if campaign_id else None,
+            "adsets": rows,
+        })
+
+
+class MetaAdPerformanceView(APIView):
+    """Ad-level leaderboard used by the drill-down tab.
+
+    Returns one row per ad with rolling-window metrics plus the attached
+    creative summary — so the frontend picker can show thumbnails and
+    core perf in a single list without a second round-trip.
+
+    Accepts optional `campaign_id` and `adset_id` filters so the drill-down
+    panel can narrow the left list when a filter dropdown is active.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+
+    def get(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        base_qs = MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
+        campaign_id = request.query_params.get("campaign_id")
+        adset_id = request.query_params.get("adset_id")
+        if campaign_id:
+            try:
+                base_qs = base_qs.filter(adset__campaign_id=int(campaign_id))
+            except ValueError:
+                return Response(
+                    {"detail": "campaign_id must be an integer."}, status=400
+                )
+        if adset_id:
+            try:
+                base_qs = base_qs.filter(adset_id=int(adset_id))
+            except ValueError:
+                return Response(
+                    {"detail": "adset_id must be an integer."}, status=400
+                )
+
         qs = (
-            MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
+            base_qs
             .select_related("adset", "adset__campaign", "creative")
             .annotate(
                 total_spend=Sum(
