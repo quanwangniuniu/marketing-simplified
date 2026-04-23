@@ -128,11 +128,12 @@ export default function AdStockChart({
               const p = payload?.[0]?.payload;
               return p?.date ?? label;
             }}
-            formatter={(v: number | string, key) => {
+            formatter={(v: unknown, key) => {
               const mk = key as StockMetric;
-              if (CURRENCY_METRICS.includes(mk)) return [formatCurrency(v as number, currency), STOCK_METRIC_LABEL[mk]];
-              if (PERCENT_METRICS.includes(mk)) return [formatPercent(v as number), STOCK_METRIC_LABEL[mk]];
-              return [formatNumber(v as number), STOCK_METRIC_LABEL[mk]];
+              const n = typeof v === 'number' || typeof v === 'string' ? v : 0;
+              if (CURRENCY_METRICS.includes(mk)) return [formatCurrency(n as number, currency), STOCK_METRIC_LABEL[mk]];
+              if (PERCENT_METRICS.includes(mk)) return [formatPercent(n as number), STOCK_METRIC_LABEL[mk]];
+              return [formatNumber(n as number), STOCK_METRIC_LABEL[mk]];
             }}
           />
           {data.length > 0 && (

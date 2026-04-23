@@ -476,7 +476,8 @@ function MetaAdsContent() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      formatter={(value: number | string) => {
+                      formatter={(value: unknown) => {
+                        if (typeof value !== 'number' && typeof value !== 'string') return '—';
                         if (metricTab === 'spend' || metricTab === 'revenue') {
                           return formatCurrency(value, currency);
                         }
