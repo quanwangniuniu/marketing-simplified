@@ -93,7 +93,7 @@ export default function ListView({ tasks, loading, error }: ListViewProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
-              {(loading ? Array.from({ length: 6 }) : visible).map((task, index) => {
+              {(loading ? Array.from({ length: 6 }, () => undefined) : visible).map((task, index) => {
                 if (loading) {
                   return (
                     <tr key={`tasks-list-skeleton-${index}`}>
@@ -123,6 +123,10 @@ export default function ListView({ tasks, loading, error }: ListViewProps) {
                       </td>
                     </tr>
                   );
+                }
+
+                if (!task) {
+                  return null;
                 }
 
                 const priority = task.priority ?? 'MEDIUM';

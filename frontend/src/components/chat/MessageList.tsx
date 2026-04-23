@@ -75,7 +75,7 @@ function MessageListLoadingSkeleton({
             <LoadingBrickRow
               key={`message-loading-line-${groupIndex}-${lineIndex}`}
               widths={line}
-              align={group.align}
+              align={group.align === 'left' || group.align === 'right' ? group.align : undefined}
             />
           ))}
           {group.media ? (
