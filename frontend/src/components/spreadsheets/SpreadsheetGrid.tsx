@@ -974,7 +974,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
     ): { clampedRows: number; clampedCols: number; wasClamped: boolean } => {
       const clampedRows = Math.min(MAX_ROWS, Math.max(0, targetRows));
       const clampedCols = Math.min(MAX_COLUMNS, Math.max(0, targetCols));
-      const wasClamped = clampedRows < targetRows || clampedCols < targetCols;
+      const wasClamped = clampedRows !== targetRows || clampedCols !== targetCols;
 
       setRowCount(clampedRows);
       setColCount(clampedCols);
@@ -1227,7 +1227,16 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           willSendSheetDimensions = false;
         }
 
-        const p: Promise<void> = (async () => {
+        // Register a placeholder immediately so concurrent loadCellRange calls dedupe
+        // on the same tile, while the HTTP request only starts when a worker runs
+        // (RANGE_TILE_READ_CONCURRENCY limits in-flight reads).
+        let completeTileRead!: () => void;
+        const p = new Promise<void>((resolve) => {
+          completeTileRead = resolve;
+        });
+        inFlightForSheet.set(rangeKey, p);
+
+        newTileTasks.push(async () => {
           try {
             const response = await SpreadsheetAPI.readCellRange(
               spreadsheetId,
@@ -1296,11 +1305,9 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
             if (currentForSheet) {
               currentForSheet.delete(rangeKey);
             }
+            completeTileRead();
           }
-        })();
-
-        inFlightForSheet.set(rangeKey, p);
-        newTileTasks.push(() => p);
+        });
       }
 
       if (newTileTasks.length > 0) {
@@ -4276,11 +4283,23 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       const resizePersisted = await resizePromise;
       if (!resizePersisted) {
         // Roll back the optimistic apply so the user does not see "fake" data that
-        // was never written to the backend. Resets each touched cell to its
-        // pre-import raw_input by replaying the changes list in reverse.
-        applyCellValuesLocalBatch(
-          changes.map((c) => ({ row: c.row, col: c.col, value: c.prevValue })),
-        );
+        // was never written to the backend.
+        // - For smaller imports we have precise pre-import values in `changes`.
+        // - For larger imports `changes` may be intentionally empty, so fall back to
+        //   clearing the optimistically populated cells touched by this import.
+        const rollbackUpdates =
+          changes.length > 0
+            ? changes.map((c) => ({ row: c.row, col: c.col, value: c.prevValue }))
+            : Array.from(
+                operations.reduce((acc, op) => {
+                  acc.set(`${op.row}:${op.column}`, { row: op.row, col: op.column, value: '' });
+                  return acc;
+                }, new Map<string, { row: number; col: number; value: string }>()),
+              ).map(([, cell]) => cell);
+
+        if (rollbackUpdates.length > 0) {
+          applyCellValuesLocalBatch(rollbackUpdates);
+        }
         importAbortControllerRef.current = null;
         toast.error('Failed to resize grid for import');
         return;

@@ -264,6 +264,11 @@ export default function SpreadsheetDetailPage() {
     })();
 
     firstSheetPromiseRef.current = promise;
+    void promise.finally(() => {
+      if (firstSheetPromiseRef.current === promise) {
+        firstSheetPromiseRef.current = null;
+      }
+    });
     return promise;
   };
 
