@@ -8,6 +8,7 @@ import NavRail, { type MessagesNavView } from '@/components/messages/LeftSidebar
 import HomeSidebar from '@/components/messages/LeftSidebar/HomeSidebar';
 
 interface SlackMessagesLayoutProps {
+  loadingProjects?: boolean;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
 
@@ -29,6 +30,7 @@ interface SlackMessagesLayoutProps {
 }
 
 export default function SlackMessagesLayout({
+  loadingProjects = false,
   selectedProjectId,
   onSelectProject,
   chats,
@@ -44,7 +46,7 @@ export default function SlackMessagesLayout({
   onStartDM,
   chatPanel,
 }: SlackMessagesLayoutProps) {
-  const isMobileChatOpen = Boolean(currentChatId);
+  const isMobileChatOpen = Boolean(currentChatId && !isLoadingChats);
   const [navView, setNavView] = useState<MessagesNavView>('home');
 
   return (
@@ -63,6 +65,7 @@ export default function SlackMessagesLayout({
           data-testid="messages-left"
         >
           <ProjectRail
+            loading={loadingProjects}
             selectedProjectId={selectedProjectId}
             onSelectProject={onSelectProject}
           />
@@ -99,4 +102,3 @@ export default function SlackMessagesLayout({
     </div>
   );
 }
-

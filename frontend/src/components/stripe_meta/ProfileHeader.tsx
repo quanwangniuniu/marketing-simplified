@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import Button from '@/components/button/Button';
 import UserAvatar from '@/people/UserAvatar';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProfileHeaderProps {
   readonly user: {
@@ -14,11 +15,13 @@ interface ProfileHeaderProps {
     last_name?: string;
   };
   readonly onEditClick: () => void;
+  readonly loading?: boolean;
 }
 
 export default function ProfileHeader({
   user,
   onEditClick,
+  loading = false,
 }: ProfileHeaderProps) {
   const [cover, setCover] = useState('/bg-gradient.svg');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
@@ -62,6 +65,7 @@ export default function ProfileHeader({
             variant="ghost"
             size="md"
             onClick={() => coverInputRef.current?.click()}
+            disabled={loading}
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent text-white opacity-0 transition-opacity duration-200 hover:bg-white/10 group-hover:opacity-100"
           >
             Change cover
@@ -78,14 +82,19 @@ export default function ProfileHeader({
             <button
               type="button"
               onClick={() => avatarInputRef.current?.click()}
-              className="relative rounded-full border-4 border-white bg-gray-100 shadow-md"
+              disabled={loading}
+              className="relative rounded-full border-4 border-white bg-gray-100 shadow-md disabled:cursor-default"
               aria-label="Change avatar"
             >
-              <UserAvatar
-                user={{ name: displayName, avatar: avatarUrl || user?.avatar, email: user?.email }}
-                size="xl"
-                className="h-24 w-24 text-4xl"
-              />
+              {loading ? (
+                <Skeleton className="h-24 w-24 rounded-full" />
+              ) : (
+                <UserAvatar
+                  user={{ name: displayName, avatar: avatarUrl || user?.avatar, email: user?.email }}
+                  size="xl"
+                  className="h-24 w-24 text-4xl"
+                />
+              )}
             </button>
             <input
               ref={avatarInputRef}
@@ -100,9 +109,18 @@ export default function ProfileHeader({
         <div className="pb-6 pt-16">
           <div className="flex items-start justify-between gap-4 pl-20 pr-6">
             <div className="w-24 text-center">
-              <p className="text-lg font-semibold text-gray-900 truncate">{displayName}</p>
-              {user?.email && (
-                <p className="text-sm text-gray-500 mt-1">{user.email}</p>
+              {loading ? (
+                <>
+                  <Skeleton className="mx-auto h-6 w-24" />
+                  <Skeleton className="mx-auto mt-2 h-4 w-32" />
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-semibold text-gray-900 truncate">{displayName}</p>
+                  {user?.email && (
+                    <p className="text-sm text-gray-500 mt-1">{user.email}</p>
+                  )}
+                </>
               )}
             </div>
           </div>

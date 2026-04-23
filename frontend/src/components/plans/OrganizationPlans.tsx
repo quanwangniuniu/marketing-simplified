@@ -40,9 +40,9 @@ function PlanCardSkeleton() {
   );
 }
 
-export default function OrganizationPlans() {
+export default function OrganizationPlans({ loading = false }: { loading?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const { plans, loading, error, handleSubscribe } = usePlan();
+  const { plans, loading: plansLoading, error, handleSubscribe } = usePlan(!loading);
   const user = useAuthStore((state) => state.user);
   const currentPlanId = user?.organization?.plan_id;
   const isOrgAdmin = !!user?.roles?.includes('Organization Admin');
@@ -93,7 +93,7 @@ export default function OrganizationPlans() {
           </div>
 
           <div className="grid border-l border-t border-gray-300 overflow-hidden" style={{gridTemplateRows: 'auto', gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))', gridAutoRows: 'max-content', gridAutoColumns: '1fr'}}>
-            {loading ? (
+            {loading || plansLoading ? (
               Array.from({ length: 3 }).map((_, index) => (
                 <PlanCardSkeleton key={`organization-plan-skeleton-${index}`} />
               ))

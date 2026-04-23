@@ -14,7 +14,13 @@ import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
 
-export default function MessagePageContent() {
+interface MessagePageContentProps {
+  loading?: boolean;
+}
+
+export default function MessagePageContent({
+  loading = false,
+}: MessagePageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore(state => state.user);
@@ -47,7 +53,7 @@ export default function MessagePageContent() {
   
   // Connect to WebSocket for real-time updates
   const { connected } = useChatSocket(userId, {
-    enabled: true,
+    enabled: !loading,
     onMessage: (message) => {
       console.log('[MessagePage] New message received:', message);
     },
@@ -64,6 +70,8 @@ export default function MessagePageContent() {
   const hasFetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
+
     const projectIdParam = searchParams.get('projectId');
     const chatIdParam = searchParams.get('chatId');
     const projectIdFromQuery = projectIdParam ? Number(projectIdParam) : NaN;
@@ -84,7 +92,7 @@ export default function MessagePageContent() {
     ) {
       setCurrentChat(chatIdFromQuery);
     }
-  }, [searchParams, selectedProjectId, currentChatId, setCurrentChat]);
+  }, [currentChatId, loading, searchParams, selectedProjectId, setCurrentChat]);
 
   const replaceMessagesQuery = useCallback(
     (next: { projectId?: number | null; chatId?: number | null; messageId?: number | null }) => {
@@ -121,7 +129,7 @@ export default function MessagePageContent() {
         fetchChats();
       }
     }
-  }, [selectedProjectId, connected, fetchChats]);
+  }, [connected, selectedProjectId, fetchChats]);
   
   // Get current chat from store
   const currentChat = chats.find(chat => chat.id === currentChatId);
@@ -174,10 +182,12 @@ export default function MessagePageContent() {
   };
   
   const handleCreateChat = () => {
+    if (loading) return;
     setIsCreateDialogOpen(true);
   };
 
   const handleCreateChannel = () => {
+    if (loading) return;
     setIsCreateChannelDialogOpen(true);
   };
   
@@ -241,6 +251,7 @@ export default function MessagePageContent() {
             
             {/* Project Selector */}
             <ProjectSelector
+              loading={loading}
               selectedProjectId={selectedProjectId}
               onSelectProject={handleSelectProject}
             />
@@ -262,6 +273,7 @@ export default function MessagePageContent() {
       </div>
       
       <SlackMessagesLayout
+        loadingProjects={loading}
         selectedProjectId={selectedProjectId}
         onSelectProject={handleSelectProject}
         chats={filteredChats}

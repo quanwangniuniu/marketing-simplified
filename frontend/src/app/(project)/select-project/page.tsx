@@ -58,10 +58,15 @@ export default function SelectProjectPage() {
   }, [fetchProjects, loadPendingInvites]);
 
   useEffect(() => {
-    if (defaultProjectId !== null) return;
     const current = projects.find((p) => p.is_active);
-    if (current) setDefaultProjectId(current.id);
-  }, [projects, defaultProjectId]);
+
+    if (current) {
+      setDefaultProjectId(current.id);
+      return;
+    }
+
+    setDefaultProjectId((prev) => (prev !== null && projects.some((project) => project.id === prev) ? prev : null));
+  }, [projects]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -80,13 +85,20 @@ export default function SelectProjectPage() {
       });
   }, [projects, search]);
 
-  const handleSelect = (id: number) => {
-    void setActiveProject(id, false);
+  const handleSelect = async (id: number) => {
+    const didUpdate = await setActiveProject(id, false);
+    if (didUpdate !== false) {
+      setDefaultProjectId(id);
+    }
+    return didUpdate;
   };
 
-  const handleSetDefault = (id: number) => {
-    setDefaultProjectId(id);
-    void setActiveProject(id, false);
+  const handleSetDefault = async (id: number) => {
+    const didUpdate = await setActiveProject(id, false);
+    if (didUpdate !== false) {
+      setDefaultProjectId(id);
+    }
+    return didUpdate;
   };
 
   // The second arg to setActiveProject is hard-coded `false` on this page:

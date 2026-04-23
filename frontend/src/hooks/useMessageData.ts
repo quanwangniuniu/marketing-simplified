@@ -25,10 +25,12 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
     return allMessages[chatId] || EMPTY_MESSAGES;
   }, [chatId, allMessages]);
   
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isFetchingMessages, setIsFetchingMessages] = useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isLoadingMessages = isFetchingMessages || isLoadingMoreMessages;
 
   // Fetch messages for current chat
   const fetchMessages = useCallback(async (chatIdToFetch?: number) => {
@@ -38,9 +40,9 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
     const { setMessages } = useChatStore.getState();
     
     try {
-      setIsLoadingMessages(true);
+      setIsFetchingMessages(true);
       setError(null);
-      
+
       const response = await getMessages({
         chat_id: targetChatId,
         limit,
@@ -55,7 +57,7 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
       console.error('Error fetching messages:', err);
       toast.error(errorMsg);
     } finally {
-      setIsLoadingMessages(false);
+      setIsFetchingMessages(false);
     }
   }, [chatId, limit]);
 
@@ -66,7 +68,7 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
     const { prependMessages } = useChatStore.getState();
     
     try {
-      setIsLoadingMessages(true);
+      setIsLoadingMoreMessages(true);
       setError(null);
       
       // Get the oldest message's timestamp for cursor-based pagination
@@ -89,7 +91,7 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
       setError(errorMsg);
       console.error('Error loading more messages:', err);
     } finally {
-      setIsLoadingMessages(false);
+      setIsLoadingMoreMessages(false);
     }
   }, [chatId, hasMore, isLoadingMessages, currentMessages, limit]);
 
@@ -197,11 +199,13 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
       fetchMessages();
       setHasMore(true); // Reset pagination
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFetch, chatId]); // Don't include fetchMessages to avoid infinite loop
 
   return {
     messages: currentMessages,
     isLoadingMessages,
+    isLoadingMoreMessages,
     isSending,
     hasMore,
     error,
@@ -213,4 +217,3 @@ export function useMessageData(options: UseMessageDataOptions = {}) {
     markAllAsRead,
   };
 }
-

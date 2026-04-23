@@ -315,6 +315,8 @@ export interface MessageListProps {
   onLoadMore: () => void;
   hasMore: boolean;
   isLoading: boolean;
+  isLoadingMoreMessages?: boolean;
+  showSwitchLoadingSkeleton?: boolean;
   roleByUserId?: Record<number, string>;
   isGroupChat?: boolean;
   isSelectMode?: boolean;

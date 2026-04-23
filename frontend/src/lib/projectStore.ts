@@ -10,6 +10,7 @@ interface ProjectState {
   activeProjectIds: number[];
   inactiveProjectIds: number[];
   completedProjectIds: number[];
+  hasHydrated: boolean;
   loading: boolean;
   error: string | null;
   setProjects: (projects: ProjectData[]) => void;
@@ -20,6 +21,7 @@ interface ProjectState {
   addInactiveProjectId: (id: number) => void;
   toggleCompletedProjectId: (id: number) => void;
   setCompletedProjectIds: (ids: number[] | ((prev: number[]) => number[])) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearProjects: () => void;
@@ -33,6 +35,7 @@ export const useProjectStore = create<ProjectState>()(
       activeProjectIds: [],
       inactiveProjectIds: [],
       completedProjectIds: [],
+      hasHydrated: false,
       loading: false,
       error: null,
       setProjects: (projects) => set({ projects }),
@@ -93,6 +96,7 @@ export const useProjectStore = create<ProjectState>()(
           const resolvedIds = typeof ids === 'function' ? ids(state.completedProjectIds) : ids;
           return { completedProjectIds: Array.from(new Set(resolvedIds)) };
         }),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       setLoading: (loading) => set({ loading }),
       setError: (error) => set({ error }),
       clearProjects: () =>
@@ -102,12 +106,16 @@ export const useProjectStore = create<ProjectState>()(
           activeProjectIds: [],
           inactiveProjectIds: [],
           completedProjectIds: [],
+          hasHydrated: true,
           loading: false,
           error: null,
         }),
     }),
     {
       name: 'project-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         activeProject: state.activeProject,
         activeProjectIds: state.activeProjectIds,

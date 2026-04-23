@@ -14,6 +14,7 @@ import type { TaskData } from "@/types/task";
 import SubtaskModal from "@/components/tasks/SubtaskModal";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import BulkActionBar from "@/components/tasks/BulkActionBar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface MemberOption {
   id: number;
@@ -56,6 +57,7 @@ interface JiraTasksViewProps {
   onTaskUpdate?: () => void;
   renderList?: () => React.ReactNode;
   renderTimeline?: () => React.ReactNode;
+  loading?: boolean;
 }
 
 const ViewButton = ({
@@ -336,6 +338,181 @@ const JiraTasksTimeline = () => (
   </div>
 );
 
+const taskListSkeletonRows = [
+  { title: "w-44", meta: "w-28" },
+  { title: "w-36", meta: "w-24" },
+  { title: "w-48", meta: "w-20" },
+  { title: "w-40", meta: "w-32" },
+  { title: "w-52", meta: "w-24" },
+  { title: "w-[8.5rem]", meta: "w-20" },
+];
+
+function JiraTasksListSkeleton() {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white">
+      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded-sm" />
+          <span className="font-semibold text-slate-600">Created</span>
+        </div>
+      </div>
+      <div className="max-h-[70vh] space-y-2 overflow-y-auto p-2">
+        {taskListSkeletonRows.map((item, index) => (
+          <div
+            key={`jira-task-list-skeleton-${index}`}
+            className="rounded-md border border-transparent px-3 py-2"
+          >
+            <div className="flex items-start gap-2">
+              <Skeleton className="mt-0.5 h-4 w-4 rounded-sm" />
+              <Skeleton className="mt-0.5 h-[18px] w-[18px] rounded-sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <Skeleton className={`mt-2 h-4 ${item.title}`} />
+              </div>
+              <Skeleton className="h-7 w-7 rounded-full" />
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className={`h-4 ${item.meta}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-slate-200 px-3 py-2 text-[11px] text-slate-500">
+        <Skeleton className="h-4 w-20" />
+      </div>
+    </div>
+  );
+}
+
+function JiraTaskDetailsSkeleton() {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-6 py-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-[18px] w-[18px] rounded-sm" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+          </div>
+          <Skeleton className="h-7 w-80 max-w-full" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-9 w-20 rounded-md" />
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+      </div>
+      <div className="grid gap-4 px-6 py-5 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="space-y-4">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Description
+            </div>
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-8/12" />
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Subtasks
+              </div>
+              <Skeleton className="h-6 w-6 rounded" />
+            </div>
+            <div className="mt-2 space-y-3">
+              {[0, 1, 2].map((index) => (
+                <div key={`subtask-skeleton-${index}`} className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4 rounded-sm" />
+                  <Skeleton
+                    className={`h-4 ${["w-40", "w-52", "w-36"][index % 3]}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Activity
+            </div>
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </div>
+          </div>
+        </div>
+        <aside className="min-w-0 space-y-4">
+          <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
+              Details
+              <Settings2 className="h-4 w-4 text-slate-400" />
+            </div>
+            <div className="mt-3 space-y-3 text-sm">
+              {[
+                { label: "Assignee", value: "w-full" },
+                { label: "Approver", value: "w-full" },
+                { label: "Work type", value: "w-28" },
+                { label: "Due date", value: "w-full" },
+                { label: "Project", value: "w-36" },
+              ].map((field) => (
+                <div
+                  key={field.label}
+                  className="grid min-w-0 grid-cols-[110px_minmax(0,1fr)] items-center gap-3"
+                >
+                  <span className="text-slate-500">{field.label}</span>
+                  <Skeleton className={`h-9 ${field.value}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-white p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Quick actions
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Skeleton className="h-7 w-24 rounded-full" />
+              <Skeleton className="h-7 w-24 rounded-full" />
+              <Skeleton className="h-7 w-24 rounded-full" />
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function JiraTasksTimelineSkeleton() {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-6">
+      <div className="grid gap-3 md:grid-cols-[180px_repeat(5,minmax(0,1fr))]">
+        <Skeleton className="h-8 w-full" />
+        {[0, 1, 2, 3, 4].map((index) => (
+          <Skeleton key={`timeline-header-skeleton-${index}`} className="h-8 w-full" />
+        ))}
+      </div>
+      <div className="mt-4 space-y-3">
+        {[0, 1, 2, 3].map((row) => (
+          <div
+            key={`timeline-row-skeleton-${row}`}
+            className="grid gap-3 md:grid-cols-[180px_repeat(5,minmax(0,1fr))]"
+          >
+            <Skeleton className="h-10 w-full" />
+            <div className="md:col-span-5">
+              <Skeleton
+                className={`h-10 rounded-xl ${["w-[72%]", "w-[54%]", "w-[68%]", "w-[46%]"][row % 4]}`}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const JiraTasksView: React.FC<JiraTasksViewProps> = ({
   tasks,
   viewMode,
@@ -348,6 +525,7 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
   onTaskUpdate,
   renderList,
   renderTimeline,
+  loading = false,
 }) => {
   const [selectedTaskId, setSelectedTaskId] = useState<
     JiraTaskItem["id"] | null
@@ -777,31 +955,40 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
 
   return (
     <>
-    <div className="space-y-4">
-      <JiraTasksToolbar
-        viewMode={viewMode}
-        onViewModeChange={onViewModeChange}
-        searchPlaceholder={searchPlaceholder}
-        searchValue={searchValue}
-        onSearchChange={onSearchChange}
-        rightOfSearch={rightOfSearch}
-      />
-      {viewMode === "list" &&
-        (renderList ? (
-          renderList()
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <JiraTasksList
-              tasks={tasks}
-              selectedTaskId={selectedTaskId}
-              onSelectTask={setSelectedTaskId}
-              selectedIds={selectedIds}
-              onToggleSelect={handleToggleSelect}
-              onSelectAll={handleSelectAll}
-              onActivateTask={handleActivateTask}
-            />
-            {selectedTask ? (
-              <div data-testid="task-detail-panel" className="rounded-md border border-slate-200 bg-white">
+      <div className="space-y-4">
+        <JiraTasksToolbar
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
+          searchPlaceholder={searchPlaceholder}
+          searchValue={searchValue}
+          onSearchChange={onSearchChange}
+          rightOfSearch={rightOfSearch}
+        />
+        {viewMode === "list" &&
+          (renderList ? (
+            renderList()
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+              {loading ? (
+                <JiraTasksListSkeleton />
+              ) : (
+                <JiraTasksList
+                  tasks={tasks}
+                  selectedTaskId={selectedTaskId}
+                  onSelectTask={setSelectedTaskId}
+                  selectedIds={selectedIds}
+                  onToggleSelect={handleToggleSelect}
+                  onSelectAll={handleSelectAll}
+                  onActivateTask={handleActivateTask}
+                />
+              )}
+              {loading ? (
+                <JiraTaskDetailsSkeleton />
+              ) : selectedTask ? (
+                <div
+                  data-testid="task-detail-panel"
+                  className="rounded-md border border-slate-200 bg-white"
+                >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-6 py-4">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -1186,61 +1373,67 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
                     </div>
                   </aside>
                 </div>
-              </div>
-            ) : (
-              <div className="flex min-h-[320px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-white text-sm text-slate-500">
-                Select a task to preview its details.
-              </div>
-            )}
-          </div>
-        ))}
-      {viewMode === "timeline" &&
-        (renderTimeline ? renderTimeline() : <JiraTasksTimeline />)}
-      {selectedIds.size > 0 && (
-        <BulkActionBar
-          selectedIds={Array.from(selectedIds)}
-          selectedTasks={tasks
-            .filter((t) => selectedIds.has(Number(t.id)))
-            .map((t) => ({
-              id: Number(t.id),
-              status: t.statusRaw ?? t.status,
-            }))}
-          projectId={tasks[0]?.projectId}
-          onSuccess={() => {
-            setSelectedIds(new Set());
-            onTaskUpdate?.();
-          }}
-        />
-      )}
-    </div>
-    <ConfirmDialog
-      isOpen={!!taskToDelete}
-      title="Delete task"
-      message={
-        taskToDelete
-          ? `Delete task #${taskToDelete.id} "${taskToDelete.summary}"?`
-          : ""
-      }
-      type="danger"
-      confirmText="Delete"
-      onConfirm={async () => {
-        if (!taskToDelete) return;
-        try {
-          await TaskAPI.deleteTask(Number(taskToDelete.id));
-          toast.success("Task deleted");
-          onTaskUpdate?.();
-        } catch (err: unknown) {
-          const msg =
-            err && typeof err === "object" && "message" in err
-              ? String((err as { message: string }).message)
-              : "Failed to delete task";
-          toast.error(msg);
+                </div>
+              ) : (
+                <div className="flex min-h-[320px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+                  Select a task to preview its details.
+                </div>
+              )}
+            </div>
+          ))}
+        {viewMode === "timeline" &&
+          (loading ? (
+            <JiraTasksTimelineSkeleton />
+          ) : renderTimeline ? (
+            renderTimeline()
+          ) : (
+            <JiraTasksTimeline />
+          ))}
+        {!loading && selectedIds.size > 0 && (
+          <BulkActionBar
+            selectedIds={Array.from(selectedIds)}
+            selectedTasks={tasks
+              .filter((t) => selectedIds.has(Number(t.id)))
+              .map((t) => ({
+                id: Number(t.id),
+                status: t.statusRaw ?? t.status,
+              }))}
+            projectId={tasks[0]?.projectId}
+            onSuccess={() => {
+              setSelectedIds(new Set());
+              onTaskUpdate?.();
+            }}
+          />
+        )}
+      </div>
+      <ConfirmDialog
+        isOpen={!!taskToDelete}
+        title="Delete task"
+        message={
+          taskToDelete
+            ? `Delete task #${taskToDelete.id} "${taskToDelete.summary}"?`
+            : ""
         }
-        setTaskToDelete(null);
-      }}
-      onCancel={() => setTaskToDelete(null)}
-    />
-  </>
+        type="danger"
+        confirmText="Delete"
+        onConfirm={async () => {
+          if (!taskToDelete) return;
+          try {
+            await TaskAPI.deleteTask(Number(taskToDelete.id));
+            toast.success("Task deleted");
+            onTaskUpdate?.();
+          } catch (err: unknown) {
+            const msg =
+              err && typeof err === "object" && "message" in err
+                ? String((err as { message: string }).message)
+                : "Failed to delete task";
+            toast.error(msg);
+          }
+          setTaskToDelete(null);
+        }}
+        onCancel={() => setTaskToDelete(null)}
+      />
+    </>
   );
 };
 

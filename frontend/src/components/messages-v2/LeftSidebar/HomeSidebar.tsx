@@ -16,6 +16,7 @@ import FilesSidebarView from './FilesSidebarView';
 import ActivitySidebarView from './ActivitySidebarView';
 import ProjectMembersSection from './ProjectMembersSection';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function normalizeChat(c: Chat): Chat {
   const raw = c.project_id ?? (c as { project?: number }).project;
@@ -70,6 +71,38 @@ function Section({
   );
 }
 
+function SidebarRowsSkeleton({
+  rows = 4,
+  withHeading = false,
+  variant = 'chat',
+}: {
+  rows?: number;
+  withHeading?: boolean;
+  variant?: 'chat' | 'member';
+}) {
+  const isMember = variant === 'member';
+  return (
+    <div className="px-3 py-2">
+      {withHeading ? <Skeleton className="mb-3 h-3 w-24" /> : null}
+      <div className="space-y-0.5">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div
+            key={`messages-sidebar-skeleton-${index}`}
+            className="flex min-h-[36px] items-center gap-2 rounded-md px-3 py-1.5"
+            data-testid="messages-sidebar-skeleton-row"
+            data-skeleton-variant={variant}
+          >
+            <Skeleton className={isMember ? 'h-6 w-6 rounded-full' : 'h-4 w-4 rounded'} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomeSidebar({
   view,
   onChangeView,
@@ -90,6 +123,7 @@ export default function HomeSidebar({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [starredOrder, setStarredOrder] = useState<number[]>([]);
   const [starLoading, setStarLoading] = useState(false);
+  const [hasLoadedStarred, setHasLoadedStarred] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
 
   const { groupChats, privateChats } = useMemo(() => {
@@ -142,25 +176,35 @@ export default function HomeSidebar({
   );
 
   const loadStarred = useCallback(async () => {
-    if (!selectedProjectId || view !== 'home') {
+    if (!selectedProjectId) {
       setStarredOrder([]);
+      setHasLoadedStarred(false);
       return;
     }
     try {
       setStarLoading(true);
       const rows = await listStarredChats(selectedProjectId);
       setStarredOrder(rows.map((r) => r.chat.id));
+      setHasLoadedStarred(true);
     } catch {
       toast.error('Could not load starred chats');
       setStarredOrder([]);
+      setHasLoadedStarred(true);
     } finally {
       setStarLoading(false);
     }
-  }, [selectedProjectId, view]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
-    void loadStarred();
-  }, [loadStarred]);
+    if (view === 'home' && selectedProjectId) {
+      void loadStarred();
+    }
+  }, [loadStarred, selectedProjectId, view]);
+
+  useEffect(() => {
+    setStarredOrder([]);
+    setHasLoadedStarred(false);
+  }, [selectedProjectId]);
 
   const starredChatsOrdered = useMemo(() => {
     return starredOrder
@@ -263,13 +307,42 @@ export default function HomeSidebar({
   );
 
   const mainListContent = () => {
+    const showHome = view === 'home';
+    const showDmsOnly = view === 'dms';
+
     if (!selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">{emptyState}</div>;
     }
     if (isLoading) {
+      if (view === 'activity' || view === 'files') {
+        return <SidebarRowsSkeleton rows={2} withHeading />;
+      }
+
       return (
-        <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
+        <div className="pb-2">
+          {showHome && (
+            <Section title="Starred" icon={<Star className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={1} />
+            </Section>
+          )}
+
+          {showHome && (
+            <Section title="Channels" icon={<Hash className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={1} />
+            </Section>
+          )}
+
+          {(showHome || showDmsOnly) && (
+            <Section title="Direct messages" icon={<Users className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={1} />
+            </Section>
+          )}
+
+          {(showHome || showDmsOnly) && selectedProjectId && (
+            <Section title="Project members" icon={<User className="w-3.5 h-3.5" />}>
+              <SidebarRowsSkeleton rows={1} variant="member" />
+            </Section>
+          )}
         </div>
       );
     }
@@ -280,9 +353,6 @@ export default function HomeSidebar({
     if (view === 'files') {
       return <FilesSidebarView selectedProjectId={selectedProjectId} />;
     }
-
-    const showHome = view === 'home';
-    const showDmsOnly = view === 'dms';
 
     if (showDmsOnly && privateChats.length === 0 && !selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">No direct messages</div>;
@@ -330,7 +400,9 @@ export default function HomeSidebar({
               ) : null
             }
           >
-            {starredChatsOrdered.length === 0 ? (
+            {starLoading && !hasLoadedStarred ? (
+              <SidebarRowsSkeleton rows={1} />
+            ) : starredChatsOrdered.length === 0 && hasLoadedStarred ? (
               <div
                 className="px-3 py-6 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg mx-1 min-h-[4rem] flex items-center justify-center text-center"
                 onDragOver={handleDragOver}

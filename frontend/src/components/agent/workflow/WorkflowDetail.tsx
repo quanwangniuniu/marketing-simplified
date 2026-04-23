@@ -5,6 +5,7 @@ import {
   ArrowLeft, Plus, GripVertical, Trash2, Save, Lock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { cn } from "@/lib/utils"
 import type {
@@ -125,8 +126,52 @@ export function WorkflowDetail({ workflowId, onBack, onUpdate }: WorkflowDetailP
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        Loading...
+      <div className="h-full flex flex-col p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div className="flex-1" />
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+
+        <div className="space-y-3 mb-6">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Name</label>
+            <Skeleton className="h-9 w-full rounded-md" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Description</label>
+            <Skeleton className="h-20 w-full rounded-md" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Status</label>
+            <Skeleton className="h-9 w-32 rounded-md" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground">Steps</h2>
+          <Skeleton className="h-7 w-24 rounded-md" />
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-1.5">
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <div
+              key={`workflow-step-skeleton-${idx}`}
+              className="flex items-center gap-2 rounded-md border border-border bg-background p-2"
+            >
+              <Skeleton className="h-4 w-4 rounded-sm" />
+              <Skeleton className="h-6 w-6 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-48 rounded-sm" />
+                <Skeleton className="h-3 w-24 rounded-sm" />
+              </div>
+              <Skeleton className="h-4 w-4 rounded-sm" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

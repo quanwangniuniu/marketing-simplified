@@ -31,7 +31,7 @@ interface UsePlanReturn {
   handleSubscribe: (planId: number) => Promise<void>;
 }
 
-export default function usePlan(): UsePlanReturn {
+export default function usePlan(enabled = true): UsePlanReturn {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -189,8 +189,9 @@ export default function usePlan(): UsePlanReturn {
   };
 
   useEffect(() => {
+    if (!enabled) return;
     fetchPlans();
-  }, []);
+  }, [enabled]);
 
   return {
     plans,
@@ -203,4 +204,3 @@ export default function usePlan(): UsePlanReturn {
     handleSubscribe
   };
 }
-

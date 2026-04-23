@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectRailProps {
+  loading?: boolean;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
 }
@@ -19,11 +21,18 @@ function getInitials(name: string): string {
   return `${first}${second}`.toUpperCase();
 }
 
-export default function ProjectRail({ selectedProjectId, onSelectProject }: ProjectRailProps) {
+export default function ProjectRail({
+  loading = false,
+  selectedProjectId,
+  onSelectProject,
+}: ProjectRailProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const projectRailLoading = loading || isLoading;
 
   useEffect(() => {
+    if (loading) return;
+
     let mounted = true;
     (async () => {
       try {
@@ -38,7 +47,7 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loading]);
 
   const selectedIndex = useMemo(() => {
     if (!selectedProjectId) return -1;
@@ -56,12 +65,12 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
       </div>
 
       <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-        {isLoading ? (
+        {projectRailLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div
+              <Skeleton
                 key={idx}
-                className="w-full h-10 rounded-lg bg-gray-200 animate-pulse"
+                className="w-full h-10 rounded-lg"
               />
             ))}
           </div>
@@ -105,4 +114,3 @@ export default function ProjectRail({ selectedProjectId, onSelectProject }: Proj
     </div>
   );
 }
-

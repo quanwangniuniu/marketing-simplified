@@ -27,7 +27,7 @@ function MessagesV2Content() {
 
 export default function MessagesV2Page() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute renderChildrenWhileLoading>
       <MessagesV2Content />
     </ProtectedRoute>
   );

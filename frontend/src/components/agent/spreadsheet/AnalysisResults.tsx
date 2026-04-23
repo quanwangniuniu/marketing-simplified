@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { AlertTriangle, AlertCircle, ChevronDown, ChevronUp, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 // AgentAPI removed — analysis results come from pipeline SSE
-import { AgentAnalysisCardSkeleton } from "@/components/agent/skeletons/AgentSkeletons"
 
 interface AnomalyCard {
   id: number
@@ -55,10 +55,6 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
   const selectedCount = anomalies.filter((a) => a.selected).length
   const isLoading = loadingOverride || loading
 
-  if (expanded && isLoading) {
-    return <AgentAnalysisCardSkeleton />
-  }
-
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
@@ -71,8 +67,9 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
             </CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {isLoading ? "Loading..." : `${anomalies.length} findings`}
+              {isLoading ? " " : `${anomalies.length} findings`}
             </span>
+            {isLoading && <Skeleton className="h-3 w-16" />}
             {expanded ? (
               <ChevronUp className="w-4 h-4 text-muted-foreground" />
             ) : (
@@ -84,7 +81,24 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
       {expanded && (
         <CardContent className="space-y-3">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Analyzing data...</p>
+            <>
+              {Array.from({ length: 2 }, (_, index) => (
+                <div
+                  key={`analysis-loading-card-${index}`}
+                  className="rounded-lg border border-border bg-muted/10 p-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <Skeleton className="mt-0.5 h-4 w-4 rounded-full" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-8/12" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <Skeleton className="h-10 w-full rounded-md" />
+            </>
           ) : anomalies.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">No anomalies detected</p>
           ) : (
