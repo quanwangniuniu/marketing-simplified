@@ -1,20 +1,66 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Bot } from 'lucide-react';
 import { AgentLayoutProvider } from './AgentLayoutContext';
 import { AgentChatPage } from './chat/AgentChatPage';
 import { useAgentSidePanelStore } from '@/lib/agentSidePanelStore';
 
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 420;
+
 export default function AgentSidePanel() {
   const { isOpen, close } = useAgentSidePanelStore();
+  const [width, setWidth] = useState(MAX_WIDTH);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(MAX_WIDTH);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = width;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  }, [width]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = startX.current - e.clientX;
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta));
+      setWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   return (
     <aside
-      className={`h-screen border-l border-gray-200 bg-white shrink-0 transition-all duration-300 overflow-hidden ${
-        isOpen ? 'w-[420px]' : 'w-0'
+      className={`h-screen border-l border-gray-200 bg-white shrink-0 overflow-hidden flex ${
+        isOpen ? '' : 'w-0'
       }`}
+      style={isOpen ? { width } : undefined}
     >
-      <div className="w-[420px] h-full flex flex-col">
+      {/* Drag handle */}
+      {isOpen && (
+        <div
+          onMouseDown={onMouseDown}
+          className="w-1 h-full cursor-ew-resize hover:bg-[#3CCED7]/40 active:bg-[#3CCED7]/60 shrink-0 transition-colors"
+        />
+      )}
+
+      <div className="flex-1 h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-2">

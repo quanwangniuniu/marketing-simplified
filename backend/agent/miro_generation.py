@@ -41,6 +41,39 @@ def load_miro_snapshot_rules() -> dict[str, Any]:
     return json.loads(MIRO_RULES_PATH.read_text(encoding="utf-8"))
 
 
+def _parse_number(value: Any, default: float = 0.0) -> float:
+    """Convert a value to float, stripping CSS units like 'px', 'em', '%' if present."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip().rstrip("pxemremvwvh%").strip()
+        try:
+            return float(stripped)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
+def _sanitize_snapshot_numbers(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Strip CSS units from all numeric fields in a Gemini-generated snapshot."""
+    numeric_item_fields = ("x", "y", "width", "height", "z_index")
+    numeric_style_fields = ("fontSize", "strokeWidth", "borderRadius")
+
+    items = snapshot.get("items", [])
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for field in numeric_item_fields:
+            if field in item:
+                item[field] = _parse_number(item[field], 0)
+        style = item.get("style")
+        if isinstance(style, dict):
+            for field in numeric_style_fields:
+                if field in style:
+                    style[field] = _parse_number(style[field], 14 if field == "fontSize" else 0)
+    return snapshot
+
+
 def _truncate_text(value: str | None, limit: int) -> str:
     if not value:
         return ""
@@ -472,6 +505,7 @@ def call_gemini_miro_generator(
         timeout=300,
     )
     snapshot = _extract_snapshot_candidate(outputs)
+    snapshot = _sanitize_snapshot_numbers(snapshot)
     snapshot = normalize_miro_snapshot_layout(snapshot)
     return validate_miro_snapshot(snapshot)
 

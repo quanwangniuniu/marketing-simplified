@@ -11,6 +11,7 @@ import ChatFAB from '@/components/global-chat/ChatFAB';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import Modal from '@/components/ui/Modal';
 import { useProjects } from '@/hooks/useProjects';
+import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI, type ProjectInvitationData } from '@/lib/api/projectApi';
 
 export default function SelectProjectPage() {
@@ -80,7 +81,11 @@ export default function SelectProjectPage() {
       });
   }, [projects, search]);
 
+  const storeSetActiveProject = useProjectStore((s) => s.setActiveProject);
+
   const handleSelect = (id: number) => {
+    const project = projects.find((p) => p.id === id);
+    if (project) storeSetActiveProject(project);
     void setActiveProject(id, false);
   };
 

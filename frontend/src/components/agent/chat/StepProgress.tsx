@@ -32,7 +32,7 @@ export function StepProgress({ steps, className }: StepProgressProps) {
   if (steps.length === 0) return null
 
   return (
-    <div className={cn("flex items-center gap-1 py-2 px-3 rounded-lg bg-muted/30 border border-border", className)}>
+    <div className={cn("flex items-center gap-1 py-2 px-3 rounded-lg bg-muted/30 border border-border overflow-x-auto scrollbar-none", className)}>
       {steps.map((step, idx) => {
         const config = statusConfig[step.status] || statusConfig.pending
         const Icon = config.icon

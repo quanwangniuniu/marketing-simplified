@@ -1,6 +1,6 @@
 "use client"
 
-import { FileCheck, ListTodo, LayoutTemplate, Send, UploadCloud } from "lucide-react"
+import { FileCheck, ListTodo, UploadCloud } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { WorkflowStepState } from "@/types/agent"
 
@@ -42,30 +42,6 @@ export function ActionBar({ stepState, onAction, onReupload, disabled }: ActionB
         </Button>
       )}
 
-      {stepState.tasksCreated && (
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-xs"
-            disabled={disabled}
-            onClick={() => onAction("generate_miro")}
-          >
-            <LayoutTemplate className="h-3.5 w-3.5" />
-            Generate Miro
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-xs"
-            disabled={disabled}
-            onClick={() => onAction("distribute_message")}
-          >
-            <Send className="h-3.5 w-3.5" />
-            Distribute Message
-          </Button>
-        </>
-      )}
 
       <Button
         size="sm"
