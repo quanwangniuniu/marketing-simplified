@@ -7,6 +7,7 @@ import type { TaskAttachment } from '@/types/task';
 import AddAttachmentDialog from './AddAttachmentDialog';
 import ConfirmDialog from './ConfirmDialog';
 import toast from 'react-hot-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const SCAN_TOKEN: Record<TaskAttachment['scan_status'], { label: string; cls: string }> = {
   pending: { label: 'Scanning…', cls: 'bg-amber-50 text-amber-700' },
@@ -25,9 +26,11 @@ function formatSize(bytes: number): string {
 export default function TaskAttachmentsBlock({
   taskId,
   readOnly,
+  loading = false,
 }: {
   taskId: number;
   readOnly: boolean;
+  loading?: boolean;
 }) {
   const [items, setItems] = useState<TaskAttachment[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,6 +38,7 @@ export default function TaskAttachmentsBlock({
 
   useEffect(() => {
     let cancelled = false;
+    if (loading) return;
     TaskAPI.getAttachments(taskId)
       .then((rows) => {
         if (!cancelled) setItems(rows);
@@ -45,7 +49,7 @@ export default function TaskAttachmentsBlock({
     return () => {
       cancelled = true;
     };
-  }, [taskId, localKey]);
+  }, [loading, taskId, localKey]);
 
   const doDownload = async (att: TaskAttachment) => {
     try {
@@ -98,7 +102,20 @@ export default function TaskAttachmentsBlock({
         )}
       </div>
 
-      {items === null && <p className="text-xs text-gray-400">Loading…</p>}
+      {(loading || items === null) ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={`task-attachments-skeleton-${index}`} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-7 w-7 rounded-md" />
+            </div>
+          ))}
+        </div>
+      ) : null}
       {items && items.length === 0 && (
         <p className="text-xs text-gray-400">No attachments yet.</p>
       )}
@@ -142,14 +159,14 @@ export default function TaskAttachmentsBlock({
         </ul>
       )}
 
-      <AddAttachmentDialog
+      {!loading && <AddAttachmentDialog
         open={modalOpen}
         onOpenChange={setModalOpen}
         taskId={taskId}
         onAdded={() => setLocalKey((k) => k + 1)}
-      />
+      />}
 
-      <ConfirmDialog
+      {!loading && <ConfirmDialog
         open={confirmAtt !== null}
         onOpenChange={(o) => !o && setConfirmAtt(null)}
         title="Delete attachment"
@@ -158,7 +175,7 @@ export default function TaskAttachmentsBlock({
         destructive
         busy={deleting}
         onConfirm={doDelete}
-      />
+      />}
     </section>
   );
 }

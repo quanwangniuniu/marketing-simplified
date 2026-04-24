@@ -4,9 +4,13 @@ import OrganizationPlans from './OrganizationPlans';
 
 interface PlansSectionProps {
   showHeader?: boolean;
+  loading?: boolean;
 }
 
-export default function PlansSection({ showHeader = true }: PlansSectionProps) {
+export default function PlansSection({
+  showHeader = true,
+  loading = false,
+}: PlansSectionProps) {
   return (
     <div>
       {/* Page Header */}
@@ -43,7 +47,7 @@ export default function PlansSection({ showHeader = true }: PlansSectionProps) {
           </div>
         </div>
       )}
-      <OrganizationPlans />
+      <OrganizationPlans loading={loading} />
     </div>
   );
 }

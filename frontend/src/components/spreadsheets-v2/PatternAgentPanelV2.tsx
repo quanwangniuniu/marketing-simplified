@@ -19,6 +19,7 @@ import {
 const DEFAULT_GROUP_NAME = 'Grouped Operation';
 
 interface PatternAgentPanelProps {
+  loading?: boolean;
   items: TimelineItem[];
   patterns: WorkflowPatternSummary[];
   selectedPatternId: string | null;

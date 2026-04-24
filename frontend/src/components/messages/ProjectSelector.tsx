@@ -3,13 +3,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, FolderOpen, Check } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectSelectorProps {
+  loading?: boolean;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
 }
 
 export default function ProjectSelector({
+  loading = false,
   selectedProjectId,
   onSelectProject,
 }: ProjectSelectorProps) {
@@ -17,40 +20,55 @@ export default function ProjectSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const onSelectProjectRef = useRef(onSelectProject);
+  const projectSelectorLoading = loading || isLoading;
+
+  useEffect(() => {
+    onSelectProjectRef.current = onSelectProject;
+  }, [onSelectProject]);
 
   // Fetch user's projects on mount
   useEffect(() => {
+    if (loading || projects.length > 0) return;
+
+    let mounted = true;
+
     const fetchProjects = async () => {
       try {
         setIsLoading(true);
         const projectList = await ProjectAPI.getProjects();
+        if (!mounted) return;
         setProjects(projectList);
-        
-        // Auto-select first project if none selected
-        if (!selectedProjectId && projectList.length > 0) {
-          // Check localStorage for last selected project
-          const savedProjectId = localStorage.getItem('messages_selected_project');
-          if (savedProjectId) {
-            const savedId = parseInt(savedProjectId, 10);
-            const exists = projectList.some(p => p.id === savedId);
-            if (exists) {
-              onSelectProject(savedId);
-            } else {
-              onSelectProject(projectList[0].id);
-            }
-          } else {
-            onSelectProject(projectList[0].id);
-          }
-        }
       } catch (error) {
         console.error('Error fetching projects:', error);
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchProjects();
-  }, [selectedProjectId, onSelectProject]);
+    return () => {
+      mounted = false;
+    };
+  }, [loading, projects.length]);
+
+  useEffect(() => {
+    if (loading || selectedProjectId || projects.length === 0) return;
+
+    const savedProjectId = localStorage.getItem('messages_selected_project');
+    if (savedProjectId) {
+      const savedId = parseInt(savedProjectId, 10);
+      const exists = projects.some(p => p.id === savedId);
+      if (exists) {
+        onSelectProjectRef.current(savedId);
+        return;
+      }
+    }
+
+    onSelectProjectRef.current(projects[0].id);
+  }, [loading, projects, selectedProjectId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -72,11 +90,11 @@ export default function ProjectSelector({
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
-  if (isLoading) {
+  if (projectSelectorLoading) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg animate-pulse">
-        <div className="w-5 h-5 bg-gray-200 rounded" />
-        <div className="w-32 h-4 bg-gray-200 rounded" />
+      <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
+        <Skeleton className="w-5 h-5 rounded" />
+        <Skeleton className="w-32 h-4 rounded" />
       </div>
     );
   }
@@ -145,4 +163,3 @@ export default function ProjectSelector({
     </div>
   );
 }
-

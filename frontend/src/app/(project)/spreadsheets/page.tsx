@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI, ProjectData } from '@/lib/api/projectApi';
@@ -14,16 +15,33 @@ import type { SpreadsheetData } from '@/types/spreadsheet';
 import SpreadsheetsHeader from '@/components/spreadsheets-v2/SpreadsheetsHeader';
 import SpreadsheetCard from '@/components/spreadsheets-v2/SpreadsheetCard';
 import CreateSpreadsheetDialog from '@/components/spreadsheets-v2/CreateSpreadsheetDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE_SIZE = 12;
+
+function SpreadsheetCardSkeleton() {
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+      <div className="flex items-start gap-3">
+        <Skeleton className="h-10 w-10 rounded-lg" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SpreadsheetsV2ListPage() {
   const searchParams = useSearchParams();
   const projectIdParam = searchParams?.get('project_id');
   const activeProject = useProjectStore((s) => s.activeProject);
+  const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
   const projectId = projectIdParam
     ? Number(projectIdParam)
     : activeProject?.id ?? null;
+  const projectContextLoading = !projectIdParam && !hasProjectStoreHydrated;
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [spreadsheets, setSpreadsheets] = useState<SpreadsheetData[]>([]);
@@ -129,7 +147,8 @@ export default function SpreadsheetsV2ListPage() {
   };
 
   return (
-    <DashboardLayout alerts={[]}>
+    <ProtectedRoute renderChildrenWhileLoading>
+      <DashboardLayout alerts={[]}>
       <div className="mx-auto w-full max-w-7xl px-6 py-8">
         <SpreadsheetsHeader
           projectName={project?.name ?? activeProject?.name}
@@ -149,11 +168,15 @@ export default function SpreadsheetsV2ListPage() {
               />
             </div>
             <div className="text-xs text-gray-500">
-              {totalCount} {totalCount === 1 ? 'spreadsheet' : 'spreadsheets'}
+              {projectContextLoading || loading ? (
+                <Skeleton className="h-3 w-24" />
+              ) : (
+                `${totalCount} ${totalCount === 1 ? 'spreadsheet' : 'spreadsheets'}`
+              )}
             </div>
           </div>
 
-          {!projectId && (
+          {!projectContextLoading && !projectId && (
             <div className="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm ring-1 ring-gray-100">
               Select a project from the sidebar to view spreadsheets.
             </div>
@@ -192,7 +215,15 @@ export default function SpreadsheetsV2ListPage() {
             </div>
           )}
 
-          {projectId && !errorMessage && spreadsheets.length > 0 && (
+          {(projectContextLoading || (projectId && !errorMessage && loading)) && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SpreadsheetCardSkeleton key={`legacy-spreadsheet-card-skeleton-${index}`} />
+              ))}
+            </div>
+          )}
+
+          {projectId && !errorMessage && spreadsheets.length > 0 && !loading && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {spreadsheets.map((sheet) => (
                 <SpreadsheetCard
@@ -202,12 +233,6 @@ export default function SpreadsheetsV2ListPage() {
                   onRequestDelete={setDeleteTarget}
                 />
               ))}
-            </div>
-          )}
-
-          {projectId && loading && (
-            <div className="rounded-xl bg-white p-6 text-center text-xs text-gray-400 shadow-sm ring-1 ring-gray-100">
-              Loading spreadsheets…
             </div>
           )}
 
@@ -262,5 +287,6 @@ export default function SpreadsheetsV2ListPage() {
       </div>
       <ChatFAB />
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }

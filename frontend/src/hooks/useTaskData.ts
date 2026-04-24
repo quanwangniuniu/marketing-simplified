@@ -10,29 +10,27 @@ type TaskFetchParams = TaskListFilters & {
   page?: number;
 };
 
+// Agent ingest/telemetry calls are best-effort debugging helpers.
+// When the local ingest service is not running, these requests will fail and
+// spam DevTools with `ERR_CONNECTION_REFUSED`, hurting UX (e.g. "flashing"
+// detail pages due to repeated re-renders).
+const ENABLE_INGEST = false;
+
 export const useTaskData = () => {
   const {
     tasks,
     currentTask,
-    loading,
-    error,
     setTasks,
     setCurrentTask,
-    setLoading,
-    setError,
     updateTask,
     addTask,
   } = useTaskStore();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<any>(null);
 
   const [lastParams, setLastParams] = useState<TaskFetchParams | undefined>(
     undefined,
   );
-
-  // Agent ingest/telemetry calls are best-effort debugging helpers.
-  // When the local ingest service is not running, these requests will fail and
-  // spam DevTools with `ERR_CONNECTION_REFUSED`, hurting UX (e.g. "flashing"
-  // detail pages due to repeated re-renders).
-  const ENABLE_INGEST = false;
 
   // Get all tasks with optional filters
   const fetchTasks = useCallback(
@@ -160,7 +158,7 @@ export const useTaskData = () => {
         setLoading(false);
       }
     },
-    [setTasks, setLoading, setError],
+    [setTasks],
   );
 
   // Get a specific task by ID
@@ -180,7 +178,7 @@ export const useTaskData = () => {
         setLoading(false);
       }
     },
-    [setCurrentTask, setLoading, setError],
+    [setCurrentTask],
   );
 
   // Force create a new task
@@ -211,7 +209,7 @@ export const useTaskData = () => {
         setLoading(false);
       }
     },
-    [addTask, setLoading, setError],
+    [addTask],
   );
 
   // Reload tasks function for manual refresh

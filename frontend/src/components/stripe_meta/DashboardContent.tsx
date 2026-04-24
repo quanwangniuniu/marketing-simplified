@@ -20,6 +20,7 @@ interface DashboardContentProps {
       name: string;
     } | null;
   };
+  loading?: boolean;
 }
 
 function DashboardSummarySkeleton({ showButton = false }: { showButton?: boolean }) {
@@ -33,7 +34,10 @@ function DashboardSummarySkeleton({ showButton = false }: { showButton?: boolean
   );
 }
 
-export default function DashboardContent({ user }: DashboardContentProps) {
+export default function DashboardContent({
+  user,
+  loading = false,
+}: DashboardContentProps) {
   const { getSubscription, getUsage } = useStripe();
   const { cancelSubscription } = usePlan();
   const router = useRouter();
@@ -120,6 +124,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (loading) return;
       if (user?.organization?.id) {
         setIsLoading(true);
         try {
@@ -159,7 +164,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
         pollIntervalRef.current = null;
       }
     };
-  }, [getSubscription, getUsage, user?.organization?.id]); // Only depend on organization ID
+  }, [getSubscription, getUsage, loading, user?.organization?.id]); // Only depend on organization ID
 
   return (
     <div className="space-y-6">
@@ -168,7 +173,7 @@ export default function DashboardContent({ user }: DashboardContentProps) {
         <div className="text-sm text-gray-500">
           <span className="inline-flex items-center gap-2">
             <span>Last updated:</span>
-            {lastUpdated ? (
+            {!loading && lastUpdated ? (
               <span>{lastUpdated}</span>
             ) : (
               <Skeleton className="h-4 w-20" />
@@ -188,15 +193,27 @@ export default function DashboardContent({ user }: DashboardContentProps) {
           <div className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
               <span className="text-sm font-medium text-gray-600">Name</span>
-              <span className="text-sm text-gray-800">{user?.first_name} {user?.last_name}</span>
+              {loading ? (
+                <Skeleton className="h-4 w-24" />
+              ) : (
+                <span className="text-sm text-gray-800">{user?.first_name} {user?.last_name}</span>
+              )}
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
               <span className="text-sm font-medium text-gray-600">Email</span>
-              <span className="text-sm text-gray-800">{user?.email}</span>
+              {loading ? (
+                <Skeleton className="h-4 w-40" />
+              ) : (
+                <span className="text-sm text-gray-800">{user?.email}</span>
+              )}
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-sm font-medium text-gray-600">Username</span>
-              <span className="text-sm text-gray-800">{user?.username}</span>
+              {loading ? (
+                <Skeleton className="h-4 w-28" />
+              ) : (
+                <span className="text-sm text-gray-800">{user?.username}</span>
+              )}
             </div>
           </div>
         </div>
@@ -212,7 +229,9 @@ export default function DashboardContent({ user }: DashboardContentProps) {
               <CheckCircle className="w-4 h-4 text-white" />
             </div>
           </div>
-          {user?.organization ? (
+          {loading ? (
+            <DashboardSummarySkeleton />
+          ) : user?.organization ? (
             isLoading ? (
               <DashboardSummarySkeleton showButton={isOrgAdmin} />
             ) : subscription ? (
@@ -276,7 +295,9 @@ export default function DashboardContent({ user }: DashboardContentProps) {
               <BarChart3 className="w-4 h-4 text-white" />
             </div>
           </div>
-          {user?.organization ? (
+          {loading ? (
+            <DashboardSummarySkeleton />
+          ) : user?.organization ? (
             isLoading ? (
               <DashboardSummarySkeleton />
             ) : usage ? (

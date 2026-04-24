@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { TaskAPI } from "@/lib/api/taskApi"
 import type { Task } from "./TaskCard"
 import { typeLabels, priorityLabels, priorityColors } from "./constants"
@@ -79,7 +80,11 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
             <div>
               <span className="text-sm text-muted-foreground">Description</span>
               {loading ? (
-                <p className="mt-1 text-sm text-muted-foreground animate-pulse">Loading...</p>
+                <div className="mt-2 space-y-2">
+                  <Skeleton className="h-4 w-full rounded-sm" />
+                  <Skeleton className="h-4 w-5/6 rounded-sm" />
+                  <Skeleton className="h-4 w-2/3 rounded-sm" />
+                </div>
               ) : (
                 <p className="mt-1 text-sm whitespace-pre-wrap">{description || "No description"}</p>
               )}

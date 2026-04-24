@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface HistoryEntry {
   id?: number;
@@ -39,15 +40,18 @@ function entryUser(e: HistoryEntry): string {
 export default function ApprovalTimelinePanel({
   taskId,
   refreshKey,
+  loading = false,
 }: {
   taskId: number;
   refreshKey: number;
+  loading?: boolean;
 }) {
   const [items, setItems] = useState<HistoryEntry[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    if (loading) return;
     TaskAPI.getApprovalHistory(taskId)
       .then((resp) => {
         if (cancelled) return;
@@ -68,7 +72,7 @@ export default function ApprovalTimelinePanel({
     return () => {
       cancelled = true;
     };
-  }, [taskId, refreshKey]);
+  }, [loading, taskId, refreshKey]);
 
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
@@ -76,7 +80,19 @@ export default function ApprovalTimelinePanel({
         Approval Timeline
       </h3>
       {err && <p className="text-xs text-rose-600">{err}</p>}
-      {!err && items === null && <p className="text-xs text-gray-400">Loading…</p>}
+      {(loading || (!err && items === null)) ? (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={`task-approval-skeleton-${index}`} className="flex gap-2.5">
+              <Skeleton className="mt-1.5 h-2 w-2 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-3 w-36" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {items && items.length === 0 && (
         <p className="text-xs text-gray-400">No approval history yet.</p>
       )}

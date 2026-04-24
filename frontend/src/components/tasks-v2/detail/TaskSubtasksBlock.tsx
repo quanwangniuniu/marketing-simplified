@@ -7,21 +7,28 @@ import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskData } from '@/types/task';
 import AddSubtaskDialog from './AddSubtaskDialog';
 import StatusPill from './pills/StatusPill';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   task: TaskData;
   readOnly: boolean;
   refreshKey: number;
+  loading?: boolean;
 }
 
-export default function TaskSubtasksBlock({ task, readOnly, refreshKey }: Props) {
+export default function TaskSubtasksBlock({
+  task,
+  readOnly,
+  refreshKey,
+  loading = false,
+}: Props) {
   const [items, setItems] = useState<TaskData[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [localKey, setLocalKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    if (!task.id) return;
+    if (loading || !task.id) return;
     TaskAPI.getSubtasks(task.id)
       .then((rows) => {
         if (!cancelled) setItems(rows);
@@ -32,7 +39,7 @@ export default function TaskSubtasksBlock({ task, readOnly, refreshKey }: Props)
     return () => {
       cancelled = true;
     };
-  }, [task.id, refreshKey, localKey]);
+  }, [loading, task.id, refreshKey, localKey]);
 
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
@@ -57,7 +64,18 @@ export default function TaskSubtasksBlock({ task, readOnly, refreshKey }: Props)
         )}
       </div>
 
-      {items === null && <p className="text-xs text-gray-400">Loading…</p>}
+      {(loading || items === null) ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={`task-subtasks-skeleton-${index}`} className="flex items-center gap-3 py-1.5">
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {!loading && items === null && null}
       {items && items.length === 0 && (
         <p className="text-xs text-gray-400">No subtasks yet.</p>
       )}

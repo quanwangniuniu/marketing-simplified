@@ -20,6 +20,7 @@ interface OrganizationContentProps {
       name: string;
     } | null;
   };
+  loading?: boolean;
 }
 
 function OrganizationMembersSkeleton() {
@@ -41,7 +42,10 @@ function OrganizationMembersSkeleton() {
   );
 }
 
-export default function OrganizationContent({ user }: OrganizationContentProps) {
+export default function OrganizationContent({
+  user,
+  loading = false,
+}: OrganizationContentProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { createOrganization, createOrganizationLoading, getOrganizationUsers } = useStripe();
   const [members, setMembers] = useState<any[]>([]);
@@ -49,6 +53,7 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [createdLabel, setCreatedLabel] = useState<string | null>(null);
 
   // New state for invite modal
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -72,8 +77,12 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
   };
 
   useEffect(() => {
+    setCreatedLabel(new Date().toLocaleDateString());
+  }, []);
+
+  useEffect(() => {
     const fetchMembers = async () => {
-      if (!user?.organization?.id) return;
+      if (loading || !user?.organization?.id) return;
       setLoadingMembers(true);
       try {
         const res = await getOrganizationUsers(page, pageSize);
@@ -86,9 +95,9 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
       }
     };
     fetchMembers();
-  }, [user?.organization?.id, page, pageSize, getOrganizationUsers]);
+  }, [getOrganizationUsers, loading, page, pageSize, user?.organization?.id]);
 
-  if (!user?.organization) {
+  if (!loading && !user?.organization) {
     return (
       <>
         <div className="space-y-4">
@@ -158,15 +167,23 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="text-sm font-medium text-gray-900">Name</span>
-                <span className="text-sm text-gray-500">{user.organization.name}</span>
+                {loading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  <span className="text-sm text-gray-500">{user.organization?.name ?? ''}</span>
+                )}
               </div>
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="text-sm font-medium text-gray-900">Created</span>
-                <span className="text-sm text-gray-500">{new Date().toLocaleDateString()}</span>
+                {loading ? (
+                  <Skeleton className="h-4 w-20" />
+                ) : (
+                  <span className="text-sm text-gray-500">{createdLabel ?? ''}</span>
+                )}
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-sm font-medium text-gray-900">Members</span>
-                {loadingMembers ? (
+                {loading || loadingMembers ? (
                   <Skeleton className="h-4 w-8" />
                 ) : (
                   <span className="text-sm text-gray-500">{count}</span>
@@ -180,7 +197,7 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
               <div className="text-lg font-semibold text-gray-800">Organization Members</div>
             </div>
             <div className="space-y-3">
-              {loadingMembers ? (
+              {loading || loadingMembers ? (
                 <OrganizationMembersSkeleton />
               ) : members.length === 0 ? (
                 <div className="text-sm text-gray-500">No members found.</div>
@@ -206,7 +223,7 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
               )}
             </div>
             {/* Pagination */}
-            {count > pageSize && (
+            {!loading && count > pageSize && (
               <div className="mt-6 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-600">
@@ -261,7 +278,7 @@ export default function OrganizationContent({ user }: OrganizationContentProps) 
               <div className="text-lg font-semibold text-gray-800">Organization Actions</div>
             </div>
             <div className="space-y-2">
-              {canManageMembers && (
+              {!loading && canManageMembers && (
                 <button
                   onClick={() => setIsInviteModalOpen(true)}
                   className="w-full text-left text-sm text-gray-500 hover:text-gray-900 transition-colors py-3 px-4 rounded-lg hover:bg-gray-300 "
