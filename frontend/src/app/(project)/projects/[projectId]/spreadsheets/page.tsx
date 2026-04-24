@@ -10,9 +10,18 @@ import { ProjectAPI, ProjectData } from '@/lib/api/projectApi';
 import { SpreadsheetData } from '@/types/spreadsheet';
 import { AlertCircle, ArrowLeft, FileSpreadsheet, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/skeleton';
 import toast from 'react-hot-toast';
 
 const UNTITLED_BASE = 'Untitled spreadsheet';
+const spreadsheetLoadingRows = [
+  { name: 'w-40', updated: 'w-28' },
+  { name: 'w-56', updated: 'w-32' },
+  { name: 'w-44', updated: 'w-24' },
+  { name: 'w-52', updated: 'w-[7.5rem]' },
+  { name: 'w-36', updated: 'w-28' },
+  { name: 'w-48', updated: 'w-32' },
+];
 
 function nextUntitledSpreadsheetName(existing: string[]): string {
   if (!existing.includes(UNTITLED_BASE)) return UNTITLED_BASE;
@@ -37,6 +46,7 @@ export default function SpreadsheetsListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const isPageLoading = loading;
 
   useEffect(() => {
     const loadProject = async () => {
@@ -194,16 +204,6 @@ export default function SpreadsheetsListPage() {
   const hasPrevious = page > 1;
 
   const renderEmptyState = () => {
-    if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Loader2 className="h-6 w-6 animate-spin text-[#3CCED7]" />
-          <p className="mt-3 font-medium text-gray-900">Loading spreadsheets…</p>
-          <p className="text-sm text-gray-600">Fetching spreadsheets from the backend.</p>
-        </div>
-      );
-    }
-
     if (error) {
       return (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-red-200 bg-white p-10 text-center text-red-600">
@@ -271,10 +271,10 @@ export default function SpreadsheetsListPage() {
     );
   };
 
-  const showTable = !error && (loading || spreadsheets.length > 0);
+  const showTable = isPageLoading || (!error && spreadsheets.length > 0);
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute renderChildrenWhileLoading>
       <Layout>
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <div className="mx-auto max-w-6xl w-full px-4 py-6 flex flex-col flex-1">
@@ -290,9 +290,13 @@ export default function SpreadsheetsListPage() {
               </div>
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">
-                    {project?.name ?? 'Project'}
-                  </h1>
+                  {projectId && !project ? (
+                    <Skeleton className="h-8 w-48" />
+                  ) : (
+                    <h1 className="text-2xl font-semibold text-gray-900">
+                      {project?.name ?? 'Project'}
+                    </h1>
+                  )}
                   <div className="mt-1 flex items-center gap-2 text-sm uppercase tracking-wide text-[#1a9ba3]">
                     <div className="h-6 w-6 rounded-lg bg-[#3CCED7]/15 text-[#1a9ba3] flex items-center justify-center">
                       <FileSpreadsheet className="h-4 w-4" />
@@ -359,12 +363,29 @@ export default function SpreadsheetsListPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {loading && spreadsheets.length === 0 ? (
-                          <tr>
-                            <td colSpan={3} className="px-4 py-12 text-center text-gray-500">
-                              <Loader2 className="inline h-5 w-5 animate-spin text-[#3CCED7]" />
-                            </td>
-                          </tr>
+                        {isPageLoading ? (
+                          spreadsheetLoadingRows.map((row, index) => (
+                            <tr key={`spreadsheet-loading-row-${index}`} className="border-b border-gray-200">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 text-green-700 flex-shrink-0">
+                                    <FileSpreadsheet className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <Skeleton className={`h-4 ${row.name}`} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Skeleton className={`h-4 ${row.updated}`} />
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end">
+                                  <Skeleton className="h-9 w-20 rounded-lg" />
+                                </div>
+                              </td>
+                            </tr>
+                          ))
                         ) : (
                           spreadsheets.map(renderSpreadsheetRow)
                         )}

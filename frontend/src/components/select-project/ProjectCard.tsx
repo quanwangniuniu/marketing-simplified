@@ -9,8 +9,8 @@ import type { ProjectData } from '@/lib/api/projectApi';
 interface ProjectCardProps {
   project: ProjectData;
   isDefault: boolean;
-  onSetDefault: (id: number) => void;
-  onSelect: (id: number) => void;
+  onSetDefault: (id: number) => Promise<boolean> | boolean;
+  onSelect: (id: number) => Promise<boolean> | boolean;
   onDelete: (id: number, name: string) => void;
   deleting?: boolean;
 }
@@ -103,15 +103,19 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
   if (project.primary_audience_type)
     metaRows.push({ label: 'Audience', value: humanize(project.primary_audience_type) });
 
-  const handleSelect = () => {
-    onSelect(project.id);
-    router.push('/overview');
+  const handleSelect = async () => {
+    const didUpdate = await onSelect(project.id);
+    if (didUpdate !== false) {
+      router.push('/overview');
+    }
   };
 
   return (
     <Card
       className="group relative cursor-pointer border-[0.5px] border-gray-200 hover:border-[#3CCED7]/40 hover:shadow-md transition-all duration-200 bg-white overflow-hidden"
-      onClick={handleSelect}
+      onClick={() => {
+        void handleSelect();
+      }}
     >
       <div className="h-[3px] w-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661]" />
 
@@ -207,7 +211,9 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
             <input
               type="checkbox"
               checked={isDefault}
-              onChange={() => onSetDefault(project.id)}
+              onChange={() => {
+                void onSetDefault(project.id);
+              }}
               className="w-3.5 h-3.5 rounded border-gray-300 text-[#3CCED7] focus:ring-[#3CCED7]/30 accent-[#3CCED7]"
             />
             Default

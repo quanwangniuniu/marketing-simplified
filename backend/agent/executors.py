@@ -247,9 +247,11 @@ class CreateTasksExecutor(BaseStepExecutor):
             created_ids = []
             for task_data in tasks_data:
                 summary = task_data.get('summary', 'AI Agent Generated Task')[:255]
+                ai_description = (task_data.get('description') or '').strip()
+                description = ai_description or f"Auto-generated from AI analysis{desc_suffix}"
                 task = Task.objects.create(
                     summary=summary,
-                    description=f"Auto-generated from AI analysis{desc_suffix}",
+                    description=description,
                     type=task_data.get('type', 'optimization'),
                     priority=task_data.get('priority', 'MEDIUM'),
                     project=project,

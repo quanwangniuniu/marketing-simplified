@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskComment } from '@/types/task';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function fmtTime(iso: string) {
   const d = new Date(iso);
@@ -33,10 +34,12 @@ export default function TaskActivityBlock({
   taskId,
   readOnly,
   refreshKey,
+  loading = false,
 }: {
   taskId: number;
   readOnly: boolean;
   refreshKey: number;
+  loading?: boolean;
 }) {
   const [items, setItems] = useState<TaskComment[] | null>(null);
   const [body, setBody] = useState('');
@@ -45,6 +48,7 @@ export default function TaskActivityBlock({
 
   useEffect(() => {
     let cancelled = false;
+    if (loading) return;
     TaskAPI.getComments(taskId)
       .then((rows) => {
         if (!cancelled) setItems(rows);
@@ -55,7 +59,7 @@ export default function TaskActivityBlock({
     return () => {
       cancelled = true;
     };
-  }, [taskId, refreshKey, localKey]);
+  }, [loading, taskId, refreshKey, localKey]);
 
   const submit = async () => {
     const text = body.trim();
@@ -78,7 +82,20 @@ export default function TaskActivityBlock({
         Activity
       </h2>
 
-      {items === null && <p className="text-xs text-gray-400">Loading…</p>}
+      {(loading || items === null) ? (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={`task-activity-skeleton-${index}`} className="flex gap-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {items && items.length === 0 && (
         <p className="text-xs text-gray-400">No comments yet.</p>
       )}
@@ -106,7 +123,7 @@ export default function TaskActivityBlock({
         </ul>
       )}
 
-      {!readOnly && (
+      {!readOnly && !loading && (
         <div className="mt-4 rounded-lg bg-gray-50 p-3 ring-1 ring-gray-100">
           <textarea
             className="w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#3CCED7]"

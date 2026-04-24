@@ -2,10 +2,11 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { TaskData } from '@/types/task';
 import { TASK_TYPES } from './TYPE_META';
 import TaskCardMini from './TaskCardMini';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface BoardViewProps {
   tasks: TaskData[];
@@ -24,15 +25,6 @@ export default function BoardView({ tasks, loading, error }: BoardViewProps) {
     }
     return map;
   }, [tasks]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center rounded-xl bg-white p-16 text-sm text-gray-500 shadow-sm ring-1 ring-gray-100">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading board…
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -68,7 +60,22 @@ export default function BoardView({ tasks, loading, error }: BoardViewProps) {
               </header>
 
               <div className="flex flex-col gap-2">
-                {tasksInColumn.length === 0 ? (
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={`${meta.value}-skeleton-${index}`}
+                      className="rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100"
+                    >
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <div className="flex items-center justify-between gap-2">
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                          <Skeleton className="h-3 w-20" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : tasksInColumn.length === 0 ? (
                   <div className="rounded-md border border-dashed border-gray-200 bg-white/40 px-3 py-4 text-center text-[11px] text-gray-400">
                     No {meta.shortLabel.toLowerCase()} tasks
                   </div>
@@ -84,7 +91,7 @@ export default function BoardView({ tasks, loading, error }: BoardViewProps) {
                   className="mt-1 inline-flex items-center justify-center gap-1 rounded-md border border-dashed border-gray-200 bg-transparent px-3 py-2 text-xs text-gray-400 transition hover:border-[#3CCED7] hover:text-[#3CCED7]"
                 >
                   <Plus className="h-3 w-3" />
-                  Create
+                  {loading ? 'Preparing…' : 'Create'}
                 </button>
               </div>
             </div>

@@ -11,6 +11,7 @@ type EventDialogContainerProps = {
   end: Date | null;
   event: EventDTO | null;
   calendars: CalendarDTO[];
+  primaryCalendar?: CalendarDTO | null;
   preferredCalendarId?: string | null;
   onSave: (payload: { action: () => Promise<void> }) => Promise<void>;
   onDelete?: (event: EventDTO) => Promise<void>;

@@ -19,6 +19,7 @@ export default function MessagePageContent() {
   const searchParams = useSearchParams();
   const user = useAuthStore(state => state.user);
   const activeProject = useProjectStore((s) => s.activeProject);
+  const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreateChannelDialogOpen, setIsCreateChannelDialogOpen] = useState(false);
@@ -154,6 +155,14 @@ export default function MessagePageContent() {
     
     return false;
   });
+
+  const projectIdFromQuery = searchParams.get('projectId');
+  const parsedProjectIdFromQuery = projectIdFromQuery ? Number(projectIdFromQuery) : NaN;
+  const hasProjectCandidate =
+    (Number.isFinite(parsedProjectIdFromQuery) && parsedProjectIdFromQuery > 0) ||
+    Boolean(activeProject?.id);
+  const projectSelectionLoading =
+    selectedProjectId === null && (!hasProjectStoreHydrated || hasProjectCandidate);
   
   const handleSelectChat = (chatId: number) => {
     setCurrentChat(chatId);
@@ -265,19 +274,21 @@ export default function MessagePageContent() {
         isLoadingMembers={isLoadingMembers}
         onStartDM={handleStartDM}
         chatListEmptyState={
-          !selectedProjectId ? (
+          selectedProjectId ? (
+            <div className="p-6 text-sm text-gray-500">No chats yet</div>
+          ) : projectSelectionLoading ? null : (
             <div className="flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">Select a project to view chats</p>
               </div>
             </div>
-          ) : (
-            <div className="p-6 text-sm text-gray-500">No chats yet</div>
           )
         }
         chatPanel={
-          !selectedProjectId ? (
+          projectSelectionLoading ? (
+            <div className="flex-1" />
+          ) : !selectedProjectId ? (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-16 h-16 text-gray-200 mx-auto mb-4" />

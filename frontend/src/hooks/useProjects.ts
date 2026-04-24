@@ -55,9 +55,11 @@ export const useProjects = () => {
   const [updatingProjectId, setUpdatingProjectId] = useState<number | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<number | null>(null);
   const {
+    activeProject,
     activeProjectIds,
     inactiveProjectIds,
     completedProjectIds,
+    setActiveProject: setStoreActiveProject,
     setActiveProjectIds,
     toggleActiveProjectId,
     addInactiveProjectId,
@@ -79,9 +81,17 @@ export const useProjects = () => {
         const apiActiveIds = list
           .filter((item) => item.is_active && !inactiveIds.includes(item.id))
           .map((item) => item.id);
+        const apiActiveProject =
+          list.find((item) => item.is_active && !inactiveIds.includes(item.id)) ?? null;
 
         if (apiActiveIds.length > 0) {
           setActiveProjectIds((prev) => Array.from(new Set([...prev, ...apiActiveIds, ...activeIds])));
+        }
+        if (apiActiveProject) {
+          setStoreActiveProject(apiActiveProject);
+        } else if (activeProject?.id) {
+          const matchingProject = list.find((item) => item.id === activeProject.id) ?? null;
+          setStoreActiveProject(matchingProject);
         }
         // Capture backend-completed flags if present
         const apiCompletedIds = list
@@ -98,7 +108,7 @@ export const useProjects = () => {
         setLoading(false);
       }
     },
-    [setActiveProjectIds]
+    [activeProject?.id, setActiveProjectIds, setStoreActiveProject]
   );
 
   const setActiveProject = useCallback(
@@ -114,32 +124,47 @@ export const useProjects = () => {
               : project
           )
         );
-        return;
+        return false;
       }
 
       setUpdatingProjectId(projectId);
       try {
+        const selectedProject =
+          projects.find((project) => project.id === projectId) ?? null;
+
         await ProjectAPI.setActiveProject(projectId);
         toast.success('Active project updated');
-        // Keep local list multi-select friendly
-        setActiveProjectIds((prev) => Array.from(new Set([...prev, projectId])));
-        setInactiveProjectIds(inactiveProjectIds.filter((id) => id !== projectId));
+        setProjects((prev) =>
+          prev.map((project) => ({
+            ...project,
+            is_active: project.id === projectId,
+            isActiveResolved: project.id === projectId,
+          }))
+        );
+        if (selectedProject) {
+          setStoreActiveProject({ ...selectedProject, is_active: true });
+        }
+        setActiveProjectIds([projectId]);
+        setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
         await fetchProjects();
+        return true;
       } catch (err) {
         const message = getErrorMessage(err);
         setError(message);
         toast.error(message);
+        return false;
       } finally {
         setUpdatingProjectId(null);
       }
     },
     [
+      projects,
       activeProjectIds,
       fetchProjects,
+      setStoreActiveProject,
       setActiveProjectIds,
       toggleActiveProjectId,
       addInactiveProjectId,
-      inactiveProjectIds,
       setInactiveProjectIds,
     ]
   );
@@ -148,11 +173,43 @@ export const useProjects = () => {
     async (projectId: number) => {
       setDeletingProjectId(projectId);
       try {
+        const remainingProjects = projects.filter((project) => project.id !== projectId);
+        const nextActiveProject =
+          activeProject?.id === projectId ? remainingProjects[0] ?? null : null;
+
         await ProjectAPI.deleteProject(projectId);
-        setProjects((prev) => prev.filter((project) => project.id !== projectId));
-        setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
-        setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+        let nextProjects = remainingProjects;
+
         setCompletedProjectIds((prev) => prev.filter((id) => id !== projectId));
+
+        if (nextActiveProject) {
+          try {
+            await ProjectAPI.setActiveProject(nextActiveProject.id);
+            nextProjects = remainingProjects.map((project) => ({
+              ...project,
+              is_active: project.id === nextActiveProject.id,
+              isActiveResolved: project.id === nextActiveProject.id,
+            }));
+            setStoreActiveProject({ ...nextActiveProject, is_active: true });
+            setActiveProjectIds([nextActiveProject.id]);
+            setInactiveProjectIds((prev) =>
+              prev.filter((id) => id !== projectId && id !== nextActiveProject.id)
+            );
+          } catch {
+            setStoreActiveProject(null);
+            setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+            setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+            toast.error('Project deleted, but failed to set a new active project.');
+          }
+        } else {
+          setActiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+          setInactiveProjectIds((prev) => prev.filter((id) => id !== projectId));
+          if (activeProject?.id === projectId) {
+            setStoreActiveProject(null);
+          }
+        }
+
+        setProjects(nextProjects);
         toast.success('Project deleted');
       } catch (err: any) {
         const status = err?.response?.status;
@@ -160,13 +217,12 @@ export const useProjects = () => {
           status === 403 || status === 401
             ? 'You do not have permission to delete this project.'
             : getErrorMessage(err);
-        setError(message);
         toast.error(message);
       } finally {
         setDeletingProjectId(null);
       }
     },
-    [setActiveProjectIds, setInactiveProjectIds, setCompletedProjectIds]
+    [projects, activeProject?.id, setStoreActiveProject, setActiveProjectIds, setInactiveProjectIds, setCompletedProjectIds]
   );
 
   const derivedProjects = useMemo(

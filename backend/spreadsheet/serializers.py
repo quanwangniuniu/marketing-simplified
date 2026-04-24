@@ -265,7 +265,12 @@ class CellRangeReadSerializer(serializers.Serializer):
     end_row = serializers.IntegerField(min_value=0)
     start_column = serializers.IntegerField(min_value=0)
     end_column = serializers.IntegerField(min_value=0)
-    
+    include_sheet_dimensions = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text='When false, skip full-sheet max row/column queries (faster for scroll/tile fetches).',
+    )
+
     def validate(self, data):
         """Validate range parameters"""
         if data['start_row'] > data['end_row']:
@@ -369,9 +374,11 @@ class CellOperationSerializer(serializers.Serializer):
 
 class CellBatchUpdateSerializer(serializers.Serializer):
     """Serializer for batch cell update"""
-    operations = CellOperationSerializer(many=True, min_length=1, max_length=1000)
+    operations = CellOperationSerializer(many=True, min_length=1, max_length=2000)
     auto_expand = serializers.BooleanField(default=True)
-    import_id = serializers.UUIDField(required=False, allow_null=True)
+    # Correlation id for chunked imports (logging / finalize). Accepts UUIDs from the
+    # browser (crypto.randomUUID) and short opaque strings in tests or custom clients.
+    import_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=64)
     chunk_index = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     import_mode = serializers.BooleanField(default=False)
 
@@ -379,8 +386,8 @@ class CellBatchUpdateSerializer(serializers.Serializer):
         """Validate operations array"""
         if not value or len(value) == 0:
             raise serializers.ValidationError("Operations array must contain at least one operation")
-        if len(value) > 1000:
-            raise serializers.ValidationError("Operations array cannot exceed 1000 operations")
+        if len(value) > 2000:
+            raise serializers.ValidationError("Operations array cannot exceed 2000 operations")
         return value
 
 

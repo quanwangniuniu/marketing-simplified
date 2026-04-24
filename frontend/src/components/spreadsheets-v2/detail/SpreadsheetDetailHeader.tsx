@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Pencil } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import SpreadsheetBreadcrumb from './SpreadsheetBreadcrumb';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   canRename?: boolean;
   saving?: boolean;
   onRename?: (newName: string) => Promise<void> | void;
+  loading?: boolean;
 }
 
 export default function SpreadsheetDetailHeader({
@@ -20,6 +22,7 @@ export default function SpreadsheetDetailHeader({
   canRename = true,
   saving = false,
   onRename,
+  loading = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(spreadsheetName);
@@ -54,7 +57,12 @@ export default function SpreadsheetDetailHeader({
         spreadsheetName={spreadsheetName}
       />
       <div className="flex items-center gap-2">
-        {editing ? (
+        {loading ? (
+          <div className="flex w-full max-w-xl items-center gap-2">
+            <Skeleton className="h-9 w-full max-w-md rounded-md" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+        ) : editing ? (
           <div className="flex w-full max-w-xl items-center gap-2">
             <input
               autoFocus

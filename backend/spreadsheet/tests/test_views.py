@@ -1,5 +1,7 @@
 from django.test import TestCase
 from decimal import Decimal
+from typing import Any, Dict, Optional
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -1739,6 +1741,63 @@ class SheetColumnDeleteViewTest(TestCase):
         self.assertEqual(positions, [0, 1, 2])
 
 
+class CellRangeReadViewTest(TestCase):
+    """POST /cells/range/ — optional full-sheet dimension aggregates"""
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        url = (
+            f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        )
+        r = self.client.post(
+            url,
+            {
+                'operations': [
+                    {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'a1'},
+                ],
+                'auto_expand': True,
+            },
+            format='json',
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def _read_range(self, extra: Optional[Dict[str, Any]] = None):
+        body = {
+            'start_row': 0,
+            'end_row': 0,
+            'start_column': 0,
+            'end_column': 0,
+        }
+        if extra:
+            body.update(extra)
+        url = (
+            f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/range/'
+        )
+        return self.client.post(url, body, format='json')
+
+    def test_includes_sheet_dimensions_by_default(self):
+        response = self._read_range()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('sheet_row_count', response.data)
+        self.assertIn('sheet_column_count', response.data)
+        self.assertIsNotNone(response.data['sheet_row_count'])
+        self.assertIsNotNone(response.data['sheet_column_count'])
+        self.assertTrue(len(response.data.get('cells', [])) >= 1)
+
+    def test_omits_sheet_dimensions_when_disabled(self):
+        response = self._read_range({'include_sheet_dimensions': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data.get('sheet_row_count'))
+        self.assertIsNone(response.data.get('sheet_column_count'))
+        self.assertTrue(len(response.data.get('cells', [])) >= 1)
+
+
 class CellBatchUpdateDependencyTest(TestCase):
     """Test dependency recalculation in batch update endpoint"""
 
@@ -2298,3 +2357,301 @@ class CellBatchUpdateDependencyTest(TestCase):
         self.assertEqual(cells[(0, 0)]['error_code'], '#CYCLE!')
         self.assertEqual(cells[(0, 1)]['error_code'], '#CYCLE!')
 
+
+# ========== Batch Import Performance / Error-Path Tests ==========
+
+
+class CellBatchUpdateLargeImportTest(TestCase):
+    """Regression tests for >1000-op batch imports.
+
+    Previously batch_update_cells built a 1000-way Q() OR to look up existing cells,
+    which blew up the Q tree depth (RecursionError) and produced huge SQL plans. These
+    tests make sure large chunks now finish cleanly.
+    """
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _batch(self, operations, import_mode=False, import_id=None, chunk_index=None):
+        url = f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        payload = {'operations': operations, 'auto_expand': True}
+        if import_mode:
+            payload['import_mode'] = True
+        if import_id is not None:
+            payload['import_id'] = import_id
+        if chunk_index is not None:
+            payload['chunk_index'] = chunk_index
+        return self.client.post(url, payload, format='json')
+
+    def test_batch_update_cells_large_chunk_does_not_raise(self):
+        """A 1500-op chunk must succeed (no RecursionError, no server 500)."""
+        operations = []
+        # 150 rows x 10 columns = 1500 ops — exceeds the old 1000-threshold that
+        # broke the Q-OR path.
+        for r in range(150):
+            for c in range(10):
+                operations.append({
+                    'operation': 'set',
+                    'row': r,
+                    'column': c,
+                    'raw_input': f'v{r}-{c}',
+                })
+        response = self._batch(operations, import_mode=True, import_id='import-large', chunk_index=0)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
+            1500,
+        )
+
+    def test_batch_update_cells_second_chunk_updates_existing(self):
+        """Running the same (row,col) twice across chunks must dedupe against existing rows."""
+        chunk1 = [{'operation': 'set', 'row': r, 'column': 0, 'raw_input': 'a'} for r in range(50)]
+        self._batch(chunk1, import_mode=True, import_id='imp', chunk_index=0)
+        chunk2 = [{'operation': 'set', 'row': r, 'column': 0, 'raw_input': 'b'} for r in range(50)]
+        response = self._batch(chunk2, import_mode=True, import_id='imp', chunk_index=1)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
+            50,
+        )
+        for r in range(50):
+            c = Cell.objects.get(sheet=self.sheet, row__position=r, column__position=0, is_deleted=False)
+            self.assertEqual(c.raw_input, 'b')
+
+
+class CellBatchImportModePivotTest(TestCase):
+    """Pivot recompute should be skipped in per-chunk batch calls when import_mode=True,
+    and performed once at ImportFinalizeView time."""
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _batch_url(self):
+        return f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+
+    def _finalize_url(self):
+        return f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/import-finalize/'
+
+    def test_batch_update_import_mode_skips_pivot_recompute(self):
+        from unittest.mock import patch
+        operations = [
+            {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'},
+            {'operation': 'set', 'row': 0, 'column': 1, 'raw_input': 'y'},
+        ]
+        with patch('spreadsheet.pivot_service.recompute_pivots_for_source_sheet') as mock_recompute:
+            response = self.client.post(
+                self._batch_url(),
+                {'operations': operations, 'auto_expand': True, 'import_mode': True, 'import_id': 'imp-1', 'chunk_index': 0},
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_recompute.assert_not_called()
+
+    def test_batch_update_non_import_mode_recomputes_pivot(self):
+        from unittest.mock import patch
+        operations = [
+            {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'},
+        ]
+        with patch('spreadsheet.pivot_service.recompute_pivots_for_source_sheet') as mock_recompute:
+            response = self.client.post(
+                self._batch_url(),
+                {'operations': operations, 'auto_expand': True},
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_recompute.assert_called_once()
+
+    def test_import_finalize_recomputes_pivot_once(self):
+        from unittest.mock import patch
+        # Seed a couple of cells via import_mode so there is something to finalize.
+        self.client.post(
+            self._batch_url(),
+            {
+                'operations': [
+                    {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': '1'},
+                    {'operation': 'set', 'row': 0, 'column': 1, 'raw_input': '=A1+1'},
+                ],
+                'auto_expand': True,
+                'import_mode': True,
+                'import_id': 'imp-fin',
+                'chunk_index': 0,
+            },
+            format='json',
+        )
+        with patch('spreadsheet.pivot_service.recompute_pivots_for_source_sheet') as mock_recompute:
+            response = self.client.post(
+                self._finalize_url(),
+                {'import_id': 'imp-fin'},
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_recompute.assert_called_once()
+
+    def test_import_finalize_recomputes_formulas_for_import_mode_cells(self):
+        """Dependencies skipped per-chunk under import_mode must be rebuilt at finalize."""
+        self.client.post(
+            self._batch_url(),
+            {
+                'operations': [
+                    {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': '10'},
+                    {'operation': 'set', 'row': 0, 'column': 1, 'raw_input': '=A1*2'},
+                ],
+                'auto_expand': True,
+                'import_mode': True,
+                'import_id': 'imp-calc',
+                'chunk_index': 0,
+            },
+            format='json',
+        )
+        # Before finalize: formula cell has not been computed.
+        b1 = Cell.objects.get(sheet=self.sheet, row__position=0, column__position=1, is_deleted=False)
+        self.assertNotEqual(b1.computed_type, ComputedCellType.NUMBER)
+
+        response = self.client.post(self._finalize_url(), {'import_id': 'imp-calc'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        b1.refresh_from_db()
+        self.assertEqual(b1.computed_type, ComputedCellType.NUMBER)
+        self.assertEqual(Decimal(str(b1.computed_number)), Decimal('20'))
+
+
+class CellBatchUpdateConcurrentColumnCreateTest(TestCase):
+    """Simulates two chunks racing to create the same SheetColumn positions:
+    the unique partial index would reject the second writer without ignore_conflicts=True.
+
+    We simulate the race deterministically by pre-building two SheetColumn objects with
+    the same (sheet, position, is_deleted=False) and attempting a bulk_create that
+    would have conflicted under the old code path. Because batch_update_cells now uses
+    ignore_conflicts=True + re-SELECT, no IntegrityError is raised.
+    """
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+
+    def test_bulk_create_column_conflict_is_ignored(self):
+        from spreadsheet.models import SheetColumn
+        SheetColumn.objects.create(sheet=self.sheet, position=0, name='A', is_deleted=False)
+        # bulk_create with ignore_conflicts=True should tolerate the conflict.
+        SheetColumn.objects.bulk_create(
+            [SheetColumn(sheet=self.sheet, position=0, name='A', is_deleted=False)],
+            ignore_conflicts=True,
+        )
+        self.assertEqual(
+            SheetColumn.objects.filter(sheet=self.sheet, position=0, is_deleted=False).count(),
+            1,
+        )
+
+    def test_batch_update_cells_handles_preexisting_column(self):
+        """Pre-create the columns that batch_update_cells would otherwise create, then
+        issue a batch that touches those columns. No IntegrityError must escape."""
+        from spreadsheet.models import SheetColumn
+        for pos in range(5):
+            SheetColumn.objects.create(sheet=self.sheet, position=pos, name=f'C{pos}', is_deleted=False)
+
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        url = f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        operations = [
+            {'operation': 'set', 'row': r, 'column': c, 'raw_input': f'{r},{c}'}
+            for r in range(3)
+            for c in range(5)
+        ]
+        response = client.post(
+            url,
+            {'operations': operations, 'auto_expand': True, 'import_mode': True, 'import_id': 'imp', 'chunk_index': 0},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
+            15,
+        )
+
+
+class CellBatchUpdateAutoExpandFalseTest(TestCase):
+    """auto_expand=False fast path used by import after a synchronous resize.
+
+    Phase 1 precomputes existing (row, col) positions once and does O(1) lookup
+    per op rather than two .exists() queries. Phase 2 has nothing to bulk_create
+    (all positions already exist).
+    """
+
+    def setUp(self):
+        self.user = create_test_user()
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.user)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _batch(self, operations, auto_expand):
+        url = f'/api/spreadsheet/spreadsheets/{self.spreadsheet.id}/sheets/{self.sheet.id}/cells/batch/'
+        payload = {
+            'operations': operations,
+            'auto_expand': auto_expand,
+            'import_mode': True,
+            'import_id': 'imp',
+            'chunk_index': 0,
+        }
+        return self.client.post(url, payload, format='json')
+
+    def test_auto_expand_false_missing_row_returns_400(self):
+        # Only column 0 pre-created, no rows.
+        SheetColumn.objects.create(sheet=self.sheet, position=0, name='A', is_deleted=False)
+        response = self._batch(
+            [{'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'}],
+            auto_expand=False,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        detail = response.data.get('detail', response.data)
+        self.assertEqual(detail.get('code'), 'INVALID_ARGUMENT')
+        fields = [d.get('field') for d in detail.get('details', [])]
+        self.assertIn('row', fields)
+
+    def test_auto_expand_false_missing_column_returns_400(self):
+        SheetRow.objects.create(sheet=self.sheet, position=0, is_deleted=False)
+        response = self._batch(
+            [{'operation': 'set', 'row': 0, 'column': 0, 'raw_input': 'x'}],
+            auto_expand=False,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        detail = response.data.get('detail', response.data)
+        fields = [d.get('field') for d in detail.get('details', [])]
+        self.assertIn('column', fields)
+
+    def test_auto_expand_false_all_present_succeeds_with_no_expansion(self):
+        for r in range(3):
+            SheetRow.objects.create(sheet=self.sheet, position=r, is_deleted=False)
+        for c in range(3):
+            SheetColumn.objects.create(sheet=self.sheet, position=c, name=f'C{c}', is_deleted=False)
+
+        operations = [
+            {'operation': 'set', 'row': r, 'column': c, 'raw_input': f'{r},{c}'}
+            for r in range(3)
+            for c in range(3)
+        ]
+        response = self._batch(operations, auto_expand=False)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['rows_expanded'], 0)
+        self.assertEqual(response.data['columns_expanded'], 0)
+        self.assertEqual(
+            Cell.objects.filter(sheet=self.sheet, is_deleted=False).count(),
+            9,
+        )

@@ -12,6 +12,7 @@ type CalendarToolbarProps = {
   onSelectView: (view: CalendarViewType) => void;
   onToday: () => void;
   onOffset: (direction: "prev" | "next") => void;
+  onAskAgent?: () => void;
 };
 
 const VIEW_ORDER: CalendarViewType[] = ["day", "week", "month", "year", "agenda"];
@@ -23,6 +24,7 @@ export function CalendarToolbar({
   onSelectView,
   onToday,
   onOffset,
+  onAskAgent,
 }: CalendarToolbarProps) {
   return (
     <header
@@ -65,6 +67,16 @@ export function CalendarToolbar({
       </div>
 
       <div className="flex items-center gap-3" ref={viewSwitcherRef}>
+        {onAskAgent && (
+          <button
+            type="button"
+            onClick={onAskAgent}
+            className="inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 transition-colors hover:bg-violet-100"
+            data-testid="calendar-v2-ask-agent"
+          >
+            Ask Agent
+          </button>
+        )}
         <nav
           className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-gray-50 p-0.5"
           data-testid="calendar-v2-view-tabs"

@@ -8,6 +8,7 @@ import type { ProjectMemberData } from '@/lib/api/projectApi';
 import StatusPill from './pills/StatusPill';
 import InlineSelect, { UserInitialsAvatar, type InlineSelectOption } from './InlineSelect';
 import { ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PRIORITY_LEADING: Record<string, { Icon: typeof Minus; cls: string }> = {
   HIGHEST: { Icon: ChevronsUp, cls: 'text-rose-600' },
@@ -45,6 +46,7 @@ interface Props {
   members: ProjectMemberData[];
   readOnly: boolean;
   onUpdated: () => void | Promise<void>;
+  loading?: boolean;
 }
 
 const LABEL = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
@@ -52,7 +54,13 @@ const ROW = 'grid grid-cols-[88px_1fr] items-center gap-3 py-2';
 const DATE_INPUT =
   'w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 outline-none transition hover:border-gray-300 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
-export default function PropertiesPanel({ task, members, readOnly, onUpdated }: Props) {
+export default function PropertiesPanel({
+  task,
+  members,
+  readOnly,
+  onUpdated,
+  loading = false,
+}: Props) {
   const id = task.id!;
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +98,24 @@ export default function PropertiesPanel({ task, members, readOnly, onUpdated }: 
     unassignedOption,
     ...activeMembers.map((m) => memberOption(m, { includeRole: true })),
   ];
+
+  if (loading) {
+    return (
+      <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          Properties
+        </h3>
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={`task-properties-skeleton-${index}`} className={ROW}>
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-9 w-full rounded-md" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">

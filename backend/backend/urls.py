@@ -26,9 +26,12 @@ from spreadsheet import views as spreadsheet_views
 def health_check(request):
     return HttpResponse("OK", content_type="text/plain")
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health_check'),
+    path('api/facebook_integration/', include('facebook_integration.urls')),
+    path('api/meta_ads/', include('meta_ads.urls')),
     path('api/access_control/', include('access_control.urls')),
     path('api/teams/', include('teams.urls')),
     path('auth/', include('authentication.urls')),
@@ -42,6 +45,9 @@ urlpatterns = [
     path('api/core/', include('core.urls')),
     path('api/alerting/', include('alerting.urls')),
     path('api/report/', include('report.urls')),
+    # Must be before any path("api/", include(...)) so /api/google-*/ is not routed to task.urls.
+    path("api/google-docs/", include("google_docs_integration.urls")),
+    path("api/google-calendar/", include("google_calendar_integration.urls")),
     path('api/', include('task.urls')),
     path('api/policy/', include('policy.urls')),
     path('api/dashboard/', include('dashboard.urls')),
@@ -73,7 +79,6 @@ urlpatterns = [
     path('api/', include('meetings.urls')),
     path("", include("django_prometheus.urls")),
     path("api/v1/zoom/", include("zoom_integration.urls")),
-    path("api/google-docs/", include("google_docs_integration.urls")),
 ]
 
 if settings.DEBUG:

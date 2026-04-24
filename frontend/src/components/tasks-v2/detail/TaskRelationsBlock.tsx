@@ -8,6 +8,7 @@ import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskData, TaskRelationsResponse, TaskRelationItem } from '@/types/task';
 import AddRelationDialog from './AddRelationDialog';
 import ConfirmDialog from './ConfirmDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const GROUPS: Array<{
   key: keyof TaskRelationsResponse;
@@ -25,9 +26,11 @@ const GROUPS: Array<{
 export default function TaskRelationsBlock({
   task,
   readOnly,
+  loading = false,
 }: {
   task: TaskData;
   readOnly: boolean;
+  loading?: boolean;
 }) {
   const [rel, setRel] = useState<TaskRelationsResponse | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,7 +38,7 @@ export default function TaskRelationsBlock({
 
   useEffect(() => {
     let cancelled = false;
-    if (!task.id) return;
+    if (loading || !task.id) return;
     TaskAPI.getRelations(task.id)
       .then((data) => {
         if (!cancelled) setRel(data);
@@ -55,7 +58,7 @@ export default function TaskRelationsBlock({
     return () => {
       cancelled = true;
     };
-  }, [task.id, localKey]);
+  }, [loading, task.id, localKey]);
 
   const [confirmRelationId, setConfirmRelationId] = useState<number | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -101,7 +104,26 @@ export default function TaskRelationsBlock({
         )}
       </div>
 
-      {rel === null && <p className="text-xs text-gray-400">Loading…</p>}
+      {(loading || rel === null) ? (
+        <div className="space-y-4">
+          {Array.from({ length: 2 }).map((_, groupIndex) => (
+            <div key={`task-relations-skeleton-group-${groupIndex}`}>
+              <Skeleton className="mb-2 h-3 w-20" />
+              <div className="space-y-2">
+                {Array.from({ length: 2 }).map((__, itemIndex) => (
+                  <div
+                    key={`task-relations-skeleton-${groupIndex}-${itemIndex}`}
+                    className="flex items-center gap-3 py-1.5"
+                  >
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {rel && totalCount === 0 && (
         <p className="text-xs text-gray-400">No linked work items yet.</p>
       )}
@@ -148,7 +170,7 @@ export default function TaskRelationsBlock({
         </div>
       )}
 
-      {task.id && (
+      {!loading && task.id && (
         <AddRelationDialog
           open={modalOpen}
           onOpenChange={setModalOpen}
@@ -157,7 +179,7 @@ export default function TaskRelationsBlock({
         />
       )}
 
-      <ConfirmDialog
+      {!loading && <ConfirmDialog
         open={confirmRelationId !== null}
         onOpenChange={(o) => !o && setConfirmRelationId(null)}
         title="Remove relation"
@@ -166,7 +188,7 @@ export default function TaskRelationsBlock({
         destructive
         busy={removing}
         onConfirm={removeRelation}
-      />
+      />}
     </section>
   );
 }

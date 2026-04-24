@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react
 import { Hash, MessagesSquare, Plus, Star, User, Users } from 'lucide-react';
 import type { Chat } from '@/types/chat';
 import { useAuthStore } from '@/lib/authStore';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   listStarredChats,
   reorderStarredChats,
@@ -69,6 +70,99 @@ function Section({
   );
 }
 
+function LoadingRows({
+  count,
+  icon,
+  widths,
+  bordered = false,
+}: {
+  count: number;
+  icon: React.ReactNode;
+  widths: string[];
+  bordered?: boolean;
+}) {
+  const containerClassName = bordered
+    ? 'divide-y divide-gray-100 border border-dashed border-gray-200 rounded-lg overflow-hidden mx-1'
+    : 'space-y-0.5 mx-1';
+
+  return (
+    <div className={containerClassName}>
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={`messages-sidebar-loading-row-${index}`}
+          className={[
+            'px-3 py-2 flex items-center gap-2',
+            bordered ? '' : 'rounded-md',
+          ].join(' ')}
+        >
+          <span className="text-gray-400">{icon}</span>
+          <Skeleton className={`h-4 ${widths[index % widths.length]}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SidebarLoadingContent({
+  view,
+}: {
+  view: MessagesNavView;
+}) {
+  if (view === 'activity' || view === 'files') {
+    return (
+      <div className="p-3 space-y-2">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div
+            key={`messages-sidebar-panel-loading-${index}`}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-3 space-y-2"
+          >
+            <Skeleton className={`h-4 ${index % 2 === 0 ? 'w-32' : 'w-24'}`} />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const showHome = view === 'home';
+  const showDmsOnly = view === 'dms';
+
+  return (
+    <div className="pb-2">
+      {showHome && (
+        <Section title="Starred" icon={<Star className="w-3.5 h-3.5" />}>
+          <LoadingRows
+            count={3}
+            icon={<Users className="w-4 h-4" />}
+            widths={['w-32', 'w-24', 'w-36']}
+            bordered
+          />
+        </Section>
+      )}
+
+      {showHome && (
+        <Section title="Channels" icon={<Hash className="w-3.5 h-3.5" />}>
+          <LoadingRows
+            count={3}
+            icon={<Hash className="w-4 h-4" />}
+            widths={['w-28', 'w-36', 'w-24']}
+          />
+        </Section>
+      )}
+
+      {(showHome || showDmsOnly) && (
+        <Section title="Direct messages" icon={<Users className="w-3.5 h-3.5" />}>
+          <LoadingRows
+            count={4}
+            icon={<Users className="w-4 h-4" />}
+            widths={['w-32', 'w-24', 'w-28', 'w-36']}
+          />
+        </Section>
+      )}
+    </div>
+  );
+}
+
 export default function HomeSidebar({
   view,
   selectedProjectId,
@@ -129,15 +223,6 @@ export default function HomeSidebar({
   );
 
   const starredIdSet = useMemo(() => new Set(starredOrder), [starredOrder]);
-
-  const mergeChat = useCallback(
-    (c: Chat): Chat => {
-      const norm = normalizeChat(c);
-      const live = chats.find((x) => x.id === norm.id);
-      return live ?? norm;
-    },
-    [chats]
-  );
 
   const loadStarred = useCallback(async () => {
     if (!selectedProjectId || view !== 'home') {
@@ -253,14 +338,11 @@ export default function HomeSidebar({
     e.dataTransfer.effectAllowed = 'copyMove';
   };
 
-  const renderPlaceholder = (title: string, subtitle: string) => (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-sm text-gray-500">
-      <p className="font-medium text-gray-700">{title}</p>
-      <p className="mt-1">{subtitle}</p>
-    </div>
-  );
-
   const mainListContent = () => {
+    if (isLoading) {
+      return <SidebarLoadingContent view={view} />;
+    }
+
     if (!selectedProjectId) {
       return <div className="p-4 text-sm text-gray-500">{emptyState}</div>;
     }

@@ -5,15 +5,17 @@ import { useRouter } from "next/navigation";
 import { addDays, format, startOfWeek } from "date-fns";
 import toast from "react-hot-toast";
 import { CalendarAPI, extractNavigationMetadata } from "@/lib/api/calendarApi";
-// Agent calendar integration intentionally omitted in v2 — see PLAN/storyboard/12_Calendar/agent_calendar.md
-import type { CalendarViewType, EventDTO } from "@/lib/api/calendarApi";
+import type { CalendarDTO, CalendarViewType, EventDTO } from "@/lib/api/calendarApi";
+import { googleCalendarApi } from "@/lib/api/googleCalendarApi";
+import type { GoogleCalendarStatus } from "@/lib/api/googleCalendarApi";
+import { GoogleCalendarConnectedBadge } from "@/components/google-calendar/GoogleCalendarConnectedBadge";
 import { useCalendarView } from "@/hooks/useCalendarView";
 import { CalendarToolbar } from "@/components/calendar-v2/CalendarToolbar";
 import { CalendarSidebarContainer } from "@/components/calendar-v2/CalendarSidebarContainer";
 import { CalendarViewRouter } from "@/components/calendar-v2/CalendarViews";
 import { EventDialogContainer } from "@/components/calendar-v2/EventDialogContainer";
 import type { CalendarDialogMode, EventPanelPosition } from "@/components/calendar-v2/types";
-import { List } from "lucide-react";
+import { List, Loader2, RefreshCw } from "lucide-react";
 import {
   CALENDAR_FILTER_STORAGE_KEY,
   VIEW_LABELS,
@@ -61,6 +63,83 @@ export default function CalendarPageContent() {
     loadActivityFilter(),
   );
   const viewSwitcherRef = useRef<HTMLDivElement>(null);
+  const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [gcalSyncing, setGcalSyncing] = useState(false);
+  const [primaryCalendar, setPrimaryCalendar] = useState<CalendarDTO | null>(null);
+
+  const refreshGcalStatus = useCallback(() => {
+    googleCalendarApi
+      .getStatus()
+      .then((s) => setGcalStatus(s))
+      .catch(() => setGcalStatus(null));
+  }, []);
+
+  useEffect(() => {
+    refreshGcalStatus();
+  }, [refreshGcalStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    CalendarAPI.listCalendars()
+      .then((res) => {
+        const raw = res.data as CalendarDTO[] | { results?: CalendarDTO[] };
+        const list = Array.isArray(raw) ? raw : raw.results ?? [];
+        if (cancelled) {
+          return;
+        }
+        setPrimaryCalendar(list.find((c) => c.is_primary) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrimaryCalendar(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        refreshGcalStatus();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [refreshGcalStatus]);
+
+  const handleAskAgentFromCalendar = useCallback(() => {
+    const ctx = {
+      type: "calendar" as const,
+      calendarIds: visibleCalendarIds ?? [],
+      currentView,
+      currentDate: format(currentDate, "yyyy-MM-dd"),
+      userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    sessionStorage.setItem("agent-calendar-context", JSON.stringify(ctx));
+    sessionStorage.removeItem("agent-session-id");
+    router.push("/agent");
+  }, [visibleCalendarIds, currentView, currentDate, router]);
+
+  const handleAskAgentFromEvent = useCallback(
+    (event: EventDTO) => {
+      const ctx = {
+        type: "event" as const,
+        eventId: event.id,
+        eventTitle: event.title || "(No title)",
+        calendarId: event.calendar_id,
+        startDatetime: event.start_datetime,
+        endDatetime: event.end_datetime,
+        description: event.description ?? "",
+        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
+      sessionStorage.setItem("agent-calendar-context", JSON.stringify(ctx));
+      sessionStorage.removeItem("agent-session-id");
+      router.push("/agent");
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -90,6 +169,20 @@ export default function CalendarPageContent() {
     calendarIds: visibleCalendarIds,
     activeEventTypes: Array.from(activeEventTypes),
   });
+
+  const handleGcalSync = useCallback(async () => {
+    setGcalSyncing(true);
+    try {
+      await googleCalendarApi.syncNow();
+      toast.success("Synced with Google Calendar.");
+      refetch();
+      refreshGcalStatus();
+    } catch {
+      toast.error("Sync failed. Check your connection and try again.");
+    } finally {
+      setGcalSyncing(false);
+    }
+  }, [refetch, refreshGcalStatus]);
 
   useEffect(() => {
     const consumePending = () => {
@@ -319,7 +412,48 @@ export default function CalendarPageContent() {
         }}
         onToday={handleToday}
         onOffset={handleOffset}
+        onAskAgent={handleAskAgentFromCalendar}
       />
+
+      {gcalStatus?.connected && (gcalStatus.needs_reconnect || gcalStatus.last_error_message) ? (
+        <div className="mx-4 mt-2 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
+          <span>
+            {gcalStatus.last_error_message ||
+              "Google Calendar authorization expired or was revoked. Reconnect in Integrations."}
+          </span>
+          <button
+            type="button"
+            onClick={() => router.push("/integrations")}
+            className="shrink-0 rounded-md bg-amber-700 px-3 py-1 text-xs font-medium text-white hover:bg-amber-800"
+          >
+            Open Integrations
+          </button>
+        </div>
+      ) : null}
+
+      {gcalStatus?.connected && !gcalStatus.needs_reconnect && !gcalStatus.last_error_message ? (
+        <div className="mx-4 mt-2 flex shrink-0 flex-wrap items-center gap-2">
+          <GoogleCalendarConnectedBadge googleEmail={gcalStatus.google_email} />
+          <button
+            type="button"
+            onClick={handleGcalSync}
+            disabled={gcalSyncing}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-400 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            {gcalSyncing ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                Syncing…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                Sync with Google
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex flex-1 overflow-hidden">
         <CalendarSidebarContainer
@@ -425,8 +559,10 @@ export default function CalendarPageContent() {
           end={dialogEnd}
           event={editingEvent}
           calendars={calendars}
+          primaryCalendar={primaryCalendar}
           preferredCalendarId={selectedCalendarId}
           position={panelPosition}
+          onAskAgent={handleAskAgentFromEvent}
           onSave={async (payload) => {
             try {
               await payload.action();

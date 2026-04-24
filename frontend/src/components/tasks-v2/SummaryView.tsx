@@ -6,12 +6,12 @@ import {
   RefreshCcw,
   Plus,
   AlarmClock,
-  Loader2,
 } from 'lucide-react';
 import api from '@/lib/api';
 import KpiCard from './KpiCard';
 import WorkTypeDonut from './WorkTypeDonut';
 import { TASK_TYPES } from './TYPE_META';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type UserField = string | { id?: number; username?: string; email?: string; name?: string } | null | undefined;
 
@@ -59,34 +59,139 @@ const eventLabel = (eventType?: string): string => {
 
 interface SummaryViewProps {
   projectId: number | null;
+  projectContextLoading?: boolean;
 }
 
-export default function SummaryView({ projectId }: SummaryViewProps) {
+function SummarySkeleton() {
+  return (
+    <div className="space-y-6">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={`tasks-summary-kpi-skeleton-${index}`}
+            className="flex items-center gap-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+          >
+            <Skeleton className="h-11 w-11 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-7 w-16" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_1fr]">
+        <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="mb-4 flex items-center justify-between">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <div className="flex items-center justify-center py-6">
+            <Skeleton className="h-48 w-48 rounded-full" />
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="mb-4 flex items-center justify-between">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-12" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`tasks-summary-type-skeleton-${index}`} className="flex items-center gap-3">
+                <Skeleton className="h-2 w-2 rounded-sm" />
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-1.5 flex-1" />
+                <Skeleton className="h-3 w-8" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+        <div className="mb-4 flex items-center justify-between">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={`tasks-summary-activity-skeleton-${index}`}
+              className="flex items-center justify-between gap-3"
+            >
+              <Skeleton className="h-3 w-56" />
+              <Skeleton className="h-3 w-14" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default function SummaryView({
+  projectId,
+  projectContextLoading = false,
+}: SummaryViewProps) {
   const [data, setData] = useState<SummaryPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (projectContextLoading) {
+      setData(null);
+      setError(null);
+      setHasLoadedOnce(false);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!projectId) {
       setData(null);
+      setError(null);
+      setHasLoadedOnce(false);
+      setLoading(false);
       return;
     }
+
+    setHasLoadedOnce(false);
     setLoading(true);
     api
       .get('/api/dashboard/summary/', { params: { project_id: projectId } })
       .then((r) => {
+        if (cancelled) return;
         setData(r.data as SummaryPayload);
         setError(null);
       })
       .catch((e) => {
+        if (cancelled) return;
         setError(
           e?.response?.data?.detail ||
             e?.response?.data?.error ||
             'Failed to load summary'
         );
       })
-      .finally(() => setLoading(false));
-  }, [projectId]);
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setHasLoadedOnce(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectContextLoading, projectId]);
+
+  if (projectContextLoading) {
+    return <SummarySkeleton />;
+  }
 
   if (!projectId) {
     return (
@@ -96,13 +201,8 @@ export default function SummaryView({ projectId }: SummaryViewProps) {
     );
   }
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center rounded-xl bg-white p-16 text-sm text-gray-500 shadow-sm ring-1 ring-gray-100">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading summary…
-      </div>
-    );
+  if (!hasLoadedOnce || (loading && !data)) {
+    return <SummarySkeleton />;
   }
 
   if (error) {

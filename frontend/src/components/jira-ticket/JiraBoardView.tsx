@@ -5,6 +5,7 @@ import {
   JiraBoardColumn,
   JiraBoardColumns,
 } from "@/components/jira-ticket/JiraBoard";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type BoardColumn = {
   key: string;
@@ -55,6 +56,7 @@ interface JiraBoardViewProps {
   currentUser?: BoardHeaderUser;
   hideInternalFilters?: boolean;
   externalFilters?: React.ReactNode;
+  loading?: boolean;
 }
 
 type BoardFilters = {
@@ -66,6 +68,12 @@ const DEFAULT_BOARD_FILTERS: BoardFilters = {
   assignee: "all",
   workType: "all",
 };
+
+const boardCardSkeletonVariants = [
+  { title: ["w-11/12", "w-7/12"], chip: "w-24", meta: "w-20" },
+  { title: ["w-10/12", "w-6/12"], chip: "w-20", meta: "w-24" },
+  { title: ["w-9/12", "w-8/12"], chip: "w-28", meta: "w-16" },
+];
 
 const getUserInitials = (user?: BoardHeaderUser) => {
   if (!user) return "U";
@@ -238,6 +246,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
   currentUser,
   hideInternalFilters = false,
   externalFilters,
+  loading = false,
 }) => {
   const [boardSearchQuery, setBoardSearchQuery] = useState("");
   const [filters, setFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
@@ -406,7 +415,7 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
               <JiraBoardColumn
                 key={column.key}
                 title={column.title}
-                count={columnTasks.length}
+                count={loading ? undefined : columnTasks.length}
                 footer={
                   <button
                     type="button"
@@ -420,7 +429,26 @@ const JiraBoardView: React.FC<JiraBoardViewProps> = ({
                   </button>
                 }
               >
-                {columnTasks.length === 0 ? (
+                {loading ? (
+                  boardCardSkeletonVariants.map((variant, index) => (
+                    <div
+                      key={`${column.key}-skeleton-${index}`}
+                      className="min-h-[132px] shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+                    >
+                      <div className="space-y-2">
+                        <Skeleton className={`h-4 ${variant.title[0]}`} />
+                        <Skeleton className={`h-4 ${variant.title[1]}`} />
+                      </div>
+                      <div className="mt-3">
+                        <Skeleton className={`h-6 rounded ${variant.chip}`} />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <Skeleton className={`h-4 ${variant.meta}`} />
+                        <Skeleton className="h-6 w-6 rounded-full" />
+                      </div>
+                    </div>
+                  ))
+                ) : columnTasks.length === 0 ? (
                   <p className="text-xs text-slate-400">{column.empty}</p>
                 ) : (
                   columnTasks.map((task) => (
