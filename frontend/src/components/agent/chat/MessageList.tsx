@@ -160,20 +160,26 @@ export function MessageList({
               />
             )}
 
-            {/* TaskListCard: show when decision created and tasks not yet created (or no stepState = backward compat) */}
-            {message.recommendedTasks && message.recommendedTasks.length > 0 && (!stepState || (stepState.decisionCreated && !stepState.tasksCreated)) && (
+            {/* TaskListCard:
+                - On analysis messages: show only BEFORE decision is created (decision card is still active)
+                - On decision_created messages: show AFTER decision created but before tasks created
+                This prevents the card from appearing twice when both message types have recommendedTasks. */}
+            {message.recommendedTasks && message.recommendedTasks.length > 0 && (
+              (message.type === "decision_created" && (!stepState || (stepState.decisionCreated && !stepState.tasksCreated))) ||
+              (message.type !== "decision_created" && (!stepState || (stepState.decisionCreated && !stepState.tasksCreated)) && !stepState?.decisionCreated)
+            ) && (
               <TaskListCard
                 tasks={message.recommendedTasks}
                 onCreateAll={() => onAction?.("create_tasks")}
               />
             )}
 
-            {/* MiroGenerateCard + DistributeMessageCard + FollowUpCard: show after tasks created (or no stepState = backward compat) */}
-            {message.recommendedTasks && message.recommendedTasks.length > 0 && (!stepState || stepState.tasksCreated) && (
+            {/* MiroGenerateCard + DistributeMessageCard: only on decision_created message, after tasks created */}
+            {message.type === "decision_created" && message.recommendedTasks && message.recommendedTasks.length > 0 && (!stepState || stepState.tasksCreated) && (
               <MiroGenerateCard onGenerate={() => onAction?.("generate_miro")} />
             )}
 
-            {message.recommendedTasks && message.recommendedTasks.length > 0 && (!stepState || stepState.tasksCreated) && (
+            {message.type === "decision_created" && message.recommendedTasks && message.recommendedTasks.length > 0 && (!stepState || stepState.tasksCreated) && (
               <DistributeMessageCard onDistribute={() => onAction?.("distribute_message")} />
             )}
 

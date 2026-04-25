@@ -29,6 +29,7 @@ def call_gemini(
     user_prompt: str,
     temperature: float = 0.3,
     timeout: int = 300,
+    response_mime_type: str | None = None,
 ) -> str:
     """Call Gemini and return the full text response as a string."""
     api_key = _get_api_key()
@@ -36,10 +37,13 @@ def call_gemini(
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
     url = f"{_GEMINI_BASE}/{GEMINI_MODEL}:streamGenerateContent?key={api_key}"
+    generation_config: dict = {"temperature": temperature}
+    if response_mime_type:
+        generation_config["responseMimeType"] = response_mime_type
     body = {
         "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
         "systemInstruction": {"parts": [{"text": system_prompt}]},
-        "generationConfig": {"temperature": temperature},
+        "generationConfig": generation_config,
     }
 
     logger.info(
@@ -101,11 +105,42 @@ def strip_json_fences(text: str) -> str:
     return text.strip()
 
 
+def _extract_json_block(text: str) -> str:
+    """Extract the first complete {...} or [...] block from text."""
+    for start_char, end_char in [('{', '}'), ('[', ']')]:
+        start = text.find(start_char)
+        if start == -1:
+            continue
+        depth = 0
+        in_string = False
+        escape = False
+        for i, ch in enumerate(text[start:], start):
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == start_char:
+                depth += 1
+            elif ch == end_char:
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    return text
+
+
 def call_gemini_json(
     system_prompt: str,
     user_prompt: str,
     temperature: float = 0.3,
     timeout: int = 300,
+    _retry: bool = True,
 ) -> dict:
     """Call Gemini and parse the response as JSON. Raises RuntimeError on failure."""
     text = call_gemini(
@@ -113,10 +148,25 @@ def call_gemini_json(
         user_prompt=user_prompt,
         temperature=temperature,
         timeout=timeout,
+        response_mime_type="application/json",
     )
     clean = strip_json_fences(text)
     try:
         return json.loads(clean)
-    except json.JSONDecodeError as exc:
-        logger.error("Gemini returned non-JSON: %s...", clean[:300])
-        raise RuntimeError(f"Gemini response is not valid JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        # Try extracting the JSON block directly in case there's surrounding text
+        extracted = _extract_json_block(clean)
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError as exc:
+            logger.error("Gemini returned non-JSON: %s...", clean[:300])
+            if _retry:
+                logger.warning("Retrying Gemini call after JSON parse failure")
+                return call_gemini_json(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature,
+                    timeout=timeout,
+                    _retry=False,
+                )
+            raise RuntimeError(f"Gemini response is not valid JSON: {exc}") from exc

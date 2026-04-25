@@ -679,10 +679,11 @@ class AgentOrchestrator:
             return
 
         if action == 'distribute_message':
-            yield {
-                "type": "text",
-                "content": "Message distribution is being configured. This feature will be available soon.",
-            }
+            latest_run = self.session.workflow_runs.filter(
+                analysis_result__isnull=False,
+                is_deleted=False,
+            ).order_by('-created_at').first()
+            yield from self._distribute_message(latest_run)
             yield {"type": "done"}
             return
 
@@ -1212,6 +1213,68 @@ class AgentOrchestrator:
             "type": "text",
             "content": "Follow-up chat closed.",
             "data": {"workflow_run_id": str(workflow_run.id)},
+        }
+
+    def _distribute_message(self, workflow_run):
+        """Send analysis summary + tasks to all project members via bot private chat."""
+        if not workflow_run or not workflow_run.analysis_result:
+            yield {"type": "error", "content": "No analysis found to distribute."}
+            return
+
+        project = self.session.project
+        sender = self.session.user
+
+        # Build summary message
+        analysis = workflow_run.analysis_result
+        anomalies = analysis.get("anomalies", [])
+        suggested = analysis.get("suggested_decision", {})
+        tasks = analysis.get("recommended_tasks", [])
+
+        lines = [f"📊 Analysis Summary — {project.name}"]
+        lines.append("")
+
+        if anomalies:
+            lines.append("⚠️ Anomalies detected:")
+            for a in anomalies[:5]:
+                lines.append(f"  • {a.get('description', str(a))}")
+
+        if suggested:
+            lines.append("")
+            lines.append(f"🎯 Suggested Decision: {suggested.get('title', '')}")
+
+        if tasks:
+            lines.append("")
+            lines.append("✅ Recommended Tasks:")
+            for t in tasks[:5]:
+                priority = t.get("priority", "")
+                title = t.get("title") or t.get("summary", "")
+                lines.append(f"  • [{priority}] {title}" if priority else f"  • {title}")
+
+        content = "\n".join(lines)
+
+        # Get all active project members except the sender
+        members = _serialize_project_members(project, excluded_users=[sender])
+        if not members:
+            yield {"type": "text", "content": "No other project members to notify."}
+            return
+
+        forwards = [{"username": m["username"], "content": content} for m in members]
+        results = _forward_to_users(forwards, sender, project)
+
+        sent = [r for r in results if r.get("status") == "sent"]
+        failed = [r for r in results if r.get("status") != "sent"]
+
+        summary_parts = []
+        if sent:
+            names = ", ".join(r["username"] for r in sent)
+            summary_parts.append(f"Message sent to {len(sent)} member(s): {names}.")
+        if failed:
+            names = ", ".join(r["username"] for r in failed)
+            summary_parts.append(f"Failed to send to: {names}.")
+
+        yield {
+            "type": "text",
+            "content": " ".join(summary_parts) if summary_parts else "Distribution complete.",
         }
 
     def create_decision_draft(self, analysis_result, workflow_run=None):

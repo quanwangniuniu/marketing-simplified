@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import type { FC, ComponentType } from "react";
 import { useChatStore } from "@/lib/chatStore";
+import { useAgentSidePanelStore } from "@/lib/agentSidePanelStore";
 // TODO: In actual projects, uncomment the imports below
 // import Link from 'next/link';
 // For Next.js 13+ App Router, also import:
@@ -187,6 +188,7 @@ const Sidebar: FC<SidebarProps> = ({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const { t } = useLanguage();
+  const { toggle: toggleAgentPanel, isOpen: isAgentPanelOpen } = useAgentSidePanelStore();
 
   // Get current pathname using Next.js 13+ App Router hook
   const pathname = usePathname();
@@ -463,13 +465,12 @@ const Sidebar: FC<SidebarProps> = ({
         }`}
       >
         <div className="px-2 pb-2 pt-2">
-          <a
-            href="/agent"
-            onClick={(e) => handleLinkClick(e, "/agent")}
+          <button
+            onClick={toggleAgentPanel}
             className={`
-            flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+            w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
             ${
-              isActive("/agent")
+              isAgentPanelOpen
                 ? "bg-gradient-to-r from-[#3CCED7] to-purple-600 text-white shadow-md"
                 : "bg-gradient-to-r from-blue-50 to-purple-50 text-[#1a9ba3] hover:from-blue-100 hover:to-purple-100 hover:shadow-sm"
             }
@@ -481,7 +482,7 @@ const Sidebar: FC<SidebarProps> = ({
               <>
                 <span>Agent</span>
                 <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                  isActive("/agent")
+                  isAgentPanelOpen
                     ? "bg-white/20 text-white"
                     : "bg-[#3CCED7]/15 text-[#3CCED7]"
                 }`}>
@@ -489,7 +490,7 @@ const Sidebar: FC<SidebarProps> = ({
                 </span>
               </>
             )}
-          </a>
+          </button>
         </div>
 
         {!collapsed && (

@@ -213,7 +213,7 @@ class DecisionViewSet(
 
     def get_queryset(self):
         base = (
-            Decision.objects.filter(is_deleted=False, is_pre_draft=False)
+            Decision.objects.filter(is_deleted=False)
             .select_related(
                 "project",
                 "meeting_origin__meeting__type_definition",

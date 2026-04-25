@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useAgentLayout, type AgentView } from "@/components/agent/AgentLayoutContext"
 import { WelcomeScreen } from "./WelcomeScreen"
 import { MessageList, type ChatMessage } from "./MessageList"
@@ -12,19 +13,18 @@ import { AGENT_MESSAGES } from "@/lib/agentMessages"
 import type { StepProgressItem } from "./StepProgress"
 
 function getPendingMiroWorkflowRunIds(messages: ChatMessage[]): string[] {
-  const completedOrFailed = new Set(
+  // Only treat "miro_board_created" as done — a prior failure can be retried for the same
+  // workflow_run_id, so "miro_generation_failed" must NOT stop the polling loop.
+  const completed = new Set(
     messages
-      .filter((message) =>
-        message.workflowRunId &&
-        (message.eventType === "miro_board_created" || message.eventType === "miro_generation_failed")
-      )
+      .filter((message) => message.workflowRunId && message.eventType === "miro_board_created")
       .map((message) => message.workflowRunId as string)
   )
 
   return messages
     .filter((message) => message.eventType === "miro_generation_started" && message.workflowRunId)
     .map((message) => message.workflowRunId as string)
-    .filter((workflowRunId) => !completedOrFailed.has(workflowRunId))
+    .filter((workflowRunId) => !completed.has(workflowRunId))
 }
 
 /** Broadcast anomalies from restored messages to RightPanel Alerts. */
@@ -68,14 +68,15 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     type = "error"
   } else if (m.data?.anomalies) {
     type = "analysis"
+  } else if (m.message_type === "task_created" || m.data?.task_ids) {
+    // Check task_created BEFORE decision_draft — backend may include decision_id on task events
+    type = "tasks_created"
+    navigateTo = "tasks"
+    navigateLabel = "Go to Tasks"
   } else if (m.message_type === "decision_draft" || m.data?.decision_id) {
     type = "decision_created"
     navigateTo = "decisions"
     navigateLabel = "Review Pre-Draft"
-  } else if (m.message_type === "task_created" || m.data?.task_ids) {
-    type = "tasks_created"
-    navigateTo = "tasks"
-    navigateLabel = "Go to Tasks"
   }
 
   return {
@@ -129,6 +130,7 @@ function buildCalendarPreload(): CalendarPreload | null {
 }
 
 export function AgentChatPage() {
+  const router = useRouter()
   const { setActiveView, floatingChat, toggleMaximize, setPendingDecisionId } = useAgentLayout()
   const [sessionId, setSessionIdState] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -172,6 +174,8 @@ export function AgentChatPage() {
   const pendingAutoConfirmRef = useRef<Record<string, string> | null>(null)
   // Always points to the latest handleConfirmColumns so it can be called from handleFileUpload
   const handleConfirmColumnsRef = useRef<((m: Record<string, string>) => void) | null>(null)
+  // Stores recommended tasks from latest analysis so decision_created messages can show TaskListCard
+  const latestRecommendedTasksRef = useRef<import("@/types/agent").RecommendedTask[] | null>(null)
 
   const setSessionId = useCallback((id: string | null) => {
     sessionIdRef.current = id
@@ -186,18 +190,37 @@ export function AgentChatPage() {
   const applySessionState = useCallback((session: Awaited<ReturnType<typeof AgentAPI.getSession>>) => {
     setSessionId(String(session.id))
     setHasStarted(true)
-    setMessages(session.messages.map(restoreMessage))
+
+    // Restore messages and back-fill recommendedTasks onto decision_created messages
+    // (the backend does not persist recommended_tasks on decision events, only on analysis events)
+    const restored = session.messages.map(restoreMessage)
+    let lastTasks: import("@/types/agent").RecommendedTask[] | undefined
+    for (let i = 0; i < restored.length; i++) {
+      if (restored[i].type === "analysis") {
+        lastTasks = restored[i].recommendedTasks
+        latestRecommendedTasksRef.current = lastTasks || null
+      } else if (restored[i].type === "decision_created" && lastTasks && !restored[i].recommendedTasks) {
+        restored[i] = { ...restored[i], recommendedTasks: lastTasks }
+      }
+    }
+    setMessages(restored)
     setFollowUpAvailable(Boolean(session.follow_up_available))
     setFollowUpStarted(Boolean(session.follow_up_started))
     broadcastRestoredAnomalies(session.messages)
-    // Derive step state from restored messages
+    // Derive step state from restored messages.
+    // Each new analysis event starts a fresh cycle — reset downstream flags so that
+    // task/decision data from a *previous* upload cycle does not carry over.
     const restoredStepState: WorkflowStepState = {
       analysisComplete: false,
       decisionCreated: false,
       tasksCreated: false,
     }
     for (const m of session.messages) {
-      if (m.data?.anomalies) restoredStepState.analysisComplete = true
+      if (m.data?.anomalies) {
+        restoredStepState.analysisComplete = true
+        restoredStepState.decisionCreated = false
+        restoredStepState.tasksCreated = false
+      }
       if (m.message_type === "decision_draft" || m.data?.decision_id) restoredStepState.decisionCreated = true
       if (m.message_type === "task_created" || m.data?.task_ids) restoredStepState.tasksCreated = true
     }
@@ -227,7 +250,18 @@ export function AgentChatPage() {
     const intervalId = window.setInterval(async () => {
       try {
         const session = await AgentAPI.getSession(sessionId)
-        setMessages(session.messages.map(restoreMessage))
+        // Re-apply the same backfill logic as applySessionState so that
+        // decision_created messages don't lose their recommendedTasks during polling.
+        const restored = session.messages.map(restoreMessage)
+        let lastTasks: import("@/types/agent").RecommendedTask[] | undefined
+        for (let i = 0; i < restored.length; i++) {
+          if (restored[i].type === "analysis") {
+            lastTasks = restored[i].recommendedTasks
+          } else if (restored[i].type === "decision_created" && lastTasks && !restored[i].recommendedTasks) {
+            restored[i] = { ...restored[i], recommendedTasks: lastTasks }
+          }
+        }
+        setMessages(restored)
         setFollowUpAvailable(Boolean(session.follow_up_available))
         setFollowUpStarted(Boolean(session.follow_up_started))
       } catch {
@@ -302,6 +336,8 @@ export function AgentChatPage() {
   /** Handle file upload — calls upload-analyze SSE endpoint */
   const handleFileUpload = useCallback(async (file: File) => {
     setHasStarted(true)
+    // Reset workflow state so a new file always starts from "Create Decision"
+    setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
 
     // Show user message
     const userMsgId = `user-${Date.now()}`
@@ -381,6 +417,7 @@ export function AgentChatPage() {
         } else if (event.type === "analysis") {
           contentParts.push(event.content || "")
           analysisData = (event.data as unknown as AnalysisResult) || null
+          latestRecommendedTasksRef.current = analysisData?.recommended_tasks || null
           setFollowUpAvailable(true)
           setFollowUpStarted(false)
           setStepState((prev) => ({ ...prev, analysisComplete: true }))
@@ -514,6 +551,7 @@ export function AgentChatPage() {
 
         if (event.type === "analysis" && event.data) {
           const data = event.data as unknown as AnalysisResult
+          latestRecommendedTasksRef.current = data.recommended_tasks || null
           setFollowUpAvailable(true)
           setFollowUpStarted(false)
           setStepState((prev) => ({ ...prev, analysisComplete: true }))
@@ -533,6 +571,7 @@ export function AgentChatPage() {
             navigateTo: "decisions",
             navigateLabel: "Review Pre-Draft",
             decisionId: decisionId ? Number(decisionId) : undefined,
+            recommendedTasks: latestRecommendedTasksRef.current || undefined,
           })
         }
         if (event.type === "task_created" && event.data) {
@@ -584,6 +623,7 @@ export function AgentChatPage() {
     setFollowUpStarted(false)
     setStepProgress([])
     setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
+    latestRecommendedTasksRef.current = null
     abortRef.current?.abort()
   }, [])
 
@@ -705,6 +745,7 @@ export function AgentChatPage() {
 
         if (event.type === "analysis" && event.data) {
           const data = event.data as unknown as AnalysisResult
+          latestRecommendedTasksRef.current = data.recommended_tasks || null
           setFollowUpAvailable(true)
           setFollowUpStarted(false)
           setStepState((prev) => ({ ...prev, analysisComplete: true }))
@@ -726,6 +767,7 @@ export function AgentChatPage() {
             navigateTo: "decisions",
             navigateLabel: "Review Pre-Draft",
             decisionId: decisionId ? Number(decisionId) : undefined,
+            recommendedTasks: latestRecommendedTasksRef.current || undefined,
           })
         }
         if (event.type === "task_created" && event.data) {
@@ -858,6 +900,7 @@ export function AgentChatPage() {
             navigateTo: "decisions",
             navigateLabel: "Review Pre-Draft",
             decisionId: decisionId ? Number(decisionId) : undefined,
+            recommendedTasks: latestRecommendedTasksRef.current || undefined,
           })
         }
         if (event.type === "task_created") {
@@ -941,11 +984,16 @@ export function AgentChatPage() {
           window.location.href = msg.navigateHref
           return
         }
+        if (view === "decisions" && msg?.decisionId) {
+          router.push(`/decisions/${msg.decisionId}`)
+          return
+        }
+        if (view === "tasks") {
+          router.push("/tasks")
+          return
+        }
         setActiveView(view as AgentView)
         if (floatingChat.mode === "maximized") toggleMaximize()
-        if (view === "decisions" && msg?.decisionId) {
-          setPendingDecisionId(msg.decisionId)
-        }
       }} />
       <ActionBar stepState={stepState} onAction={handleAction} onReupload={handleReupload} disabled={isStreaming} />
       <ChatInput
