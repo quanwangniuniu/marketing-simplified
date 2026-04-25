@@ -346,7 +346,7 @@ class OrchestratorTests(TestCase):
 
 
     @patch('agent.services._call_gemini_chat')
-    def test_follow_up_completed_marks_run_and_passes_project_members(self, mock_call_dify_chat):
+    def test_follow_up_completed_marks_run_and_passes_project_members(self, mock_call_gemini_chat):
         teammate = CustomUser.objects.create_user(
             email='alice@test.com',
             username='alice',
@@ -373,7 +373,7 @@ class OrchestratorTests(TestCase):
             role='assistant',
             content='Analysis complete.',
         )
-        mock_call_dify_chat.return_value = {
+        mock_call_gemini_chat.return_value = {
             'status': 'completed',
             'text': 'Prepared a summary.',
             'forwards': [],
@@ -389,9 +389,9 @@ class OrchestratorTests(TestCase):
         workflow_run.refresh_from_db()
         self.assertTrue(workflow_run.chat_followed_up)
 
-        self.assertTrue(mock_call_dify_chat.called)
-        project_members = mock_call_dify_chat.call_args.kwargs['project_members']
-        current_username = mock_call_dify_chat.call_args.kwargs['current_username']
+        self.assertTrue(mock_call_gemini_chat.called)
+        project_members = mock_call_gemini_chat.call_args.kwargs['project_members']
+        current_username = mock_call_gemini_chat.call_args.kwargs['current_username']
         usernames = {member['username'] for member in project_members}
         self.assertEqual(current_username, 'orchuser')
         self.assertIn('orchuser', usernames)
@@ -399,14 +399,14 @@ class OrchestratorTests(TestCase):
         self.assertNotIn('agent-bot', usernames)
 
     @patch('agent.services._call_gemini_chat')
-    def test_follow_up_needs_clarification_keeps_run_open(self, mock_call_dify_chat):
+    def test_follow_up_needs_clarification_keeps_run_open(self, mock_call_gemini_chat):
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
             status='awaiting_confirmation',
             analysis_result=_test_analysis_data(),
             chat_follow_up_started=True,
         )
-        mock_call_dify_chat.return_value = {
+        mock_call_gemini_chat.return_value = {
             'status': 'needs_clarification',
             'text': 'Please provide the exact username.',
             'forwards': [],
@@ -420,7 +420,7 @@ class OrchestratorTests(TestCase):
             chunks,
         )
         self.assertEqual(
-            mock_call_dify_chat.call_args.kwargs['current_username'],
+            mock_call_gemini_chat.call_args.kwargs['current_username'],
             'orchuser',
         )
         workflow_run.refresh_from_db()
@@ -473,7 +473,7 @@ class OrchestratorTests(TestCase):
         self.assertFalse(workflow_run.chat_followed_up)
 
     @patch('agent.services._call_gemini_chat')
-    def test_follow_up_requires_explicit_start(self, mock_call_dify_chat):
+    def test_follow_up_requires_explicit_start(self, mock_call_gemini_chat):
         AgentWorkflowRun.objects.create(
             session=self.session,
             status='awaiting_confirmation',
@@ -493,7 +493,7 @@ class OrchestratorTests(TestCase):
             },
             chunks,
         )
-        mock_call_dify_chat.assert_not_called()
+        mock_call_gemini_chat.assert_not_called()
 
     @patch('chat.tasks.notify_new_message.delay')
     def test_forward_to_users_does_not_match_first_name(self, mock_notify_delay):

@@ -12,7 +12,7 @@ const integrations = [
   { name: "Slack", icon: "/icons/slack.svg" },
   { name: "Zoom", icon: "/icons/zoom.svg" },
   { name: "Stripe", icon: "/icons/stripe.svg" },
-  { name: "Dify", icon: "/icons/dify.svg" },
+  { name: "Gemini", icon: "/icons/gemini.svg" },
 ]
 
 const stats = [
