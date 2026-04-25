@@ -20,10 +20,14 @@ from django.conf import settings
 from django.db import transaction
 from google_auth_oauthlib.flow import Flow  # For OAuth start (generating auth URL)
 from requests_oauthlib import OAuth2Session  # For OAuth callback (token exchange)
+from django.core.mail import send_mail
+from django.utils import timezone
+import datetime
 import requests
 import jwt
 import uuid
 import secrets
+
 
 User = get_user_model()
 
@@ -840,3 +844,65 @@ class UserTeamsView(APIView):
             'team_ids': team_ids,
             'team_count': len(team_ids)
         }, status=status.HTTP_200_OK)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ForgotPasswordView(APIView):
+    permission_classes = []
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"message":"If this email is exists, a reset link will be sent to your email."}, status=status.HTTP_200_OK)
+        # Generate a random token to reset pwd
+        token = secrets.token_urlsafe(32)
+        user.password_reset_token = token
+        user.password_reset_token_expires_at = timezone.now() + datetime.timedelta(hours=1)
+        user.save()
+        
+        #send email to user
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        reset_link = f"{frontend_url}/reset-password?token={token}"
+        send_mail(
+            subject='Reset Password',
+            message=f"Click the link below to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.",
+            from_email=settings.EMAIL_HOST_USER,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        return Response({"message": "If this email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class ResetPasswordView(APIView):
+    permission_classes = []
+    def post(self, request):
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+        if not token or not new_password:
+            return Response({"error":"Token and new password are required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(password_reset_token = token)
+        except User.DoesNotExist:
+            return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        #validate token expiration
+        if user.password_reset_token_expires_at is None:
+            return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+        if user.password_reset_token_expires_at is not None or timezone.now() > user.password_reset_token_expires_at:
+            return Response({"error":"Token has expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+        #validate new password
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as e:
+            return Response({"error":"Password validation failed", "details": list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        #set new pwd
+        user.set_password(new_password)
+        user.password_reset_token = None
+        user.password_reset_token_expires_at = None
+        user.save()
+        
+        return Response({"message":"Password reset successfully"}, status=status.HTTP_200_OK)
