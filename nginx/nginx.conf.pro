@@ -60,10 +60,10 @@ http {
 
     server {
         listen 443 ssl;
-        server_name mediajira.dpdns.org www.mediajira.dpdns.org;
+        server_name marketing.simplified.dpdns.org;
 
-        ssl_certificate /etc/letsencrypt/live/mediajira.dpdns.org/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/mediajira.dpdns.org/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/marketing.simplified.dpdns.org/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/marketing.simplified.dpdns.org/privkey.pem;
 
         client_max_body_size 110m;
 
