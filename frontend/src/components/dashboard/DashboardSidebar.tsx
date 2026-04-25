@@ -198,7 +198,7 @@ export default function DashboardSidebar() {
   };
 
   return (
-    <aside className="w-[255px] h-screen flex flex-col border-r border-gray-200 bg-white shrink-0">
+    <aside className="w-[255px] h-full flex flex-col border-r border-gray-200 bg-white shrink-0">
       {/* Logo */}
       <div className="px-4 py-4 border-b border-gray-100">
         <Link href="/" className="flex items-center">
@@ -262,7 +262,7 @@ export default function DashboardSidebar() {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto pt-4 pb-2 px-2">
+      <nav className="flex-1 overflow-y-auto pt-4 pb-2 px-2 [scrollbar-width:thin] [scrollbar-color:#94a3b8_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-thumb:hover]:bg-slate-500">
         {visibleNavGroups.map((group, gi) => (
           <div key={group.title} className={gi > 0 ? 'mt-5' : ''}>
             <div className="px-3 mb-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
