@@ -1,10 +1,56 @@
 services:
+  db:
+    build: 
+      context: ./postgres
+      dockerfile: Dockerfile
+    container_name: db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-}
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - pgbackups:/var/lib/pgbackrest
+      - /var/run/postgresql:/var/run/postgresql 
+    networks:
+      - app-network
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgbackrest:
+    build: 
+      context: ./pgbackrest
+      dockerfile: Dockerfile
+    container_name: pgbackrest
+    restart: always    
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - pgbackups:/var/lib/pgbackrest
+      - pglogs:/var/log/pgbackrest   
+      - /var/run/postgresql:/var/run/postgresql 
+    networks:
+      - app-network
+    command: ["/bin/bash", "/usr/bin/entrypoint"]
+    depends_on:
+      db:
+        condition: service_healthy
+        required: true      
+
   redis:
     image: redis:7-alpine
     container_name: redis-prod
     restart: always
     ports:
       - "6379:6379"
+    networks:
+      - app-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -20,6 +66,8 @@ services:
       - "3310:3310"
     volumes:
       - clamav_data:/var/lib/clamav
+    networks:
+      - app-network
     healthcheck:
       test: ["CMD", "clamdscan", "--version"]
       interval: 30s
@@ -27,10 +75,9 @@ services:
       retries: 3
 
   backend:
-    # build: 
-    #   context: ./backend
-    #   dockerfile: Dockerfile
-    image: backend_base_image
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: backend-prod
     restart: always
     ports:
@@ -60,16 +107,20 @@ services:
       # Note: On Windows with Docker Desktop, time is automatically synced
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
+      # Conditional dependencies - Only depend on db and redis in CI environment or full environment
+      db:
+        condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
       clamav:
         condition: service_healthy
     networks:
       - app-network
-    command: ["/bin/bash", "/app/entrypoint"]      
+    command: ["/bin/bash", "/app/entrypoint"]
     logging:
       driver: "json-file"
       options:
@@ -78,10 +129,9 @@ services:
         labels: "service=django"
 
   frontend:
-    # build:
-    #   context: ./frontend
-    #   dockerfile: Dockerfile
-    image: frontend_base_image
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: frontend-prod
     restart: always
     ports:
@@ -122,10 +172,9 @@ services:
       - app-network
 
   celery-worker:
-    # build:
-    #   context: ./backend
-    #   dockerfile: Dockerfile
-    image: backend_base_image
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: celery-worker-prod
     restart: always
     env_file:
@@ -152,11 +201,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      db:
+        condition: service_healthy
+        required: false    
       redis:
         condition: service_healthy
       clamav:
         condition: service_healthy
     command: celery -A backend worker --loglevel=info
+    networks:
+      - app-network
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
@@ -184,11 +238,17 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - app-network
 
 networks:
   app-network:
     driver: bridge
 
 volumes:
+  pgdata: 
+  pgbackups: 
+  pglogs:
   clamav_data:
   kafka_data:
+
