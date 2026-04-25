@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
 import NotificationBell from './NotificationBell';
 import UpcomingMeetingsPanel from './UpcomingMeetingsPanel';
+import AgentSidePanel from '@/components/agent/AgentSidePanel';
 import { useProjectStore } from '@/lib/projectStore';
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import { splitMeetingRowsBySchedule } from '@/lib/meetings/meetingScheduleSplit';
@@ -219,6 +220,7 @@ export default function DashboardLayout({
           loading={meetingsLoading}
         />
       )}
+      <AgentSidePanel />
     </div>
   );
 }

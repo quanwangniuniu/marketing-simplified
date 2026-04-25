@@ -15,6 +15,7 @@ import {
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/lib/authStore';
 import useAuth from '@/hooks/useAuth';
+import { useAgentSidePanelStore } from '@/lib/agentSidePanelStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -152,6 +153,7 @@ export default function DashboardSidebar() {
   const authLoading = useAuthStore((state) => state.loading);
   const authInitialized = useAuthStore((state) => state.initialized);
   const { logout } = useAuth();
+  const { toggle: toggleAgentPanel, isOpen: isAgentPanelOpen } = useAgentSidePanelStore();
 
   const userDisplayName = useMemo(() => {
     if (!user) return null;
@@ -277,15 +279,23 @@ export default function DashboardSidebar() {
               return (
                 <div key={item.label}>
                   <button
-                    onClick={() => (hasChildren ? toggle(item.label) : router.push(item.href))}
+                    onClick={() => {
+                      if (item.href === '/agent') {
+                        toggleAgentPanel();
+                      } else if (hasChildren) {
+                        toggle(item.label);
+                      } else {
+                        router.push(item.href);
+                      }
+                    }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
-                      isActive || childActive
+                      (item.href === '/agent' ? isAgentPanelOpen : isActive || childActive)
                         ? 'bg-[#3CCED7]/8 text-[#3CCED7]'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                     aria-expanded={hasChildren ? isOpen : undefined}
                   >
-                    {isActive && (
+                    {(item.href === '/agent' ? isAgentPanelOpen : isActive) && (
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[#3CCED7]" />
                     )}
                     <item.icon className="w-[18px] h-[18px] shrink-0" />
