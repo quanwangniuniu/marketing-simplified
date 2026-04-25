@@ -590,9 +590,15 @@ input[type="password"]::-ms-clear {
 }
 /* Some WebKit credential decorations */
 input[type="password"]::-webkit-credentials-auto-fill-button,
-input[type="password"]::-webkit-textfield-decoration-container {
-  display: none !important;
+input[type="password"]::-webkit-contacts-auto-fill-button {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
+
+/*
+  Safari/WebKit: do NOT hide `::-webkit-textfield-decoration-container`.
+  Hiding it can collapse the input's internal layout and shrink the clickable area.
+*/
 
 
 /* Liquid glass card */
