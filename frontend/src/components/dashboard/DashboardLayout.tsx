@@ -18,6 +18,7 @@ interface DashboardLayoutProps {
   alerts?: AlertData[];
   upcomingMeetings?: MeetingListItem[];
   hideRightPanel?: boolean;
+  mainClassName?: string;
 }
 
 const humanize = (value: string): string =>
@@ -90,6 +91,7 @@ export default function DashboardLayout({
   alerts = [],
   upcomingMeetings,
   hideRightPanel = false,
+  mainClassName = '',
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [meetingsLoading, setMeetingsLoading] = useState(
@@ -205,7 +207,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Scrollable content */}
-        <main className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
+        <main className={`min-h-0 flex-1 overflow-y-auto p-5 space-y-4 ${mainClassName}`}>
           {children}
         </main>
       </div>

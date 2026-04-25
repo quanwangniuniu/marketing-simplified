@@ -527,6 +527,31 @@ hr {
   scrollbar-width: none;
 }
 
+/* Thin dashboard scrollbar with transparent track. */
+.dashboard-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 /* Visible scrollbar for spreadsheet grid; only this container scrolls (page/body do not). */
 .spreadsheet-scroll-container {
   /* Firefox */

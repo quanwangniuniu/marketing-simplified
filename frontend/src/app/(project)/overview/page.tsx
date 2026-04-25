@@ -43,7 +43,11 @@ export default function OverviewPage() {
   const { data, alerts, loading, errors } = useOverviewData(projectId);
 
   return (
-    <DashboardLayout alerts={alerts} upcomingMeetings={data.upcomingMeetings}>
+    <DashboardLayout
+      alerts={alerts}
+      upcomingMeetings={data.upcomingMeetings}
+      mainClassName="dashboard-scrollbar"
+    >
       <ErrorBanner errors={errors} />
       {loading ? (
         <OverviewSkeleton />

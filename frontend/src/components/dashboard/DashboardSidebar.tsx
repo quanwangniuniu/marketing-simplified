@@ -262,7 +262,7 @@ export default function DashboardSidebar() {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto pt-4 pb-2 px-2 [scrollbar-width:thin] [scrollbar-color:#94a3b8_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-thumb:hover]:bg-slate-500">
+      <nav className="dashboard-scrollbar flex-1 overflow-y-auto pt-4 pb-2 px-2">
         {visibleNavGroups.map((group, gi) => (
           <div key={group.title} className={gi > 0 ? 'mt-5' : ''}>
             <div className="px-3 mb-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
