@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import ChatWidget from '@/components/chat/ChatWidget';
+import AgentSidePanel from '@/components/agent/AgentSidePanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import { usePermissionEditControl } from '@/hooks/usePermissionEditControl';
@@ -154,15 +155,16 @@ const Layout: React.FC<LayoutProps> = ({
 
           {/* main content */}
           <main className={`
-
-            flex-1 overflow-hidden bg-white 
-            ${usePageScroll ? 'overflow-visible' : 'overflow-hidden'} 
+            flex-1 overflow-hidden bg-white
+            ${usePageScroll ? 'overflow-visible' : 'overflow-hidden'}
             bg-gray-50
             ${isMobile && !isSidebarCollapsed ? 'hidden' : 'block'}
             transition-all duration-300 ease-in-out
           `}>
             {children}
           </main>
+
+          <AgentSidePanel />
         </div>
 
         {/* sidebar collapse */}
