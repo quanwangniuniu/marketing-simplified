@@ -27,6 +27,10 @@ import requests
 import jwt
 import uuid
 import secrets
+import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 User = get_user_model()
@@ -852,27 +856,31 @@ class ForgotPasswordView(APIView):
         email = request.data.get('email')
         if not email:
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        generic_response = Response({"message": "If this email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({"message":"If this email is exists, a reset link will be sent to your email."}, status=status.HTTP_200_OK)
-        # Generate a random token to reset pwd
+            return generic_response
+        # Generate a random token; store only its hash to protect against DB reads
         token = secrets.token_urlsafe(32)
-        user.password_reset_token = token
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.password_reset_token = token_hash
         user.password_reset_token_expires_at = timezone.now() + datetime.timedelta(hours=1)
         user.save()
-        
-        #send email to user
+
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
         reset_link = f"{frontend_url}/reset-password?token={token}"
-        send_mail(
-            subject='Reset Password',
-            message=f"Click the link below to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.",
-            from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        return Response({"message": "If this email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+        try:
+            send_mail(
+                subject='Reset Password',
+                message=f"Click the link below to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", email)
+        return generic_response
     
 @method_decorator(csrf_exempt, name='dispatch')
 class ResetPasswordView(APIView):
@@ -882,8 +890,9 @@ class ResetPasswordView(APIView):
         new_password = request.data.get('new_password')
         if not token or not new_password:
             return Response({"error":"Token and new password are required"}, status=status.HTTP_400_BAD_REQUEST)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         try:
-            user = User.objects.get(password_reset_token = token)
+            user = User.objects.get(password_reset_token=token_hash)
         except User.DoesNotExist:
             return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
         

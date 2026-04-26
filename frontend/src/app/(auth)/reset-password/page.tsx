@@ -121,7 +121,6 @@
 
               <FormButton
                 type="submit"
-                onClick={() => {}}
                 loading={loading}
                 disabled={loading || hasFieldErrors}
               >

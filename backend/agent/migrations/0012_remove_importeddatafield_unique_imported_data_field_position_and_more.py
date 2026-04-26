@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0002_customuser_password_reset_token_and_more'),
+        ('core', '0001_initial'),
         ('agent', '0011_insert_generate_criteria_step'),
     ]
 

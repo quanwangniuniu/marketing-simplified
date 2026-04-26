@@ -79,7 +79,7 @@
                 placeholder="Enter your email"
               />                          
 
-              <FormButton type="submit" onClick={() => {}} loading={loading} disabled={loading}>                                       
+              <FormButton type="submit" loading={loading} disabled={loading}>                                       
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </FormButton>                                                                                                            
                                                                                                                                        
