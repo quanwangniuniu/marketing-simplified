@@ -13,6 +13,8 @@ const integrations = [
   { name: "Zoom", icon: "/icons/zoom.svg" },
   { name: "Stripe", icon: "/icons/stripe.svg" },
   { name: "Gemini", icon: "/icons/gemini.svg" },
+  { name: "Google Sheets", icon: "/icons/google-spreadsheet.svg" },
+  { name:"Google Gemini", icon: "/icons/google-gemini.svg" },
 ]
 
 const stats = [
@@ -66,9 +68,6 @@ export default function IntegrationsSection() {
                 className="group relative flex flex-col items-center justify-center gap-2 p-5 glass-card rounded-2xl hover:shadow-lg transition-all duration-300 cursor-pointer"
               >
                 <Image src={icon} alt={name} width={28} height={28} />
-                {/* <span className="text-sm font-semibold text-gray-600 group-hover:text-brand-teal transition-colors">
-                  {name}
-                </span> */}
               </motion.div>
             ))}
           </div>
