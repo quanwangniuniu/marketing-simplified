@@ -194,6 +194,9 @@ class CustomUser(AbstractUser):
     is_verified = models.BooleanField(default=False)
     email = models.EmailField(unique=True)
     verification_token = models.CharField(max_length=100, blank=True, null=True)
+    #For password reset
+    password_reset_token = models.CharField(max_length=100, blank=True, null=True)
+    password_reset_token_expires_at = models.DateTimeField(blank=True, null=True)
 
     # For google auth
     google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
