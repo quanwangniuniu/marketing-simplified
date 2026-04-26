@@ -1,8 +1,7 @@
 from unittest.mock import patch, Mock
 
 from agent.executors import CreateMiroBoardExecutor, GenerateMiroSnapshotExecutor
-from agent.dify_workflows import run_dify_workflow
-from agent.miro_generation import normalize_miro_snapshot_layout, call_dify_miro_generator
+from agent.miro_generation import normalize_miro_snapshot_layout, call_gemini_miro_generator
 from agent.miro_board_service import _materialize_snapshot_ids
 from agent.services import _generate_miro_board_for_workflow_run, AgentOrchestrator
 
@@ -155,15 +154,15 @@ def test_materialize_snapshot_ids_converts_ids_and_parent_references():
     assert persisted["items"][1]["parent_item_id"] == persisted["items"][0]["id"]
 
 
-@patch("agent.miro_generation.call_dify_miro_generator")
+@patch("agent.miro_generation.call_gemini_miro_generator")
 @patch("agent.miro_generation.build_miro_generation_context_from_run")
-def test_generate_miro_snapshot_executor_saves_snapshot(mock_build_context, mock_call_dify):
+def test_generate_miro_snapshot_executor_saves_snapshot(mock_build_context, mock_call_gemini):
     workflow_run = _WorkflowRunStub()
     orchestrator = _OrchestratorStub()
     executor = GenerateMiroSnapshotExecutor(_StepStub("generate_miro_snapshot"), workflow_run, orchestrator)
 
     mock_build_context.return_value = {"chat_context": "[user]: Analyze this"}
-    mock_call_dify.return_value = _test_snapshot()
+    mock_call_gemini.return_value = _test_snapshot()
 
     result = executor.execute({"analysis_result": workflow_run.analysis_result})
 
@@ -200,13 +199,13 @@ def test_create_miro_board_executor_persists_board_and_snapshot(mock_create_boar
 @patch("agent.miro_generation.build_miro_generation_context_from_run")
 def test_generate_miro_board_for_workflow_run_updates_run(
     mock_build_context,
-    mock_call_dify,
+    mock_call_gemini,
     mock_create_board,
 ):
     workflow_run = _WorkflowRunStub()
     orchestrator = _OrchestratorStub()
     mock_build_context.return_value = {"analysis": {"anomalies": []}}
-    mock_call_dify.return_value = _test_snapshot()
+    mock_call_gemini.return_value = _test_snapshot()
     board = type("BoardStub", (), {"id": "board-legacy-1", "title": "Agent Miro - Analysis session"})()
     persisted_snapshot = _materialize_snapshot_ids(_test_snapshot(), _persisted_id_map())
     mock_create_board.return_value = (board, persisted_snapshot)
@@ -310,10 +309,10 @@ def test_normalize_miro_snapshot_layout_pushes_overlapping_items_down():
 
 
 @patch("agent.gemini_client.call_gemini_json")
-def test_call_dify_miro_generator_normalizes_layout_before_validation(mock_call_gemini):
+def test_call_gemini_miro_generator_normalizes_layout_before_validation(mock_call_gemini):
     mock_call_gemini.return_value = _overlapping_snapshot()
 
-    snapshot = call_dify_miro_generator({"analysis": {"anomalies": []}}, user_id=1)
+    snapshot = call_gemini_miro_generator({"analysis": {"anomalies": []}}, user_id=1)
     title = snapshot["items"][1]
     reason = snapshot["items"][2]
     action = snapshot["items"][3]
@@ -322,59 +321,3 @@ def test_call_dify_miro_generator_normalizes_layout_before_validation(mock_call_
     assert action["y"] >= reason["y"] + reason["height"] + 24
 
 
-@patch("agent.dify_workflows.requests.post")
-def test_run_dify_workflow_streaming_returns_outputs_from_stream(mock_post):
-    response = Mock()
-    response.raise_for_status.return_value = None
-    response.iter_lines.return_value = iter([
-        'event: workflow_finished',
-        'data: {"workflow_run_id":"run-123","data":{"outputs":{"snapshot":"ok"}}}',
-        '',
-    ])
-    mock_post.return_value = response
-
-    outputs = run_dify_workflow(
-        api_url="https://api.dify.ai",
-        api_key="app-test",
-        inputs={"board_generation_context": "{}"},
-        user_id=1,
-        timeout=10,
-        response_mode="streaming",
-    )
-
-    assert outputs == {"snapshot": "ok"}
-
-
-@patch("agent.dify_workflows.time.sleep", return_value=None)
-@patch("agent.dify_workflows.requests.get")
-@patch("agent.dify_workflows.requests.post")
-def test_run_dify_workflow_streaming_fetches_final_outputs_when_stream_has_only_run_id(mock_post, mock_get, _mock_sleep):
-    post_response = Mock()
-    post_response.raise_for_status.return_value = None
-    post_response.iter_lines.return_value = iter([
-        'event: workflow_started',
-        'data: {"workflow_run_id":"run-456"}',
-        '',
-    ])
-    mock_post.return_value = post_response
-
-    get_response = Mock()
-    get_response.raise_for_status.return_value = None
-    get_response.json.return_value = {
-        "data": {
-            "status": "succeeded",
-            "outputs": {"snapshot": "done"},
-        }
-    }
-    mock_get.return_value = get_response
-
-    outputs = run_dify_workflow(
-        api_url="https://api.dify.ai",
-        api_key="app-test",
-        inputs={"board_generation_context": "{}"},
-        user_id=1,
-        timeout=10,
-        response_mode="streaming",
-    )
-
-    assert outputs == {"snapshot": "done"}

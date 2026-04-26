@@ -19,6 +19,7 @@ interface DashboardLayoutProps {
   alerts?: AlertData[];
   upcomingMeetings?: MeetingListItem[];
   hideRightPanel?: boolean;
+  mainClassName?: string;
 }
 
 const humanize = (value: string): string =>
@@ -91,6 +92,7 @@ export default function DashboardLayout({
   alerts = [],
   upcomingMeetings,
   hideRightPanel = false,
+  mainClassName = '',
 }: DashboardLayoutProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [meetingsLoading, setMeetingsLoading] = useState(
@@ -109,6 +111,19 @@ export default function DashboardLayout({
   const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
   const [autoMeetings, setAutoMeetings] = useState<MeetingListItem[]>([]);
   const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
+
+  useEffect(() => {
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
 
   useEffect(() => {
     if (useExplicit) {
@@ -150,11 +165,11 @@ export default function DashboardLayout({
   const meetingsForPanel = useExplicit ? upcomingMeetings! : autoMeetings;
 
   return (
-    <div className="flex h-screen bg-[#F7F8FA] overflow-hidden">
+    <div className="fixed inset-0 flex bg-[#F7F8FA] overflow-hidden">
       <DashboardSidebar />
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="min-h-0 flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="flex items-center justify-between px-5 h-12 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center gap-2 text-sm">
@@ -193,7 +208,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto p-5 space-y-4">
+        <main className={`min-h-0 flex-1 overflow-y-auto p-5 space-y-4 ${mainClassName}`}>
           {children}
         </main>
       </div>

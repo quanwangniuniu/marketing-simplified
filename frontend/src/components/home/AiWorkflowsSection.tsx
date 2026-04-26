@@ -3,52 +3,101 @@
 import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import {
-  Table2,
-  MessageSquare,
-  Presentation,
-  Calendar,
-  Zap,
+  FileSpreadsheet,
+  MessagesSquare,
+  CalendarDays,
   Bot,
+  SearchCheck,
+  Share2,
+  PanelsTopLeft,
+  CalendarCheck,
+  type LucideIcon,
 } from "lucide-react"
 
-const workflows = [
+type Workflow = {
+  id: string
+  name: string
+  icon?: LucideIcon
+  iconSrc?: string
+  iconGradient: string
+  outcomeIcon: LucideIcon
+  outcomeLabel: string
+  action: string
+  trigger: string
+}
+
+const workflows: Workflow[] = [
   {
     id: "spreadsheet-analysis",
     name: "Spreadsheet Analysis",
-    icon: Table2,
+    icon: FileSpreadsheet,
     iconGradient: "from-brand-teal to-brand-lime",
+    outcomeIcon: SearchCheck,
+    outcomeLabel: "Analyze & recommend",
     action:
-      "Hand a campaign spreadsheet to the LLM to detect anomalies and suggest actions.",
-    trigger: "Step 1 of default analysis workflow",
+      "Upload campaign data and spot unusual spend, performance drops, and the next best move in minutes.",
+    trigger: "When a campaign spreadsheet is uploaded",
   },
   {
     id: "follow-up-chat",
     name: "Follow-up Chat",
-    icon: MessageSquare,
+    icon: MessagesSquare,
     iconGradient: "from-brand-teal to-brand-lime",
+    outcomeIcon: Share2,
+    outcomeLabel: "Explain & share",
     action:
-      "Answer the user's follow-up question, optionally producing a forward list.",
-    trigger: "After default analysis workflow, when user asks in chat",
+      "Ask a follow-up and get a clear answer your team can share, discuss, and act on right away.",
+    trigger: "When a teammate asks about the results",
   },
   {
     id: "miro-snapshot",
     name: "Miro Snapshot Generator",
-    icon: Presentation,
+    iconSrc: "/icons/flowchart-16-regular.svg",
     iconGradient: "from-amber-500 to-orange-500",
+    outcomeIcon: PanelsTopLeft,
+    outcomeLabel: "Visualize & organize",
     action:
-      "Convert the analysis result into JSON renderable on a Miro board.",
-    trigger: "User's custom flow contains a Miro step",
+      "Turn findings into a visual planning board so campaign owners can review priorities together.",
+    trigger: "When a workflow includes a board snapshot",
   },
   {
     id: "calendar-qa",
     name: "Calendar Q&A",
-    icon: Calendar,
+    icon: CalendarDays,
     iconGradient: "from-emerald-500 to-teal-500",
+    outcomeIcon: CalendarCheck,
+    outcomeLabel: "Plan & schedule",
     action:
-      "Answer the user's questions about their own calendar.",
-    trigger: "Chat message carries #calendar-context marker",
+      "Check timelines, answer scheduling questions, and prepare campaign events without leaving chat.",
+    trigger: "When someone asks about the calendar",
   },
 ]
+
+function WorkflowIcon({
+  icon: Icon,
+  iconSrc,
+  className,
+}: {
+  icon?: LucideIcon
+  iconSrc?: string
+  className: string
+}) {
+  if (iconSrc) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${className} block bg-current`}
+        style={{
+          WebkitMask: `url("${iconSrc}") center / contain no-repeat`,
+          mask: `url("${iconSrc}") center / contain no-repeat`,
+        }}
+      />
+    )
+  }
+
+  if (!Icon) return null
+  return <Icon className={className} />
+}
 
 export default function AiWorkflowsSection() {
   const ref = useRef(null)
@@ -80,7 +129,7 @@ export default function AiWorkflowsSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {workflows.map((wf, index) => {
-            const Icon = wf.icon
+            const OutcomeIcon = wf.outcomeIcon
 
             return (
               <motion.div
@@ -94,13 +143,13 @@ export default function AiWorkflowsSection() {
                   <div
                     className={`flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${wf.iconGradient} flex items-center justify-center shadow-lg`}
                   >
-                    <Icon className="w-6 h-6 text-white" />
+                    <WorkflowIcon icon={wf.icon} iconSrc={wf.iconSrc} className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{wf.name}</h3>
                     <div className="flex items-center gap-1.5 text-xs text-brand-teal font-medium">
-                      <Zap className="w-3 h-3" />
-                      Action
+                      <OutcomeIcon className="w-3.5 h-3.5" />
+                      {wf.outcomeLabel}
                     </div>
                   </div>
                 </div>

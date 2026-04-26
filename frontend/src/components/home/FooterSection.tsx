@@ -9,7 +9,7 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
     { label: "Meetings", href: "/meetings" },
     { label: "Tasks", href: "/tasks" },
     { label: "Calendar", href: "/calendar" },
-    { label: "Documents", href: "/notion" },
+    { label: "Notion", href: "/notion" },
   ],
   Resources: [
     { label: "Blog", href: "#" },
@@ -22,7 +22,6 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
   Company: [
     { label: "About", href: "#" },
     { label: "Careers", href: "#" },
-    { label: "Press", href: "#" },
     { label: "Contact", href: "#" },
     { label: "Partners", href: "#" },
   ],
@@ -51,7 +50,7 @@ export default function FooterSection() {
               />
             </Link>
             <p className="text-gray-500 mb-6 max-w-xs">
-              One platform. Every stage. The AI-powered platform for media buyers.
+              Plan campaigns, coordinate work, and turn performance signals into decisions your media team can act on.
             </p>
           </div>
 
@@ -82,11 +81,6 @@ export default function FooterSection() {
 
         <div className="mt-16 pt-8 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500">&copy; 2026 Marketing Simplified. All rights reserved.</p>
-          <div className="flex items-center gap-6 text-sm text-gray-500">
-            <span className="hover:text-gray-900 transition-colors cursor-pointer">Status</span>
-            <span className="hover:text-gray-900 transition-colors cursor-pointer">Changelog</span>
-            <span className="hover:text-gray-900 transition-colors cursor-pointer">Support</span>
-          </div>
         </div>
       </div>
     </footer>
