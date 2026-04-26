@@ -527,6 +527,31 @@ hr {
   scrollbar-width: none;
 }
 
+/* Thin dashboard scrollbar with transparent track. */
+.dashboard-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 /* Visible scrollbar for spreadsheet grid; only this container scrolls (page/body do not). */
 .spreadsheet-scroll-container {
   /* Firefox */
@@ -565,9 +590,15 @@ input[type="password"]::-ms-clear {
 }
 /* Some WebKit credential decorations */
 input[type="password"]::-webkit-credentials-auto-fill-button,
-input[type="password"]::-webkit-textfield-decoration-container {
-  display: none !important;
+input[type="password"]::-webkit-contacts-auto-fill-button {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
+
+/*
+  Safari/WebKit: do NOT hide `::-webkit-textfield-decoration-container`.
+  Hiding it can collapse the input's internal layout and shrink the clickable area.
+*/
 
 
 /* Liquid glass card */

@@ -1,54 +1,90 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, type ReactNode } from "react"
 import { motion, useInView } from "framer-motion"
 import { Avatar } from "@/components/avatar/Avatar"
 import {
-  Table2,
-  Scale,
-  CheckSquare,
-  MessageSquare,
+  SearchCheck,
+  ShieldCheck,
+  TextSearch,
   AlertTriangle,
   ThumbsUp,
   ThumbsDown,
   ArrowRight,
   Send,
+  type LucideIcon,
 } from "lucide-react"
 
-const features = [
+type Feature = {
+  id: string
+  icon?: LucideIcon
+  iconSrc?: string
+  gradient: string
+  headline: string
+  body: string
+  visual: ReactNode
+}
+
+const features: Feature[] = [
   {
     id: "spreadsheet",
-    icon: Table2,
+    icon: SearchCheck,
     gradient: "from-brand-teal to-brand-lime",
     headline: "AI-Driven Anomaly Detection",
-    body: "Ingest campaign spreadsheets and let our AI surface outliers, budget drift, and optimization opportunities automatically.",
+    body: "Drop in campaign spreadsheets and quickly see which ads are wasting spend, which trends need attention, and where to act next.",
     visual: <SpreadsheetMockup />,
   },
   {
     id: "decision",
-    icon: Scale,
+    icon: ShieldCheck,
     gradient: "from-brand-teal to-brand-lime",
     headline: "Data-Backed Go/No-Go",
-    body: "Get AI-powered recommendations grounded in your campaign data. Every decision comes with a confidence score and projected impact.",
+    body: "Move budget decisions out of guesswork with clear recommendations, confidence signals, and the expected impact on performance.",
     visual: <DecisionMockup />,
   },
   {
     id: "task",
-    icon: CheckSquare,
+    iconSrc: "/icons/task-list-20-filled.svg",
     gradient: "from-brand-teal to-brand-lime",
     headline: "Automated Task Orchestration",
-    body: "From brief to launch \u2014 AI creates, assigns, and sequences tasks across your creative team based on project context.",
+    body: "Keep briefs, creative reviews, approvals, and launch tasks moving in one flow, so every owner knows what needs attention.",
     visual: <TaskMockup />,
   },
   {
     id: "chat",
-    icon: MessageSquare,
+    icon: TextSearch,
     gradient: "from-brand-teal to-brand-lime",
     headline: "Natural Language Project Querying",
-    body: "Ask questions about your campaigns, budgets, Miro boards, or calendar in plain English. Get instant, context-aware answers.",
+    body: "Ask about spend, timelines, planning boards, or upcoming meetings and get answers that help the team make the next call.",
     visual: <ChatMockup />,
   },
 ]
+
+function FeatureIcon({
+  icon: Icon,
+  iconSrc,
+  className,
+}: {
+  icon?: LucideIcon
+  iconSrc?: string
+  className: string
+}) {
+  if (iconSrc) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${className} block bg-current`}
+        style={{
+          WebkitMask: `url("${iconSrc}") center / contain no-repeat`,
+          mask: `url("${iconSrc}") center / contain no-repeat`,
+        }}
+      />
+    )
+  }
+
+  if (!Icon) return null
+  return <Icon className={className} />
+}
 
 function SpreadsheetMockup() {
   const rows = [
@@ -211,11 +247,10 @@ function FeatureRow({
   index,
   isInView,
 }: {
-  feature: (typeof features)[0]
+  feature: Feature
   index: number
   isInView: boolean
 }) {
-  const Icon = feature.icon
   const isEven = index % 2 === 1
 
   return (
@@ -229,7 +264,7 @@ function FeatureRow({
         <div
           className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} shadow-lg`}
         >
-          <Icon className="w-6 h-6 text-white" />
+          <FeatureIcon icon={feature.icon} iconSrc={feature.iconSrc} className="w-6 h-6 text-white" />
         </div>
         <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">{feature.headline}</h3>
         <p className="text-gray-600 text-lg leading-relaxed">{feature.body}</p>
@@ -259,13 +294,13 @@ export default function FeatureShowcaseSection() {
           className="text-center mb-20"
         >
           <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-4">
-            The{" "}
+            Run smarter{" "}
             <span className="bg-gradient-to-r from-brand-teal to-brand-lime bg-clip-text text-transparent">
-              Core Four
+              media campaigns
             </span>
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Four AI-powered pillars that give your media team an unfair advantage.
+            See what needs attention, decide where budget should move, and keep every campaign owner aligned from brief to launch.
           </p>
         </motion.div>
 

@@ -33,7 +33,7 @@ export default function AlertPanel({ alerts: initialAlerts, isOpen }: AlertPanel
 
   return (
     <aside
-      className={`h-screen border-l border-gray-200 bg-white shrink-0 transition-all duration-300 overflow-hidden ${
+      className={`h-full border-l border-gray-200 bg-white shrink-0 transition-all duration-300 overflow-hidden ${
         isOpen ? 'w-[320px]' : 'w-0'
       }`}
     >

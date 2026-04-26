@@ -11,7 +11,9 @@ from .views import (
     GoogleSetPasswordView,
     OrganizationTokenRefreshView,
     MeView, 
-    UserTeamsView
+    UserTeamsView,
+    ForgotPasswordView,
+    ResetPasswordView,
 )
 
 urlpatterns = [
@@ -30,4 +32,8 @@ urlpatterns = [
     path('google/start/', GoogleOAuthStartView.as_view(), name='google-oauth-start'),
     path('google/callback/', GoogleOAuthCallbackView.as_view(), name='google-oauth-callback'),
     path('google/set-password/', GoogleSetPasswordView.as_view(), name='google-set-password'),
+
+    # Password reset endpoints
+    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
 ]

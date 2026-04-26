@@ -819,10 +819,7 @@ class AgentConfigStatusView(EnglishResponseMixin, APIView):
 
     # Mapping of response key -> (settings attr, env var fallback)
     KEY_MAP = {
-        'dify_api': ('DIFY_API_KEY', 'DIFY_API_KEY'),
-        'dify_chat': ('DIFY_CHAT_API_KEY', 'DIFY_CHAT_API_KEY'),
-        'dify_calendar': ('DIFY_CALENDAR_API_KEY', 'DIFY_CALENDAR_API_KEY'),
-        'dify_miro': ('DIFY_MIRO_API_KEY', 'DIFY_MIRO_API_KEY'),
+        'gemini': ('GEMINI_API_KEY', 'GEMINI_API_KEY'),
         'anthropic': ('ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'),
     }
 
