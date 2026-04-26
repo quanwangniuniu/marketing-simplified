@@ -6,7 +6,7 @@ from typing import Any
 
 from django.conf import settings
 
-from .dify_workflows import json_input
+from .agent_utils import json_input
 
 import logging
 
@@ -509,6 +509,3 @@ def call_gemini_miro_generator(
     snapshot = normalize_miro_snapshot_layout(snapshot)
     return validate_miro_snapshot(snapshot)
 
-
-# Keep old name as alias for any callers that haven't been updated yet
-call_dify_miro_generator = call_gemini_miro_generator

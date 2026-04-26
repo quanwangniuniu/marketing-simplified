@@ -80,31 +80,13 @@ class AnalyzeDataExecutor(BaseStepExecutor):
 
 
 class CallDifyExecutor(BaseStepExecutor):
-    """Calls Dify API, supports per-step config override."""
+    """Legacy step type — Dify has been replaced by Gemini. Returns error if called."""
 
     def execute(self, input_data):
-        from .services import _call_dify, _get_dify_config
-
-        spreadsheet_data = input_data.get('spreadsheet_data', input_data)
-        try:
-            user_id = str(self.orchestrator.user.id)
-
-            if not _get_dify_config():
-                return StepResult(success=False, error='No Dify API configured')
-
-            result = _call_dify(spreadsheet_data, user_id=user_id)
-
-            return StepResult(
-                success=True,
-                output_data={
-                    'analysis_result': result,
-                    'spreadsheet_data': spreadsheet_data,
-                },
-                sse_events=[{'type': 'text', 'content': 'Dify analysis completed.'}],
-            )
-        except Exception as e:
-            logger.exception("CallDifyExecutor failed")
-            return StepResult(success=False, error=str(e))
+        return StepResult(
+            success=False,
+            error='call_dify step type is no longer supported. Use analyze_data instead.',
+        )
 
 
 class CallLLMExecutor(BaseStepExecutor):
@@ -281,12 +263,12 @@ class CreateTasksExecutor(BaseStepExecutor):
 
 
 class GenerateMiroSnapshotExecutor(BaseStepExecutor):
-    """Generate a validated Miro snapshot from workflow context via Dify."""
+    """Generate a validated Miro snapshot from workflow context via Gemini."""
 
     def execute(self, input_data):
         from .miro_generation import (
             build_miro_generation_context_from_run,
-            call_dify_miro_generator,
+            call_gemini_miro_generator,
         )
 
         try:
@@ -294,7 +276,7 @@ class GenerateMiroSnapshotExecutor(BaseStepExecutor):
                 session=self.orchestrator.session,
                 workflow_run=self.workflow_run,
             )
-            snapshot = call_dify_miro_generator(
+            snapshot = call_gemini_miro_generator(
                 context,
                 user_id=str(self.orchestrator.user.id),
             )
