@@ -3,69 +3,104 @@
 import { useState, useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import {
-  Users,
-  Rocket,
-  Zap,
-  BarChart3,
+  Layers,
+  BellDot,
   ArrowRight,
   CheckCircle,
   Play,
+  type LucideIcon,
 } from "lucide-react"
 
-const steps = [
+type Step = {
+  id: number
+  title: string
+  description: string
+  details: string[]
+  icon?: LucideIcon
+  iconSrc?: string
+  gradient: string
+}
+
+const steps: Step[] = [
   {
     id: 1,
     title: "Plan & Assign",
-    description: "Define roles, permissions, and tasks in one place.",
+    description: "Turn campaign plans into clear owners, deadlines, and approvals before work begins.",
     details: [
-      "Set up team roles and access levels",
-      "Create and assign tasks to team members",
-      "Define approval workflows",
-      "Set project timelines and milestones",
+      "Map every brief to the right owner",
+      "Assign creative, media, and approval tasks",
+      "Keep review paths visible from day one",
+      "Align launch dates, milestones, and handoffs",
     ],
-    icon: Users,
+    iconSrc: "/icons/assign.svg",
     gradient: "from-brand-teal to-brand-lime",
   },
   {
     id: 2,
     title: "Execute & Collab",
-    description: "Manage assets, budgets, and channels seamlessly.",
+    description: "Keep creative, spend, and channel work aligned while campaigns move toward launch.",
     details: [
-      "Upload and manage creative assets",
-      "Track budget allocation in real-time",
-      "Coordinate across multiple channels",
-      "Collaborate with inline comments",
+      "Keep campaign assets easy to find",
+      "Track budget movement as plans change",
+      "Coordinate paid channels in one workspace",
+      "Resolve feedback where the work happens",
     ],
-    icon: Rocket,
+    icon: Layers,
     gradient: "from-amber-500 to-orange-500",
   },
   {
     id: 3,
     title: "Automate & Notify",
-    description: "Trigger smart workflows and stay informed in real time.",
+    description: "Let routine follow-ups, alerts, and handoffs happen before bottlenecks slow the team down.",
     details: [
-      "AI-powered task automation",
-      "Smart notifications for key events",
-      "Automated approval routing",
-      "Real-time status updates",
+      "Send the right reminder at the right time",
+      "Route approvals to the next decision maker",
+      "Flag campaign changes that need attention",
+      "Keep status updates moving without chase-ups",
     ],
-    icon: Zap,
+    icon: BellDot,
     gradient: "from-rose-500 to-pink-500",
   },
   {
     id: 4,
     title: "Analyze & Optimize",
-    description: "Turn data into insights for your next campaign.",
+    description: "Read performance signals faster and decide where to scale, pause, or adjust next.",
     details: [
-      "Comprehensive performance dashboards",
-      "AI-generated insights and recommendations",
-      "Cross-channel analytics",
-      "Exportable reports for stakeholders",
+      "Compare performance across active channels",
+      "Spot unusual spend or conversion shifts",
+      "Prioritize actions with clear recommendations",
+      "Share concise reports with stakeholders",
     ],
-    icon: BarChart3,
+    iconSrc: "/icons/analyze.svg",
     gradient: "from-emerald-500 to-teal-500",
   },
 ]
+
+function StepIcon({
+  icon: Icon,
+  iconSrc,
+  className,
+}: {
+  icon?: LucideIcon
+  iconSrc?: string
+  className: string
+}) {
+  if (iconSrc) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`${className} block bg-current`}
+        style={{
+          WebkitMask: `url("${iconSrc}") center / contain no-repeat`,
+          mask: `url("${iconSrc}") center / contain no-repeat`,
+        }}
+      />
+    )
+  }
+
+  if (!Icon) return null
+  return <Icon className={className} />
+}
 
 type HowItWorksSectionProps = {
   onGetStartedClick: () => void
@@ -93,7 +128,7 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
             ?
           </h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            From setup to optimization, Marketing Simplified keeps your campaigns moving effortlessly.
+            Bring campaign planning, execution, automation, and performance decisions into one focused workspace.
           </p>
         </motion.div>
 
@@ -105,7 +140,6 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
             className="space-y-4"
           >
             {steps.map((step, index) => {
-              const IconComponent = step.icon
               const isActive = activeStep === step.id
 
               return (
@@ -124,7 +158,7 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
                   <div
                     className={`relative flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${step.gradient} flex items-center justify-center shadow-lg`}
                   >
-                    <IconComponent className="w-6 h-6 text-white" />
+                    <StepIcon icon={step.icon} iconSrc={step.iconSrc} className="w-6 h-6 text-white" />
                     <span className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center text-xs font-bold text-gray-900 shadow border border-gray-200">
                       {step.id}
                     </span>
@@ -158,7 +192,6 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
           >
             {steps.map((step) => {
               if (step.id !== activeStep) return null
-              const IconComponent = step.icon
 
               return (
                 <motion.div
@@ -171,7 +204,7 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
                   <div className={`bg-gradient-to-r ${step.gradient} p-6`}>
                     <div className="flex items-center gap-4">
                       <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                        <IconComponent className="w-8 h-8 text-white" />
+                        <StepIcon icon={step.icon} iconSrc={step.iconSrc} className="w-8 h-8 text-white" />
                       </div>
                       <div>
                         <span className="text-white/80 text-sm font-medium">Step {step.id}</span>
