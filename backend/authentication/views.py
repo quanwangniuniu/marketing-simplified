@@ -890,7 +890,7 @@ class ResetPasswordView(APIView):
         #validate token expiration
         if user.password_reset_token_expires_at is None:
             return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
-        if user.password_reset_token_expires_at is not None or timezone.now() > user.password_reset_token_expires_at:
+        if timezone.now() > user.password_reset_token_expires_at: 
             return Response({"error":"Token has expired"}, status=status.HTTP_400_BAD_REQUEST)
 
         #validate new password

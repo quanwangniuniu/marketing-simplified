@@ -160,7 +160,18 @@ export const authAPI = {
       : {};
     const response = await api.patch('/auth/me/', profileData, config);
     return response.data;
-  }
+  },
+
+  // Password reset endpoints
+  forgotPassword: async(email: string):Promise<{ message:string }> =>{
+    const response = await api.post('/auth/forgot-password/', { email });
+    return response.data;
+  },
+
+  resetPassword: async(token: string, new_password: string):Promise<{ message:string }> =>{
+    const response = await api.post('/auth/reset-password/', { token, new_password });
+    return response.data;
+  },
 };
 
 export default api; 
