@@ -2,8 +2,16 @@
 
 import { useState } from 'react';
 import { Menu, X, User } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../lib/authStore';
+
+const publicLinks = [
+  { label: 'Product', href: '/docs/product' },
+  { label: 'Solutions', href: '/solutions' },
+  { label: 'Pricing', href: '/docs/pricing' },
+  { label: 'Docs', href: '/docs' },
+];
 
 export default function MobileMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -50,40 +58,22 @@ export default function MobileMenu() {
           
           <div className="absolute top-full left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-gray-200 shadow-2xl z-50">
             <nav className="px-6 py-4 space-y-4">
-              <a 
-                href="#" 
-                className="block text-gray-600 hover:text-gray-900 py-2 border-b border-gray-100 transition"
-                onClick={() => setIsOpen(false)}
-              >
-                Features
-              </a>
-              <a 
-                href="#" 
-                className="block text-gray-600 hover:text-gray-900 py-2 border-b border-gray-100 transition"
-                onClick={() => setIsOpen(false)}
-              >
-                Solutions
-              </a>
-              <a 
-                href="#" 
-                className="block text-gray-600 hover:text-gray-900 py-2 border-b border-gray-100 transition"
-                onClick={() => setIsOpen(false)}
-              >
-                Pricing
-              </a>
-              <a 
-                href="#" 
-                className="block text-gray-600 hover:text-gray-900 py-2 border-b border-gray-100 transition"
-                onClick={() => setIsOpen(false)}
-              >
-                Resource
-              </a>
+              {publicLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="block text-gray-600 hover:text-brand-teal py-2 border-b border-gray-100 transition"
+                  onClick={() => setIsOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
               
               <div className="pt-4 space-y-3">
                 {isAuthenticated ? (
                   <button 
                     onClick={handleLoginClick} 
-                    className="block w-full px-6 py-3 text-indigo-600 border border-indigo-300 rounded-full hover:bg-indigo-50 transition text-center font-medium"
+                    className="block w-full px-6 py-3 text-brand-teal border border-brand-teal/40 rounded-full hover:bg-brand-teal/5 transition text-center font-medium"
                   >
                     <span className="inline-flex items-center gap-2 justify-center">
                       <User className="w-4 h-4" />
@@ -94,14 +84,14 @@ export default function MobileMenu() {
                 ) : (
                   <button 
                     onClick={handleLoginClick} 
-                    className="block w-full px-6 py-3 text-indigo-600 border border-indigo-300 rounded-full hover:bg-indigo-50 transition text-center font-medium"
+                    className="block w-full px-6 py-3 text-brand-teal border border-brand-teal/40 rounded-full hover:bg-brand-teal/5 transition text-center font-medium"
                   >
                     Log in
                   </button>
                 )}
                 <button 
                   onClick={handleGetStartedClick} 
-                  className="block w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-full hover:from-indigo-600 hover:to-violet-600 transition text-center font-medium glow-indigo"
+                  className="block w-full px-6 py-3 bg-brand-gradient text-white rounded-full hover:saturate-150 transition text-center font-medium glow-brand"
                 >
                   Get Started
                 </button>

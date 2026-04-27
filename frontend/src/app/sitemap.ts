@@ -16,12 +16,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
 	// put paths in array
 	const paths = [
-		'/tasks',
-		'/spreadsheets',
-		'/decisions',
-		'/agent',
-		'/notion',
-		'/meetings',
+		'/',
+		'/solutions',
+		'/docs',
+		'/docs/product',
+		'/docs/pricing',
+		'/docs/policy',
 	];
 
 	return paths.map((path) => ({

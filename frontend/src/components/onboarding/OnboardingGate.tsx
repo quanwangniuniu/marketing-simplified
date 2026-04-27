@@ -21,8 +21,14 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
     pathname?.startsWith('/google/callback');
   const isAuthRoute = isPublicAuthRoute || isOAuthCallbackRoute;
   const isRootRoute = pathname === '/';
+  const isPublicSeoRoute =
+    pathname?.startsWith('/docs') ||
+    pathname === '/product' ||
+    pathname === '/solutions' ||
+    pathname === '/pricing' ||
+    pathname === '/policy';
   const { needsOnboarding, checking } = useOnboarding();
-  const shouldShowOnboardingWizard = !isAuthRoute && needsOnboarding;
+  const shouldShowOnboardingWizard = !isAuthRoute && !isRootRoute && !isPublicSeoRoute && needsOnboarding;
   // Legacy "Preparing your workspace" blue spinner is intentionally disabled
   // (G-09): per-page skeletons in dashboard-v2 already cover the brief check
   // window, and stacking two overlays in a row was jarring.
