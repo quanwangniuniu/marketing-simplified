@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import type { TaskData } from '@/types/task';
+import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import {
   PRIORITY_META,
   STATUS_META,
@@ -11,6 +12,10 @@ import {
   formatDateShort,
 } from './TYPE_META';
 import { Skeleton } from '@/components/ui/skeleton';
+import TaskListRowContextMenu, {
+  type TaskListRowContextMenuState,
+} from '@/components/tasks-v2/TaskListRowContextMenu';
+import { useTaskStore } from '@/lib/taskStore';
 
 interface ListViewProps {
   tasks: TaskData[];
@@ -34,7 +39,99 @@ const TABLE_COLUMN_WIDTHS = {
 
 export default function ListView({ tasks, loading, error }: ListViewProps) {
   const router = useRouter();
+  const removeTask = useTaskStore((s) => s.removeTask);
+  const updateTask = useTaskStore((s) => s.updateTask);
   const [search, setSearch] = useState('');
+  const [rowMenu, setRowMenu] = useState<TaskListRowContextMenuState>(null);
+  const [menuMembers, setMenuMembers] = useState<ProjectMemberData[]>([]);
+  const [menuMembersLoading, setMenuMembersLoading] = useState(false);
+  const membersByProjectIdRef = useRef<Map<number, ProjectMemberData[]>>(new Map());
+  const pendingMemberFetchesRef = useRef<Map<number, Promise<ProjectMemberData[]>>>(new Map());
+
+  useEffect(() => {
+    if (!rowMenu) {
+      setMenuMembers([]);
+      setMenuMembersLoading(false);
+      return;
+    }
+    const pid = rowMenu.task.project_id ?? rowMenu.task.project?.id ?? null;
+    if (pid == null) {
+      setMenuMembers([]);
+      setMenuMembersLoading(false);
+      return;
+    }
+
+    const cached = membersByProjectIdRef.current.get(pid);
+    if (cached) {
+      setMenuMembers(cached);
+      setMenuMembersLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMenuMembers([]);
+    setMenuMembersLoading(true);
+
+    const existing = pendingMemberFetchesRef.current.get(pid);
+    const promise =
+      existing ??
+      ProjectAPI.getProjectMembers(pid)
+        .then((rows) => {
+          membersByProjectIdRef.current.set(pid, rows);
+          pendingMemberFetchesRef.current.delete(pid);
+          return rows;
+        })
+        .catch(() => {
+          pendingMemberFetchesRef.current.delete(pid);
+          return [] as ProjectMemberData[];
+        });
+    if (!existing) {
+      pendingMemberFetchesRef.current.set(pid, promise);
+    }
+
+    void promise.then((rows) => {
+      if (!cancelled) {
+        setMenuMembers(rows);
+        setMenuMembersLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rowMenu]);
+
+  const openRowMenu = useCallback((e: MouseEvent, task: TaskData) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (task.id == null) return;
+    let x = e.clientX;
+    let y = e.clientY;
+    setRowMenu({ task, x, y });
+  }, []);
+
+  const closeRowMenu = useCallback(() => setRowMenu(null), []);
+
+  const handleOpenDetail = useCallback(
+    (taskId: number) => {
+      router.push(`/tasks/${taskId}`);
+    },
+    [router]
+  );
+
+  const handleTaskDeleted = useCallback(
+    (taskId: number) => {
+      removeTask(taskId);
+    },
+    [removeTask]
+  );
+
+  const handleTaskPatched = useCallback(
+    (taskId: number, data: Partial<TaskData>) => {
+      updateTask(taskId, data);
+    },
+    [updateTask]
+  );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -48,6 +145,15 @@ export default function ListView({ tasks, loading, error }: ListViewProps) {
 
   return (
     <div>
+      <TaskListRowContextMenu
+        state={rowMenu}
+        menuMembers={menuMembers}
+        menuMembersLoading={menuMembersLoading}
+        onRequestClose={closeRowMenu}
+        onOpenDetail={handleOpenDetail}
+        onTaskDeleted={handleTaskDeleted}
+        onTaskPatched={handleTaskPatched}
+      />
       <div className="mb-3 flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -137,6 +243,7 @@ export default function ListView({ tasks, loading, error }: ListViewProps) {
                     key={task.id}
                     className="cursor-pointer transition hover:bg-gray-50/80"
                     onClick={() => router.push(`/tasks/${task.id}`)}
+                    onContextMenu={(e) => openRowMenu(e, task)}
                   >
                     <td className={`${TABLE_COLUMN_WIDTHS.icon} px-4 py-3`}>
                       <span
