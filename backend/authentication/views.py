@@ -921,14 +921,14 @@ class DeleteAccountView(APIView):
     """
     DELETE /auth/me/delete/
     Permanently removes all personal data for the authenticated user.
-    Tasks/Projects created by the user are kept (owner set to null).
+    Projects and tasks created by the user are kept; owner/current_approver set to null.
     """
     permission_classes = [IsAuthenticated]
 
     def delete(self, request):
         user = request.user
 
-        # Require the user to confirm with their password (or a typed phrase for Google OAuth users)
+        # Require the user to confirm deletion by typing the exact phrase below.
         confirm = request.data.get('confirm', '')
         if confirm != 'DELETE MY ACCOUNT':
             return Response(
@@ -939,6 +939,7 @@ class DeleteAccountView(APIView):
         with transaction.atomic():
             from core.models import TeamMember, ProjectMember, Project
             from access_control.models import UserRole, ModuleApprover
+            from task.models import Task
 
             # 1. Remove user from all teams
             TeamMember.objects.filter(user=user).delete()
@@ -954,6 +955,10 @@ class DeleteAccountView(APIView):
 
             # 5. Detach user from owned projects (keep the projects intact)
             Project.objects.filter(owner=user).update(owner=None)
+
+            # 6. Detach user from tasks they own or are approving (keep the tasks intact)
+            Task.objects.filter(owner=user).update(owner=None)
+            Task.objects.filter(current_approver=user).update(current_approver=None)
 
             # 6. Delete avatar file if it exists
             if user.avatar:

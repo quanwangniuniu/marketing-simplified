@@ -18,6 +18,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { authAPI } from '@/lib/api';
 import Button from '@/components/button/Button';
 import OrganizationContent from '@/components/stripe_meta/OrganizationContent';
 import { TextInput } from '@/components/input/InputPrimitives';
@@ -168,28 +169,19 @@ function ProfileV2Content() {
     setIsDeleting(true);
     try {
       const authStorage = typeof window !== 'undefined' ? localStorage.getItem('auth-storage') : null;
-      let token = '';
       let refreshToken = '';
       if (authStorage) {
-        const parsed = JSON.parse(authStorage);
-        token = parsed.state?.token ?? '';
+        const parsed = JSON.parse(authStorage) as { state?: { refresh?: string } };
         refreshToken = parsed.state?.refresh ?? '';
       }
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
-      const res = await fetch(`${apiBase}/auth/me/delete/`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ confirm: 'DELETE MY ACCOUNT', refresh_token: refreshToken }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? 'Failed to delete account');
-      }
+      await authAPI.deleteAccount(refreshToken);
       toast.success('Your account has been deleted.');
       await logout();
       router.replace('/login');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete account');
+      const axiosError = e as { response?: { data?: { error?: string; detail?: string } } };
+      const message = axiosError.response?.data?.error ?? axiosError.response?.data?.detail ?? (e instanceof Error ? e.message : 'Failed to delete account');
+      toast.error(message);
     } finally {
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
