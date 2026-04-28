@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
@@ -44,7 +45,7 @@ const integrations = [
   { name: 'TikTok', icon: '/icons/tiktok.svg' },
   { name: 'Slack', icon: '/icons/slack.svg' },
   { name: 'Zoom', icon: '/icons/zoom.svg' },
-  { name: 'Google Sheets', icon: '/icons/google-spreadsheet.svg' },
+  { name: 'Google Sheets', icon: '/icons/google-sheets.svg' },
   { name: 'Google Gemini', icon: '/icons/google-gemini.svg' },
 ];
 
@@ -360,9 +361,34 @@ export function DocsProductPageContent() {
 
 export function DocsPricingPageContent() {
   const plans = [
-    ['Free', 'Small teams validating the workspace before wider rollout.', 'Up to 5 team members, 2 previews per day, and 5 tasks per day for core campaign coordination.'],
-    ['Pro', 'Growing teams running recurring creative, preview, and task workflows.', 'Up to 10 team members, 10 previews per day, and 20 tasks per day. This is the highlighted plan in the subscription experience.'],
-    ['Ultimate', 'Larger teams that need more capacity across campaign operations.', 'Up to 20 team members, 50 previews per day, and 50 tasks per day for heavier review and execution workflows.'],
+    {
+      name: 'Free',
+      price: '$0',
+      suffix: '/mo',
+      fit: 'Small teams validating the workspace before wider rollout.',
+      includes: ['Up to 5 team members', '2 previews per day', '5 tasks per day'],
+      cta: 'Start free',
+      href: '/login',
+    },
+    {
+      name: 'Pro',
+      price: '$29',
+      suffix: '/mo',
+      fit: 'Growing teams running recurring creative, preview, and task workflows.',
+      includes: ['Everything in Free', 'Up to 10 team members', '10 previews per day', '20 tasks per day'],
+      cta: 'Get Pro',
+      href: '/login',
+      badge: 'Recommended',
+    },
+    {
+      name: 'Ultimate',
+      price: '$99',
+      suffix: '/mo',
+      fit: 'Larger teams that need more capacity across campaign operations.',
+      includes: ['Everything in Pro', 'Up to 20 team members', '50 previews per day', '50 tasks per day'],
+      cta: 'Get Ultimate',
+      href: '/login',
+    },
   ];
   const purchasePaths = [
     { title: 'Start self-serve', body: 'Create or log in to an account, open Subscription, and choose a plan when your organization is ready.', href: '/login' },
@@ -371,7 +397,7 @@ export function DocsPricingPageContent() {
     { title: 'Compare by workflow', body: 'Match plan capacity to previews, tasks, campaign volume, creative approvals, and stakeholders who need visibility.', href: '/solutions' },
   ];
   const questions = [
-    ['Is there public dollar pricing?', 'Not yet. Public docs explain plan fit and capacity without publishing unapproved dollar amounts.'],
+    ['Is there public dollar pricing?', 'Yes. Free is $0/month, Pro is $29/month, and Ultimate is $99/month.'],
     ['Can we start with a trial?', 'Yes. Self-serve evaluation routes users toward account creation or login, then plan selection happens in Subscription.'],
     ['How do seats work?', 'Plan fit should be based on the team member limits shown for Free, Pro, and Ultimate, plus who needs campaign visibility.'],
     ['What affects usage?', 'Daily previews, daily tasks, connected integrations, campaign volume, reporting, and workflow automation influence the right package.'],
@@ -385,17 +411,56 @@ export function DocsPricingPageContent() {
       activeHref="/docs/pricing"
       eyebrow="Pricing guide"
       title="Pricing built for modern ad teams"
-      description="Compare plan fit without relying on unapproved dollar amounts. Use tiers to understand rollout complexity, support expectations, and workflow depth."
+      description="Compare plan fit, monthly pricing, rollout complexity, support expectations, and workflow depth."
       toc={docsTocByPath['/docs/pricing']}
     >
       <DocSection id="plans" title="Plans">
-        <div className="grid gap-4 md:grid-cols-2">
-          {plans.map(([name, fit, details]) => (
-            <div key={name} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 className="text-xl font-bold text-gray-900">{name}</h3>
-              <p className="mt-3 text-sm leading-6 text-gray-600">{fit}</p>
-              <p className="mt-4 text-sm leading-6 text-gray-700">{details}</p>
-            </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <article
+              key={plan.name}
+              className={`flex min-h-[27rem] flex-col rounded-2xl border bg-white p-6 shadow-sm transition hover:shadow-md ${
+                plan.badge
+                  ? 'border-brand-teal/40 ring-1 ring-brand-teal/25 shadow-brand-teal/10'
+                  : 'border-brand-teal/15 hover:border-brand-teal/30'
+              }`}
+            >
+              <div className="mb-6 h-1.5 w-16 rounded-full bg-brand-gradient" />
+              <div className="flex items-start justify-between gap-4">
+                <h3 className="text-2xl font-semibold text-gray-900">{plan.name}</h3>
+                {plan.badge ? (
+                  <span className="mt-1 whitespace-nowrap rounded-full border border-brand-teal/20 bg-brand-teal/10 px-3 py-1 text-xs font-semibold text-brand-teal">
+                    {plan.badge}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 flex items-baseline text-slate-900">
+                <span className="text-3xl font-semibold">{plan.price}</span>
+                <span className="ml-1 text-base text-gray-500">{plan.suffix}</span>
+              </div>
+              <p className="mt-6 text-sm leading-6 text-gray-600">{plan.fit}</p>
+              <p className="mt-6 text-sm font-medium text-gray-500">Includes:</p>
+              <ul className="mt-4 space-y-3">
+                {plan.includes.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm leading-6 text-gray-800">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand-teal/10">
+                      <Check className="h-3 w-3 text-brand-teal" />
+                    </span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                asChild
+                className={`mt-auto w-fit rounded-full px-5 ${
+                  plan.badge
+                    ? 'bg-brand-gradient text-white hover:saturate-150 glow-brand'
+                    : 'border border-brand-teal/40 bg-white text-brand-teal shadow-none hover:bg-brand-teal/5'
+                }`}
+              >
+                <Link href={plan.href}>{plan.cta}</Link>
+              </Button>
+            </article>
           ))}
         </div>
       </DocSection>
@@ -517,6 +582,12 @@ export function DocsPolicyPageContent() {
           for campaign and workspace data. Customers should manage user access, connected-account permissions, and offboarding
           processes carefully.
         </p>
+        <p>
+          Disaster recovery planning helps protect availability for private workspace information by keeping recoverable backups,
+          restoration procedures, and operational runbooks ready for outages or data-loss events. Backup access should remain
+          restricted and audited so private campaign records, uploaded assets, meeting notes, and account context can be restored
+          without broadening who can see them.
+        </p>
       </DocSection>
 
       <DocSection id="access-controls" title="Access controls">
@@ -617,6 +688,74 @@ export function ProductPageContent() {
   );
 }
 
+function ValueComparison() {
+  const points = [
+    { feature: 'Context', oldWay: 'Scattered in Slack & Email', newWay: 'Pinned to the Campaign Record' },
+    { feature: 'Decisions', oldWay: 'Buried in meeting notes', newWay: 'Structured, searchable logs' },
+    { feature: 'Reporting', oldWay: 'Manual spreadsheet exports', newWay: 'AI-assisted signal detection' },
+  ];
+
+  return (
+    <section className="bg-gradient-to-b from-white via-brand-teal/5 to-white px-6 py-20">
+      <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.8fr_1.35fr] lg:items-start lg:gap-16">
+        <div className="lg:sticky lg:top-28">
+          <div className="mb-5 inline-flex rounded-full border border-brand-teal/20 bg-white px-4 py-2 text-sm font-medium text-brand-teal shadow-sm">
+            Operating model
+          </div>
+          <h2 className="text-4xl font-bold tracking-normal text-slate-900 lg:text-5xl">The Operating Upgrade</h2>
+          <p className="mt-5 text-base leading-7 text-gray-600 lg:text-lg">
+            Replace fragmented campaign operations with a durable system of record for context, decisions, and reporting signals.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div className="hidden grid-cols-[0.75fr_1fr_1fr] gap-4 px-4 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
+            <span>Workflow</span>
+            <span>Traditional Way</span>
+            <span className="text-brand-teal">With Marketing Simplified</span>
+          </div>
+
+          {points.map((point) => (
+            <article
+              key={point.feature}
+              className="rounded-2xl border border-brand-teal/15 bg-white p-4 shadow-sm transition hover:border-brand-teal/30 hover:shadow-md"
+            >
+              <div className="grid gap-4 md:grid-cols-[0.75fr_1fr_1fr] md:items-center">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal md:hidden">Workflow</p>
+                  <h3 className="mt-1 text-xl font-semibold text-slate-900 md:mt-0">{point.feature}</h3>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:hidden">Traditional Way</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-500 md:mt-0">{point.oldWay}</p>
+                </div>
+
+                <div className="rounded-xl border border-brand-teal/25 bg-brand-teal/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal md:hidden">
+                    With Marketing Simplified
+                  </p>
+                  <div className="mt-1 flex items-start gap-3 md:mt-0">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-gradient text-white">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    </span>
+                    <p className="text-sm font-semibold leading-6 text-slate-900">{point.newWay}</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          <div className="flex items-center gap-3 rounded-2xl border border-brand-teal/15 bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm">
+            <ArrowRight className="h-4 w-4 flex-shrink-0 text-brand-teal" />
+            <span>Less coordination debt, more reusable operating memory for every campaign.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SolutionsPageContent() {
   const roles: Feature[] = [
     { title: 'Media buyers', body: 'Track campaign performance, spot spend changes, and convert analysis into clear budget and testing decisions.', icon: Target },
@@ -673,6 +812,8 @@ export function SolutionsPageContent() {
           <FeatureGrid features={roles} />
         </div>
       </section>
+
+      <ValueComparison />
 
       <section className="px-6 py-16">
         <div className="mx-auto max-w-7xl">
