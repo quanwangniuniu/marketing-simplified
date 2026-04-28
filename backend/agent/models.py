@@ -418,7 +418,7 @@ class AgentWorkflowDefinition(TimeStampedModel):
 class AgentWorkflowStep(TimeStampedModel):
     STEP_TYPE_CHOICES = [
         ('analyze_data', 'Analyze Data'),
-        ('call_dify', 'Call Dify'),
+        ('call_dify', 'Call LLM (Legacy)'),
         ('call_llm', 'Call LLM'),
         ('create_decision', 'Create Decision'),
         ('create_tasks', 'Create Tasks'),

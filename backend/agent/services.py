@@ -17,7 +17,7 @@ from .models import (
 )
 from . import data_service
 from . import file_parser
-from .dify_workflows import json_input, serialize_agent_messages
+from .agent_utils import json_input, serialize_agent_messages
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +239,7 @@ def _preprocess_spreadsheet(spreadsheet_data, success_criteria=None):
 
 
 def _call_gemini_analysis(spreadsheet_data, user_id=None, success_criteria=None):
-    """Call Gemini to analyze spreadsheet data. Replaces _call_dify."""
+    """Call Gemini to analyze spreadsheet data."""
     from .gemini_client import call_gemini_json
 
     column_summary, cleaned_data, criteria_text = _preprocess_spreadsheet(
@@ -295,7 +295,7 @@ def _run_analysis(spreadsheet_data, user_id=None, success_criteria=None):
 
 
 def _serialize_project_members(project, excluded_users=None):
-    """Return a minimal project member list for Dify follow-up disambiguation."""
+    """Return a minimal project member list for LLM follow-up disambiguation."""
     from core.models import ProjectMember
 
     excluded_user_ids = {
@@ -331,8 +331,8 @@ def _coerce_json(value):
         return value
 
 
-def _normalize_dify_chat_output(output):
-    """Normalize Dify follow-up output to {status, text, forwards}."""
+def _normalize_llm_chat_output(output):
+    """Normalize LLM follow-up output to {status, text, forwards}."""
     parsed = _coerce_json(output)
     if isinstance(parsed, dict):
         status = parsed.get('status') or 'completed'
@@ -462,7 +462,7 @@ def _call_gemini_chat(
         logger.error("Gemini chat call failed: %s", e)
         raise RuntimeError(f"Gemini chat failed: {e}") from e
 
-    normalized = _normalize_dify_chat_output(parsed)
+    normalized = _normalize_llm_chat_output(parsed)
     if normalized:
         return normalized
 

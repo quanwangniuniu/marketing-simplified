@@ -20,10 +20,18 @@ from django.conf import settings
 from django.db import transaction
 from google_auth_oauthlib.flow import Flow  # For OAuth start (generating auth URL)
 from requests_oauthlib import OAuth2Session  # For OAuth callback (token exchange)
+from django.core.mail import send_mail
+from django.utils import timezone
+import datetime
 import requests
 import jwt
 import uuid
 import secrets
+import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 User = get_user_model()
 
@@ -840,3 +848,148 @@ class UserTeamsView(APIView):
             'team_ids': team_ids,
             'team_count': len(team_ids)
         }, status=status.HTTP_200_OK)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ForgotPasswordView(APIView):
+    permission_classes = []
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        generic_response = Response({"message": "If this email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return generic_response
+        # Generate a random token; store only its hash to protect against DB reads
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.password_reset_token = token_hash
+        user.password_reset_token_expires_at = timezone.now() + datetime.timedelta(hours=1)
+        user.save()
+
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        reset_link = f"{frontend_url}/reset-password?token={token}"
+        try:
+            send_mail(
+                subject='Reset Password',
+                message=f"Click the link below to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", email)
+        return generic_response
+    
+@method_decorator(csrf_exempt, name='dispatch')
+class ResetPasswordView(APIView):
+    permission_classes = []
+    def post(self, request):
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+        if not token or not new_password:
+            return Response({"error":"Token and new password are required"}, status=status.HTTP_400_BAD_REQUEST)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        try:
+            user = User.objects.get(password_reset_token=token_hash)
+        except User.DoesNotExist:
+            return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        #validate token expiration
+        if user.password_reset_token_expires_at is None:
+            return Response({"error":"Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+        if timezone.now() > user.password_reset_token_expires_at: 
+            return Response({"error":"Token has expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+        #validate new password
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as e:
+            return Response({"error":"Password validation failed", "details": list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        #set new pwd
+        user.set_password(new_password)
+        user.password_reset_token = None
+        user.password_reset_token_expires_at = None
+        user.save()
+        
+        return Response({"message":"Password reset successfully"}, status=status.HTTP_200_OK)
+
+
+class DeleteAccountView(APIView):
+    """
+    DELETE /auth/me/delete/
+    Permanently removes all personal data for the authenticated user.
+    Projects and tasks created by the user are kept; owner/current_approver set to null.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+
+        # Require the user to confirm deletion by typing the exact phrase below.
+        confirm = request.data.get('confirm', '')
+        if confirm != 'DELETE MY ACCOUNT':
+            return Response(
+                {'error': 'Please type "DELETE MY ACCOUNT" to confirm.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            from core.models import TeamMember, ProjectMember, Project
+            from access_control.models import UserRole, ModuleApprover
+            from task.models import Task
+
+            # 1. Remove user from all teams
+            TeamMember.objects.filter(user=user).delete()
+
+            # 2. Remove all role assignments
+            UserRole.objects.filter(user=user).delete()
+
+            # 3. Remove all project memberships
+            ProjectMember.objects.filter(user=user).delete()
+
+            # 4. Remove module approver assignments
+            ModuleApprover.objects.filter(user=user).delete()
+
+            # 5. Detach user from owned projects (keep the projects intact)
+            Project.objects.filter(owner=user).update(owner=None)
+
+            # 6. Detach user from tasks they own or are approving (keep the tasks intact)
+            Task.objects.filter(owner=user).update(owner=None)
+            Task.objects.filter(current_approver=user).update(current_approver=None)
+
+            # 6. Delete avatar file if it exists
+            if user.avatar:
+                try:
+                    user.avatar.delete(save=False)
+                except Exception:
+                    pass
+
+            # 7. Blacklist the refresh token supplied in the request (best-effort)
+            refresh_token = request.data.get('refresh_token')
+            if refresh_token:
+                try:
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                except Exception:
+                    pass
+
+            # 8. Anonymise and soft-delete the user record
+            #    (keeps FK integrity for audit logs / chat messages etc.)
+            anon_id = user.id
+            user.email = f'deleted_{anon_id}@removed.invalid'
+            user.username = f'deleted_{anon_id}'
+            user.first_name = ''
+            user.last_name = ''
+            user.google_id = None
+            user.verification_token = None
+            user.password_reset_token = None
+            user.password_reset_token_expires_at = None
+            user.is_active = False
+            user.is_deleted = True
+            user.set_unusable_password()
+            user.save()
+
+        return Response({'message': 'Account deleted successfully.'}, status=status.HTTP_200_OK)
