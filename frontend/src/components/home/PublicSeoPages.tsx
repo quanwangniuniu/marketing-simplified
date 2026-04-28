@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { docsNavGroups, docsTocByPath, type TocItem } from '@/components/home/docsNavigation';
+import DocsTableOfContents from '@/components/home/DocsTableOfContents';
 
 type Action = {
   label: string;
@@ -195,47 +197,6 @@ function IntegrationsStrip() {
   );
 }
 
-type TocItem = {
-  id: string;
-  label: string;
-};
-
-type DocsNavItem = {
-  label: string;
-  href: string;
-};
-
-const docsNavGroups: { title: string; items: DocsNavItem[] }[] = [
-  {
-    title: 'Start',
-    items: [
-      { label: 'Overview', href: '/docs' },
-      { label: 'Product', href: '/docs/product' },
-      { label: 'Pricing', href: '/docs/pricing' },
-      { label: 'Policy', href: '/docs/policy' },
-    ],
-  },
-  {
-    title: 'Workflows',
-    items: [
-      { label: 'Campaign setup', href: '/docs#campaign-setup' },
-      { label: 'AI Agent workflows', href: '/docs#ai-agent-workflows' },
-      { label: 'Spreadsheet analysis', href: '/docs#spreadsheet-analysis' },
-      { label: 'Decisions and follow-up', href: '/docs#decisions-follow-up' },
-      { label: 'Policy response', href: '/docs#policy-response' },
-    ],
-  },
-  {
-    title: 'Evaluation',
-    items: [
-      { label: 'Plan comparison', href: '/docs/pricing#plans' },
-      { label: 'Pricing FAQ', href: '/docs/pricing#pricing-faq' },
-      { label: 'Data use', href: '/docs/policy#data-we-collect' },
-      { label: 'Platform responsibilities', href: '/docs/policy#platform-responsibilities' },
-    ],
-  },
-];
-
 function DocsArticleShell({
   activeHref,
   eyebrow,
@@ -252,44 +213,42 @@ function DocsArticleShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="px-6 py-10 lg:py-14">
-      <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[250px_minmax(0,1fr)_230px] lg:items-start">
-        <aside className="lg:sticky lg:top-32">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <Link href="/docs" className="mb-5 flex items-center gap-2 rounded-xl bg-brand-teal/10 px-3 py-2 font-semibold text-brand-teal">
-              <BookOpen className="h-4 w-4" />
-              Documentation
-            </Link>
-            <nav className="space-y-6" aria-label="Documentation navigation">
-              {docsNavGroups.map((group) => (
-                <div key={group.title}>
-                  <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{group.title}</h2>
-                  <ul className="space-y-1">
-                    {group.items.map((item) => {
-                      const isActive = item.href === activeHref;
-                      return (
-                        <li key={item.href}>
-                          <Link
-                            href={item.href}
-                            className={`block rounded-lg px-3 py-2 text-sm transition ${
-                              isActive
-                                ? 'bg-brand-teal/10 font-semibold text-brand-teal'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                          >
-                            {item.label}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </nav>
-          </div>
-        </aside>
+    <section className="lg:pl-[280px] lg:pr-[320px]">
+      <aside className="hidden lg:block lg:fixed lg:left-0 lg:top-24 lg:bottom-0 lg:w-[280px] lg:border-r lg:border-gray-200 lg:bg-white/80 lg:px-5 lg:py-8">
+        <Link href="/docs" className="mb-6 flex items-center gap-2 rounded-xl bg-brand-teal/10 px-3 py-2 font-semibold text-brand-teal">
+          <BookOpen className="h-4 w-4" />
+          Documentation
+        </Link>
+        <nav className="space-y-7" aria-label="Documentation navigation">
+          {docsNavGroups.map((group) => (
+            <div key={group.title}>
+              <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-400">{group.title}</h2>
+              <ul className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = item.href === activeHref;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={`block rounded-lg px-3 py-2 text-sm transition ${
+                          isActive
+                            ? 'bg-brand-teal/10 font-semibold text-brand-teal'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </aside>
 
-        <article className="min-w-0">
+      <div className="min-w-0 px-6 py-10 lg:px-10 lg:py-14">
+        <article className="min-w-0 max-w-4xl">
           <div className="border-b border-gray-200 pb-10">
             <div className="mb-5 inline-flex rounded-full border border-brand-teal/20 bg-brand-teal/10 px-4 py-2 text-sm font-medium text-brand-teal">
               {eyebrow}
@@ -299,23 +258,7 @@ function DocsArticleShell({
           </div>
           <div className="space-y-14 py-10">{children}</div>
         </article>
-
-        <aside className="hidden lg:block lg:sticky lg:top-32">
-          <div className="border-l border-gray-200 pl-5">
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-400">On this page</h2>
-            <nav aria-label="Table of contents">
-              <ul className="space-y-3">
-                {toc.map((item) => (
-                  <li key={item.id}>
-                    <a href={`#${item.id}`} className="text-sm text-gray-500 transition hover:text-brand-teal">
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          </div>
-        </aside>
+        <DocsTableOfContents toc={toc} />
       </div>
     </section>
   );
@@ -354,13 +297,7 @@ function DocCardGrid({ items }: { items: { title: string; body: string; href?: s
 }
 
 export function DocsProductPageContent() {
-  const toc = [
-    { id: 'what-it-is', label: 'What it is' },
-    { id: 'core-workflows', label: 'Core workflows' },
-    { id: 'modules', label: 'Modules' },
-    { id: 'integrations', label: 'Integrations' },
-    { id: 'next-steps', label: 'Next steps' },
-  ];
+  const toc = docsTocByPath['/docs/product'];
 
   return (
     <DocsArticleShell
@@ -411,6 +348,7 @@ export function DocsProductPageContent() {
       <DocSection id="next-steps" title="Next steps">
         <DocCardGrid
           items={[
+            { title: 'See solutions by role', body: 'Map the product to media buying, creative operations, agency reporting, leadership visibility, and policy response workflows.', href: '/solutions' },
             { title: 'Compare plans', body: 'Review how tiers map to team size, integrations, and rollout needs.', href: '/docs/pricing' },
             { title: 'Read platform policy guidance', body: 'Understand data use, connected-account responsibility, and platform-aligned expectations.', href: '/docs/policy' },
           ]}
@@ -422,18 +360,24 @@ export function DocsProductPageContent() {
 
 export function DocsPricingPageContent() {
   const plans = [
-    ['Starter', 'Small teams validating a focused ad-ops workflow.', 'Campaign workspace basics, task coordination, core integrations, and self-serve onboarding.'],
-    ['Growth', 'Teams running multiple channels and recurring performance reviews.', 'AI Agent workflows, spreadsheet analysis, decision tracking, and campaign templates.'],
-    ['Scale', 'Agencies and operators coordinating larger campaign portfolios.', 'Advanced workflow design, cross-team reporting, review controls, and priority onboarding.'],
-    ['Enterprise', 'Organizations needing custom rollout, governance, and support.', 'Custom implementation planning, security review, admin-oriented workflows, and dedicated success paths.'],
+    ['Free', 'Small teams validating the workspace before wider rollout.', 'Up to 5 team members, 2 previews per day, and 5 tasks per day for core campaign coordination.'],
+    ['Pro', 'Growing teams running recurring creative, preview, and task workflows.', 'Up to 10 team members, 10 previews per day, and 20 tasks per day. This is the highlighted plan in the subscription experience.'],
+    ['Ultimate', 'Larger teams that need more capacity across campaign operations.', 'Up to 20 team members, 50 previews per day, and 50 tasks per day for heavier review and execution workflows.'],
+  ];
+  const purchasePaths = [
+    { title: 'Start self-serve', body: 'Create or log in to an account, open Subscription, and choose a plan when your organization is ready.', href: '/login' },
+    { title: 'Admin plan changes', body: 'Only Organization Admins can subscribe, upgrade, downgrade, or switch plans inside the app.', href: '/login' },
+    { title: 'Prepare an enterprise review', body: 'Use the product, policy, and solutions docs to gather workflow, security, and rollout questions before contacting the team.', href: '/docs/policy' },
+    { title: 'Compare by workflow', body: 'Match plan capacity to previews, tasks, campaign volume, creative approvals, and stakeholders who need visibility.', href: '/solutions' },
   ];
   const questions = [
-    ['Is there public dollar pricing?', 'Not yet. This page uses named tiers and buyer guidance without publishing unapproved dollar amounts.'],
-    ['Can we start with a trial?', 'Yes. Self-serve evaluation routes users toward account creation or login.'],
-    ['How do seats work?', 'Plan fit should be based on team size, active campaign operators, and stakeholders who need visibility.'],
-    ['What affects usage?', 'AI-assisted analysis, integrations, campaign volume, reporting, and workflow automation influence the right package.'],
+    ['Is there public dollar pricing?', 'Not yet. Public docs explain plan fit and capacity without publishing unapproved dollar amounts.'],
+    ['Can we start with a trial?', 'Yes. Self-serve evaluation routes users toward account creation or login, then plan selection happens in Subscription.'],
+    ['How do seats work?', 'Plan fit should be based on the team member limits shown for Free, Pro, and Ultimate, plus who needs campaign visibility.'],
+    ['What affects usage?', 'Daily previews, daily tasks, connected integrations, campaign volume, reporting, and workflow automation influence the right package.'],
     ['Which integrations are included?', 'The public pages highlight Google Ads, Meta Ads, TikTok, Slack, Zoom, Google Sheets, and Google Gemini.'],
-    ['How do I choose a plan?', 'Start with the smallest tier that supports active workflows, then move up for more automation, reporting, governance, or support.'],
+    ['Who can change plans?', 'Plan changes are handled in the app and limited to Organization Admins.'],
+    ['How do I choose a plan?', 'Start with the smallest tier that supports active users, previews, and tasks, then move up when campaign operations need more capacity.'],
   ];
 
   return (
@@ -442,11 +386,7 @@ export function DocsPricingPageContent() {
       eyebrow="Pricing guide"
       title="Pricing built for modern ad teams"
       description="Compare plan fit without relying on unapproved dollar amounts. Use tiers to understand rollout complexity, support expectations, and workflow depth."
-      toc={[
-        { id: 'plans', label: 'Plans' },
-        { id: 'how-to-choose', label: 'How to choose' },
-        { id: 'pricing-faq', label: 'Pricing FAQ' },
-      ]}
+      toc={docsTocByPath['/docs/pricing']}
     >
       <DocSection id="plans" title="Plans">
         <div className="grid gap-4 md:grid-cols-2">
@@ -460,11 +400,23 @@ export function DocsPricingPageContent() {
         </div>
       </DocSection>
 
+      <DocSection id="subscription-limits" title="Subscription limits">
+        <p>
+          The in-app subscription page presents Free, Pro, and Ultimate plans. The visible capacity levers are team members,
+          previews per day, and tasks per day, so teams should compare plans against the number of operators, reviewers, and
+          daily campaign actions they expect to run.
+        </p>
+      </DocSection>
+
       <DocSection id="how-to-choose" title="How to choose">
         <p>
-          Choose based on the number of campaigns under active management, the number of people coordinating work, the
-          integrations needed, the importance of AI-assisted analysis, and the level of onboarding or governance required.
+          Choose based on the number of campaigns under active management, the number of people coordinating work, daily preview
+          volume, daily task creation, the integrations needed, and the importance of AI-assisted analysis.
         </p>
+      </DocSection>
+
+      <DocSection id="purchase-paths" title="Purchase paths">
+        <DocCardGrid items={purchasePaths} />
       </DocSection>
 
       <DocSection id="pricing-faq" title="Pricing FAQ">
@@ -485,16 +437,7 @@ export function DocsPricingPageContent() {
 }
 
 export function DocsPolicyPageContent() {
-  const toc = [
-    { id: 'introduction', label: 'Introduction' },
-    { id: 'data-we-collect', label: 'Data we collect' },
-    { id: 'how-we-use-data', label: 'How we use data' },
-    { id: 'sharing-and-processors', label: 'Sharing and processors' },
-    { id: 'retention-and-deletion', label: 'Retention and deletion' },
-    { id: 'platform-responsibilities', label: 'Platform responsibilities' },
-    { id: 'security', label: 'Security' },
-    { id: 'contact', label: 'Contact' },
-  ];
+  const toc = docsTocByPath['/docs/policy'];
 
   return (
     <DocsArticleShell
@@ -557,11 +500,34 @@ export function DocsPolicyPageContent() {
         </p>
       </DocSection>
 
+      <DocSection id="platform-checklist" title="Platform checklist">
+        <DocCardGrid
+          items={[
+            { title: 'Meta workflows', body: 'Confirm business asset access, ad account permission, destination consistency, claims, creative rights, and review status before launch.' },
+            { title: 'Google Ads workflows', body: 'Review prohibited content, restricted categories, editorial quality, destination requirements, tracking, and data-use disclosures.' },
+            { title: 'TikTok workflows', body: 'Check market-specific creative rules, landing-page functionality, restricted categories, advertiser identity, and data collection expectations.' },
+            { title: 'Escalation triggers', body: 'Route sensitive categories, policy changes, rejected ads, unusual data use, and regulated claims for human review before scaling.' },
+          ]}
+        />
+      </DocSection>
+
       <DocSection id="security" title="Security">
         <p>
           The product should use reasonable safeguards, access controls, and least-privilege operational practices appropriate
           for campaign and workspace data. Customers should manage user access, connected-account permissions, and offboarding
           processes carefully.
+        </p>
+      </DocSection>
+
+      <DocSection id="access-controls" title="Access controls">
+        <p>
+          Teams should assign roles based on least privilege, keep organization admins limited to trusted operators, remove
+          access when users leave a project, and periodically review connected ad-platform permissions. Subscription changes
+          and account-level administration should remain limited to authorized organization admins.
+        </p>
+        <p>
+          For shared campaign operations, use approvals, decision records, meeting notes, and task ownership to preserve an
+          audit-friendly record of who reviewed important changes and what evidence supported them.
         </p>
       </DocSection>
 
@@ -659,6 +625,33 @@ export function SolutionsPageContent() {
     { title: 'Agency and account teams', body: 'Create a shared operating layer for client campaigns, meeting follow-ups, reports, and execution tasks.', icon: Users },
     { title: 'Marketing leadership', body: 'See risks, decisions, campaign status, and cross-team progress without chasing scattered updates.', icon: Gauge },
   ];
+  const scenarios = [
+    {
+      title: 'Media buyer budget pacing',
+      situation: 'Spend is moving faster than forecast across Google Ads, Meta Ads, and TikTok.',
+      outcome: 'Buyers see pacing risk, capture the reason, and turn budget shifts into decisions and follow-up tasks.',
+    },
+    {
+      title: 'Creative ops approval loops',
+      situation: 'New assets need review before platform preview, client feedback, and launch handoff.',
+      outcome: 'Creative teams keep versions, approvers, channel requirements, and deadlines visible in one workflow.',
+    },
+    {
+      title: 'Agency client reporting',
+      situation: 'Account teams need a weekly story from campaign data, decisions, meetings, and open work.',
+      outcome: 'Client updates pull from the same operating record instead of scattered spreadsheets and chat threads.',
+    },
+    {
+      title: 'Leadership risk visibility',
+      situation: 'Leaders need to know which launches, spend shifts, policy issues, or approvals need attention.',
+      outcome: 'Executives get a concise view of campaign status, unresolved decisions, and the next responsible owner.',
+    },
+    {
+      title: 'Policy remediation workflow',
+      situation: 'A platform policy update or rejected ad affects active campaigns and creative assets.',
+      outcome: 'Teams track affected campaigns, mitigation steps, review owners, and launch-safe follow-through.',
+    },
+  ];
 
   return (
     <>
@@ -685,19 +678,18 @@ export function SolutionsPageContent() {
         <div className="mx-auto max-w-7xl">
           <SectionHeader
             eyebrow="Use cases"
-            title="Real workflows for campaign teams"
-            body="Use the public pages as entry points into common mid-funnel questions: what the product does, who it helps, and how teams adopt it."
+            title="Role-specific scenarios and outcomes"
+            body="Each solution starts from a real operating problem and ends with a clearer decision, owner, or next action."
           />
-          <div className="grid gap-5 lg:grid-cols-3">
-            {[
-              ['Campaign launch command center', 'Plan milestones, assign owners, collect creative inputs, and keep launch readiness visible.'],
-              ['Performance review loop', 'Upload data, ask questions, generate decisions, and create follow-up tasks for optimization.'],
-              ['Cross-platform policy response', 'Track platform policy updates, affected campaigns, mitigation steps, and review status.'],
-            ].map(([title, body]) => (
-              <article key={title} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="grid gap-5 lg:grid-cols-2">
+            {scenarios.map((scenario) => (
+              <article key={scenario.title} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                 <PlayCircle className="mb-5 h-8 w-8 text-brand-teal" />
-                <h3 className="text-xl font-bold text-gray-900">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-gray-600">{body}</p>
+                <h3 className="text-xl font-bold text-gray-900">{scenario.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-gray-600">{scenario.situation}</p>
+                <p className="mt-4 rounded-xl bg-brand-teal/5 p-4 text-sm font-medium leading-6 text-gray-700">
+                  Outcome: {scenario.outcome}
+                </p>
               </article>
             ))}
           </div>
@@ -844,14 +836,7 @@ export function PricingPageContent() {
 }
 
 export function DocsPageContent() {
-  const toc = [
-    { id: 'getting-started', label: 'Getting started' },
-    { id: 'campaign-setup', label: 'Campaign setup' },
-    { id: 'ai-agent-workflows', label: 'AI Agent workflows' },
-    { id: 'spreadsheet-analysis', label: 'Spreadsheet analysis' },
-    { id: 'decisions-follow-up', label: 'Decisions and follow-up' },
-    { id: 'policy-response', label: 'Policy response' },
-  ];
+  const toc = docsTocByPath['/docs'];
 
   return (
     <DocsArticleShell

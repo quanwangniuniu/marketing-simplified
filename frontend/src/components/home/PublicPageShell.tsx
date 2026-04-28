@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import HeaderSection from '@/components/home/HeaderSection';
 import FooterSection from '@/components/home/FooterSection';
@@ -11,6 +12,8 @@ type PublicPageShellProps = {
 
 export default function PublicPageShell({ children }: PublicPageShellProps) {
   const { initialized, isAuthenticated, user } = useAuthStore();
+  const pathname = usePathname();
+  const isDocsRoute = pathname === '/docs' || pathname?.startsWith('/docs/');
 
   const redirectToLogin = () => {
     window.location.href = '/login';
@@ -50,7 +53,7 @@ export default function PublicPageShell({ children }: PublicPageShellProps) {
           onRedirectToLogin={redirectToLogin}
         />
         <main>{children}</main>
-        <FooterSection />
+        {isDocsRoute ? null : <FooterSection />}
       </div>
     </div>
   );
