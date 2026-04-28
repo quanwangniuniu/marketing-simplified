@@ -15,6 +15,7 @@ interface TaskStore {
   
   // Update specific task
   updateTask: (taskId: number, updatedData: Partial<TaskData>) => void;
+  updateTasksBulk: (taskIds: number[], updatedData: Partial<TaskData>) => void;
   
   // Add new task
   addTask: (task: TaskData) => void;
@@ -42,6 +43,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       currentTask: state.currentTask && state.currentTask.id === taskId 
         ? { ...state.currentTask, ...updatedData } 
         : state.currentTask
+    }));
+  },
+
+  updateTasksBulk: (taskIds, updatedData) => {
+    const idSet = new Set(taskIds);
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id && idSet.has(task.id) ? { ...task, ...updatedData } : task
+      ),
+      currentTask:
+        state.currentTask?.id && idSet.has(state.currentTask.id)
+          ? { ...state.currentTask, ...updatedData }
+          : state.currentTask,
     }));
   },
   

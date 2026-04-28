@@ -10,7 +10,8 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskHierarchy, TaskRelation, ApprovalChain
-from task.serializers import TaskSerializer, TaskListSerializer, TaskLinkSerializer, ApprovalRecordSerializer, TaskApprovalSerializer, TaskForwardSerializer, TaskCommentSerializer, TaskAttachmentSerializer, SubtaskAddSerializer, TaskRelationAddSerializer
+from task.serializers import TaskSerializer, TaskListSerializer, TaskLinkSerializer, ApprovalRecordSerializer, TaskApprovalSerializer, TaskForwardSerializer, TaskCommentSerializer, TaskAttachmentSerializer, SubtaskAddSerializer, TaskRelationAddSerializer, TaskBulkActionSerializer
+from task.services import bulk_update_tasks
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from core.models import ProjectMember, Project
@@ -437,6 +438,37 @@ class TaskViewSet(viewsets.ModelViewSet):
         
         # Delete the task itself
         instance.delete()
+
+    @action(detail=False, methods=['post'], url_path='bulk_action')
+    def bulk_action(self, request):
+        """Apply bulk task updates in one atomic operation."""
+        serializer = TaskBulkActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        task_ids = data.pop('task_ids')
+        result = bulk_update_tasks(
+            user=request.user,
+            task_ids=task_ids,
+            updates=data,
+        )
+
+        if result['failed']:
+            return Response(
+                {
+                    'detail': 'Bulk action failed. No tasks were updated.',
+                    'result': result,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'detail': f"Bulk action completed successfully. Updated {result['updated_count']} task(s).",
+                'result': result,
+            },
+            status=status.HTTP_200_OK,
+        )
     
     @action(detail=True, methods=['post'])
     def link(self, request, pk=None):

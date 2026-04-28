@@ -684,3 +684,56 @@ class TaskRelationAddSerializer(serializers.Serializer):
         choices=['causes', 'blocks', 'clones', 'relates_to'],
         required=True
     )
+
+
+class TaskBulkActionSerializer(serializers.Serializer):
+    """Validate payload for bulk task updates from list view."""
+
+    task_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+    status = serializers.ChoiceField(
+        choices=Task.Status.choices,
+        required=False,
+    )
+    due_date = serializers.DateField(required=False, allow_null=True)
+    owner_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    current_approver_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    priority = serializers.ChoiceField(
+        choices=Task.Priority.choices,
+        required=False,
+    )
+    start_date = serializers.DateField(required=False, allow_null=True)
+    planned_start_date = serializers.DateField(required=False, allow_null=True)
+
+    def validate_task_ids(self, value):
+        seen = set()
+        deduped = []
+        for task_id in value:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            deduped.append(task_id)
+        return deduped
+
+    def validate(self, attrs):
+        updatable_fields = {
+            "status",
+            "due_date",
+            "owner_id",
+            "current_approver_id",
+            "priority",
+            "start_date",
+            "planned_start_date",
+        }
+        provided_fields = [field for field in updatable_fields if field in attrs]
+        if not provided_fields:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "At least one bulk update field must be provided."
+                    ]
+                }
+            )
+        return attrs
