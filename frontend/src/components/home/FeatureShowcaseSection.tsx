@@ -12,6 +12,7 @@ import {
   ThumbsDown,
   ArrowRight,
   Send,
+  Bot,
   type LucideIcon,
 } from "lucide-react"
 
@@ -213,24 +214,24 @@ function ChatMockup() {
   return (
     <div className="bg-white rounded-xl p-4 h-full flex flex-col shadow-sm border border-gray-100">
       <div className="space-y-3 flex-1">
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
+          <div className="bg-gray-100 rounded-lg rounded-tr-sm px-3 py-2 text-xs text-gray-700 max-w-[80%]">
+            What&apos;s my ad spend for Q2 across all channels?
+          </div>
           <Avatar
-            src="https://unsplash.com/photos/man-wearing-eyeglasses-and-blue-shirt-inside-coffee-shop-QJEVpydulGs"
+            src="/avatars/person-9.jpg"
             alt="User"
             size="xs"
             fallback="U"
             className="flex-shrink-0"
           />
-          <div className="bg-gray-100 rounded-lg rounded-tl-sm px-3 py-2 text-xs text-gray-700 max-w-[80%]">
-            What&apos;s my ad spend for Q2 across all channels?
-          </div>
         </div>
-        <div className="flex gap-2 justify-end">
-          <div className="bg-brand-teal/10 rounded-lg rounded-tr-sm px-3 py-2 text-xs text-slate-800 max-w-[80%] border border-brand-teal/20">
-            Your total Q2 spend is <span className="font-semibold text-gray-900">$42,600</span> across 4 channels. Facebook leads at $15.2k (+12% MoM).
-          </div>
+        <div className="flex gap-2">
           <div className="w-6 h-6 rounded-full bg-brand-gradient flex-shrink-0 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-white">AI</span>
+            <Bot className="w-3.5 h-3.5 text-white" />
+          </div>
+          <div className="bg-brand-teal/10 rounded-lg rounded-tl-sm px-3 py-2 text-xs text-slate-800 max-w-[80%] border border-brand-teal/20">
+            Your total Q2 spend is <span className="font-semibold text-gray-900">$42,600</span> across 4 channels. Facebook leads at $15.2k (+12% MoM).
           </div>
         </div>
       </div>
