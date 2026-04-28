@@ -2244,3 +2244,256 @@ class TaskAPITest(TestCase):
         self.assertTrue(response.data['can_lock'])
         self.assertEqual(response.data['approvals_summary']['approved_count'], 2)
         self.assertEqual(response.data['approvals_summary']['display'], '2 of 2 approvals')
+
+
+class TaskBulkActionAPITest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='bulk@example.com',
+            username='bulkuser',
+            password='testpass123',
+        )
+        self.other_user = User.objects.create_user(
+            email='other@example.com',
+            username='otheruser',
+            password='testpass123',
+        )
+        self.owner_candidate = User.objects.create_user(
+            email='owner@example.com',
+            username='ownercandidate',
+            password='testpass123',
+        )
+
+        self.organization = Organization.objects.create(name='Bulk Org')
+        self.project = Project.objects.create(name='Project A', organization=self.organization)
+        self.project_b = Project.objects.create(name='Project B', organization=self.organization)
+
+        ProjectMember.objects.create(
+            user=self.user,
+            project=self.project,
+            role='Team Leader',
+            is_active=True,
+        )
+        ProjectMember.objects.create(
+            user=self.owner_candidate,
+            project=self.project,
+            role='member',
+            is_active=True,
+        )
+        ProjectMember.objects.create(
+            user=self.other_user,
+            project=self.project,
+            role='member',
+            is_active=True,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('task-bulk-action')
+
+    def _make_task(self, summary, project=None):
+        return Task.objects.create(
+            summary=summary,
+            type='budget',
+            owner=self.user,
+            project=project or self.project,
+        )
+
+    def test_bulk_priority_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'priority': Task.Priority.HIGHEST},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+        self.assertEqual(response.data['result']['requested_count'], 2)
+        self.assertEqual(response.data['result']['succeeded_count'], 2)
+        self.assertEqual(response.data['result']['failed_count'], 0)
+        self.assertEqual(response.data['result']['applied_fields'], ['priority'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.priority, Task.Priority.HIGHEST)
+        self.assertEqual(t2.priority, Task.Priority.HIGHEST)
+
+    def test_bulk_due_date_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'due_date': '2026-06-01'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(str(t1.due_date), '2026-06-01')
+        self.assertEqual(str(t2.due_date), '2026-06-01')
+
+    def test_bulk_owner_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'owner_id': self.owner_candidate.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+        self.assertEqual(response.data['result']['applied_fields'], ['owner_id'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.owner_id, self.owner_candidate.id)
+        self.assertEqual(t2.owner_id, self.owner_candidate.id)
+
+    def test_bulk_approver_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'current_approver_id': self.other_user.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+        self.assertEqual(response.data['result']['applied_fields'], ['current_approver_id'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.current_approver_id, self.other_user.id)
+        self.assertEqual(t2.current_approver_id, self.other_user.id)
+
+    def test_bulk_start_dates_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {
+                'task_ids': [t1.id, t2.id],
+                'start_date': '2026-05-01',
+                'planned_start_date': '2026-05-03',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+        self.assertEqual(
+            response.data['result']['applied_fields'],
+            ['planned_start_date', 'start_date'],
+        )
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(str(t1.start_date), '2026-05-01')
+        self.assertEqual(str(t2.start_date), '2026-05-01')
+        self.assertEqual(str(t1.planned_start_date), '2026-05-03')
+        self.assertEqual(str(t2.planned_start_date), '2026-05-03')
+
+    def test_bulk_status_success_updates_all_tasks(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'status': Task.Status.SUBMITTED},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 2)
+        self.assertEqual(response.data['result']['applied_fields'], ['status'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.status, Task.Status.SUBMITTED)
+        self.assertEqual(t2.status, Task.Status.SUBMITTED)
+
+    def test_bulk_owner_fails_atomically_when_owner_not_project_member(self):
+        t1 = self._make_task('Task 1')
+        t2 = self._make_task('Task 2')
+        stranger = User.objects.create_user(
+            email='stranger@example.com',
+            username='stranger',
+            password='testpass123',
+        )
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'owner_id': stranger.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(response.data['result']['failed'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.owner_id, self.user.id)
+        self.assertEqual(t2.owner_id, self.user.id)
+
+    def test_bulk_permission_fails_atomically_for_inaccessible_project(self):
+        t1 = self._make_task('Task 1', project=self.project)
+        t2 = self._make_task('Task 2', project=self.project_b)
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id, t2.id], 'priority': Task.Priority.LOW},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(response.data['result']['failed'])
+
+        t1 = Task.objects.get(pk=t1.pk)
+        t2 = Task.objects.get(pk=t2.pk)
+        self.assertEqual(t1.priority, Task.Priority.MEDIUM)
+        self.assertEqual(t2.priority, Task.Priority.MEDIUM)
+
+    def test_bulk_status_fails_atomically_on_invalid_transition(self):
+        draft_task = self._make_task('Draft Task')
+        submitted_task = self._make_task('Submitted Task')
+        submitted_task.submit()
+        submitted_task.save()
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [draft_task.id, submitted_task.id], 'status': Task.Status.DRAFT},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(response.data['result']['failed'])
+
+        draft_task = Task.objects.get(pk=draft_task.pk)
+        submitted_task = Task.objects.get(pk=submitted_task.pk)
+        self.assertEqual(draft_task.status, Task.Status.DRAFT)
+        self.assertEqual(submitted_task.status, Task.Status.SUBMITTED)
+
+    def test_bulk_approver_fails_when_user_not_found(self):
+        t1 = self._make_task('Task 1')
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [t1.id], 'current_approver_id': 999999},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['result']['failed_count'], 1)
+        self.assertEqual(response.data['result']['updated_count'], 0)

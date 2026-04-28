@@ -185,3 +185,35 @@ export interface TaskListFilters {
   include_subtasks?: boolean;
   all_projects?: boolean;
 }
+
+export interface TaskBulkUpdateRequest {
+  task_ids: number[];
+  status?: TaskData['status'];
+  due_date?: string | null;
+  owner_id?: number | null;
+  current_approver_id?: number | null;
+  priority?: string;
+  start_date?: string | null;
+  planned_start_date?: string | null;
+}
+
+export interface TaskBulkFailureItem {
+  task_id: number | null;
+  reason: string;
+}
+
+export interface TaskBulkActionResult {
+  requested_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  updated_count: number;
+  succeeded: number[];
+  failed: TaskBulkFailureItem[];
+  atomic: boolean;
+  applied_fields: string[];
+}
+
+export interface TaskBulkActionResponse {
+  detail: string;
+  result: TaskBulkActionResult;
+}
