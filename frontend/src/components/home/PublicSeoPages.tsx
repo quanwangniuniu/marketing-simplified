@@ -249,7 +249,7 @@ function DocsArticleShell({
       </aside>
 
       <div className="min-w-0 px-6 py-10 lg:px-10 lg:py-14">
-        <article className="min-w-0 max-w-4xl">
+        <article className="mx-auto min-w-0 max-w-4xl">
           <div className="border-b border-gray-200 pb-10">
             <div className="mb-5 inline-flex rounded-full border border-brand-teal/20 bg-brand-teal/10 px-4 py-2 text-sm font-medium text-brand-teal">
               {eyebrow}
