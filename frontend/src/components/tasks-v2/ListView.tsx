@@ -324,7 +324,7 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
     requestData: Record<string, unknown>,
     fallbackError: string
   ): Promise<boolean> => {
-    if (!task.id) return;
+    if (!task.id) return false;
     const previous = { ...task };
     updateTaskInStore(task.id, patch);
     setTaskSaving(task.id, true);
@@ -540,11 +540,10 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
         <button
           type="button"
           onClick={() => setBulkMode((v) => !v)}
-          className={`inline-flex h-9 items-center rounded-xl border px-3.5 text-xs font-semibold transition ${
-            bulkMode
+          className={`inline-flex h-9 items-center rounded-xl border px-3.5 text-xs font-semibold transition ${bulkMode
               ? 'border-[#2fc6d6] bg-white text-[#2fc6d6] shadow-sm hover:bg-[#2fc6d6]/5'
               : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-          }`}
+            }`}
         >
           {bulkMode ? 'Exit Bulk edit' : 'Bulk edit'}
         </button>
@@ -552,22 +551,20 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
           <button
             type="button"
             onClick={() => setDensity('comfortable')}
-            className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
-              density === 'comfortable'
+            className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${density === 'comfortable'
                 ? 'border border-[#2fc6d6] bg-[#effbfc] text-[#2fc6d6] shadow-sm'
                 : 'border border-transparent text-gray-600 hover:bg-gray-50'
-            }`}
+              }`}
           >
             Comfortable
           </button>
           <button
             type="button"
             onClick={() => setDensity('compact')}
-            className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
-              density === 'compact'
+            className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${density === 'compact'
                 ? 'border border-[#2fc6d6] bg-[#effbfc] text-[#2fc6d6] shadow-sm'
                 : 'border border-transparent text-gray-600 hover:bg-gray-50'
-            }`}
+              }`}
           >
             Compact
           </button>
@@ -707,13 +704,12 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                 return (
                   <tr
                     key={task.id}
-                    className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50/50 ${
-                      task.id && recentlyUpdatedIds.includes(task.id)
+                    className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50/50 ${task.id && recentlyUpdatedIds.includes(task.id)
                         ? 'bg-emerald-50/45'
                         : bulkMode && isSelected
                           ? 'bg-cyan-50/40'
                           : ''
-                    }`}
+                      }`}
                     onClick={() => {
                       if (!task.id) return;
                       if (bulkMode) {
@@ -733,14 +729,13 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                             setOpenDuePickerTaskId(null);
                             setOpenPriorityTaskId((prev) => (prev === task.id ? null : task.id ?? null));
                           }}
-                        className={`inline-block h-2.5 w-2.5 rounded-full ${PRIORITY_META[priority]?.dot ?? 'bg-gray-300'} ring-2 ring-white transition hover:scale-110`}
+                          className={`inline-block h-2.5 w-2.5 rounded-full ${PRIORITY_META[priority]?.dot ?? 'bg-gray-300'} ring-2 ring-white transition hover:scale-110`}
                           title={`Priority: ${PRIORITY_META[priority]?.label ?? priority}`}
                         />
                         {openPriorityTaskId === task.id ? (
                           <div
-                            className={`absolute left-0 z-20 min-w-[136px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${
-                              openPriorityUpward ? 'bottom-5' : 'top-5'
-                            }`}
+                            className={`absolute left-0 z-20 min-w-[136px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openPriorityUpward ? 'bottom-5' : 'top-5'
+                              }`}
                           >
                             {PRIORITY_OPTIONS.map((opt) => (
                               <button
@@ -750,9 +745,8 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                                   e.stopPropagation();
                                   void updatePriority(task, opt);
                                 }}
-                                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition ${
-                                  opt === priority ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'
-                                }`}
+                                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition ${opt === priority ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'
+                                  }`}
                               >
                                 <span className={`h-2 w-2 rounded-full ${PRIORITY_META[opt]?.dot ?? 'bg-gray-300'}`} />
                                 <span>{PRIORITY_META[opt]?.label ?? opt}</span>
@@ -856,9 +850,8 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                         </button>
                         {openStatusTaskId === task.id ? (
                           <div
-                            className={`absolute left-0 z-20 min-w-[148px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${
-                              openOverlayUpward ? 'bottom-10' : 'top-10'
-                            }`}
+                            className={`absolute left-0 z-20 min-w-[148px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
+                              }`}
                           >
                             {getAllowedStatusOptions(task.status).map((opt) => (
                               <button
@@ -900,9 +893,8 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                         </button>
                         {openOwnerTaskId === task.id ? (
                           <div
-                            className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${
-                              openOverlayUpward ? 'bottom-10' : 'top-10'
-                            }`}
+                            className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
+                              }`}
                           >
                             {memberOptions.map((member) => (
                               <button
@@ -955,19 +947,17 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                                 setOpenDuePickerTaskId(null);
                                 setOpenApproverTaskId((prev) => (prev === task.id ? null : task.id ?? null));
                               }}
-                              className={`inline-flex h-8 w-full items-center justify-start truncate rounded-md border border-transparent px-1 text-left text-xs transition ${
-                                isDisabled
+                              className={`inline-flex h-8 w-full items-center justify-start truncate rounded-md border border-transparent px-1 text-left text-xs transition ${isDisabled
                                   ? 'cursor-default text-gray-500'
                                   : 'text-gray-700 hover:border-[#2fc6d6]/70 hover:bg-[#2fc6d6]/5 hover:px-3'
-                              }`}
+                                }`}
                             >
                               {task.current_approver?.username || task.current_approver?.email || '—'}
                             </button>
                             {!isDisabled && openApproverTaskId === task.id ? (
                               <div
-                                className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${
-                                  openOverlayUpward ? 'bottom-10' : 'top-10'
-                                }`}
+                                className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
+                                  }`}
                               >
                                 <button
                                   type="button"
@@ -1017,9 +1007,8 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                             ) : null}
                             {isDisabled && disabledReason ? (
                               <div
-                                className={`pointer-events-none absolute left-0 z-20 hidden w-56 rounded-lg border border-gray-200 bg-white p-2 text-[11px] text-gray-700 shadow-lg group-hover:block ${
-                                  openOverlayUpward ? 'bottom-9' : 'top-9'
-                                }`}
+                                className={`pointer-events-none absolute left-0 z-20 hidden w-56 rounded-lg border border-gray-200 bg-white p-2 text-[11px] text-gray-700 shadow-lg group-hover:block ${openOverlayUpward ? 'bottom-9' : 'top-9'
+                                  }`}
                               >
                                 {disabledReason}
                               </div>
@@ -1047,9 +1036,8 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                       </button>
                       {openDuePickerTaskId === task.id ? (
                         <div
-                          className={`absolute right-0 z-20 w-52 rounded-lg border border-gray-200 bg-white p-2 shadow-lg ${
-                            index >= Math.max(visible.length - 3, 0) ? 'bottom-11' : 'top-11'
-                          }`}
+                          className={`absolute right-0 z-20 w-52 rounded-lg border border-gray-200 bg-white p-2 shadow-lg ${index >= Math.max(visible.length - 3, 0) ? 'bottom-11' : 'top-11'
+                            }`}
                         >
                           <input
                             type="date"
