@@ -399,6 +399,10 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# Shared secret for the platform-native cron endpoint that triggers the
+# daily Meta ads fan-out. Empty string disables the endpoint (always 401).
+INTERNAL_CRON_SECRET = config('INTERNAL_CRON_SECRET', default='')
+
 # Redis Configuration
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)

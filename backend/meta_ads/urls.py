@@ -8,6 +8,7 @@ from .views import (
     MetaAdSetDetailView,
     MetaAdSetInsightTimeseriesView,
     MetaAdSetPerformanceView,
+    MetaAdTriggerDailySyncAllView,
     MetaCampaignDetailView,
     MetaCampaignInsightTimeseriesView,
     MetaCampaignListView,
@@ -83,6 +84,11 @@ urlpatterns = [
         "summary/",
         MetaSummaryView.as_view(),
         name="meta-summary",
+    ),
+    path(
+        "trigger_daily_sync_all/",
+        MetaAdTriggerDailySyncAllView.as_view(),
+        name="meta-trigger-daily-sync-all",
     ),
     path(
         "campaigns/<int:campaign_id>/",

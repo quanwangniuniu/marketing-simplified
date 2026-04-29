@@ -7,9 +7,11 @@ on-demand sync is exposed through `facebook_integration.FacebookSyncView` and
 
 import csv
 import datetime as _dt
+import secrets as _secrets
 from collections import defaultdict
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.db.models import IntegerField, OuterRef, Subquery, Sum
 from django.http import StreamingHttpResponse
@@ -35,7 +37,7 @@ from .serializers import (
     MetaInsightDailySerializer,
     MetaSyncRunSerializer,
 )
-from .tasks import sync_single_ad_account
+from .tasks import sync_all_active_ad_accounts, sync_single_ad_account
 
 
 # Helpers ---------------------------------------------------------------------
@@ -314,6 +316,40 @@ class MetaSyncRunTriggerView(APIView):
                 "ad_account_id": ad_account.id,
                 "poll_url": f"/api/meta_ads/ad_accounts/{ad_account.id}/sync_runs/",
             },
+            status=202,
+        )
+
+
+class MetaAdTriggerDailySyncAllView(APIView):
+    """Server-to-server endpoint that fires the daily sync fan-out.
+
+    Authenticated by a shared secret carried in the X-Internal-Cron-Secret
+    header and compared in constant time against the INTERNAL_CRON_SECRET
+    setting. Fail-closed: when the server-side secret is empty the endpoint
+    rejects every call, even one with an empty header. Designed for
+    platform-native cron (K8s CronJob, Render Cron, system crontab) so
+    production does not need a celery-beat sidecar.
+
+    On success dispatches sync_all_active_ad_accounts via Celery and returns
+    the resulting task id for ops debuggability. Duplicate dispatches inside
+    the in-flight lock window are absorbed by sync_all_active_ad_accounts
+    itself, so this endpoint does not need its own idempotency check.
+    """
+
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request):
+        expected = getattr(settings, "INTERNAL_CRON_SECRET", "") or ""
+        provided = request.META.get("HTTP_X_INTERNAL_CRON_SECRET", "") or ""
+        if not expected or not _secrets.compare_digest(expected, provided):
+            return Response({"detail": "invalid secret"}, status=401)
+        try:
+            async_result = sync_all_active_ad_accounts.delay()
+        except Exception:
+            return Response({"detail": "broker unreachable"}, status=503)
+        return Response(
+            {"dispatched_task_id": async_result.id},
             status=202,
         )
 

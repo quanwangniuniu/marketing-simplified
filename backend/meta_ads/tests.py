@@ -5,10 +5,11 @@ import csv
 import datetime as _dt
 import io
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -1360,3 +1361,45 @@ class SyncAllActiveAdAccountsTests(APITestCase):
         )
         self.assertEqual(result["dispatched"], 2)
         self.assertEqual(result["skipped_locked"], 0)
+
+
+class MetaAdTriggerDailySyncAllTests(APITestCase):
+    """Cover the platform-cron endpoint: header-based shared-secret auth,
+    fail-closed behavior when the server side is unconfigured, and the
+    success path that dispatches sync_all_active_ad_accounts.
+    """
+
+    URL = "/api/meta_ads/trigger_daily_sync_all/"
+
+    @override_settings(INTERNAL_CRON_SECRET="match-me")
+    @patch("meta_ads.views.sync_all_active_ad_accounts.delay")
+    def test_dispatches_when_header_matches(self, mock_delay):
+        mock_delay.return_value = SimpleNamespace(id="task-abc")
+        resp = self.client.post(
+            self.URL, HTTP_X_INTERNAL_CRON_SECRET="match-me"
+        )
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data, {"dispatched_task_id": "task-abc"})
+        mock_delay.assert_called_once_with()
+
+    @override_settings(INTERNAL_CRON_SECRET="match-me")
+    @patch("meta_ads.views.sync_all_active_ad_accounts.delay")
+    def test_rejects_wrong_header(self, mock_delay):
+        resp = self.client.post(
+            self.URL, HTTP_X_INTERNAL_CRON_SECRET="wrong"
+        )
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.data, {"detail": "invalid secret"})
+        mock_delay.assert_not_called()
+
+    @override_settings(INTERNAL_CRON_SECRET="")
+    @patch("meta_ads.views.sync_all_active_ad_accounts.delay")
+    def test_fail_closed_on_empty_settings(self, mock_delay):
+        # Even when the request header is also empty, an unconfigured server
+        # side must reject so a misconfigured prod cannot accidentally accept
+        # any caller.
+        resp = self.client.post(
+            self.URL, HTTP_X_INTERNAL_CRON_SECRET=""
+        )
+        self.assertEqual(resp.status_code, 401)
+        mock_delay.assert_not_called()
