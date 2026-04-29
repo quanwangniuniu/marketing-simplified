@@ -9,6 +9,7 @@ import {
   FileUp,
   FileDown,
   Clock,
+  ChevronDown,
   MoreHorizontal,
   Trash2,
   X,
@@ -589,6 +590,9 @@ function NotionV2DetailContent() {
     }
   }, [draftId, hasChanges, notionExportParentPageRef, title]);
 
+  const integrationActionBusy =
+    googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy;
+
   return (
     <DashboardLayout>
       <div className="-m-5 h-[calc(100vh-3rem)] flex flex-col bg-white overflow-hidden">
@@ -619,42 +623,33 @@ function NotionV2DetailContent() {
             >
               <Eye className="w-4 h-4" /> Preview
             </button>
-            <button
-              type="button"
-              onClick={handleOpenImportGoogleDoc}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
-            >
-              <FileUp className="w-4 h-4" />
-              {googleDocsImportBusy ? 'Importing…' : 'Import Doc'}
-            </button>
-            <button
-              type="button"
-              onClick={handleExportGoogleDoc}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
-            >
-              <FileDown className="w-4 h-4" />
-              {googleDocsExportBusy ? 'Exporting…' : 'Export Doc'}
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenImportNotion}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 rounded-md transition disabled:opacity-50"
-            >
-              <FileUp className="w-4 h-4" />
-              {notionImportBusy ? 'Importing…' : 'Import Notion'}
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenExportNotion}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 rounded-md transition disabled:opacity-50"
-            >
-              <FileDown className="w-4 h-4" />
-              {notionExportBusy ? 'Exporting…' : 'Export Notion'}
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isLoading || integrationActionBusy}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
+                >
+                  {integrationActionBusy ? 'Working…' : 'Import / Export'}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={handleOpenImportGoogleDoc}>
+                  <FileUp className="w-4 h-4 mr-2" /> Import from Google Docs
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleExportGoogleDoc}>
+                  <FileDown className="w-4 h-4 mr-2" /> Export to Google Docs
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleOpenImportNotion}>
+                  <FileUp className="w-4 h-4 mr-2" /> Import from Notion
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleOpenExportNotion}>
+                  <FileDown className="w-4 h-4 mr-2" /> Export to Notion
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
