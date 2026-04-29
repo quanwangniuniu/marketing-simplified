@@ -524,3 +524,257 @@ class MetaCreativePerformanceFiltersTests(APITestCase):
         rows = {r["meta_creative_id"]: r for r in resp.data["creatives"]}
         self.assertEqual(rows["cra"]["ad_count"], 1)
         self.assertEqual(rows["crc"]["ad_count"], 2)
+
+
+class MetaAdComparisonModeTests(APITestCase):
+    """Cover the ad-comparison `ids` query param on MetaAdPerformanceView.
+
+    When `ids` is non-empty the view bypasses the activity / min_* filters
+    and the default spend-desc sort, returning rows for the requested ads
+    in input order (with foreign-account ids silently dropped). When `ids`
+    is absent or empty, behavior is unchanged.
+
+    Fixture: one primary ad account with six ads (mix of high traffic, mid
+    traffic, low events, and zero-impression). One secondary ad account
+    with one ad to exercise the foreign-account drop.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username="comparison_user",
+            email="comparison@example.com",
+            password="x",
+        )
+        cls.connection = FacebookConnection.objects.create(
+            user=cls.user, fb_user_id="fb-test-3", is_active=True
+        )
+        cls.ad_account = MetaAdAccount.objects.create(
+            connection=cls.connection,
+            meta_account_id="333",
+            name="Comparison Account",
+            currency="USD",
+        )
+        cls.campaign = MetaCampaign.objects.create(
+            ad_account=cls.ad_account, meta_campaign_id="cmp1", name="Camp"
+        )
+        cls.adset = MetaAdSet.objects.create(
+            campaign=cls.campaign, meta_adset_id="cmpas1", name="Adset"
+        )
+
+        cls.ad_a = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_a", name="Ad A"
+        )
+        cls.ad_b = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_b", name="Ad B"
+        )
+        cls.ad_c = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_c", name="Ad C"
+        )
+        cls.ad_d = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_d", name="Ad D"
+        )
+        cls.ad_e = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_e", name="Ad E"
+        )
+        cls.ad_f = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="cmp_f", name="Ad F"
+        )
+
+        # Foreign account
+        cls.foreign_user = User.objects.create_user(
+            username="foreign_comparison_user",
+            email="foreign_comparison@example.com",
+            password="x",
+        )
+        cls.foreign_connection = FacebookConnection.objects.create(
+            user=cls.foreign_user, fb_user_id="fb-foreign-3", is_active=True
+        )
+        cls.foreign_account = MetaAdAccount.objects.create(
+            connection=cls.foreign_connection,
+            meta_account_id="444",
+            name="Foreign Account",
+            currency="USD",
+        )
+        cls.foreign_campaign = MetaCampaign.objects.create(
+            ad_account=cls.foreign_account, meta_campaign_id="fcmp1", name="Foreign Camp"
+        )
+        cls.foreign_adset = MetaAdSet.objects.create(
+            campaign=cls.foreign_campaign, meta_adset_id="fcmpas1", name="Foreign Adset"
+        )
+        cls.foreign_ad = MetaAd.objects.create(
+            adset=cls.foreign_adset, meta_ad_id="cmp_foreign", name="Foreign Ad"
+        )
+
+        today = _dt.date.today()
+        # Ad A: 14 days high traffic, ~112 events
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_a,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("14.2857"),
+                impressions=715,
+                clicks=20,
+                leads=5,
+                calls=1,
+                purchases=2,
+                video_3sec_count=300,
+                lpv_count=15,
+                comment_count=2,
+            )
+        # Ad B: no insights — exercises activity-bypass when ids given.
+        # Ad C: no insights either — same purpose, plus order-preserve test.
+        # Ad D: 7 days mid traffic
+        for i in range(7):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_d,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("8.00"),
+                impressions=400,
+                clicks=12,
+                leads=4,
+                purchases=1,
+                video_3sec_count=160,
+                lpv_count=8,
+            )
+        # Ad E: 14 days
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_e,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("6.00"),
+                impressions=300,
+                clicks=8,
+                leads=4,
+                purchases=1,
+                video_3sec_count=120,
+            )
+        # Ad F: 14 days low events
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_f,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("4.00"),
+                impressions=200,
+                clicks=4,
+                leads=2,
+                purchases=0,
+                video_3sec_count=80,
+            )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse("meta-ad-performance", args=[self.ad_account.id])
+
+    def _ids(self, response):
+        return [row["id"] for row in response.data["ads"]]
+
+    def test_empty_ids_param_falls_back_to_default_behavior(self):
+        # ids="" means default M3 path: activity filter on by default.
+        # Ad A / D / E / F have impressions; B and C do not.
+        resp = self.client.get(self.url, {"days": 14, "ids": ""})
+        self.assertEqual(resp.status_code, 200)
+        returned = self._ids(resp)
+        self.assertIn(self.ad_a.id, returned)
+        self.assertIn(self.ad_d.id, returned)
+        self.assertNotIn(self.ad_b.id, returned)
+        self.assertNotIn(self.ad_c.id, returned)
+        # echo carries an empty ids list, not the literal "" param.
+        self.assertEqual(resp.data["filters"]["ids"], [])
+
+    def test_nonexistent_id_returns_empty_ads(self):
+        resp = self.client.get(self.url, {"days": 14, "ids": "999999"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["ads"], [])
+        self.assertEqual(resp.data["filters"]["ids"], [999999])
+
+    def test_mixed_input_resolved_and_deduped(self):
+        spec = f"{self.ad_a.id},{self.ad_b.id},abc,{self.ad_c.id},{self.ad_a.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            self._ids(resp),
+            [self.ad_a.id, self.ad_b.id, self.ad_c.id],
+        )
+        self.assertEqual(
+            resp.data["filters"]["ids"],
+            [self.ad_a.id, self.ad_b.id, self.ad_c.id],
+        )
+
+    def test_min_events_filter_bypassed_when_ids_present(self):
+        # Ad B has 0 events; min_events=50 would normally exclude it.
+        resp = self.client.get(
+            self.url,
+            {"days": 14, "ids": str(self.ad_b.id), "min_events": 50},
+        )
+        self.assertEqual(self._ids(resp), [self.ad_b.id])
+
+    def test_activity_filter_bypassed_when_ids_present(self):
+        # Ad B has zero impressions; default activity filter would normally
+        # exclude it. With ids, it must come through.
+        resp = self.client.get(
+            self.url, {"days": 14, "ids": str(self.ad_b.id)}
+        )
+        self.assertEqual(self._ids(resp), [self.ad_b.id])
+
+    def test_min_spend_filter_bypassed_when_ids_present(self):
+        # Ad B has $0 spend; min_spend=100 would normally exclude it.
+        resp = self.client.get(
+            self.url,
+            {"days": 14, "ids": str(self.ad_b.id), "min_spend": "100"},
+        )
+        self.assertEqual(self._ids(resp), [self.ad_b.id])
+
+    def test_foreign_ad_account_id_silently_dropped(self):
+        spec = f"{self.ad_a.id},{self.foreign_ad.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(self._ids(resp), [self.ad_a.id, self.ad_b.id])
+        # Echo includes the foreign id (request shape, not resolved shape).
+        self.assertEqual(
+            resp.data["filters"]["ids"],
+            [self.ad_a.id, self.foreign_ad.id, self.ad_b.id],
+        )
+
+    def test_input_order_preserved_strict(self):
+        spec = f"{self.ad_c.id},{self.ad_a.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(
+            self._ids(resp),
+            [self.ad_c.id, self.ad_a.id, self.ad_b.id],
+        )
+
+    def test_six_ids_accepted_no_frontend_cap(self):
+        spec = ",".join(
+            str(i)
+            for i in [
+                self.ad_a.id,
+                self.ad_b.id,
+                self.ad_c.id,
+                self.ad_d.id,
+                self.ad_e.id,
+                self.ad_f.id,
+            ]
+        )
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(len(resp.data["ads"]), 6)
+
+    def test_filters_echo_includes_ids(self):
+        spec = f"{self.ad_a.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(
+            resp.data["filters"]["ids"], [self.ad_a.id, self.ad_b.id]
+        )
+
+    def test_is_in_learning_still_emitted_in_ids_mode(self):
+        spec = f"{self.ad_a.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        for row in resp.data["ads"]:
+            self.assertIn("is_in_learning", row)
+
+    def test_ids_with_days_lt_7_emits_null_is_in_learning(self):
+        resp = self.client.get(
+            self.url, {"days": 3, "ids": str(self.ad_a.id)}
+        )
+        self.assertEqual(len(resp.data["ads"]), 1)
+        self.assertIsNone(resp.data["ads"][0]["is_in_learning"])

@@ -750,6 +750,7 @@ class MetaAdPerformanceView(APIView):
         min_days_with_data = _parse_qp_int(request, "min_days_with_data")
         min_spend = _parse_qp_decimal(request, "min_spend")
         include_inactive = _parse_qp_bool(request, "include_inactive", default=False)
+        ids = _parse_ids(request.query_params.get("ids", ""))
 
         base_qs = MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
         campaign_id = request.query_params.get("campaign_id")
@@ -803,14 +804,20 @@ class MetaAdPerformanceView(APIView):
             )
         )
 
-        if not include_inactive:
-            qs = qs.filter(total_impressions__gt=0)
-        if min_impressions > 0:
-            qs = qs.filter(total_impressions__gte=min_impressions)
-        if min_spend > 0:
-            qs = qs.filter(total_spend__gte=min_spend)
-        if min_days_with_data > 0:
-            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
+        if ids:
+            # Explicit selection mode. ad_account scoping on base_qs already
+            # drops ids from foreign accounts; min_* / activity filters are
+            # bypassed because the user picked these ads on purpose.
+            qs = qs.filter(id__in=ids)
+        else:
+            if not include_inactive:
+                qs = qs.filter(total_impressions__gt=0)
+            if min_impressions > 0:
+                qs = qs.filter(total_impressions__gte=min_impressions)
+            if min_spend > 0:
+                qs = qs.filter(total_spend__gte=min_spend)
+            if min_days_with_data > 0:
+                qs = qs.filter(n_days_with_data__gte=min_days_with_data)
 
         rows = []
         for ad in qs:
@@ -882,9 +889,15 @@ class MetaAdPerformanceView(APIView):
                 "days_with_data": days_with_data,
                 "is_in_learning": is_in_learning,
             })
-        if min_events > 0:
-            rows = [r for r in rows if r["total_events"] >= min_events]
-        rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
+        if ids:
+            # Preserve input order strictly; ids that did not resolve are
+            # absent from rows and naturally drop out of the response.
+            order_index = {ad_id: i for i, ad_id in enumerate(ids)}
+            rows.sort(key=lambda r: order_index[r["id"]])
+        else:
+            if min_events > 0:
+                rows = [r for r in rows if r["total_events"] >= min_events]
+            rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
         return Response({
             "ad_account_id": ad_account.id,
             "currency": ad_account.currency,
@@ -896,6 +909,7 @@ class MetaAdPerformanceView(APIView):
                 "min_events": min_events,
                 "min_days_with_data": min_days_with_data,
                 "include_inactive": include_inactive,
+                "ids": ids,
             },
             "ads": rows,
         })
@@ -1770,3 +1784,33 @@ def _parse_qp_bool(request, name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_ids(raw: str) -> list[int]:
+    """Parse a comma-separated id list from a URL query param.
+
+    Returns a deduped list of positive integers preserving first-occurrence
+    order. Malformed (non-integer, zero, negative) entries are silently
+    dropped — a single typo should not 400 the whole request. The list is
+    truncated to 20 entries server-side as a defensive bound; callers may
+    impose their own lower UX caps.
+    """
+    if not raw:
+        return []
+    out: list[int] = []
+    seen: set[int] = set()
+    for piece in raw.split(","):
+        s = piece.strip()
+        if not s:
+            continue
+        try:
+            n = int(s)
+        except ValueError:
+            continue
+        if n <= 0 or n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+        if len(out) >= 20:
+            break
+    return out
