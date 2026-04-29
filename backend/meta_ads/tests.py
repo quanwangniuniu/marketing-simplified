@@ -278,7 +278,10 @@ class MetaAdPerformanceFiltersTests(APITestCase):
 
 
 class MetaCreativePerformanceFiltersTests(APITestCase):
-    """Cover the Mission 1 filter / sharing knobs on MetaCreativePerformanceView.
+    """Cover the creative-leaderboard filter and sharing knobs on
+    MetaCreativePerformanceView (orphan exclusion, 1:1 default,
+    include_shared_creatives toggle, the four data-quality filters,
+    activity gating, and the learning-phase flag).
 
     Fixture: one ad account, four creatives.
     - Creative A: linked 1:1 to Ad A. 14 daily insight rows, ~10000 imp,

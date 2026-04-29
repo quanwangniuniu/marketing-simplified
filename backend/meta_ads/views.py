@@ -492,8 +492,8 @@ class MetaCreativePerformanceView(APIView):
             ad_count=models.Count("ads", distinct=True),
         )
 
-        # Orphan exclusion (always on): historical creatives with no ad
-        # references make up ~76% of dev-DB creatives per textbook 6.6.
+        # Orphan exclusion (always on): creatives with no ad references
+        # have no measurable performance and only pollute the leaderboard.
         qs = qs.filter(ad_count__gte=1)
         if not include_shared_creatives:
             qs = qs.filter(ad_count=1)
