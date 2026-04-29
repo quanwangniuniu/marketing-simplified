@@ -520,7 +520,8 @@ export default function FeatureCarousel() {
                   duration: 0.6,
                   delay: Math.min((index % total) * 0.1, 0.5),
                 }}
-                className="w-[min(calc(100vw-2rem),380px)] flex-shrink-0"
+                className="flex-shrink-0"
+                style={{ width: "calc(100vw - 2rem)", maxWidth: CARD_WIDTH }}
               >
                 <FeatureCardComponent feature={feature} />
               </motion.div>
