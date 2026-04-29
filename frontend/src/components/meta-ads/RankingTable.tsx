@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 
 import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
+import AdActionMenu from "./AdActionMenu";
+import AdNoteIndicator from "./AdNoteIndicator";
 import {
   formatCurrency,
   formatPercent,
@@ -37,6 +39,9 @@ interface RankingTableProps {
   currency: string;
   loading: boolean;
   selection?: RankingTableSelection;
+  adAccountId: number;
+  days: number;
+  projectId: number | null;
 }
 
 interface RankedRow {
@@ -51,6 +56,9 @@ export default function RankingTable({
   currency,
   loading,
   selection,
+  adAccountId,
+  days,
+  projectId,
 }: RankingTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -125,13 +133,14 @@ export default function RankingTable({
               <th className="px-4 py-2.5 text-right">CPL</th>
               <th className="px-4 py-2.5 text-right">CPLPV</th>
               <th className="px-4 py-2.5 text-right">CPCMT</th>
+              <th className="w-10 px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading && rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={selection ? 14 : 13}
+                  colSpan={selection ? 15 : 14}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   Loading…
@@ -140,7 +149,7 @@ export default function RankingTable({
             ) : paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={selection ? 14 : 13}
+                  colSpan={selection ? 15 : 14}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   No ads match the current filters.
@@ -156,6 +165,9 @@ export default function RankingTable({
                   currency={currency}
                   selection={selection}
                   atCap={atCap}
+                  adAccountId={adAccountId}
+                  days={days}
+                  projectId={projectId}
                 />
               ))
             )}
@@ -184,6 +196,9 @@ function Row({
   currency,
   selection,
   atCap,
+  adAccountId,
+  days,
+  projectId,
 }: {
   row: MetaAdPerformanceRow;
   score: number;
@@ -191,6 +206,9 @@ function Row({
   currency: string;
   selection?: RankingTableSelection;
   atCap?: boolean;
+  adAccountId: number;
+  days: number;
+  projectId: number | null;
 }) {
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
@@ -254,6 +272,10 @@ function Row({
           <span className="truncate text-xs font-medium text-gray-900">
             {row.name || row.meta_ad_id}
           </span>
+          <AdNoteIndicator
+            adAccountId={adAccountId}
+            adMetaId={row.meta_ad_id}
+          />
           {isLearning && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
               Learning
@@ -319,6 +341,15 @@ function Row({
         {row.comment_count > 0
           ? formatCurrency(row.cost_per_comment, currency)
           : "—"}
+      </td>
+      <td className="px-3 py-2.5 align-middle">
+        <AdActionMenu
+          mode="row"
+          ads={[row]}
+          adAccountId={adAccountId}
+          days={days}
+          projectId={projectId}
+        />
       </td>
     </tr>
   );

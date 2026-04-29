@@ -646,6 +646,44 @@ export const facebookApi = {
     return response.data;
   },
 
+  getMetaAdExportCsv: async (
+    adAccountId: number,
+    days: number,
+    filters?: {
+      ids?: number[];
+      campaignId?: number | null;
+      adsetId?: number | null;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+    }
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.campaignId) params.campaign_id = filters.campaignId;
+    if (filters?.adsetId) params.adset_id = filters.adsetId;
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) {
+      params.min_days_with_data = filters.minDaysWithData;
+    }
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.get<Blob>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/export.csv/`,
+      { params, responseType: "blob" }
+    );
+    const disposition =
+      (response.headers["content-disposition"] as string | undefined) ?? "";
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] ?? `meta-ads-${adAccountId}-${days}d.csv`;
+    return { blob: response.data, filename };
+  },
+
   getMetaAdSetPerformance: async (
     adAccountId: number,
     days: number,

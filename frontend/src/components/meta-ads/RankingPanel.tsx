@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
+import { useProjectStore } from "@/lib/projectStore";
 import {
   facebookApi,
   type MetaAdPerformanceRow,
 } from "@/lib/api/facebookApi";
+import AdActionMenu from "./AdActionMenu";
 import FilterPanel, {
   DEFAULT_RANKING_FILTERS,
   RANKING_DAY_OPTIONS,
@@ -135,6 +137,9 @@ export default function RankingPanel({
   const [rows, setRows] = useState<MetaAdPerformanceRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const projectId = useProjectStore(
+    (state) => state.activeProject?.id ?? null
+  );
 
   const lastSyncedSearchRef = useRef<string>("");
   const COMPARE_MIN = 2;
@@ -266,6 +271,11 @@ export default function RankingPanel({
     router.push(`/meta-ads/compare?${params.toString()}`);
   }, [adAccountId, compareReady, filters.days, router, selectedIds]);
 
+  const selectedAds = useMemo(
+    () => rows.filter((row) => selectedIds.has(row.id)),
+    [rows, selectedIds]
+  );
+
   const compareButton = (
     <button
       type="button"
@@ -280,6 +290,21 @@ export default function RankingPanel({
     >
       Compare{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
     </button>
+  );
+
+  const headerSlot = (
+    <div className="flex items-center gap-2">
+      {compareButton}
+      {selectedAds.length > 0 && (
+        <AdActionMenu
+          mode="bulk"
+          ads={selectedAds}
+          adAccountId={adAccountId}
+          days={filters.days}
+          projectId={projectId}
+        />
+      )}
+    </div>
   );
 
   return (
@@ -298,11 +323,14 @@ export default function RankingPanel({
         weights={weights}
         currency={currency}
         loading={loading}
+        adAccountId={adAccountId}
+        days={filters.days}
+        projectId={projectId}
         selection={{
           selectedIds,
           onToggle: toggleSelected,
           cap: COMPARE_MAX,
-          headerSlot: compareButton,
+          headerSlot,
         }}
       />
     </div>
