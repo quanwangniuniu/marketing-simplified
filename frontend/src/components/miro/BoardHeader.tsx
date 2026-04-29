@@ -1,9 +1,20 @@
 "use client";
 
 import React from "react";
-import { ZoomIn, ZoomOut, Maximize2, Share2, ArrowLeft, Save, Camera, Eye, Undo2, Redo2, PanelLeft } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Share2,
+  ArrowLeft,
+  Save,
+  Camera,
+  Eye,
+  Undo2,
+  Redo2,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 import { Viewport } from "./hooks/useBoardViewport";
-import { useRouter } from "next/navigation";
 
 interface BoardHeaderProps {
   title: string;
@@ -22,6 +33,16 @@ interface BoardHeaderProps {
   canUndo?: boolean;
   canRedo?: boolean;
   onBoardsToggle?: () => void;
+  onBack?: () => void;
+}
+
+function iconBtnClass(disabled = false) {
+  return [
+    "inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition",
+    disabled
+      ? "cursor-not-allowed opacity-40"
+      : "hover:bg-gray-50 hover:text-[#3CCED7]",
+  ].join(" ");
 }
 
 export default function BoardHeader({
@@ -40,133 +61,145 @@ export default function BoardHeader({
   onRedo,
   canUndo = false,
   canRedo = false,
-  onBoardsToggle,
+  onBack,
 }: BoardHeaderProps) {
-  const router = useRouter();
-
-  const handleShare = () => {
+  const handleShare = async () => {
     const shareUrl = `${window.location.origin}/miro/share/${shareToken}`;
-    navigator.clipboard.writeText(shareUrl);
-    alert("Share link copied to clipboard!");
-  };
-
-  const handleBack = () => {
-    router.back();
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Share link copied");
+    } catch {
+      toast.error("Failed to copy link");
+    }
   };
 
   return (
-    <div className="h-14 border-b bg-white flex items-center justify-between px-4">
-      <div className="flex items-center gap-4">
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
+      <div className="flex min-w-0 items-center gap-2">
         <button
-          onClick={handleBack}
-          className="flex items-center text-gray-600 hover:text-gray-900 transition-colors p-2 hover:bg-gray-100 rounded"
+          type="button"
+          onClick={onBack}
+          className={iconBtnClass()}
           title="Back to Boards"
+          aria-label="Back to Boards"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="h-4 w-4" />
         </button>
         <input
           type="text"
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          className="text-lg font-semibold border-none outline-none bg-transparent"
           onBlur={(e) => onTitleChange(e.target.value)}
+          className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-[15px] font-semibold text-gray-900 placeholder:text-gray-300 outline-none transition focus:bg-gray-50 focus:ring-2 focus:ring-[#3CCED7]/30"
+          placeholder="Untitled Board"
         />
+        {isSaving && (
+          <span className="text-[11px] text-gray-400">Saving…</span>
+        )}
       </div>
 
-      <div className="flex items-center gap-2">
-        {onBoardsToggle && (
-          <button
-            onClick={onBoardsToggle}
-            className="p-2 hover:bg-gray-100 rounded"
-            title="Toggle Boards Sidebar"
-          >
-            <PanelLeft className="w-4 h-4" />
-          </button>
-        )}
-        {onSave && (
-          <button
-            onClick={onSave}
-            disabled={isSaving}
-            className={`p-2 rounded ml-2 ${
-              isSaving ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100"
-            }`}
-            title="Save"
-          >
-            <Save className="w-4 h-4" />
-          </button>
-        )}
-        {onSnapshotClick && (
-          <button
-            onClick={onSnapshotClick}
-            className="p-2 hover:bg-gray-100 rounded"
-            title="Snapshots"
-          >
-            <Camera className="w-4 h-4" />
-          </button>
-        )}
-        {onPreviewClick && (
-          <button
-            onClick={onPreviewClick}
-            className="p-2 hover:bg-gray-100 rounded"
-            title="Preview"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-        )}
+      <div className="flex items-center gap-1">
         {onUndo && (
           <button
+            type="button"
             onClick={onUndo}
             disabled={!canUndo}
-            className={`p-2 rounded ${canUndo ? "hover:bg-gray-100" : "opacity-40 cursor-not-allowed"}`}
+            className={iconBtnClass(!canUndo)}
             title="Undo (Cmd/Ctrl+Z)"
+            aria-label="Undo"
           >
-            <Undo2 className="w-4 h-4" />
+            <Undo2 className="h-4 w-4" />
           </button>
         )}
         {onRedo && (
           <button
+            type="button"
             onClick={onRedo}
             disabled={!canRedo}
-            className={`p-2 rounded ${canRedo ? "hover:bg-gray-100" : "opacity-40 cursor-not-allowed"}`}
+            className={iconBtnClass(!canRedo)}
             title="Redo (Cmd+Shift+Z / Ctrl+Y)"
+            aria-label="Redo"
           >
-            <Redo2 className="w-4 h-4" />
+            <Redo2 className="h-4 w-4" />
           </button>
         )}
+        <div className="mx-1 h-5 w-px bg-gray-200" aria-hidden />
+        {onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            className={iconBtnClass(isSaving)}
+            title="Save snapshot"
+            aria-label="Save snapshot"
+          >
+            <Save className="h-4 w-4" />
+          </button>
+        )}
+        {onSnapshotClick && (
+          <button
+            type="button"
+            onClick={onSnapshotClick}
+            className={iconBtnClass()}
+            title="Snapshots"
+            aria-label="Snapshots"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
+        )}
+        {onPreviewClick && (
+          <button
+            type="button"
+            onClick={onPreviewClick}
+            className={iconBtnClass()}
+            title="Preview"
+            aria-label="Preview"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+        )}
+        <div className="mx-1 h-5 w-px bg-gray-200" aria-hidden />
         <button
+          type="button"
           onClick={onZoomOut}
-          className="p-2 hover:bg-gray-100 rounded"
-          title="Zoom Out"
+          className={iconBtnClass()}
+          title="Zoom out"
+          aria-label="Zoom out"
         >
-          <ZoomOut className="w-4 h-4" />
+          <ZoomOut className="h-4 w-4" />
         </button>
-        <span className="text-sm text-gray-600 min-w-[60px] text-center">
+        <span className="min-w-[44px] text-center text-xs text-gray-500">
           {Math.round(viewport.zoom * 100)}%
         </span>
         <button
+          type="button"
           onClick={onZoomIn}
-          className="p-2 hover:bg-gray-100 rounded"
-          title="Zoom In"
+          className={iconBtnClass()}
+          title="Zoom in"
+          aria-label="Zoom in"
         >
-          <ZoomIn className="w-4 h-4" />
+          <ZoomIn className="h-4 w-4" />
         </button>
         <button
+          type="button"
           onClick={onFitToScreen}
-          className="p-2 hover:bg-gray-100 rounded ml-2"
-          title="Fit to Screen"
+          className={iconBtnClass()}
+          title="Fit to screen"
+          aria-label="Fit to screen"
         >
-          <Maximize2 className="w-4 h-4" />
+          <Maximize2 className="h-4 w-4" />
         </button>
-        {/* Share button hidden */}
-        {/* <button
+        <div className="mx-1 h-5 w-px bg-gray-200" aria-hidden />
+        <button
+          type="button"
           onClick={handleShare}
-          className="p-2 hover:bg-gray-100 rounded ml-2"
-          title="Share"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:border-[#3CCED7] hover:text-[#3CCED7]"
+          title="Copy share link"
         >
-          <Share2 className="w-4 h-4" />
-        </button> */}
+          <Share2 className="h-3.5 w-3.5" />
+          Share
+        </button>
       </div>
     </div>
   );
 }
-

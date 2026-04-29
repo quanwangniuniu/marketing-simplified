@@ -16,9 +16,9 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { miroApi, MiroBoard } from "@/lib/api/miroApi";
 import { ProjectAPI, ProjectData } from "@/lib/api/projectApi";
-import CreateBoardModal from "@/components/miro-v2/CreateBoardModal";
-import BrandDialog from "@/components/tasks-v2/detail/BrandDialog";
-import ConfirmDialog from "@/components/tasks-v2/detail/ConfirmDialog";
+import CreateBoardModal from "@/components/miro/CreateBoardModal";
+import BrandDialog from "@/components/tasks/detail/BrandDialog";
+import ConfirmDialog from "@/components/tasks/detail/ConfirmDialog";
 
 function MiroV2ListContent() {
   const router = useRouter();

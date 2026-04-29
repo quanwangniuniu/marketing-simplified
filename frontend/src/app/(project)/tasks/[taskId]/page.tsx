@@ -10,15 +10,15 @@ import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import type { TaskData } from '@/types/task';
 
-import TaskDetailHeader from '@/components/tasks-v2/detail/TaskDetailHeader';
-import TaskDescriptionBlock from '@/components/tasks-v2/detail/TaskDescriptionBlock';
-import TaskTypeBlock from '@/components/tasks-v2/detail/TaskTypeBlock';
-import TaskSubtasksBlock from '@/components/tasks-v2/detail/TaskSubtasksBlock';
-import TaskRelationsBlock from '@/components/tasks-v2/detail/TaskRelationsBlock';
-import TaskAttachmentsBlock from '@/components/tasks-v2/detail/TaskAttachmentsBlock';
-import TaskActivityBlock from '@/components/tasks-v2/detail/TaskActivityBlock';
-import PropertiesPanel from '@/components/tasks-v2/detail/PropertiesPanel';
-import ApprovalTimelinePanel from '@/components/tasks-v2/detail/ApprovalTimelinePanel';
+import TaskDetailHeader from '@/components/tasks/detail/TaskDetailHeader';
+import TaskDescriptionBlock from '@/components/tasks/detail/TaskDescriptionBlock';
+import TaskTypeBlock from '@/components/tasks/detail/TaskTypeBlock';
+import TaskSubtasksBlock from '@/components/tasks/detail/TaskSubtasksBlock';
+import TaskRelationsBlock from '@/components/tasks/detail/TaskRelationsBlock';
+import TaskAttachmentsBlock from '@/components/tasks/detail/TaskAttachmentsBlock';
+import TaskActivityBlock from '@/components/tasks/detail/TaskActivityBlock';
+import PropertiesPanel from '@/components/tasks/detail/PropertiesPanel';
+import ApprovalTimelinePanel from '@/components/tasks/detail/ApprovalTimelinePanel';
 
 export default function TaskV2DetailPage() {
   const params = useParams();

@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Loader2, Mail, Plus, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import ConfirmDialog from '@/components/tasks-v2/detail/ConfirmDialog';
+import ConfirmDialog from '@/components/tasks/detail/ConfirmDialog';
 import {
   EmailDraftTableV2,
   type EmailDraftRow,
-} from '@/components/email-draft-v2';
+} from '@/components/email-draft';
 import { mailchimpApi } from '@/lib/api/mailchimpApi';
 import type { EmailDraft } from '@/hooks/useMailchimpData';
 

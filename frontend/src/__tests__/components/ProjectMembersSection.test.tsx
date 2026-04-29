@@ -76,8 +76,8 @@ describe('ProjectMembersSection', () => {
   test('shows skeleton loader while loading', () => {
     render(<ProjectMembersSection {...defaultProps} isLoading={true} />);
 
-    const skeletons = document.querySelectorAll('.animate-pulse');
-    expect(skeletons.length).toBe(3);
+    const skeletons = document.querySelectorAll('.skeleton-fade');
+    expect(skeletons.length).toBe(6);
     expect(screen.queryByTestId('project-member-dm-row')).not.toBeInTheDocument();
   });
 

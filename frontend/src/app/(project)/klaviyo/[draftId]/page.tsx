@@ -28,7 +28,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import { EmailDraftStatusPill } from '@/components/email-draft-v2';
+import { EmailDraftStatusPill } from '@/components/email-draft';
 import {
   CanvasBlocks,
   CanvasBlock,

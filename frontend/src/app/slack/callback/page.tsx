@@ -59,8 +59,8 @@ function SlackCallbackContent() {
 
                 // Redirect after delay
                 setTimeout(() => {
-                    // Return to settings page with the modal auto-opened
-                    router.push('/settings?open_slack=1');
+                    // Return to integrations page with the modal auto-opened
+                    router.push('/integrations?open_slack=1');
                 }, 3000);
 
             } catch (err: any) {
@@ -109,10 +109,10 @@ function SlackCallbackContent() {
                         <h1 className="text-xl font-semibold text-gray-900">Connection Failed</h1>
                         <p className="text-red-500 text-sm">{errorMessage}</p>
                         <button
-                            onClick={() => router.push('/settings?open_slack=1')}
+                            onClick={() => router.push('/integrations?open_slack=1')}
                             className="mt-4 px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                         >
-                            Return to Settings
+                            Return to Integrations
                         </button>
                     </>
                 )}

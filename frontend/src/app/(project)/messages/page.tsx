@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import MessagePageContent from '@/components/messages-v2/MessagePageContent';
+import MessagePageContent from '@/components/messages/MessagePageContent';
 import { useChatStore } from '@/lib/chatStore';
 
 function MessagesV2Content() {

@@ -21,19 +21,19 @@ import {
 import { toast } from 'react-hot-toast';
 import AdDraftActionBar, {
   type ActionSpec,
-} from '@/components/ads-draft-v2/AdDraftActionBar';
-import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
-import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
+} from '@/components/ads-draft/AdDraftActionBar';
+import CampaignScopeBanner from '@/components/ads-draft/CampaignScopeBanner';
+import PlatformBadge from '@/components/ads-draft/PlatformBadge';
 import SharePreviewModal, {
   type ShareDays,
-} from '@/components/ads-draft-v2/SharePreviewModal';
-import AdDraftStatusPill from '@/components/ads-draft-v2/pills/AdDraftStatusPill';
-import type { FacebookStatus } from '@/components/ads-draft-v2/types';
+} from '@/components/ads-draft/SharePreviewModal';
+import AdDraftStatusPill from '@/components/ads-draft/pills/AdDraftStatusPill';
+import type { FacebookStatus } from '@/components/ads-draft/types';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import FacebookAdPreviews from '@/components/facebook_meta/FacebookAdPreviews';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
-import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
+import InlineSelect from '@/components/tasks/detail/InlineSelect';
 import { FacebookMetaAPI, type AdCreative } from '@/lib/api/facebookMetaApi';
 import { getPhotos, uploadPhoto, type PhotoData } from '@/lib/api/facebookMetaPhotoApi';
 import { getVideos, uploadVideo, type VideoData } from '@/lib/api/facebookMetaVideoApi';

@@ -6,11 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import AdCreateModal, {
   type AdCreateRequestV2,
-} from '@/components/ads-draft-v2/google_ads/AdCreateModal';
-import AdTableV2 from '@/components/ads-draft-v2/google_ads/AdTableV2';
-import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
-import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
+} from '@/components/ads-draft/google_ads/AdCreateModal';
+import AdTableV2 from '@/components/ads-draft/google_ads/AdTableV2';
+import CampaignScopeBanner from '@/components/ads-draft/CampaignScopeBanner';
+import PlatformBadge from '@/components/ads-draft/PlatformBadge';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useGoogleAdsData } from '@/hooks/useGoogleAdsData';
 import type { AdStatus, AdType } from '@/lib/api/googleAdsApi';

@@ -996,7 +996,7 @@ export default function BoardCanvas({
 
       {marqueeRect && (
         <div
-          className="absolute border border-[#3CCED7] bg-[#3CCED7]/15/20 pointer-events-none"
+          className="absolute border border-[#3CCED7] bg-[#3CCED7]/10/20 pointer-events-none"
           style={{
             left: Math.min(marqueeRect.startX, marqueeRect.currentX) * viewport.zoom + viewport.x,
             top: Math.min(marqueeRect.startY, marqueeRect.currentY) * viewport.zoom + viewport.y,

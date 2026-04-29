@@ -377,7 +377,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.shapeType === "rect" || !selectedItem.style?.shapeType
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                 >
@@ -394,7 +394,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.shapeType === "roundRect"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                 >
@@ -411,7 +411,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.shapeType === "ellipse"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                 >
@@ -428,7 +428,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.shapeType === "diamond"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                 >
@@ -518,7 +518,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`h-8 border-2 rounded ${
                     (selectedItem.style?.backgroundColor || "#fef08a") === preset.color
-                      ? "border-[#3CCED7] ring-2 ring-blue-200"
+                      ? "border-[#3CCED7] ring-2 ring-[#3CCED7]/30"
                       : "border-gray-300"
                   }`}
                   style={{ backgroundColor: preset.color }}
@@ -598,7 +598,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     !selectedItem.style?.strokeDasharray
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Solid"
@@ -616,7 +616,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "8,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dashed"
@@ -634,7 +634,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "2,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dotted"
@@ -652,7 +652,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "8,4,2,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dash-Dot"
@@ -747,7 +747,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     !selectedItem.style?.strokeDasharray
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Solid"
@@ -765,7 +765,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "8,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dashed"
@@ -783,7 +783,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "2,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dotted"
@@ -801,7 +801,7 @@ export default function BoardPropertiesPanel({
                   }
                   className={`px-2 py-1 text-xs border rounded ${
                     selectedItem.style?.strokeDasharray === "8,4,2,4"
-                      ? "bg-[#3CCED7]/15 border-[#3CCED7]"
+                      ? "bg-[#3CCED7]/10 border-[#3CCED7]"
                       : "bg-white border-gray-300"
                   }`}
                   title="Dash-Dot"
@@ -880,7 +880,7 @@ export default function BoardPropertiesPanel({
                 e.stopPropagation();
                 onUpdate({ parent_item_id: null });
               }}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#3CCED7]/10 text-[#1a9ba3] rounded hover:bg-[#3CCED7]/15"
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#3CCED7]/10 text-[#3CCED7] rounded hover:bg-[#3CCED7]/10"
             >
               <span className="text-sm">Remove from frame</span>
             </button>

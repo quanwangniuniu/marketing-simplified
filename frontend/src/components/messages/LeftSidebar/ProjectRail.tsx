@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { ProjectAPI, type ProjectData } from '@/lib/api/projectApi';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectRailProps {
-  loading?: boolean;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
 }
@@ -21,18 +19,11 @@ function getInitials(name: string): string {
   return `${first}${second}`.toUpperCase();
 }
 
-export default function ProjectRail({
-  loading = false,
-  selectedProjectId,
-  onSelectProject,
-}: ProjectRailProps) {
+export default function ProjectRail({ selectedProjectId, onSelectProject }: ProjectRailProps) {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const projectRailLoading = loading || isLoading;
 
   useEffect(() => {
-    if (loading) return;
-
     let mounted = true;
     (async () => {
       try {
@@ -47,7 +38,7 @@ export default function ProjectRail({
     return () => {
       mounted = false;
     };
-  }, [loading]);
+  }, []);
 
   const selectedIndex = useMemo(() => {
     if (!selectedProjectId) return -1;
@@ -65,12 +56,12 @@ export default function ProjectRail({
       </div>
 
       <div className="flex-1 overflow-y-auto w-full px-2 space-y-2">
-        {projectRailLoading ? (
+        {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <Skeleton
+              <div
                 key={idx}
-                className="w-full h-10 rounded-lg"
+                className="w-full h-10 rounded-lg bg-gray-200 animate-pulse"
               />
             ))}
           </div>
@@ -90,7 +81,7 @@ export default function ProjectRail({
                   'w-full h-10 rounded-lg flex items-center justify-center',
                   'border transition-colors',
                   isSelected
-                    ? 'bg-white border-blue-300 text-[#1a9ba3] shadow-sm'
+                    ? 'bg-gradient-to-br from-[#3CCED7] to-[#A6E661] border-transparent text-white shadow-sm'
                     : 'bg-white/60 border-gray-200 text-gray-700 hover:bg-white hover:border-gray-300',
                 ].join(' ')}
                 title={project.name}

@@ -23,7 +23,7 @@ interface BoardListSidebarProps {
 const cardBase =
   "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-600 shadow-sm transition-colors";
 const cardInactive = "hover:border-gray-300 hover:bg-gray-50/80";
-const cardActive = "border-[#3CCED7] bg-[#3CCED7]/10/60 text-gray-800 ring-1 ring-blue-200/60";
+const cardActive = "border-[#3CCED7] bg-[#3CCED7]/10/60 text-gray-800 ring-1 ring-[#3CCED7]/30/60";
 
 const railBtnBase =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-semibold uppercase leading-none tracking-tight shadow-sm transition-colors";

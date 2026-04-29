@@ -67,14 +67,14 @@ export default function BoardToolbar({
   ];
 
   return (
-    <div className="w-16 border-r bg-white flex flex-col items-center py-4 gap-2">
+    <div className="z-20 mx-2 my-3 flex w-14 shrink-0 flex-col items-center gap-1 self-start rounded-xl bg-white p-1.5 shadow-md ring-1 ring-gray-100">
       <div className="flex flex-col items-center">
         <Popover open={templatesOpen} onOpenChange={setTemplatesOpen}>
           <Tooltip content="Templates" side="right">
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="p-2 rounded hover:bg-gray-100 text-gray-600"
+                className="p-2 rounded text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 aria-label="Templates"
               >
                 <LayoutTemplate className="w-5 h-5" />
@@ -138,8 +138,8 @@ export default function BoardToolbar({
                           onDragEnd={handleDragEnd}
                           className={`p-2 rounded cursor-move ${
                             activeTool === "emoji"
-                              ? "bg-[#3CCED7]/15 text-[#1a9ba3]"
-                              : "hover:bg-gray-100 text-gray-600"
+                              ? "bg-[#3CCED7]/10 text-[#3CCED7]"
+                              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                           }`}
                           aria-label={tool.label}
                         >
@@ -196,8 +196,8 @@ export default function BoardToolbar({
                     onDragEnd={handleDragEnd}
                     className={`p-2 rounded ${
                       activeTool === tool.type
-                        ? "bg-[#3CCED7]/15 text-[#1a9ba3]"
-                        : "hover:bg-gray-100 text-gray-600"
+                        ? "bg-[#3CCED7]/10 text-[#3CCED7]"
+                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                     } ${!isSelect ? "cursor-move" : ""}`}
                     aria-label={tool.label}
                     type="button"
@@ -294,7 +294,7 @@ function LineVariantButton({
           onClick();
         }}
         className={`w-12 rounded px-1 py-1 text-[10px] leading-none transition ${
-          active ? "bg-[#3CCED7]/15 text-[#1a9ba3]" : "hover:bg-gray-100 text-gray-700"
+          active ? "bg-[#3CCED7]/10 text-[#3CCED7]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`}
         aria-pressed={active}
         aria-label={label}

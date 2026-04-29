@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { listAccessibleChatFiles } from '@/lib/api/attachmentApi';
 import type { ChatFileListItem } from '@/types/chat';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function getUploaderLabel(uploader: ChatFileListItem['uploader']): string {
   const fullName = `${uploader.first_name ?? ''} ${uploader.last_name ?? ''}`.trim();
@@ -69,8 +70,20 @@ export default function FilesSidebarView({ selectedProjectId }: { selectedProjec
   const content = useMemo(() => {
     if (isLoading) {
       return (
-        <div className="p-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
+        <div className="space-y-2 p-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={`messages-files-skeleton-${index}`}
+              className="flex gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2"
+            >
+              <Skeleton className="mt-0.5 h-4 w-4 rounded-sm" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-full" />
+              </div>
+              <Skeleton className="h-4 w-10" />
+            </div>
+          ))}
         </div>
       );
     }
@@ -134,4 +147,3 @@ export default function FilesSidebarView({ selectedProjectId }: { selectedProjec
     </div>
   );
 }
-

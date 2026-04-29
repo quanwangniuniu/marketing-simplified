@@ -10,11 +10,11 @@ import { Button } from '@/components/ui/button';
 import InlineEditController from '@/inline-edit/InlineEditController';
 import InlineSelectController from '@/inline-edit/InlineSelectController';
 import InlineMultiSelectController from '@/inline-edit/InlineMultiSelectController';
-import { useCampaignTemplate } from '@/hooks/campaigns-v2/useCampaignTemplate';
-import SharingScopePill from '@/components/campaigns-v2/pills/SharingScopePill';
-import TemplateActionBar from '@/components/campaigns-v2/templates/TemplateActionBar';
-import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
-import CreateCampaignFromTemplateDialog from '@/components/campaigns-v2/modals/CreateCampaignFromTemplateDialog';
+import { useCampaignTemplate } from '@/hooks/campaigns/useCampaignTemplate';
+import SharingScopePill from '@/components/campaigns/pills/SharingScopePill';
+import TemplateActionBar from '@/components/campaigns/templates/TemplateActionBar';
+import BrandConfirmDialog from '@/components/campaigns/BrandConfirmDialog';
+import CreateCampaignFromTemplateDialog from '@/components/campaigns/modals/CreateCampaignFromTemplateDialog';
 import type {
   CampaignObjective,
   CampaignPlatform,

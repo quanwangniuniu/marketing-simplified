@@ -8,7 +8,7 @@ import Button from '@/components/button/Button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Minus, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
+import BrandConfirmDialog from '@/components/campaigns/BrandConfirmDialog';
 
 interface CampaignCheckInsProps {
   campaignId: string;

@@ -51,16 +51,16 @@ describe('BoardToolbar Component', () => {
 
     test('highlights active tool', () => {
       render(<BoardToolbar {...defaultProps} activeTool="text" />);
-      
+
       const textButton = screen.getByRole('button', { name: 'Text' });
-      expect(textButton).toHaveClass('bg-blue-100', 'text-blue-700');
+      expect(textButton).toHaveClass('bg-[#3CCED7]/10', 'text-[#3CCED7]');
     });
 
     test('does not highlight inactive tools', () => {
       render(<BoardToolbar {...defaultProps} activeTool="text" />);
-      
+
       const selectButton = screen.getByRole('button', { name: 'Select' });
-      expect(selectButton).not.toHaveClass('bg-blue-100');
+      expect(selectButton).not.toHaveClass('bg-[#3CCED7]/10');
     });
   });
 
@@ -217,17 +217,16 @@ describe('BoardToolbar Component', () => {
   describe('Tool States', () => {
     test('applies active styles to active tool', () => {
       render(<BoardToolbar {...defaultProps} activeTool="shape" />);
-      
+
       const shapeButton = screen.getByRole('button', { name: 'Shape' });
-      expect(shapeButton).toHaveClass('bg-blue-100', 'text-blue-700');
+      expect(shapeButton).toHaveClass('bg-[#3CCED7]/10', 'text-[#3CCED7]');
     });
 
     test('applies hover styles to inactive tools', () => {
       render(<BoardToolbar {...defaultProps} activeTool="select" />);
-      
+
       const textButton = screen.getByRole('button', { name: 'Text' });
-      expect(textButton).toHaveClass('hover:bg-gray-100', 'text-gray-600');
+      expect(textButton).toHaveClass('hover:bg-gray-50', 'text-gray-500', 'hover:text-gray-900');
     });
   });
 });
-

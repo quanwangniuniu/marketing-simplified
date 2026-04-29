@@ -94,7 +94,7 @@ export default function NotionDraftList({
                   }}
                   className={`w-full text-left py-1.5 px-3 transition-colors cursor-pointer flex items-center justify-between gap-2 ${
                     isSelected
-                      ? 'bg-[#3CCED7]/10 border-l-2 border-[#3CCED7]'
+                      ? 'bg-[#3CCED7]/8 border-l-2 border-[#3CCED7]'
                       : 'hover:bg-gray-100'
                   }`}
                 >

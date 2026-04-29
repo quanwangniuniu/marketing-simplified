@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import type { AdGroup } from '@/types/adVariation';
 import VariationForm from './VariationForm';
 

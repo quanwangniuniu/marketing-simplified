@@ -6,19 +6,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import AdDraftActionBar, {
   type ActionSpec,
-} from '@/components/ads-draft-v2/AdDraftActionBar';
-import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
-import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
-import SharePreviewModal from '@/components/ads-draft-v2/SharePreviewModal';
-import AdDraftStatusPill from '@/components/ads-draft-v2/pills/AdDraftStatusPill';
+} from '@/components/ads-draft/AdDraftActionBar';
+import CampaignScopeBanner from '@/components/ads-draft/CampaignScopeBanner';
+import PlatformBadge from '@/components/ads-draft/PlatformBadge';
+import SharePreviewModal from '@/components/ads-draft/SharePreviewModal';
+import AdDraftStatusPill from '@/components/ads-draft/pills/AdDraftStatusPill';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ResponsiveDisplayAdForm from '@/components/google_ads/design/ResponsiveDisplayAdForm';
 import ResponsiveSearchAdForm from '@/components/google_ads/design/ResponsiveSearchAdForm';
 import VideoResponsiveAdForm from '@/components/google_ads/design/VideoResponsiveAdForm';
 import AdPreviewPanel from '@/components/google_ads/preview/AdPreviewPanel';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
-import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
+import InlineSelect from '@/components/tasks/detail/InlineSelect';
 import { useGoogleAdsDesign } from '@/hooks/useGoogleAdsDesign';
 import { FacebookMetaAPI } from '@/lib/api/facebookMetaApi';
 import {

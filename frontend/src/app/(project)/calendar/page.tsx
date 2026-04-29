@@ -2,7 +2,7 @@
 
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import CalendarPageContent from '@/components/calendar-v2/CalendarPageContent';
+import CalendarPageContent from '@/components/calendar/CalendarPageContent';
 
 function CalendarV2Content() {
   return (

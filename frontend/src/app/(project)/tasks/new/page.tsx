@@ -9,11 +9,11 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useProjectStore } from '@/lib/projectStore';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
-import TaskTypeFieldsSection, { fieldId } from '@/components/tasks-v2/new/TaskTypeFieldsSection';
+import TaskTypeFieldsSection, { fieldId } from '@/components/tasks/new/TaskTypeFieldsSection';
 import TaskCreateChecklistAside, {
   type ChecklistItem,
-} from '@/components/tasks-v2/new/TaskCreateChecklistAside';
-import { getTypeSchema, getUnfilledRequiredKeys } from '@/lib/tasks-v2/typeFieldSchemas';
+} from '@/components/tasks/new/TaskCreateChecklistAside';
+import { getTypeSchema, getUnfilledRequiredKeys } from '@/lib/tasks/typeFieldSchemas';
 import { TASK_TYPE_CONFIG_STATIC } from '@/lib/taskTypeConfigRegistry';
 import { Skeleton } from '@/components/ui/skeleton';
 

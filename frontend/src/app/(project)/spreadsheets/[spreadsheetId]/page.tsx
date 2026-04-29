@@ -19,7 +19,7 @@ import {
   UpdateSheetRequest,
 } from '@/types/spreadsheet';
 import SpreadsheetGrid, { SpreadsheetGridHandle } from '@/components/spreadsheets/SpreadsheetGrid';
-import PatternAgentPanelV2 from '@/components/spreadsheets-v2/PatternAgentPanelV2';
+import PatternAgentPanelV2 from '@/components/spreadsheets/PatternAgentPanelV2';
 import { PivotEditorPanel } from '@/components/spreadsheets/PivotEditorPanel';
 import {
   PivotConfig,
@@ -62,9 +62,9 @@ import {
   updateTimelineItemById,
 } from '@/lib/spreadsheets/timelineItems';
 
-import SpreadsheetDetailHeader from '@/components/spreadsheets-v2/detail/SpreadsheetDetailHeader';
-import SheetTabBarBottom from '@/components/spreadsheets-v2/detail/SheetTabBarBottom';
-import CreateSheetDialog from '@/components/spreadsheets-v2/CreateSheetDialog';
+import SpreadsheetDetailHeader from '@/components/spreadsheets/detail/SpreadsheetDetailHeader';
+import SheetTabBarBottom from '@/components/spreadsheets/detail/SheetTabBarBottom';
+import CreateSheetDialog from '@/components/spreadsheets/CreateSheetDialog';
 
 function getNextSheetName(existingSheets: SheetData[]): string {
   const re = /^sheet(\d+)$/i;

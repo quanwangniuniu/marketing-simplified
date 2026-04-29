@@ -6,6 +6,27 @@ import { NotionDraftAPI } from '@/lib/api/notionDraftApi';
 import useOutline from '@/hooks/useOutline';
 import OutlineOverlay from './OutlineOverlay';
 import { toast } from 'react-hot-toast';
+import {
+  Plus,
+  GripVertical,
+  Trash2,
+  Type,
+  Heading1,
+  Heading2,
+  Heading3,
+  Quote,
+  Code,
+  Minus,
+  List,
+  ListOrdered,
+  CheckSquare,
+  Table2,
+  Image as ImageIcon,
+  Video,
+  Volume2,
+  Paperclip,
+  Bookmark,
+} from 'lucide-react';
 
 type Command = 'bold' | 'italic' | 'underline' | 'link';
 
@@ -333,7 +354,7 @@ const getBlockClassName = (type: NotionBlockType | string) => {
     case 'code':
       return 'font-mono text-sm bg-gray-900 rounded-md px-4 py-4 overflow-x-auto';
     case 'table':
-      return 'text-base leading-7 [&_table]:border-collapse [&_table]:table-fixed [&_table]:rounded-md [&_table]:w-full [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_td]:align-top [&_td]:min-w-[200px] [&_td]:relative [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_th]:relative [&_td:hover_.column-resize-handle]:bg-[#3CCED7] [&_td:hover_.column-resize-handle]:opacity-60';
+      return 'text-base leading-7 [&_table]:border-collapse [&_table]:table-fixed [&_table]:rounded-md [&_table]:w-full [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_td]:align-top [&_td]:min-w-[200px] [&_td]:relative [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:p-2 [&_th]:relative [&_td:hover_.column-resize-handle]:bg-[#3CCED7]/80 [&_td:hover_.column-resize-handle]:opacity-60';
     case 'list':
     case 'numbered_list':
     case 'todo_list':
@@ -544,39 +565,25 @@ interface CommandOption {
 }
 
 const basicBlocks: CommandOption[] = [
-  { id: 'text', label: 'Text', icon: 'T', type: 'rich_text', description: 'Just start writing with plain text.' },
-  { id: 'h1', label: 'Heading 1', icon: '#', type: 'heading_1', description: 'Big section heading.' },
-  { id: 'h2', label: 'Heading 2', icon: '##', type: 'heading_2', description: 'Medium section heading.' },
-  { id: 'h3', label: 'Heading 3', icon: '###', type: 'heading_3', description: 'Small section heading.' },
-  { id: 'quote', label: 'Quote', icon: '"', type: 'quote', description: 'Capture a quote.' },
-  { id: 'code', label: 'Code', icon: '</>', type: 'code', description: 'Capture a code snippet.' },
-  { id: 'divider', label: 'Divider', icon: '---', type: 'divider', description: 'Visually divide blocks.' },
-  { id: 'list', label: 'Bulleted list', icon: '•', type: 'list', description: 'Create a simple bulleted list.' },
-  { id: 'numbered_list', label: 'Numbered list', icon: '1.', type: 'numbered_list', description: 'Create an ordered list.' },
-  { id: 'todo_list', label: 'To-do list', icon: '☐', type: 'todo_list', description: 'Track tasks with checkboxes.' },
-  { 
-    id: 'table', 
-    label: 'Table', 
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-        <line x1="2" y1="6" x2="14" y2="6" stroke="currentColor" strokeWidth="1.2"/>
-        <line x1="2" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="1.2"/>
-        <line x1="6" y1="2" x2="6" y2="14" stroke="currentColor" strokeWidth="1.2"/>
-        <line x1="10" y1="2" x2="10" y2="14" stroke="currentColor" strokeWidth="1.2"/>
-      </svg>
-    ), 
-    type: 'table', 
-    description: 'Insert a simple grid for structured data.' 
-  },
+  { id: 'text', label: 'Text', icon: <Type className="w-[18px] h-[18px]" />, type: 'rich_text', description: 'Just start writing with plain text.' },
+  { id: 'h1', label: 'Heading 1', icon: <Heading1 className="w-[18px] h-[18px]" />, type: 'heading_1', description: 'Big section heading.' },
+  { id: 'h2', label: 'Heading 2', icon: <Heading2 className="w-[18px] h-[18px]" />, type: 'heading_2', description: 'Medium section heading.' },
+  { id: 'h3', label: 'Heading 3', icon: <Heading3 className="w-[18px] h-[18px]" />, type: 'heading_3', description: 'Small section heading.' },
+  { id: 'quote', label: 'Quote', icon: <Quote className="w-[18px] h-[18px]" />, type: 'quote', description: 'Capture a quote.' },
+  { id: 'code', label: 'Code', icon: <Code className="w-[18px] h-[18px]" />, type: 'code', description: 'Capture a code snippet.' },
+  { id: 'divider', label: 'Divider', icon: <Minus className="w-[18px] h-[18px]" />, type: 'divider', description: 'Visually divide blocks.' },
+  { id: 'list', label: 'Bulleted list', icon: <List className="w-[18px] h-[18px]" />, type: 'list', description: 'Create a simple bulleted list.' },
+  { id: 'numbered_list', label: 'Numbered list', icon: <ListOrdered className="w-[18px] h-[18px]" />, type: 'numbered_list', description: 'Create an ordered list.' },
+  { id: 'todo_list', label: 'To-do list', icon: <CheckSquare className="w-[18px] h-[18px]" />, type: 'todo_list', description: 'Track tasks with checkboxes.' },
+  { id: 'table', label: 'Table', icon: <Table2 className="w-[18px] h-[18px]" />, type: 'table', description: 'Insert a simple grid for structured data.' },
 ];
 
 const mediaBlocks: CommandOption[] = [
-  { id: 'image', label: 'Image', icon: '🖼️', type: 'image', description: 'Upload or embed an image.' },
-  { id: 'video', label: 'Video', icon: '▶️', type: 'video', description: 'Upload or embed a video.' },
-  { id: 'audio', label: 'Audio', icon: '🔊', type: 'audio', description: 'Upload or embed an audio file.' },
-  { id: 'file', label: 'File', icon: '📎', type: 'file', description: 'Upload or embed a file.' },
-  { id: 'web_bookmark', label: 'Web bookmark', icon: '🔖', type: 'web_bookmark', description: 'Add a web bookmark.' },
+  { id: 'image', label: 'Image', icon: <ImageIcon className="w-[18px] h-[18px]" />, type: 'image', description: 'Upload or embed an image.' },
+  { id: 'video', label: 'Video', icon: <Video className="w-[18px] h-[18px]" />, type: 'video', description: 'Upload or embed a video.' },
+  { id: 'audio', label: 'Audio', icon: <Volume2 className="w-[18px] h-[18px]" />, type: 'audio', description: 'Upload or embed an audio file.' },
+  { id: 'file', label: 'File', icon: <Paperclip className="w-[18px] h-[18px]" />, type: 'file', description: 'Upload or embed a file.' },
+  { id: 'web_bookmark', label: 'Web bookmark', icon: <Bookmark className="w-[18px] h-[18px]" />, type: 'web_bookmark', description: 'Add a web bookmark.' },
 ];
 
 // Combined for backward compatibility
@@ -1592,7 +1599,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                   if (rCells[colIndex]) {
                     const h = rCells[colIndex].querySelector('.column-resize-handle') as HTMLElement;
                     if (h) {
-                      h.style.background = '#3b82f6';
+                      h.style.background = '#3CCED7';
                     }
                   }
                 });
@@ -1656,7 +1663,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                     if (rCells[colIndex]) {
                       const h = rCells[colIndex].querySelector('.column-resize-handle') as HTMLElement;
                       if (h) {
-                        h.style.background = '#3b82f6';
+                        h.style.background = '#3CCED7';
                         h.style.opacity = '0.6';
                       }
                     }
@@ -1690,7 +1697,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                     if (rCells[colIndex]) {
                       const h = rCells[colIndex].querySelector('.column-resize-handle') as HTMLElement;
                       if (h) {
-                        h.style.background = '#3b82f6';
+                        h.style.background = '#3CCED7';
                         h.style.opacity = '0.6';
                       }
                     }
@@ -1909,14 +1916,22 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
 
   const removeBlock = useCallback((id: string) => {
     setBlocks((prev) => {
-      if (prev.length === 1) {
-        return prev;
-      }
       const index = prev.findIndex((block) => block.id === id);
       if (index === -1) {
         return prev;
       }
       const nextBlocks = prev.filter((block) => block.id !== id);
+      if (nextBlocks.length === 0) {
+        const fresh = createEmptyBlock('rich_text');
+        setTimeout(() => {
+          const el = blockRefs.current.get(fresh.id);
+          if (el) {
+            el.focus();
+            placeCaretAtEnd(el);
+          }
+        }, 0);
+        return [fresh];
+      }
       const fallbackBlock = nextBlocks[Math.max(0, index - 1)] ?? nextBlocks[0];
       if (fallbackBlock && isTextBlock(fallbackBlock.type)) {
         focusBlock(fallbackBlock.id);
@@ -3073,12 +3088,54 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
     };
   }, []);
 
+  // Notion-like: click on empty area (gutter / bottom padding) focuses the last block,
+  // creating a new empty text block if the current last block is non-empty or non-text.
+  const handleEmptyAreaClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-block-id]')) return;
+    if (target.closest('button')) return;
+    if (target.closest('a')) return;
+    if (target.closest('[contenteditable="true"]')) return;
+    if (target.closest('[role="button"]')) return;
+
+    const sel = window.getSelection();
+    if (sel && sel.toString().length > 0) return;
+
+    const focusBlock = (id: string) => {
+      const el = blockRefs.current.get(id);
+      if (el) {
+        el.focus();
+        placeCaretAtEnd(el);
+      }
+    };
+
+    const lastBlock = blocks[blocks.length - 1];
+    if (!lastBlock) {
+      const fresh = createEmptyBlock('rich_text');
+      setBlocks([fresh]);
+      setTimeout(() => focusBlock(fresh.id), 0);
+      return;
+    }
+
+    const lastIsEmptyText =
+      isTextBlock(lastBlock.type) && isEmptyHtml(lastBlock.html || '');
+
+    if (!lastIsEmptyText) {
+      const fresh = createEmptyBlock('rich_text');
+      setBlocks((prev) => [...prev, fresh]);
+      setTimeout(() => focusBlock(fresh.id), 0);
+    } else {
+      focusBlock(lastBlock.id);
+    }
+  }, [blocks, setBlocks]);
+
   return (
     <div className="relative h-full min-h-0 overflow-hidden">
       <div
         ref={editorScrollRef}
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain cursor-text"
         data-notion-editor-container
+        onClick={handleEmptyAreaClick}
       >
         <div className="flex-1 min-w-0 pb-24">
           <div className="max-w-3xl mx-auto w-full py-10 px-8 space-y-0 relative">
@@ -3104,7 +3161,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                 <div
                   key={block.id}
                   className={`group relative flex items-center ${
-                    isSelected ? 'bg-[#3CCED7]/10' : ''
+                    isSelected ? 'bg-[#3CCED7]/8' : ''
                   }`}
                   onMouseEnter={() => setHoveredBlockId(block.id)}
                   onMouseLeave={() => setHoveredBlockId(null)}
@@ -3115,38 +3172,34 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                 >
                   {/* Drag indicator line above */}
                   {showDragIndicator && dragPosition === 'before' && (
-                    <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
+                    <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7]/80 z-10" />
                   )}
 
                   <div className="flex items-center justify-between group w-full">
                     {/* Left sidebar with add button and drag handle */}
-                    <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0.5 flex-shrink-0 mr-5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           insertBlockAfter(block.id, 'rich_text');
                         }}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                        title="Add block above"
-                        aria-label="Add block above"
+                        className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-[#3CCED7] transition-colors"
+                        title="Add block below"
+                        aria-label="Add block below"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         draggable
                         onDragStart={(e) => handleDragStart(e, block.id)}
                         onDragEnd={handleDragEnd}
-                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-grab active:cursor-grabbing"
+                        className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-grab active:cursor-grabbing"
                         title="Drag to reorder"
                         aria-label="Drag to reorder"
                       >
-                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                        </svg>
+                        <GripVertical className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -3157,26 +3210,17 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                     <button
                       type="button"
                       onClick={() => removeBlock(block.id)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition mr-2 flex-shrink-0"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:bg-red-50 hover:text-red-500 transition mr-1 flex-shrink-0"
                       aria-label="Remove divider"
+                      title="Remove divider"
                     >
-                      <svg
-                        className="h-4 w-4"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 3a1 1 0 01.894.553L11 4h3a1 1 0 010 2h-1v8a3 3 0 01-3 3H9a3 3 0 01-3-3V6H5a1 1 0 010-2h3l.106-.447A1 1 0 019 3zM8 6v8a1 1 0 001 1h2a1 1 0 001-1V6H8z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
                   {/* Drag indicator line below */}
                   {showDragIndicator && dragPosition === 'after' && (
-                    <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
+                    <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7]/80 z-10" />
                   )}
                 </div>
               );
@@ -3187,7 +3231,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
               <div
                 key={block.id}
                 className={`group relative ${isDragged ? 'opacity-50' : ''} ${
-                  isSelected ? 'bg-[#3CCED7]/10' : ''
+                  isSelected ? 'bg-[#3CCED7]/8' : ''
                 } ${block.type === 'table' ? 'mb-10 pb-10' : ''}`}
                 onMouseEnter={() => setHoveredBlockId(block.id)}
                 onMouseLeave={() => setHoveredBlockId(null)}
@@ -3202,38 +3246,34 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
               >
                 {/* Drag indicator line above */}
                 {showDragIndicator && dragPosition === 'before' && (
-                  <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
+                  <div className="absolute -top-2 left-0 right-0 h-0.5 bg-[#3CCED7]/80 z-10" />
                 )}
                 
                 <div className="flex items-center justify-between group w-full">
                   {/* Left sidebar with add button and drag handle */}
-                  <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-0.5 flex-shrink-0 mr-5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         insertBlockAfter(block.id, 'rich_text');
                       }}
-                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                      title="Add block above"
-                      aria-label="Add block above"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-[#3CCED7] transition-colors"
+                      title="Add block below"
+                      aria-label="Add block below"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+                      <Plus className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
                       draggable
                       onDragStart={(e) => handleDragStart(e, block.id)}
                       onDragEnd={handleDragEnd}
-                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-grab active:cursor-grabbing"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-grab active:cursor-grabbing"
                       title="Drag to reorder"
                       aria-label="Drag to reorder"
                     >
-                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                      </svg>
+                      <GripVertical className="w-4 h-4" />
                     </button>
                   </div>
                   
@@ -3250,7 +3290,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                               toggleTodoState(block.id);
                             }}
                             className={`w-4 h-4 flex items-center justify-center border rounded ${
-                              todoChecked ? 'bg-[#3CCED7] border-[#3CCED7]' : 'border-gray-400'
+                              todoChecked ? 'bg-[#3CCED7]/80 border-[#3CCED7]' : 'border-gray-400'
                             }`}
                             aria-label={todoChecked ? 'Mark to-do incomplete' : 'Mark to-do complete'}
                           >
@@ -3274,12 +3314,12 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                       </div>
                     )}
                     {isEmptyHtml(block.html) && !isListBlock && isTextBlock(block.type) ? (
-                      <div className="absolute top-1.5 left-0 pointer-events-none select-none text-sm text-gray-400 z-0">
+                      <div className="absolute top-1.5 left-0 pointer-events-none select-none text-base leading-7 text-gray-400 z-0">
                         Type &apos;/&apos; for commands, press Enter to add a new block
                       </div>
                     ) : null}
                     {isEmptyHtml(block.html) && isListBlock ? (
-                      <div className="absolute top-1.5 left-6 pointer-events-none select-none text-sm text-gray-400 z-0">
+                      <div className="absolute top-1.5 left-6 pointer-events-none select-none text-base leading-7 text-gray-400 z-0">
                         {isNumberedList ? 'Numbered item' : isTodoList ? 'To-do item' : 'List item'}
                       </div>
                     ) : null}
@@ -3351,7 +3391,7 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                                     updateBlockLanguage(block.id, lang.value);
                                   }}
                                   className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${
-                                    (block.language || 'plain') === lang.value ? 'bg-[#3CCED7]/10 text-[#3CCED7]' : ''
+                                    (block.language || 'plain') === lang.value ? 'bg-[#3CCED7]/8 text-[#3CCED7]' : ''
                                   }`}
                                 >
                                   {lang.label}
@@ -3707,28 +3747,18 @@ export default function NotionEditor({ blocks, setBlocks, draftId }: NotionEdito
                         e.stopPropagation();
                         removeBlock(block.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition mr-2 flex-shrink-0"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:bg-red-50 hover:text-red-500 transition mr-1 flex-shrink-0"
                       aria-label={`Delete ${block.type}`}
                       title={`Delete ${block.type}`}
                     >
-                      <svg
-                        className="h-4 w-4"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 3a1 1 0 01.894.553L11 4h3a1 1 0 010 2h-1v8a3 3 0 01-3 3H9a3 3 0 01-3-3V6H5a1 1 0 010-2h3l.106-.447A1 1 0 019 3zM8 6v8a1 1 0 001 1h2a1 1 0 001-1V6H8z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
                 
                 {/* Drag indicator line below */}
                 {showDragIndicator && dragPosition === 'after' && (
-                  <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7] z-10" />
+                  <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-[#3CCED7]/80 z-10" />
                 )}
               </div>
             );

@@ -9,11 +9,11 @@ import { useAuthStore } from '@/lib/authStore';
 import api from '@/lib/api';
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import type { Meeting } from '@/types/meeting';
-import DocumentHeader from '@/components/meetings-v2/document/DocumentHeader';
+import DocumentHeader from '@/components/meetings/document/DocumentHeader';
 import CollaborativeEditor, {
   type EditorHostState,
   type MemberLike,
-} from '@/components/meetings-v2/document/CollaborativeEditor';
+} from '@/components/meetings/document/CollaborativeEditor';
 
 export default function MeetingDocumentPage() {
   const params = useParams<{ meetingId: string }>();
