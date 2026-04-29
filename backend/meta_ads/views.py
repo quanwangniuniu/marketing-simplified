@@ -330,8 +330,31 @@ class MetaCreativePerformanceView(APIView):
 
     Aggregates insights across every ad linked to the creative, so the
     frontend gets one row per creative with performance already reduced.
-    Creatives with zero linked insights are still returned with metadata
-    so the page can show them as "no data yet".
+
+    Filters
+    -------
+    `min_impressions` (int, default 0), `min_spend` (decimal, default 0),
+    `min_events` (int, default 0), `min_days_with_data` (int, default 0):
+    drop low-data creatives so the leaderboard is not polluted by paused
+    or under-delivered ads. `min_spend` is in the ad account's native
+    currency. `min_events` sums leads + calls + purchases + messages
+    across linked ads. `min_days_with_data` counts linked-ad x date pairs
+    where impressions > 0 (so a creative referenced by N ads delivering
+    on the same date contributes N to this count, not 1).
+
+    `include_inactive` (bool, default false): when false, creatives with
+    zero linked-insight impressions in the window are excluded.
+
+    `include_shared_creatives` (bool, default false): when false, only
+    creatives referenced by exactly 1 ad are returned (the 1:1 cohort).
+    When true, creatives referenced by >= 1 ad are returned (1:1 + N:M).
+    Orphan creatives (0 ad references) are always excluded; there is no
+    toggle for them.
+
+    Each row carries `is_in_learning` (events/week < 50) plus the raw
+    `total_events`, `days_with_data`, `lpv_count`, `comment_count`,
+    `video_3sec_count` so the frontend can grey out low-confidence rows.
+    `is_in_learning` is null when `days < 7`.
     """
 
     permission_classes = [IsAuthenticated]
@@ -342,6 +365,15 @@ class MetaCreativePerformanceView(APIView):
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
         since = today - _dt.timedelta(days=days - 1)
+
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+        include_inactive = _parse_qp_bool(request, "include_inactive", default=False)
+        include_shared_creatives = _parse_qp_bool(
+            request, "include_shared_creatives", default=False
+        )
 
         qs = MetaAdCreative.objects.filter(ad_account=ad_account).annotate(
             total_spend=Sum(
@@ -372,8 +404,22 @@ class MetaCreativePerformanceView(APIView):
                     ads__insights_daily__date__lte=today,
                 ),
             ),
+            total_calls=Sum(
+                "ads__insights_daily__calls",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
             total_purchases=Sum(
                 "ads__insights_daily__purchases",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_messages=Sum(
+                "ads__insights_daily__messages",
                 filter=models.Q(
                     ads__insights_daily__date__gte=since,
                     ads__insights_daily__date__lte=today,
@@ -414,7 +460,51 @@ class MetaCreativePerformanceView(APIView):
                     ads__insights_daily__date__lte=today,
                 ),
             ),
+            total_video_3sec=Sum(
+                "ads__insights_daily__video_3sec_count",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_lpv=Sum(
+                "ads__insights_daily__lpv_count",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            total_comments=Sum(
+                "ads__insights_daily__comment_count",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                ),
+            ),
+            n_days_with_data=models.Count(
+                "ads__insights_daily",
+                filter=models.Q(
+                    ads__insights_daily__date__gte=since,
+                    ads__insights_daily__date__lte=today,
+                    ads__insights_daily__impressions__gt=0,
+                ),
+            ),
+            ad_count=models.Count("ads", distinct=True),
         )
+
+        # Orphan exclusion (always on): historical creatives with no ad
+        # references make up ~76% of dev-DB creatives per textbook 6.6.
+        qs = qs.filter(ad_count__gte=1)
+        if not include_shared_creatives:
+            qs = qs.filter(ad_count=1)
+        if not include_inactive:
+            qs = qs.filter(total_impressions__gt=0)
+        if min_impressions > 0:
+            qs = qs.filter(total_impressions__gte=min_impressions)
+        if min_spend > 0:
+            qs = qs.filter(total_spend__gte=min_spend)
+        if min_days_with_data > 0:
+            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
 
         rows = []
         for cr in qs:
@@ -423,10 +513,21 @@ class MetaCreativePerformanceView(APIView):
             imp = cr.total_impressions or 0
             clicks = cr.total_clicks or 0
             leads = cr.total_leads or 0
+            calls = cr.total_calls or 0
             purchases = cr.total_purchases or 0
+            messages = cr.total_messages or 0
             p25 = cr.total_video_p25 or 0
             p75 = cr.total_video_p75 or 0
             p100 = cr.total_video_p100 or 0
+            v3 = cr.total_video_3sec or 0
+            lpv = cr.total_lpv or 0
+            comments = cr.total_comments or 0
+            days_with_data = cr.n_days_with_data or 0
+            total_events = leads + calls + purchases + messages
+            if days < 7:
+                is_in_learning = None
+            else:
+                is_in_learning = (total_events * 7) < (50 * days)
             hook_rate = _safe_ratio(p25, imp) * Decimal("100")
             hold_rate = _safe_ratio(p75, p25) * Decimal("100")
             completion_rate = _safe_ratio(p100, p25) * Decimal("100")
@@ -445,7 +546,9 @@ class MetaCreativePerformanceView(APIView):
                 "impressions": imp,
                 "clicks": clicks,
                 "leads": leads,
+                "calls": calls,
                 "purchases": purchases,
+                "messages": messages,
                 "revenue": str(rev),
                 "ctr": str(_safe_ratio(clicks, imp) * Decimal("100")),
                 "cpc": str(_safe_ratio(spend, clicks)),
@@ -456,15 +559,35 @@ class MetaCreativePerformanceView(APIView):
                 "video_p75": p75,
                 "video_p100": p100,
                 "hook_rate": str(hook_rate),
+                "hook_rate_strict": str(_safe_ratio(v3, imp) * Decimal("100")),
                 "hold_rate": str(hold_rate),
                 "completion_rate": str(completion_rate),
+                "video_3sec_count": v3,
+                "lpv_count": lpv,
+                "cost_per_lpv": str(_safe_ratio(spend, lpv)),
+                "comment_count": comments,
+                "cost_per_comment": str(_safe_ratio(spend, comments)),
+                "total_events": total_events,
+                "days_with_data": days_with_data,
+                "is_in_learning": is_in_learning,
+                "ad_count": cr.ad_count,
             })
+        if min_events > 0:
+            rows = [r for r in rows if r["total_events"] >= min_events]
         rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
         return Response({
             "ad_account_id": ad_account.id,
             "currency": ad_account.currency,
             "days": days,
             "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "filters": {
+                "min_impressions": min_impressions,
+                "min_spend": str(min_spend),
+                "min_events": min_events,
+                "min_days_with_data": min_days_with_data,
+                "include_inactive": include_inactive,
+                "include_shared_creatives": include_shared_creatives,
+            },
             "creatives": rows,
         })
 
