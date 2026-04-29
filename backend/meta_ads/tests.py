@@ -5,6 +5,7 @@ import csv
 import datetime as _dt
 import io
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase
@@ -1050,3 +1051,87 @@ class MetaAdExportCsvTests(APITestCase):
         rows = self._rows(resp)
         self.assertEqual(len(rows), 1)
         self.assertEqual(",".join(rows[0]), self.EXPECTED_HEADER)
+
+
+class SyncInsightsActionCountsRegressionTests(APITestCase):
+    """Cover the sync write path when the Graph API row omits the actions array.
+
+    The three NOT-NULL columns lpv_count, video_3sec_count, and comment_count
+    must persist as zero when actions is absent, null, or an empty list. A
+    prior bug let the parsers' return value leak as NULL into the column,
+    breaking the daily sync against any account whose latest day had no
+    measured actions.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username="sync_regression_user",
+            email="sync_regression@example.com",
+            password="x",
+        )
+        cls.connection = FacebookConnection.objects.create(
+            user=cls.user, fb_user_id="fb-test-sync", is_active=True
+        )
+        cls.ad_account = MetaAdAccount.objects.create(
+            connection=cls.connection,
+            meta_account_id="777",
+            name="Sync Regression Account",
+            currency="USD",
+        )
+        cls.campaign = MetaCampaign.objects.create(
+            ad_account=cls.ad_account,
+            meta_campaign_id="syncc1",
+            name="Sync Camp",
+        )
+        cls.adset = MetaAdSet.objects.create(
+            campaign=cls.campaign,
+            meta_adset_id="syncas1",
+            name="Sync Adset",
+        )
+        cls.ad = MetaAd.objects.create(
+            adset=cls.adset, meta_ad_id="sync_ad_1", name="Sync Ad"
+        )
+
+    def _row(self, date_str: str, actions_value):
+        """Build a Graph-API-shaped row. Pass a sentinel to omit actions."""
+        row: dict = {
+            "ad_id": self.ad.meta_ad_id,
+            "date_start": date_str,
+            "spend": "12.34",
+            "impressions": "100",
+            "reach": "80",
+            "clicks": "5",
+            "frequency": "1.25",
+            "ctr": "5.0",
+            "cpc": "2.47",
+            "cpm": "123.40",
+        }
+        if actions_value is not _OMITTED:
+            row["actions"] = actions_value
+        return row
+
+    def test_sync_persists_zero_action_counts_when_actions_array_missing(self):
+        rows = [
+            self._row("2026-04-24", _OMITTED),
+            self._row("2026-04-25", None),
+            self._row("2026-04-26", []),
+        ]
+        with patch("meta_ads.services.graph_paged", return_value=iter(rows)):
+            from meta_ads.services import sync_insights
+
+            inserted = sync_insights(self.ad_account, "fake-token", days=14)
+
+        self.assertEqual(inserted, 3)
+        persisted = MetaInsightDaily.objects.filter(ad=self.ad).order_by("date")
+        self.assertEqual(persisted.count(), 3)
+        for row in persisted:
+            self.assertEqual(row.lpv_count, 0)
+            self.assertEqual(row.video_3sec_count, 0)
+            self.assertEqual(row.comment_count, 0)
+            self.assertEqual(row.impressions, 100)
+            self.assertEqual(row.clicks, 5)
+
+
+_OMITTED = object()
