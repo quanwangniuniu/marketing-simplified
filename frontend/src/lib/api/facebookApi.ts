@@ -121,7 +121,9 @@ export interface MetaCreativePerformanceRow {
   impressions: number;
   clicks: number;
   leads: number;
+  calls: number;
   purchases: number;
+  messages: number;
   revenue: string;
   ctr: string;
   cpc: string;
@@ -132,8 +134,27 @@ export interface MetaCreativePerformanceRow {
   video_p75: number;
   video_p100: number;
   hook_rate: string;
+  hook_rate_strict: string;
   hold_rate: string;
   completion_rate: string;
+  video_3sec_count: number;
+  lpv_count: number;
+  cost_per_lpv: string;
+  comment_count: number;
+  cost_per_comment: string;
+  total_events: number;
+  days_with_data: number;
+  is_in_learning: boolean | null;
+  ad_count: number;
+}
+
+export interface MetaCreativePerformanceFilters {
+  min_impressions: number;
+  min_spend: string;
+  min_events: number;
+  min_days_with_data: number;
+  include_inactive: boolean;
+  include_shared_creatives: boolean;
 }
 
 export interface MetaCreativePerformance {
@@ -141,6 +162,7 @@ export interface MetaCreativePerformance {
   currency: string;
   days: number;
   window: { since: string; until: string };
+  filters: MetaCreativePerformanceFilters;
   creatives: MetaCreativePerformanceRow[];
 }
 
@@ -567,11 +589,26 @@ export const facebookApi = {
 
   getMetaCreativePerformance: async (
     adAccountId: number,
-    days: number
+    days: number,
+    filters?: {
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+      includeSharedCreatives?: boolean;
+    }
   ): Promise<MetaCreativePerformance> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) params.min_days_with_data = filters.minDaysWithData;
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.includeSharedCreatives) params.include_shared_creatives = "true";
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/creative_performance/`,
-      { params: { days } }
+      { params }
     );
     return response.data;
   },

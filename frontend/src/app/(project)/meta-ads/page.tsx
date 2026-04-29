@@ -37,6 +37,7 @@ import AccountPicker from '@/components/meta-ads/AccountPicker';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
+import CreativeRankPanel from '@/components/meta-ads/CreativeRankPanel';
 import RankingPanel from '@/components/meta-ads/RankingPanel';
 import {
   facebookApi,
@@ -63,6 +64,7 @@ const VIEW_TABS = [
   { key: 'creatives', label: 'Creatives', hint: 'Hook / hold rate' },
   { key: 'drilldown', label: 'Ad drill-down', hint: 'Per-ad time series' },
   { key: 'ranking', label: 'Ranking', hint: 'Composite-score ad rank' },
+  { key: 'creative-rank', label: 'Creative Rank', hint: '1:1 creative leaderboard' },
 ] as const;
 
 type ViewKey = (typeof VIEW_TABS)[number]['key'];
@@ -528,6 +530,10 @@ function MetaAdsContent() {
 
       {viewTab === 'ranking' && selectedId && (
         <RankingPanel adAccountId={selectedId} currency={currency} />
+      )}
+
+      {viewTab === 'creative-rank' && selectedId && (
+        <CreativeRankPanel adAccountId={selectedId} currency={currency} />
       )}
     </div>
   );

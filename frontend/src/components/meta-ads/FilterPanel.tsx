@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 
 export const RANKING_DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 export type RankingDays = (typeof RANKING_DAY_OPTIONS)[number];
@@ -27,6 +27,12 @@ interface FilterPanelProps {
   filters: RankingFilters;
   onChange: (next: RankingFilters) => void;
   currency: string;
+  /**
+   * Optional extra controls rendered after the include_inactive checkbox.
+   * Used by the creative leaderboard to add an `include_shared_creatives`
+   * toggle without polluting the shared `RankingFilters` shape.
+   */
+  extras?: ReactNode;
 }
 
 const INPUT_CLASSES =
@@ -45,6 +51,7 @@ export default function FilterPanel({
   filters,
   onChange,
   currency,
+  extras,
 }: FilterPanelProps) {
   const minImpId = useId();
   const minSpendId = useId();
@@ -204,6 +211,8 @@ export default function FilterPanel({
           />
           Include inactive ads (zero impressions in window)
         </label>
+
+        {extras}
       </div>
     </section>
   );

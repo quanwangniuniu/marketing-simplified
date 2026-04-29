@@ -1,5 +1,6 @@
 /**
- * Composite-score logic for the Mission 3 ranking tab.
+ * Composite-score logic shared by the meta-ads ranking surfaces (per-ad and
+ * per-creative leaderboards).
  *
  * Pure module — no React, no DOM, no fetch. Easy to unit-test.
  *
@@ -16,7 +17,21 @@
  * surfacing drift if it matters.
  */
 
-import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
+/**
+ * Structural row shape that the composite-score logic needs.
+ * Both the per-ad and per-creative leaderboard rows satisfy this contract —
+ * they share the seven metric strings plus an integer `id`.
+ */
+export interface MetricBearingRow {
+  id: number;
+  roas: string;
+  cpa: string;
+  hook_rate_strict: string;
+  hold_rate: string;
+  ctr: string;
+  cost_per_lpv: string;
+  cost_per_comment: string;
+}
 
 export type RankingMetric =
   | "roas"
@@ -122,7 +137,7 @@ export function sumWeights(weights: WeightSet): number {
   return total;
 }
 
-function readMetric(row: MetaAdPerformanceRow, metric: RankingMetric): number {
+function readMetric<T extends MetricBearingRow>(row: T, metric: RankingMetric): number {
   switch (metric) {
     case "roas":
       return Number(row.roas);
@@ -147,8 +162,8 @@ interface MetricRange {
   range: number;
 }
 
-function computeRanges(
-  rows: MetaAdPerformanceRow[]
+function computeRanges<T extends MetricBearingRow>(
+  rows: T[]
 ): Record<RankingMetric, MetricRange> {
   const ranges = {} as Record<RankingMetric, MetricRange>;
   for (const m of RANKING_METRICS) {
@@ -169,8 +184,8 @@ function computeRanges(
   return ranges;
 }
 
-export function computeCompositeScores(
-  rows: MetaAdPerformanceRow[],
+export function computeCompositeScores<T extends MetricBearingRow>(
+  rows: T[],
   weights: WeightSet
 ): Map<number, number> {
   const ranges = computeRanges(rows);

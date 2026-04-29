@@ -11,7 +11,7 @@ import {
   Video,
 } from "lucide-react";
 
-import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
+import type { MetaCreativePerformanceRow } from "@/lib/api/facebookApi";
 import {
   formatCurrency,
   formatPercent,
@@ -23,25 +23,25 @@ import { computeCompositeScores, type WeightSet } from "./rankingScoring";
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const LOW_CONFIDENCE_EVENTS_THRESHOLD = 50;
 
-interface RankingTableProps {
-  rows: MetaAdPerformanceRow[];
+interface CreativeRankTableProps {
+  rows: MetaCreativePerformanceRow[];
   weights: WeightSet;
   currency: string;
   loading: boolean;
 }
 
 interface RankedRow {
-  row: MetaAdPerformanceRow;
+  row: MetaCreativePerformanceRow;
   score: number;
   rank: number;
 }
 
-export default function RankingTable({
+export default function CreativeRankTable({
   rows,
   weights,
   currency,
   loading,
-}: RankingTableProps) {
+}: CreativeRankTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
@@ -75,7 +75,7 @@ export default function RankingTable({
     <section className="rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
-          Ranked ads
+          Ranked creatives
           {total > 0 && (
             <span className="ml-2 text-[11px] font-medium normal-case text-gray-400">
               {total}
@@ -92,8 +92,7 @@ export default function RankingTable({
           <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th className="w-12 px-4 py-2.5">#</th>
-              <th className="w-14 px-3 py-2.5"></th>
-              <th className="px-4 py-2.5">Ad</th>
+              <th className="px-4 py-2.5">Creative</th>
               <th className="px-4 py-2.5 text-right">Score</th>
               <th className="px-4 py-2.5 text-right">Spend</th>
               <th className="px-4 py-2.5 text-right">ROAS</th>
@@ -110,7 +109,7 @@ export default function RankingTable({
             {loading && rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={12}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   Loading…
@@ -119,10 +118,10 @@ export default function RankingTable({
             ) : paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={12}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
-                  No ads match the current filters.
+                  No creatives match the current filters.
                 </td>
               </tr>
             ) : (
@@ -160,7 +159,7 @@ function Row({
   rank,
   currency,
 }: {
-  row: MetaAdPerformanceRow;
+  row: MetaCreativePerformanceRow;
   score: number;
   rank: number;
   currency: string;
@@ -168,72 +167,85 @@ function Row({
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
   const learningUnknown = row.is_in_learning === null;
-  const thumb = thumbnailOrFallback(row.creative?.thumbnail_url ?? null);
-  const isVideo =
-    row.creative?.object_type === "VIDEO" || !!row.creative?.video_id;
+  const thumb = thumbnailOrFallback(row.thumbnail_url);
+  const isVideo = row.object_type === "VIDEO" || !!row.video_id;
+  const detailHref = `/meta-ads/creatives/${row.id}`;
+  const altText = row.name || row.title || "Creative thumbnail";
+  const display = row.title || row.name || row.meta_creative_id;
 
   return (
     <tr
       className={`align-top hover:bg-gray-50/60 ${lowConfidence ? "opacity-50" : ""}`}
     >
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
         {rank}
       </td>
-      <td className="px-3 py-2.5">
-        <div className="relative h-9 w-9 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-          {thumb ? (
-            <img
-              src={thumb}
-              alt=""
-              className="h-full w-full object-cover"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-gray-300">
-              <ImageIcon className="h-4 w-4" />
-            </div>
-          )}
-          {isVideo && (
-            <span className="pointer-events-none absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-0.5">
-              <Video className="h-2 w-2 text-white" />
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="flex max-w-[420px] items-center gap-2">
-          <span className="truncate text-xs font-medium text-gray-900">
-            {row.name || row.meta_ad_id}
-          </span>
-          {isLearning && (
-            <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-              Learning
-            </span>
-          )}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-gray-400">
-          <span className="truncate">{row.campaign_name}</span>
-          <span>·</span>
-          <span className="truncate">{row.adset_name}</span>
-          {row.creative?.id && (
-            <>
-              <span>·</span>
+      <td className="px-4 py-3">
+        <div className="flex gap-3">
+          <Link
+            href={detailHref}
+            aria-label={`Open creative ${display}`}
+            className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 transition-shadow hover:border-[#3CCED7]/60 hover:shadow"
+          >
+            {thumb ? (
+              <img
+                src={thumb}
+                alt={altText}
+                className="h-full w-full object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-gray-300">
+                <ImageIcon className="h-6 w-6" />
+              </div>
+            )}
+            {isVideo && (
+              <span className="pointer-events-none absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 py-0.5">
+                <Video className="h-2.5 w-2.5 text-white" />
+              </span>
+            )}
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
               <Link
-                href={`/meta-ads/creatives/${row.creative.id}`}
-                className="font-mono hover:text-[#1a9ba3]"
+                href={detailHref}
+                className="truncate text-sm font-medium text-gray-900 hover:text-[#1a9ba3]"
               >
-                creative {row.creative.meta_creative_id}
+                {display}
               </Link>
-            </>
-          )}
+              {isLearning && (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                  Learning
+                </span>
+              )}
+            </div>
+            {row.body && (
+              <p className="mt-1 line-clamp-2 text-sm leading-snug text-gray-700">
+                {row.body}
+              </p>
+            )}
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-gray-400">
+              {row.call_to_action_type && (
+                <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                  {row.call_to_action_type}
+                </span>
+              )}
+              {row.ad_count > 1 && (
+                <span className="text-xs text-gray-500">
+                  {row.ad_count} ads
+                </span>
+              )}
+              <span className="font-mono">{row.meta_creative_id}</span>
+            </div>
+          </div>
         </div>
       </td>
       <td
-        className="px-4 py-2.5 text-right font-mono text-sm text-gray-900"
+        className="px-4 py-3 text-right font-mono text-sm text-gray-900"
         title={
           lowConfidence
-            ? `Low confidence — only ${row.total_events} events in window (need ≥ ${LOW_CONFIDENCE_EVENTS_THRESHOLD})`
+            ? `Low confidence — only ${row.total_events} events in window (need >= ${LOW_CONFIDENCE_EVENTS_THRESHOLD})`
             : learningUnknown
               ? "Learning state unknown — window shorter than 7 days"
               : undefined
@@ -241,33 +253,33 @@ function Row({
       >
         {score.toFixed(4)}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {formatCurrency(row.spend, currency)}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {Number(row.roas) > 0 ? `${formatRatio(row.roas)}x` : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {row.purchases > 0 ? formatCurrency(row.cpa, currency) : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {Number(row.hook_rate_strict) > 0
           ? formatPercent(row.hook_rate_strict)
           : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {Number(row.hold_rate) > 0 ? formatPercent(row.hold_rate) : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {Number(row.ctr) > 0 ? formatPercent(row.ctr) : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {row.leads > 0 ? formatCurrency(row.cpl, currency) : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {row.lpv_count > 0 ? formatCurrency(row.cost_per_lpv, currency) : "—"}
       </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-800">
+      <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">
         {row.comment_count > 0
           ? formatCurrency(row.cost_per_comment, currency)
           : "—"}

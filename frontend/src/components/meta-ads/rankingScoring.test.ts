@@ -1,4 +1,7 @@
-import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
+import type {
+  MetaAdPerformanceRow,
+  MetaCreativePerformanceRow,
+} from "@/lib/api/facebookApi";
 import {
   PRESETS,
   applyPreset,
@@ -209,6 +212,90 @@ describe("computeCompositeScores", () => {
     const scores = computeCompositeScores(rows, weights);
     expect(scores.get(1)).toBe(0);
     expect(scores.get(2)).toBeGreaterThan(scores.get(3)!);
+  });
+});
+
+function makeCreativeRow(
+  id: number,
+  overrides: Partial<MetaCreativePerformanceRow> = {}
+): MetaCreativePerformanceRow {
+  return {
+    id,
+    meta_creative_id: `c${id}`,
+    name: `Creative ${id}`,
+    title: `Title ${id}`,
+    body: `Body ${id}`,
+    thumbnail_url: "",
+    image_url: "",
+    video_id: "",
+    object_type: "VIDEO",
+    call_to_action_type: "LEARN_MORE",
+    spend: "0",
+    impressions: 0,
+    clicks: 0,
+    leads: 0,
+    calls: 0,
+    purchases: 0,
+    messages: 0,
+    revenue: "0",
+    ctr: "0",
+    cpc: "0",
+    cpl: "0",
+    cpa: "0",
+    roas: "0",
+    video_p25: 0,
+    video_p75: 0,
+    video_p100: 0,
+    hook_rate: "0",
+    hook_rate_strict: "0",
+    hold_rate: "0",
+    completion_rate: "0",
+    video_3sec_count: 0,
+    lpv_count: 0,
+    cost_per_lpv: "0",
+    comment_count: 0,
+    cost_per_comment: "0",
+    total_events: 0,
+    days_with_data: 0,
+    is_in_learning: null,
+    ad_count: 1,
+    ...overrides,
+  };
+}
+
+describe("computeCompositeScores on creative-shape rows", () => {
+  it("ranks creative rows by Performance preset", () => {
+    const rows = [
+      makeCreativeRow(1, { roas: "1.0", cpa: "20" }),
+      makeCreativeRow(2, { roas: "5.0", cpa: "20" }),
+      makeCreativeRow(3, { roas: "3.0", cpa: "20" }),
+    ];
+    const scores = computeCompositeScores(rows, PRESETS.performance);
+    expect(scores.get(2)).toBeGreaterThan(scores.get(3)!);
+    expect(scores.get(3)).toBeGreaterThan(scores.get(1)!);
+  });
+
+  it("inverts cost_per_comment for creative rows under Engagement preset", () => {
+    const rows = [
+      makeCreativeRow(1, {
+        roas: "2.0",
+        cpa: "20",
+        hook_rate_strict: "30",
+        hold_rate: "20",
+        ctr: "1",
+        cost_per_comment: "1.0",
+      }),
+      makeCreativeRow(2, {
+        roas: "2.0",
+        cpa: "20",
+        hook_rate_strict: "30",
+        hold_rate: "20",
+        ctr: "1",
+        cost_per_comment: "10.0",
+      }),
+    ];
+    const scores = computeCompositeScores(rows, PRESETS.engagement);
+    expect(scores.get(1)).toBeGreaterThan(scores.get(2)!);
   });
 });
 
