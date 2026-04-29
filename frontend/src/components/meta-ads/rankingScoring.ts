@@ -206,3 +206,43 @@ export function computeCompositeScores<T extends MetricBearingRow>(
   }
   return scores;
 }
+
+/**
+ * Per-row [0, 1] normalized value for one metric across the given row set.
+ *
+ * Used by the radar chart to map raw metric values onto each radial axis.
+ * When all rows share the same value (range = 0) every row gets 0 — no
+ * spike in any direction. When a row's raw value is non-finite (e.g. a
+ * derived ratio that came back as "NaN") the row gets 0 for that metric.
+ *
+ * For "lower is better" metrics, pass `invert = true` so cheap CPA / cost
+ * per LPV / cost per comment yields a higher normalized score than the
+ * expensive end of the range.
+ */
+export function computeMinMaxNormalized<T extends MetricBearingRow>(
+  rows: T[],
+  metric: RankingMetric,
+  invert: boolean
+): Map<number, number> {
+  const out = new Map<number, number>();
+  let min = Infinity;
+  let max = -Infinity;
+  for (const r of rows) {
+    const v = readMetric(r, metric);
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const range =
+    Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
+  for (const r of rows) {
+    const raw = readMetric(r, metric);
+    if (!Number.isFinite(raw)) {
+      out.set(r.id, 0);
+      continue;
+    }
+    const norm = range === 0 ? 0 : (raw - min) / range;
+    out.set(r.id, invert ? 1 - norm : norm);
+  }
+  return out;
+}

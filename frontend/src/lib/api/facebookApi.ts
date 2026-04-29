@@ -218,6 +218,7 @@ export interface MetaAdPerformanceFilters {
   min_events: number;
   min_days_with_data: number;
   include_inactive: boolean;
+  ids: number[];
 }
 
 export interface MetaAdPerformance {
@@ -624,6 +625,7 @@ export const facebookApi = {
       minEvents?: number;
       minDaysWithData?: number;
       includeInactive?: boolean;
+      ids?: number[];
     }
   ): Promise<MetaAdPerformance> => {
     const params: Record<string, string | number> = { days };
@@ -634,6 +636,9 @@ export const facebookApi = {
     if (filters?.minEvents) params.min_events = filters.minEvents;
     if (filters?.minDaysWithData) params.min_days_with_data = filters.minDaysWithData;
     if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/`,
       { params }

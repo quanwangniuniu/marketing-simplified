@@ -134,8 +134,11 @@ export default function RankingPanel({
   const [weights, setWeights] = useState<WeightSet>(initial.weights);
   const [rows, setRows] = useState<MetaAdPerformanceRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const lastSyncedSearchRef = useRef<string>("");
+  const COMPARE_MIN = 2;
+  const COMPARE_MAX = 5;
 
   // Sync URL <- state (debounced is overkill; React batches state updates)
   useEffect(() => {
@@ -231,6 +234,54 @@ export default function RankingPanel({
     setWeights(next);
   }, []);
 
+  const toggleSelected = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < COMPARE_MAX) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const compareReady =
+    selectedIds.size >= COMPARE_MIN && selectedIds.size <= COMPARE_MAX;
+
+  const compareTitle = compareReady
+    ? undefined
+    : selectedIds.size < COMPARE_MIN
+      ? `Pick ${COMPARE_MIN}-${COMPARE_MAX} ads to compare`
+      : `At most ${COMPARE_MAX} ads can be compared at once`;
+
+  const openCompare = useCallback(() => {
+    if (!compareReady) return;
+    const ids = Array.from(selectedIds).join(",");
+    const params = new URLSearchParams({
+      ad_account: String(adAccountId),
+      ids,
+      days: String(filters.days),
+    });
+    router.push(`/meta-ads/compare?${params.toString()}`);
+  }, [adAccountId, compareReady, filters.days, router, selectedIds]);
+
+  const compareButton = (
+    <button
+      type="button"
+      onClick={openCompare}
+      disabled={!compareReady}
+      title={compareTitle}
+      className={
+        compareReady
+          ? "h-9 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-95"
+          : "h-9 cursor-not-allowed rounded-lg bg-white px-4 text-sm font-medium text-gray-400 ring-1 ring-gray-200"
+      }
+    >
+      Compare{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+    </button>
+  );
+
   return (
     <div className="space-y-5">
       <FilterPanel
@@ -247,6 +298,12 @@ export default function RankingPanel({
         weights={weights}
         currency={currency}
         loading={loading}
+        selection={{
+          selectedIds,
+          onToggle: toggleSelected,
+          cap: COMPARE_MAX,
+          headerSlot: compareButton,
+        }}
       />
     </div>
   );

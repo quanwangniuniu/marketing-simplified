@@ -6,6 +6,7 @@ import {
   PRESETS,
   applyPreset,
   computeCompositeScores,
+  computeMinMaxNormalized,
   detectActivePreset,
   sumWeights,
   type WeightSet,
@@ -296,6 +297,54 @@ describe("computeCompositeScores on creative-shape rows", () => {
     ];
     const scores = computeCompositeScores(rows, PRESETS.engagement);
     expect(scores.get(1)).toBeGreaterThan(scores.get(2)!);
+  });
+});
+
+describe("computeMinMaxNormalized", () => {
+  it("normalizes raw metric values onto [0, 1] across the row set", () => {
+    const rows = [
+      makeRow(1, { roas: "1.0" }),
+      makeRow(2, { roas: "5.0" }),
+      makeRow(3, { roas: "3.0" }),
+    ];
+    const out = computeMinMaxNormalized(rows, "roas", false);
+    expect(out.get(1)).toBeCloseTo(0, 5);
+    expect(out.get(2)).toBeCloseTo(1, 5);
+    expect(out.get(3)).toBeCloseTo(0.5, 5);
+  });
+
+  it("inverts when invert=true so lower raw values get higher scores", () => {
+    const rows = [
+      makeRow(1, { cpa: "10" }),
+      makeRow(2, { cpa: "100" }),
+      makeRow(3, { cpa: "55" }),
+    ];
+    const out = computeMinMaxNormalized(rows, "cpa", true);
+    expect(out.get(1)).toBeCloseTo(1, 5);
+    expect(out.get(2)).toBeCloseTo(0, 5);
+    expect(out.get(3)).toBeCloseTo(0.5, 5);
+  });
+
+  it("returns 0 for every row when range is 0 (all rows equal)", () => {
+    const rows = [
+      makeRow(1, { hold_rate: "20" }),
+      makeRow(2, { hold_rate: "20" }),
+    ];
+    const out = computeMinMaxNormalized(rows, "hold_rate", false);
+    expect(out.get(1)).toBe(0);
+    expect(out.get(2)).toBe(0);
+  });
+
+  it("yields 0 for rows with non-finite raw values, normalizes the rest", () => {
+    const rows = [
+      makeRow(1, { ctr: "NaN" }),
+      makeRow(2, { ctr: "1" }),
+      makeRow(3, { ctr: "5" }),
+    ];
+    const out = computeMinMaxNormalized(rows, "ctr", false);
+    expect(out.get(1)).toBe(0);
+    expect(out.get(2)).toBeCloseTo(0, 5);
+    expect(out.get(3)).toBeCloseTo(1, 5);
   });
 });
 

@@ -23,11 +23,19 @@ import { computeCompositeScores, type WeightSet } from "./rankingScoring";
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const LOW_CONFIDENCE_EVENTS_THRESHOLD = 50;
 
+export interface RankingTableSelection {
+  selectedIds: Set<number>;
+  onToggle: (id: number) => void;
+  cap: number;
+  headerSlot?: React.ReactNode;
+}
+
 interface RankingTableProps {
   rows: MetaAdPerformanceRow[];
   weights: WeightSet;
   currency: string;
   loading: boolean;
+  selection?: RankingTableSelection;
 }
 
 interface RankedRow {
@@ -41,6 +49,7 @@ export default function RankingTable({
   weights,
   currency,
   loading,
+  selection,
 }: RankingTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -71,6 +80,9 @@ export default function RankingTable({
     [ranked, safePage, pageSize]
   );
 
+  const selectedCount = selection?.selectedIds.size ?? 0;
+  const atCap = selection ? selectedCount >= selection.cap : false;
+
   return (
     <section className="rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
@@ -81,16 +93,24 @@ export default function RankingTable({
               {total}
             </span>
           )}
+          {selection && selectedCount > 0 && (
+            <span className="ml-3 text-[11px] font-medium normal-case text-[#1a9ba3]">
+              {selectedCount} selected
+            </span>
+          )}
         </h2>
-        <span className="text-[11px] text-gray-400">
-          Higher score = better fit for the current weights
-        </span>
+        {selection?.headerSlot ?? (
+          <span className="text-[11px] text-gray-400">
+            Higher score = better fit for the current weights
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
             <tr>
+              {selection && <th className="w-10 px-3 py-2.5"></th>}
               <th className="w-12 px-4 py-2.5">#</th>
               <th className="w-14 px-3 py-2.5"></th>
               <th className="px-4 py-2.5">Ad</th>
@@ -110,7 +130,7 @@ export default function RankingTable({
             {loading && rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={selection ? 14 : 13}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   Loading…
@@ -119,7 +139,7 @@ export default function RankingTable({
             ) : paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={selection ? 14 : 13}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   No ads match the current filters.
@@ -133,6 +153,8 @@ export default function RankingTable({
                   score={score}
                   rank={rank}
                   currency={currency}
+                  selection={selection}
+                  atCap={atCap}
                 />
               ))
             )}
@@ -159,11 +181,15 @@ function Row({
   score,
   rank,
   currency,
+  selection,
+  atCap,
 }: {
   row: MetaAdPerformanceRow;
   score: number;
   rank: number;
   currency: string;
+  selection?: RankingTableSelection;
+  atCap?: boolean;
 }) {
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
@@ -171,11 +197,32 @@ function Row({
   const thumb = thumbnailOrFallback(row.creative?.thumbnail_url ?? null);
   const isVideo =
     row.creative?.object_type === "VIDEO" || !!row.creative?.video_id;
+  const isSelected = selection?.selectedIds.has(row.id) ?? false;
+  const checkboxDisabled = !!selection && atCap && !isSelected;
 
   return (
     <tr
-      className={`align-top hover:bg-gray-50/60 ${lowConfidence ? "opacity-50" : ""}`}
+      className={[
+        "align-top hover:bg-gray-50/60",
+        lowConfidence ? "opacity-50" : "",
+        isSelected ? "bg-[#3CCED7]/5" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
+      {selection && (
+        <td className="px-3 py-2.5">
+          <input
+            type="checkbox"
+            aria-label={`Select ad ${row.name || row.meta_ad_id} for comparison`}
+            checked={isSelected}
+            disabled={checkboxDisabled}
+            onChange={() => selection.onToggle(row.id)}
+            title={checkboxDisabled ? `Cap reached (${selection.cap} ads max)` : undefined}
+            className={`h-4 w-4 rounded accent-[#3CCED7] ${checkboxDisabled ? "cursor-not-allowed opacity-50" : ""}`}
+          />
+        </td>
+      )}
       <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
         {rank}
       </td>
