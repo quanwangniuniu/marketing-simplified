@@ -751,6 +751,12 @@ def _build_ad_perf_queryset(
         .annotate(
             total_spend=Sum("insights_daily__spend", filter=window_q),
             total_impressions=Sum("insights_daily__impressions", filter=window_q),
+            # Reach is summed across the daily rows in the window. Daily reach
+            # counts unique people per day, so an ad that ran for several days
+            # has the same person counted once per day they were reached. The
+            # summed total therefore over-states the true window-unique reach.
+            # Frequency derived in-row from total_impressions / total_reach
+            # carries the same caveat.
             total_reach=Sum("insights_daily__reach", filter=window_q),
             total_clicks=Sum("insights_daily__clicks", filter=window_q),
             total_leads=Sum("insights_daily__leads", filter=window_q),
@@ -766,11 +772,7 @@ def _build_ad_perf_queryset(
             total_comments=Sum("insights_daily__comment_count", filter=window_q),
             n_days_with_data=models.Count(
                 "insights_daily",
-                filter=models.Q(
-                    insights_daily__date__gte=since,
-                    insights_daily__date__lte=today,
-                    insights_daily__impressions__gt=0,
-                ),
+                filter=window_q & models.Q(insights_daily__impressions__gt=0),
             ),
         )
     )
@@ -973,6 +975,10 @@ CSV_EXPORT_HEADER: tuple[str, ...] = (
     "Creative ID",
     "Spend (account currency)",
     "Impressions",
+    # Reach values are summed across the daily rows in the window; the same
+    # person counted on more than one day is added each time, so this column
+    # over-states true window-unique reach. Frequency in the next column
+    # inherits the same caveat.
     "Reach",
     "Frequency",
     "Days with data",
@@ -1224,7 +1230,7 @@ class MetaAdExportCsvView(APIView):
             for ad in ads:
                 yield writer.writerow(_csv_row_for_ad(ad, days))
 
-        ts = _dt.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
         filename = f"meta-ads-{ad_account.id}-{days}d-{ts}.csv"
         response = StreamingHttpResponse(
             stream(), content_type="text/csv; charset=utf-8"

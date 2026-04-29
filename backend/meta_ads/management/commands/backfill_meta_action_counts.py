@@ -57,7 +57,9 @@ class Command(BaseCommand):
                 )
             )
             for row in batch:
-                actions = (row.raw or {}).get("actions") or []
+                actions = (row.raw or {}).get("actions")
+                if not isinstance(actions, list):
+                    actions = []
                 row.lpv_count = _parse_landing_page_views(actions)
                 row.video_3sec_count = _parse_video_3sec(actions)
                 row.comment_count = _parse_comments(actions)
