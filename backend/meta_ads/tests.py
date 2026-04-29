@@ -1,7 +1,9 @@
 """Basic tests for meta_ads parsers (actions, revenue, video) and the
 ad-performance view's filter / data-quality query params."""
 
+import csv
 import datetime as _dt
+import io
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -778,3 +780,273 @@ class MetaAdComparisonModeTests(APITestCase):
         )
         self.assertEqual(len(resp.data["ads"]), 1)
         self.assertIsNone(resp.data["ads"][0]["is_in_learning"])
+
+
+class MetaAdExportCsvTests(APITestCase):
+    """Cover the CSV export endpoint: streaming response shape, headers,
+    filter contract, and per-row formatting (numeric escaping, learning
+    state, creative reuse count, comma escaping in names).
+
+    Fixture: one primary account with four ads — two share a creative
+    (so reuse count == 2), one is zero-impression (activity filter), one
+    has a comma in its name (escaping). One foreign account contributes
+    one ad to verify cross-tenant id drop.
+    """
+
+    EXPECTED_HEADER = (
+        "Ad ID,Ad Name,Campaign,Ad Set,Creative ID,Spend (account currency),"
+        "Impressions,Reach,Frequency,Days with data,ROAS,CPA,CVR,"
+        "Hook Rate (strict),Hold Rate,CTR,Completion Rate,LPV Count,"
+        "Comment Count,3-sec Views,Total Events,In Learning,Creative Reuse Count"
+    )
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username="csv_export_user",
+            email="csv_export@example.com",
+            password="x",
+        )
+        cls.connection = FacebookConnection.objects.create(
+            user=cls.user, fb_user_id="fb-test-csv", is_active=True
+        )
+        cls.ad_account = MetaAdAccount.objects.create(
+            connection=cls.connection,
+            meta_account_id="555",
+            name="CSV Account",
+            currency="USD",
+        )
+        cls.campaign = MetaCampaign.objects.create(
+            ad_account=cls.ad_account,
+            meta_campaign_id="csvc1",
+            name="CSV Camp",
+        )
+        cls.adset = MetaAdSet.objects.create(
+            campaign=cls.campaign,
+            meta_adset_id="csvas1",
+            name="CSV Adset",
+        )
+
+        cls.shared_creative = MetaAdCreative.objects.create(
+            ad_account=cls.ad_account,
+            meta_creative_id="shared_42",
+            title="Shared",
+            thumbnail_url="",
+            video_id="",
+            object_type="VIDEO",
+        )
+
+        cls.ad_a = MetaAd.objects.create(
+            adset=cls.adset,
+            meta_ad_id="csv_a",
+            name="Ad A",
+            creative=cls.shared_creative,
+        )
+        cls.ad_b = MetaAd.objects.create(
+            adset=cls.adset,
+            meta_ad_id="csv_b",
+            name="Ad B",
+            creative=cls.shared_creative,
+        )
+        cls.ad_c = MetaAd.objects.create(
+            adset=cls.adset,
+            meta_ad_id="csv_c",
+            name="Ad C",
+        )
+        cls.ad_comma = MetaAd.objects.create(
+            adset=cls.adset,
+            meta_ad_id="csv_comma",
+            name="Test, Ad",
+        )
+
+        cls.foreign_user = User.objects.create_user(
+            username="foreign_csv_user",
+            email="foreign_csv@example.com",
+            password="x",
+        )
+        cls.foreign_connection = FacebookConnection.objects.create(
+            user=cls.foreign_user, fb_user_id="fb-foreign-csv", is_active=True
+        )
+        cls.foreign_account = MetaAdAccount.objects.create(
+            connection=cls.foreign_connection,
+            meta_account_id="666",
+            name="Foreign CSV Account",
+            currency="USD",
+        )
+        cls.foreign_campaign = MetaCampaign.objects.create(
+            ad_account=cls.foreign_account,
+            meta_campaign_id="fcsvc1",
+            name="Foreign CSV Camp",
+        )
+        cls.foreign_adset = MetaAdSet.objects.create(
+            campaign=cls.foreign_campaign,
+            meta_adset_id="fcsvas1",
+            name="Foreign CSV Adset",
+        )
+        cls.foreign_ad = MetaAd.objects.create(
+            adset=cls.foreign_adset,
+            meta_ad_id="csv_foreign",
+            name="Foreign Ad",
+        )
+
+        today = _dt.date.today()
+
+        # Ad A: high volume; mature lifecycle (events well above the
+        # learning threshold). Numbers chosen to give clean assertions:
+        # totals over 14 days are spend=1400, impressions=1.4M, ROAS=2.
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_a,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("100.00"),
+                impressions=100000,
+                reach=50000,
+                clicks=300,
+                leads=10,
+                calls=2,
+                purchases=5,
+                messages=1,
+                revenue=Decimal("200.00"),
+                video_3sec_count=80000,
+                lpv_count=200,
+                comment_count=10,
+            )
+
+        # Ad B: no insights — exercises activity-filter bypass and shows
+        # creative reuse without contributing to its own row counts.
+
+        # Ad C: low events, learning. 1 event/day for 14 days = 14 events;
+        # 14 * 7 = 98 < 50 * 14 = 700 → in learning.
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_c,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("1.00"),
+                impressions=10,
+                reach=10,
+                clicks=1,
+                purchases=1,
+            )
+
+        # Ad with a comma in its name; non-zero traffic so it shows up
+        # under the default activity filter.
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_comma,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("5.00"),
+                impressions=100,
+                reach=80,
+                clicks=5,
+                purchases=2,
+            )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse(
+            "meta-ad-performance-export-csv", args=[self.ad_account.id]
+        )
+
+    def _body(self, response) -> str:
+        return b"".join(response.streaming_content).decode("utf-8")
+
+    def _rows(self, response):
+        return list(csv.reader(io.StringIO(self._body(response))))
+
+    def test_get_with_explicit_ids_returns_input_order(self):
+        spec = f"{self.ad_c.id},{self.ad_a.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/csv; charset=utf-8")
+        self.assertTrue(
+            resp["Content-Disposition"].startswith(
+                'attachment; filename="meta-ads-'
+            )
+        )
+        self.assertIn(f"-{self.ad_account.id}-14d-", resp["Content-Disposition"])
+        rows = self._rows(resp)
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(
+            [rows[1][0], rows[2][0], rows[3][0]],
+            [self.ad_c.meta_ad_id, self.ad_a.meta_ad_id, self.ad_b.meta_ad_id],
+        )
+        # Creative reuse: ad_a and ad_b share a creative → 2; ad_c has none → 1.
+        ids_to_reuse = {row[0]: row[22] for row in rows[1:]}
+        self.assertEqual(ids_to_reuse[self.ad_a.meta_ad_id], "2")
+        self.assertEqual(ids_to_reuse[self.ad_b.meta_ad_id], "2")
+        self.assertEqual(ids_to_reuse[self.ad_c.meta_ad_id], "1")
+
+    def test_header_row_exact_match(self):
+        resp = self.client.get(self.url, {"days": 14, "ids": str(self.ad_a.id)})
+        body = self._body(resp)
+        first_line = body.split("\r\n", 1)[0]
+        self.assertEqual(first_line, self.EXPECTED_HEADER)
+
+    def test_numeric_formatting(self):
+        resp = self.client.get(self.url, {"days": 14, "ids": str(self.ad_a.id)})
+        rows = self._rows(resp)
+        data = rows[1]
+        # Spend column (index 5): plain decimal, no currency symbol or
+        # thousands separator. Totals: 14 * 100.00 = 1400.00.
+        self.assertEqual(data[5], "1400.00")
+        self.assertNotIn("$", data[5])
+        # Impressions column (index 6): plain int, no commas. 14 * 100000.
+        self.assertEqual(data[6], "1400000")
+        # ROAS column (index 10): rev / spend = 2800 / 1400 = 2 → "2.0000".
+        self.assertEqual(data[10], "2.0000")
+        # Hook Rate (strict) column (index 13): no percent sign, raw decimal.
+        self.assertNotIn("%", data[13])
+        self.assertRegex(data[13], r"^\d+(\.\d+)?$")
+        # CTR column (index 15): no percent sign, raw decimal.
+        self.assertNotIn("%", data[15])
+
+    def test_is_in_learning_yes_no_empty(self):
+        resp_a = self.client.get(self.url, {"days": 14, "ids": str(self.ad_a.id)})
+        self.assertEqual(self._rows(resp_a)[1][21], "No")
+
+        resp_c = self.client.get(self.url, {"days": 14, "ids": str(self.ad_c.id)})
+        self.assertEqual(self._rows(resp_c)[1][21], "Yes")
+
+        resp_short = self.client.get(
+            self.url, {"days": 3, "ids": str(self.ad_a.id)}
+        )
+        self.assertEqual(self._rows(resp_short)[1][21], "")
+
+    def test_csv_escaping_for_comma_in_name(self):
+        resp = self.client.get(
+            self.url, {"days": 14, "ids": str(self.ad_comma.id)}
+        )
+        body = self._body(resp)
+        self.assertIn('"Test, Ad"', body)
+        rows = list(csv.reader(io.StringIO(body)))
+        self.assertEqual(rows[1][1], "Test, Ad")
+
+    def test_foreign_id_silently_dropped_in_ids_mode(self):
+        spec = f"{self.ad_a.id},{self.foreign_ad.id},{self.ad_b.id}"
+        resp = self.client.get(self.url, {"days": 14, "ids": spec})
+        rows = self._rows(resp)
+        body_ids = [r[0] for r in rows[1:]]
+        self.assertEqual(
+            body_ids, [self.ad_a.meta_ad_id, self.ad_b.meta_ad_id]
+        )
+
+    def test_activity_filter_applies_when_no_ids_bypassed_when_ids(self):
+        resp_default = self.client.get(self.url, {"days": 14})
+        rows_default = self._rows(resp_default)
+        ids_default = [r[0] for r in rows_default[1:]]
+        self.assertNotIn(self.ad_b.meta_ad_id, ids_default)
+        self.assertIn(self.ad_a.meta_ad_id, ids_default)
+
+        spec = f"{self.ad_a.id},{self.ad_b.id}"
+        resp_ids = self.client.get(self.url, {"days": 14, "ids": spec})
+        rows_ids = self._rows(resp_ids)
+        self.assertEqual(len(rows_ids), 3)
+
+    def test_empty_result_emits_header_only(self):
+        resp = self.client.get(
+            self.url, {"days": 14, "min_spend": "999999"}
+        )
+        rows = self._rows(resp)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(",".join(rows[0]), self.EXPECTED_HEADER)

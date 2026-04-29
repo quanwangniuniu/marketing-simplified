@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    MetaAdExportCsvView,
     MetaAdInsightTimeseriesView,
     MetaAdListView,
     MetaAdPerformanceView,
@@ -47,6 +48,11 @@ urlpatterns = [
         "ad_accounts/<int:ad_account_id>/ad_performance/",
         MetaAdPerformanceView.as_view(),
         name="meta-ad-performance",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/ad_performance/export.csv/",
+        MetaAdExportCsvView.as_view(),
+        name="meta-ad-performance-export-csv",
     ),
     path(
         "ad_accounts/<int:ad_account_id>/ads/",

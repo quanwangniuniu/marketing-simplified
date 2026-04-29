@@ -5,12 +5,14 @@ on-demand sync is exposed through `facebook_integration.FacebookSyncView` and
 `MetaSyncRunTriggerView` below.
 """
 
+import csv
 import datetime as _dt
 from collections import defaultdict
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Sum
+from django.db.models import IntegerField, OuterRef, Subquery, Sum
+from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -706,6 +708,88 @@ class MetaAdSetPerformanceView(APIView):
         })
 
 
+def _build_ad_perf_queryset(
+    *,
+    ad_account: MetaAdAccount,
+    days: int,
+    since: _dt.date,
+    today: _dt.date,
+    ids: list[int],
+    include_inactive: bool,
+    min_impressions: int,
+    min_spend: Decimal,
+    min_days_with_data: int,
+    campaign_id: int | None = None,
+    adset_id: int | None = None,
+):
+    """Annotated, scoped, filtered queryset for ad-level performance reads.
+
+    Shared by the JSON perf endpoint and the CSV export endpoint. Callers own
+    row-level construction, the min_events filter (events are summed in-row,
+    not annotated), and the final ordering pass.
+
+    Filtering rules mirror the JSON contract: when `ids` is non-empty the
+    activity and data-quality filters are bypassed because the caller picked
+    those rows on purpose. Account scoping on the base queryset still drops
+    ids that belong to a foreign account, so cross-tenant leaks are not
+    possible even in the explicit-id branch.
+    """
+    base_qs = MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
+    if campaign_id is not None:
+        base_qs = base_qs.filter(adset__campaign_id=campaign_id)
+    if adset_id is not None:
+        base_qs = base_qs.filter(adset_id=adset_id)
+
+    window_q = models.Q(
+        insights_daily__date__gte=since,
+        insights_daily__date__lte=today,
+    )
+
+    qs = (
+        base_qs
+        .select_related("adset", "adset__campaign", "creative")
+        .annotate(
+            total_spend=Sum("insights_daily__spend", filter=window_q),
+            total_impressions=Sum("insights_daily__impressions", filter=window_q),
+            total_reach=Sum("insights_daily__reach", filter=window_q),
+            total_clicks=Sum("insights_daily__clicks", filter=window_q),
+            total_leads=Sum("insights_daily__leads", filter=window_q),
+            total_calls=Sum("insights_daily__calls", filter=window_q),
+            total_purchases=Sum("insights_daily__purchases", filter=window_q),
+            total_messages=Sum("insights_daily__messages", filter=window_q),
+            total_revenue=Sum("insights_daily__revenue", filter=window_q),
+            total_video_p25=Sum("insights_daily__video_p25", filter=window_q),
+            total_video_p75=Sum("insights_daily__video_p75", filter=window_q),
+            total_video_p100=Sum("insights_daily__video_p100", filter=window_q),
+            total_video_3sec=Sum("insights_daily__video_3sec_count", filter=window_q),
+            total_lpv=Sum("insights_daily__lpv_count", filter=window_q),
+            total_comments=Sum("insights_daily__comment_count", filter=window_q),
+            n_days_with_data=models.Count(
+                "insights_daily",
+                filter=models.Q(
+                    insights_daily__date__gte=since,
+                    insights_daily__date__lte=today,
+                    insights_daily__impressions__gt=0,
+                ),
+            ),
+        )
+    )
+
+    if ids:
+        qs = qs.filter(id__in=ids)
+    else:
+        if not include_inactive:
+            qs = qs.filter(total_impressions__gt=0)
+        if min_impressions > 0:
+            qs = qs.filter(total_impressions__gte=min_impressions)
+        if min_spend > 0:
+            qs = qs.filter(total_spend__gte=min_spend)
+        if min_days_with_data > 0:
+            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
+
+    return qs
+
+
 class MetaAdPerformanceView(APIView):
     """Ad-level leaderboard used by the drill-down tab.
 
@@ -752,72 +836,38 @@ class MetaAdPerformanceView(APIView):
         include_inactive = _parse_qp_bool(request, "include_inactive", default=False)
         ids = _parse_ids(request.query_params.get("ids", ""))
 
-        base_qs = MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
-        campaign_id = request.query_params.get("campaign_id")
-        adset_id = request.query_params.get("adset_id")
-        if campaign_id:
+        campaign_id_raw = request.query_params.get("campaign_id")
+        adset_id_raw = request.query_params.get("adset_id")
+        campaign_id: int | None = None
+        adset_id: int | None = None
+        if campaign_id_raw:
             try:
-                base_qs = base_qs.filter(adset__campaign_id=int(campaign_id))
+                campaign_id = int(campaign_id_raw)
             except ValueError:
                 return Response(
                     {"detail": "campaign_id must be an integer."}, status=400
                 )
-        if adset_id:
+        if adset_id_raw:
             try:
-                base_qs = base_qs.filter(adset_id=int(adset_id))
+                adset_id = int(adset_id_raw)
             except ValueError:
                 return Response(
                     {"detail": "adset_id must be an integer."}, status=400
                 )
 
-        window_q = models.Q(
-            insights_daily__date__gte=since,
-            insights_daily__date__lte=today,
+        qs = _build_ad_perf_queryset(
+            ad_account=ad_account,
+            days=days,
+            since=since,
+            today=today,
+            ids=ids,
+            include_inactive=include_inactive,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
+            campaign_id=campaign_id,
+            adset_id=adset_id,
         )
-
-        qs = (
-            base_qs
-            .select_related("adset", "adset__campaign", "creative")
-            .annotate(
-                total_spend=Sum("insights_daily__spend", filter=window_q),
-                total_impressions=Sum("insights_daily__impressions", filter=window_q),
-                total_clicks=Sum("insights_daily__clicks", filter=window_q),
-                total_leads=Sum("insights_daily__leads", filter=window_q),
-                total_calls=Sum("insights_daily__calls", filter=window_q),
-                total_purchases=Sum("insights_daily__purchases", filter=window_q),
-                total_messages=Sum("insights_daily__messages", filter=window_q),
-                total_revenue=Sum("insights_daily__revenue", filter=window_q),
-                total_video_p25=Sum("insights_daily__video_p25", filter=window_q),
-                total_video_p75=Sum("insights_daily__video_p75", filter=window_q),
-                total_video_p100=Sum("insights_daily__video_p100", filter=window_q),
-                total_video_3sec=Sum("insights_daily__video_3sec_count", filter=window_q),
-                total_lpv=Sum("insights_daily__lpv_count", filter=window_q),
-                total_comments=Sum("insights_daily__comment_count", filter=window_q),
-                n_days_with_data=models.Count(
-                    "insights_daily",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                        insights_daily__impressions__gt=0,
-                    ),
-                ),
-            )
-        )
-
-        if ids:
-            # Explicit selection mode. ad_account scoping on base_qs already
-            # drops ids from foreign accounts; min_* / activity filters are
-            # bypassed because the user picked these ads on purpose.
-            qs = qs.filter(id__in=ids)
-        else:
-            if not include_inactive:
-                qs = qs.filter(total_impressions__gt=0)
-            if min_impressions > 0:
-                qs = qs.filter(total_impressions__gte=min_impressions)
-            if min_spend > 0:
-                qs = qs.filter(total_spend__gte=min_spend)
-            if min_days_with_data > 0:
-                qs = qs.filter(n_days_with_data__gte=min_days_with_data)
 
         rows = []
         for ad in qs:
@@ -913,6 +963,274 @@ class MetaAdPerformanceView(APIView):
             },
             "ads": rows,
         })
+
+
+CSV_EXPORT_HEADER: tuple[str, ...] = (
+    "Ad ID",
+    "Ad Name",
+    "Campaign",
+    "Ad Set",
+    "Creative ID",
+    "Spend (account currency)",
+    "Impressions",
+    "Reach",
+    "Frequency",
+    "Days with data",
+    "ROAS",
+    "CPA",
+    "CVR",
+    "Hook Rate (strict)",
+    "Hold Rate",
+    "CTR",
+    "Completion Rate",
+    "LPV Count",
+    "Comment Count",
+    "3-sec Views",
+    "Total Events",
+    "In Learning",
+    "Creative Reuse Count",
+)
+
+
+class _CsvEcho:
+    """File-like buffer that returns its writes instead of accumulating them.
+
+    Pairing this with `csv.writer` and a generator yields a row at a time, so
+    the response streams without building the full document in memory.
+    """
+
+    def write(self, value: str) -> str:
+        return value
+
+
+def _csv_decimal4(value) -> str:
+    """Format a numeric value as a plain four-decimal string.
+
+    Empty on null / non-numeric. Used for derived ratios and percentages so
+    spreadsheet apps parse them as numbers (no currency symbol, no `%`).
+    """
+    if value is None:
+        return ""
+    try:
+        d = Decimal(str(value))
+    except Exception:
+        return ""
+    return f"{d:.4f}"
+
+
+def _csv_money(value) -> str:
+    """Render a Decimal money amount as a plain decimal string.
+
+    Currency symbol is intentionally absent — the column header carries the
+    currency context. Returns `"0"` for null values to keep the column numeric.
+    """
+    if value is None:
+        return "0"
+    return str(value)
+
+
+def _csv_int(value) -> str:
+    if value is None:
+        return "0"
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        return "0"
+
+
+def _csv_yes_no_blank(value) -> str:
+    if value is True:
+        return "Yes"
+    if value is False:
+        return "No"
+    return ""
+
+
+def _csv_row_for_ad(ad, days: int) -> tuple[str, ...]:
+    """Build the 23-cell CSV row for one annotated MetaAd."""
+    spend = ad.total_spend or Decimal("0")
+    rev = ad.total_revenue or Decimal("0")
+    imp = ad.total_impressions or 0
+    reach = ad.total_reach or 0
+    clicks = ad.total_clicks or 0
+    leads = ad.total_leads or 0
+    calls = ad.total_calls or 0
+    purchases = ad.total_purchases or 0
+    messages = ad.total_messages or 0
+    p25 = ad.total_video_p25 or 0
+    p75 = ad.total_video_p75 or 0
+    p100 = ad.total_video_p100 or 0
+    v3 = ad.total_video_3sec or 0
+    lpv = ad.total_lpv or 0
+    comments = ad.total_comments or 0
+    days_with_data = ad.n_days_with_data or 0
+    total_events = leads + calls + purchases + messages
+    if days < 7:
+        is_in_learning = None
+    else:
+        is_in_learning = (total_events * 7) < (50 * days)
+
+    if reach:
+        frequency_cell = _csv_decimal4(Decimal(str(imp)) / Decimal(str(reach)))
+    else:
+        frequency_cell = ""
+
+    if clicks:
+        cvr_cell = _csv_decimal4(Decimal(str(purchases)) / Decimal(str(clicks)))
+    else:
+        cvr_cell = ""
+
+    creative_meta_id = ad.creative.meta_creative_id if ad.creative else ""
+    creative_reuse = getattr(ad, "creative_ad_count", None) or 1
+
+    campaign_name = (
+        ad.adset.campaign.name if ad.adset and ad.adset.campaign else ""
+    )
+    adset_name = ad.adset.name if ad.adset else ""
+
+    return (
+        ad.meta_ad_id,
+        ad.name,
+        campaign_name,
+        adset_name,
+        creative_meta_id,
+        _csv_money(spend),
+        _csv_int(imp),
+        _csv_int(reach),
+        frequency_cell,
+        _csv_int(days_with_data),
+        _csv_decimal4(_safe_ratio(rev, spend)),
+        _csv_decimal4(_safe_ratio(spend, purchases)),
+        cvr_cell,
+        _csv_decimal4(_safe_ratio(v3, imp) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(p75, p25) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(clicks, imp) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(p100, p25) * Decimal("100")),
+        _csv_int(lpv),
+        _csv_int(comments),
+        _csv_int(v3),
+        _csv_int(total_events),
+        _csv_yes_no_blank(is_in_learning),
+        _csv_int(creative_reuse),
+    )
+
+
+class MetaAdExportCsvView(APIView):
+    """Stream a CSV of per-ad performance for an account-scoped query.
+
+    Mirrors `MetaAdPerformanceView`'s filter shape so the same query string
+    can be hit for either JSON or CSV. The response is a chunked
+    `StreamingHttpResponse` because a full ad account can be ~1k ads and
+    materialising the document in memory would push the worker hot under
+    parallel exports.
+
+    Reuses `_build_ad_perf_queryset` for the annotate + scoping + filter
+    chain, then layers on a `creative_ad_count` annotate so the export can
+    surface how often the same creative is rotated within the account.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def get(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+        include_inactive = _parse_qp_bool(request, "include_inactive", default=False)
+        ids = _parse_ids(request.query_params.get("ids", ""))
+
+        campaign_id_raw = request.query_params.get("campaign_id")
+        adset_id_raw = request.query_params.get("adset_id")
+        campaign_id: int | None = None
+        adset_id: int | None = None
+        if campaign_id_raw:
+            try:
+                campaign_id = int(campaign_id_raw)
+            except ValueError:
+                return Response(
+                    {"detail": "campaign_id must be an integer."}, status=400
+                )
+        if adset_id_raw:
+            try:
+                adset_id = int(adset_id_raw)
+            except ValueError:
+                return Response(
+                    {"detail": "adset_id must be an integer."}, status=400
+                )
+
+        qs = _build_ad_perf_queryset(
+            ad_account=ad_account,
+            days=days,
+            since=since,
+            today=today,
+            ids=ids,
+            include_inactive=include_inactive,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
+            campaign_id=campaign_id,
+            adset_id=adset_id,
+        )
+        # Subquery rather than a sibling annotate: a `Count("creative__ads")`
+        # would add a second join path on top of the insights_daily joins,
+        # cartesian-multiplying the per-row SUMs and silently doubling spend
+        # for any ad whose creative is shared by another ad in the account.
+        creative_reuse_sq = (
+            MetaAd.objects
+            .filter(
+                creative_id=OuterRef("creative_id"),
+                adset__campaign__ad_account=ad_account,
+            )
+            .values("creative_id")
+            .annotate(reuse=models.Count("id"))
+            .values("reuse")
+        )
+        qs = qs.annotate(
+            creative_ad_count=Subquery(
+                creative_reuse_sq, output_field=IntegerField()
+            ),
+        )
+
+        ads = list(qs)
+        if not ids and min_events > 0:
+            ads = [
+                a
+                for a in ads
+                if (
+                    (a.total_leads or 0)
+                    + (a.total_calls or 0)
+                    + (a.total_purchases or 0)
+                    + (a.total_messages or 0)
+                )
+                >= min_events
+            ]
+        if ids:
+            order_index = {ad_id: i for i, ad_id in enumerate(ids)}
+            ads.sort(key=lambda a: order_index[a.id])
+        else:
+            ads.sort(key=lambda a: a.total_spend or Decimal("0"), reverse=True)
+
+        pseudo = _CsvEcho()
+        writer = csv.writer(pseudo)
+
+        def stream():
+            yield writer.writerow(CSV_EXPORT_HEADER)
+            for ad in ads:
+                yield writer.writerow(_csv_row_for_ad(ad, days))
+
+        ts = _dt.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        filename = f"meta-ads-{ad_account.id}-{days}d-{ts}.csv"
+        response = StreamingHttpResponse(
+            stream(), content_type="text/csv; charset=utf-8"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class MetaCreativeDetailView(APIView):
