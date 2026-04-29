@@ -544,6 +544,11 @@ GOOGLE_CALENDAR_OAUTH_REDIRECT_URI = config(
     default='http://localhost:8000/api/google-calendar/callback/',
 ).strip()
 
+# Notion OAuth Configuration
+NOTION_OAUTH_CLIENT_ID = config('NOTION_CLIENT_ID', default='').strip()
+NOTION_OAUTH_CLIENT_SECRET = config('NOTION_CLIENT_SECRET', default='').strip()
+NOTION_OAUTH_REDIRECT_URI = config('NOTION_OAUTH_REDIRECT_URI', default='').strip()
+
 # Logging Configuration
 import logging
 import logging.config
