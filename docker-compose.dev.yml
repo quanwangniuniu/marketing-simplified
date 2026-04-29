@@ -161,7 +161,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: celery -A backend worker --loglevel=info
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=4
 
   celery-beat:
     build:
