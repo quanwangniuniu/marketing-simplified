@@ -163,16 +163,16 @@ export default function SmartWorkflowSection() {
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {workflowColumns.map((column, colIndex) => (
                       <motion.div
                         key={column.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={isInView ? { opacity: 1, y: 0 } : {}}
                         transition={{ duration: 0.4, delay: 0.3 + colIndex * 0.1 }}
-                        className="space-y-2"
+                        className="min-w-0 space-y-2"
                       >
-                        <h4 className="text-xs font-semibold text-gray-500 mb-2">{column.title}</h4>
+                        <h4 className="mb-2 truncate text-xs font-semibold text-gray-500">{column.title}</h4>
                         {column.tasks.map((task, taskIndex) => {
                           const status = statusConfig[task.status]
                           const StatusIcon = status.icon
@@ -189,17 +189,17 @@ export default function SmartWorkflowSection() {
                               }`}
                             >
                               <div className={`h-1 ${colorMap[task.color]} rounded-t-lg`} />
-                              <div className="p-2.5">
-                                <div className="flex items-start justify-between mb-2">
+                              <div className="min-w-0 p-2 sm:p-2.5">
+                                <div className="mb-2 flex min-w-0 items-start justify-between gap-1">
                                   <span
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 ${status.bg} ${status.text} text-xs font-medium rounded`}
+                                    className={`inline-flex min-w-0 flex-1 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium leading-tight sm:px-2 sm:text-xs ${status.bg} ${status.text}`}
                                   >
-                                    <StatusIcon className="w-3 h-3" />
-                                    {status.label}
+                                    <StatusIcon className="h-3 w-3 flex-shrink-0" />
+                                    <span className="min-w-0 truncate">{status.label}</span>
                                   </span>
-                                  <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
+                                  <MoreVertical className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
                                 </div>
-                                <h5 className="text-xs font-semibold text-gray-900 mb-2">{task.title}</h5>
+                                <h5 className="mb-2 break-words text-xs font-semibold text-gray-900">{task.title}</h5>
                                 <div className="flex items-center gap-2">
                                   <Avatar
                                     src={`/avatars/person-${(task.id % 9) + 1}.jpg`}

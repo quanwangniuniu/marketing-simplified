@@ -57,16 +57,16 @@ export default function IntegrationsSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="mb-16"
         >
-          <div className="grid grid-cols-4 md:grid-cols-7 gap-6">
+          <div className="grid grid-cols-4 gap-3 sm:gap-5 md:grid-cols-7 md:gap-6">
             {integrations.map(({ name, icon }, index) => (
               <motion.div
                 key={name}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={isInView ? { opacity: 1, scale: 1 } : {}}
                 transition={{ duration: 0.3, delay: 0.05 * index }}
-                className="group relative flex flex-col items-center justify-center gap-2 p-5 glass-card rounded-2xl hover:shadow-lg transition-all duration-300 cursor-pointer"
+                className="group relative flex min-h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl p-4 transition-all duration-300 hover:shadow-lg glass-card sm:min-h-24 sm:p-5"
               >
-                <Image src={icon} alt={name} width={28} height={28} />
+                <Image src={icon} alt={name} width={40} height={40} className="h-9 w-9 sm:h-10 sm:w-10 md:h-7 md:w-7" />
               </motion.div>
             ))}
           </div>

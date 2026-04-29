@@ -351,14 +351,21 @@ const CARD_WIDTH = 380
 const GAP = 24
 const SLIDE_WIDTH = CARD_WIDTH + GAP
 const AUTO_PLAY_MS = 2000
+const DEFAULT_CAROUSEL_METRICS = {
+  viewportWidth: 0,
+  cardWidth: CARD_WIDTH,
+  slideWidth: SLIDE_WIDTH,
+}
 
 export default function FeatureCarousel() {
   const sectionRef = useRef<HTMLDivElement>(null)
+  const carouselViewportRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
   const [currentIndex, setCurrentIndex] = useState(0)
   const [transitionEnabled, setTransitionEnabled] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [carouselMetrics, setCarouselMetrics] = useState(DEFAULT_CAROUSEL_METRICS)
 
   const total = features.length
   const extendedFeatures = [...features, ...features, ...features]
@@ -376,6 +383,37 @@ export default function FeatureCarousel() {
 
   const goToNext = useCallback(() => slide(1), [slide])
   const goToPrev = useCallback(() => slide(-1), [slide])
+
+  const updateCarouselMetrics = useCallback(() => {
+    const viewport = carouselViewportRef.current
+    if (!viewport) return
+
+    const slides = viewport.querySelectorAll<HTMLElement>("[data-feature-slide]")
+    const firstSlide = slides[0]
+    if (!firstSlide) return
+
+    const secondSlide = slides[1]
+    const cardWidth = firstSlide.offsetWidth
+    const slideWidth = secondSlide ? secondSlide.offsetLeft - firstSlide.offsetLeft : cardWidth + GAP
+
+    setCarouselMetrics((previousMetrics) => {
+      const nextMetrics = {
+        viewportWidth: viewport.clientWidth,
+        cardWidth,
+        slideWidth,
+      }
+
+      if (
+        previousMetrics.viewportWidth === nextMetrics.viewportWidth &&
+        previousMetrics.cardWidth === nextMetrics.cardWidth &&
+        previousMetrics.slideWidth === nextMetrics.slideWidth
+      ) {
+        return previousMetrics
+      }
+
+      return nextMetrics
+    })
+  }, [])
 
   const handleTransitionEnd = useCallback(() => {
     if (currentIndex >= total || currentIndex < 0) {
@@ -398,7 +436,31 @@ export default function FeatureCarousel() {
     return () => clearInterval(id)
   }, [isPaused, isInView, goToNext])
 
-  const translateX = -(homeOffset + currentIndex) * SLIDE_WIDTH
+  useEffect(() => {
+    updateCarouselMetrics()
+
+    const viewport = carouselViewportRef.current
+    if (!viewport) return undefined
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateCarouselMetrics)
+      return () => window.removeEventListener("resize", updateCarouselMetrics)
+    }
+
+    const resizeObserver = new ResizeObserver(updateCarouselMetrics)
+    resizeObserver.observe(viewport)
+
+    viewport.querySelectorAll<HTMLElement>("[data-feature-slide]").forEach((slideElement) => {
+      resizeObserver.observe(slideElement)
+    })
+
+    return () => resizeObserver.disconnect()
+  }, [updateCarouselMetrics])
+
+  const translateX =
+    carouselMetrics.viewportWidth / 2 -
+    carouselMetrics.cardWidth / 2 -
+    (homeOffset + currentIndex) * carouselMetrics.slideWidth
   const activeDot = ((currentIndex % total) + total) % total
 
   return (
@@ -442,22 +504,23 @@ export default function FeatureCarousel() {
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        <div className="overflow-hidden mx-4 md:mx-0">
+        <div ref={carouselViewportRef} className="overflow-hidden mx-4 md:mx-0">
           <div
-            className={`flex pb-8 md:pl-8 lg:pl-12 ${transitionEnabled ? "transition-transform duration-500 ease-in-out" : ""}`}
-            style={{ transform: `translateX(${translateX}px)`, gap: `${GAP}px` }}
+            className={`flex gap-4 pb-8 sm:gap-6 ${transitionEnabled ? "transition-transform duration-500 ease-in-out" : ""}`}
+            style={{ transform: `translateX(${translateX}px)` }}
             onTransitionEnd={handleTransitionEnd}
           >
             {extendedFeatures.map((feature, index) => (
               <motion.div
                 key={`${feature.id}-${index}`}
+                data-feature-slide
                 initial={{ opacity: 0, y: 30 }}
                 animate={isInView ? { opacity: 1, y: 0 } : {}}
                 transition={{
                   duration: 0.6,
                   delay: Math.min((index % total) * 0.1, 0.5),
                 }}
-                className="flex-shrink-0 w-[380px]"
+                className="w-[min(calc(100vw-2rem),380px)] flex-shrink-0"
               >
                 <FeatureCardComponent feature={feature} />
               </motion.div>
