@@ -4,27 +4,6 @@ import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
 const NOTE_KEY_PREFIX = "meta-ads:notes";
 const NOTE_CHANGE_EVENT = "meta-ads:note-changed";
 
-export interface AdActionContext {
-  ad: MetaAdPerformanceRow;
-  adAccountId: number;
-  days: number;
-  currency: string;
-  projectId: number | null;
-}
-
-export interface BulkAdActionContext {
-  ads: MetaAdPerformanceRow[];
-  adAccountId: number;
-  days: number;
-  currency: string;
-  projectId: number | null;
-}
-
-export interface CsvExportBundle {
-  blob: Blob;
-  filename: string;
-}
-
 export interface NoteChangeDetail {
   adAccountId: number;
   adMetaIds: string[];

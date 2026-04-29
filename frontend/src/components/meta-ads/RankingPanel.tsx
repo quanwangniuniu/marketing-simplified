@@ -38,6 +38,9 @@ const PRESET_NAMES: PresetName[] = [
   "cost_efficient",
 ];
 
+const COMPARE_MIN = 2;
+const COMPARE_MAX = 5;
+
 function parseDays(raw: string | null): RankingDays {
   if (!raw) return DEFAULT_RANKING_FILTERS.days;
   const n = Number(raw);
@@ -142,8 +145,6 @@ export default function RankingPanel({
   );
 
   const lastSyncedSearchRef = useRef<string>("");
-  const COMPARE_MIN = 2;
-  const COMPARE_MAX = 5;
 
   // Sync URL <- state (debounced is overkill; React batches state updates)
   useEffect(() => {
@@ -284,8 +285,8 @@ export default function RankingPanel({
       title={compareTitle}
       className={
         compareReady
-          ? "h-9 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-95"
-          : "h-9 cursor-not-allowed rounded-lg bg-white px-4 text-sm font-medium text-gray-400 ring-1 ring-gray-200"
+          ? "h-9 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+          : "h-9 cursor-not-allowed rounded-lg bg-white px-4 text-sm font-medium text-gray-400 ring-1 ring-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
       }
     >
       Compare{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}

@@ -38,7 +38,8 @@ function renderCell(
       return formatNumber(raw as number | string);
     case "ratio": {
       const n = Number(raw);
-      if (!Number.isFinite(n) || n <= 0) return "—";
+      if (!Number.isFinite(n) || n < 0) return "—";
+      if (n === 0) return "0.0000x";
       return `${formatRatio(String(raw))}x`;
     }
     case "yes_no_dash":

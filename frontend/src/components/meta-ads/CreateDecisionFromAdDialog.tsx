@@ -102,7 +102,7 @@ export default function CreateDecisionFromAdDialog({
 
       if (typeof window !== "undefined") {
         for (const id of okIds) {
-          window.open(`/decisions/${id}`, "_blank", "noopener");
+          window.open(`/decisions/${id}`, "_blank", "noopener,noreferrer");
         }
       }
 

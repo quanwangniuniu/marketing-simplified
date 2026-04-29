@@ -81,7 +81,7 @@ export default function AddNoteDialog({
     <BrandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={isBulk ? "Add note" : "Add note"}
+      title={isBulk ? `Add note to ${ads.length} ads` : "Add note"}
       subtitle={subtitle}
     >
       <div className="space-y-4">

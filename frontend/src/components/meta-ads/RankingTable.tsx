@@ -13,6 +13,13 @@ import {
 } from "lucide-react";
 
 import type { MetaAdPerformanceRow } from "@/lib/api/facebookApi";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import AdActionMenu from "./AdActionMenu";
 import AdNoteIndicator from "./AdNoteIndicator";
 import {
@@ -389,18 +396,24 @@ function PaginationBar({
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-2.5 text-xs text-gray-600">
       <div className="flex items-center gap-2">
         <span className="text-gray-500">Rows per page</span>
-        <select
-          aria-label="Rows per page"
-          value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+        <Select
+          value={String(pageSize)}
+          onValueChange={(value) => onPageSizeChange(Number(value))}
         >
-          {PAGE_SIZE_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label="Rows per page"
+            className="h-7 w-auto gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs shadow-none focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="min-w-[5rem]">
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <SelectItem key={n} value={String(n)} className="text-xs">
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <span className="ml-2 text-gray-400">
           {rangeStart}–{rangeEnd} of {total}
         </span>
