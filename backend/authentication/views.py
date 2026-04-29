@@ -915,3 +915,81 @@ class ResetPasswordView(APIView):
         user.save()
         
         return Response({"message":"Password reset successfully"}, status=status.HTTP_200_OK)
+
+
+class DeleteAccountView(APIView):
+    """
+    DELETE /auth/me/delete/
+    Permanently removes all personal data for the authenticated user.
+    Projects and tasks created by the user are kept; owner/current_approver set to null.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+
+        # Require the user to confirm deletion by typing the exact phrase below.
+        confirm = request.data.get('confirm', '')
+        if confirm != 'DELETE MY ACCOUNT':
+            return Response(
+                {'error': 'Please type "DELETE MY ACCOUNT" to confirm.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            from core.models import TeamMember, ProjectMember, Project
+            from access_control.models import UserRole, ModuleApprover
+            from task.models import Task
+
+            # 1. Remove user from all teams
+            TeamMember.objects.filter(user=user).delete()
+
+            # 2. Remove all role assignments
+            UserRole.objects.filter(user=user).delete()
+
+            # 3. Remove all project memberships
+            ProjectMember.objects.filter(user=user).delete()
+
+            # 4. Remove module approver assignments
+            ModuleApprover.objects.filter(user=user).delete()
+
+            # 5. Detach user from owned projects (keep the projects intact)
+            Project.objects.filter(owner=user).update(owner=None)
+
+            # 6. Detach user from tasks they own or are approving (keep the tasks intact)
+            Task.objects.filter(owner=user).update(owner=None)
+            Task.objects.filter(current_approver=user).update(current_approver=None)
+
+            # 6. Delete avatar file if it exists
+            if user.avatar:
+                try:
+                    user.avatar.delete(save=False)
+                except Exception:
+                    pass
+
+            # 7. Blacklist the refresh token supplied in the request (best-effort)
+            refresh_token = request.data.get('refresh_token')
+            if refresh_token:
+                try:
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                except Exception:
+                    pass
+
+            # 8. Anonymise and soft-delete the user record
+            #    (keeps FK integrity for audit logs / chat messages etc.)
+            anon_id = user.id
+            user.email = f'deleted_{anon_id}@removed.invalid'
+            user.username = f'deleted_{anon_id}'
+            user.first_name = ''
+            user.last_name = ''
+            user.google_id = None
+            user.verification_token = None
+            user.password_reset_token = None
+            user.password_reset_token_expires_at = None
+            user.is_active = False
+            user.is_deleted = True
+            user.set_unusable_password()
+            user.save()
+
+        return Response({'message': 'Account deleted successfully.'}, status=status.HTTP_200_OK)

@@ -241,7 +241,7 @@ function SettingsPageContent() {
 
     return (
         <Layout user={layoutUser} onUserAction={handleUserAction}>
-            <div className="flex h-full flex-col bg-gray-50 p-6 md:p-8">
+            <div className="flex flex-col bg-gray-50 p-6 md:p-8">
                 <div className="max-w-7xl mx-auto w-full">
                     {/* Header */}
                     <div className="mb-8">
@@ -401,6 +401,7 @@ function SettingsPageContent() {
                                 </div>
                             </div>
                         </section>
+
                     </div>
                 </div>
             </div>

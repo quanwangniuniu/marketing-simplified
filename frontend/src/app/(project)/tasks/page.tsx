@@ -125,7 +125,9 @@ export default function TasksV2Page() {
           {tab === 'summary' && (
             <SummaryView projectId={projectId} projectContextLoading={projectContextLoading} />
           )}
-          {tab === 'tasks' && <ListView tasks={tasks} loading={taskListLoading} error={error} />}
+          {tab === 'tasks' && (
+            <ListView tasks={tasks} loading={taskListLoading} error={error} projectId={projectId} />
+          )}
           {tab === 'board' && <BoardView tasks={tasks} loading={taskListLoading} error={error} />}
         </div>
         <ChatFAB />

@@ -155,8 +155,8 @@ const Layout: React.FC<LayoutProps> = ({
 
           {/* main content */}
           <main className={`
-            flex-1 overflow-hidden bg-white
-            ${usePageScroll ? 'overflow-visible' : 'overflow-hidden'}
+            flex-1 bg-white
+            ${usePageScroll ? 'overflow-y-auto' : 'overflow-hidden'}
             bg-gray-50
             ${isMobile && !isSidebarCollapsed ? 'hidden' : 'block'}
             transition-all duration-300 ease-in-out

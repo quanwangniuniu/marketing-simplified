@@ -1,19 +1,20 @@
 # authentication/urls.py
 from django.urls import path
 from .views import (
-    RegisterView, 
-    VerifyEmailView, 
-    LoginView, 
+    RegisterView,
+    VerifyEmailView,
+    LoginView,
     SsoRedirectView,
     SsoCallbackView,
-    GoogleOAuthStartView, 
-    GoogleOAuthCallbackView, 
+    GoogleOAuthStartView,
+    GoogleOAuthCallbackView,
     GoogleSetPasswordView,
     OrganizationTokenRefreshView,
-    MeView, 
+    MeView,
     UserTeamsView,
     ForgotPasswordView,
     ResetPasswordView,
+    DeleteAccountView,
 )
 
 urlpatterns = [
@@ -22,6 +23,7 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('organization-token/refresh/', OrganizationTokenRefreshView.as_view(), name='organization-token-refresh'),
     path('me/', MeView.as_view(), name='me'),
+    path('me/delete/', DeleteAccountView.as_view(), name='me-delete'),
     path('me/teams/', UserTeamsView.as_view(), name='user-teams'),
     
     # SSO endpoints (mock implementation for testing)

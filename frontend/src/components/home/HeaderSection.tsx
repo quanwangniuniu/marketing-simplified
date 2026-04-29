@@ -2,6 +2,7 @@ import React from 'react';
 import { Grid3x3, User } from 'lucide-react';
 import MobileMenu from '../MobileMenu';
 import Image from 'next/image';
+import Link from 'next/link';
 
 type HeaderSectionProps = {
   isAuthenticated: boolean;
@@ -25,7 +26,7 @@ export default function HeaderSection({
       <header className="hidden md:block fixed top-0 left-0 right-0 border-b border-gray-200 bg-white z-50">
         <div className="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-12">
-             <div className="flex items-center">
+             <Link href="/" className="flex items-center" aria-label="Marketing Simplified home">
               <Image
                 src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
@@ -35,12 +36,12 @@ export default function HeaderSection({
                 className="h-20 w-auto"
                 priority
               />
-            </div>
+            </Link>
             <nav className="hidden lg:flex gap-6">
-              <a href="#features" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Features</a>
-              <a href="#solutions" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Solutions</a>
-              <a href="#how-it-works" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Pricing</a>
-              <a href="#testimonials" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Resources</a>
+              <Link href="/docs/product" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Product</Link>
+              <Link href="/solutions" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Solutions</Link>
+              <Link href="/docs/pricing" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Pricing</Link>
+              <Link href="/docs" className="text-gray-600 hover:text-brand-teal transition border-b-2 border-transparent hover:border-brand-teal pb-0.5">Docs</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -84,7 +85,7 @@ export default function HeaderSection({
 
       <header className="block md:hidden fixed top-0 left-0 right-0 border-b border-gray-200 bg-white z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center">
+        <Link href="/" className="flex items-center" aria-label="Marketing Simplified home">
               <Image
                 src="/marketing_simplified_logo.png"
                 alt="Marketing Simplified Logo"
@@ -94,7 +95,7 @@ export default function HeaderSection({
                 className="h-16 w-auto"
                 priority
               />
-            </div>
+            </Link>
           <MobileMenu />
         </div>
       </header>

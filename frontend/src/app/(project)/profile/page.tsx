@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Briefcase,
   Building2,
   Check,
@@ -15,6 +16,9 @@ import {
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { authAPI } from '@/lib/api';
 import Button from '@/components/button/Button';
 import OrganizationContent from '@/components/stripe_meta/OrganizationContent';
 import { TextInput } from '@/components/input/InputPrimitives';
@@ -43,8 +47,12 @@ const getInitials = (name?: string | null): string => {
 };
 
 function ProfileV2Content() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState<SectionKey>('dashboard');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const profileLoading = loading || !user;
 
   const userAny = user as { job?: string; department?: string; location?: string } | null;
@@ -154,6 +162,30 @@ function ProfileV2Content() {
         : null,
       roles: user.roles || [],
     };
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE MY ACCOUNT') return;
+    setIsDeleting(true);
+    try {
+      const authStorage = typeof window !== 'undefined' ? localStorage.getItem('auth-storage') : null;
+      let refreshToken = '';
+      if (authStorage) {
+        const parsed = JSON.parse(authStorage) as { state?: { refresh?: string } };
+        refreshToken = parsed.state?.refresh ?? '';
+      }
+      await authAPI.deleteAccount(refreshToken);
+      toast.success('Your account has been deleted.');
+      await logout();
+      router.replace('/login');
+    } catch (e) {
+      const axiosError = e as { response?: { data?: { error?: string; detail?: string } } };
+      const message = axiosError.response?.data?.error ?? axiosError.response?.data?.detail ?? (e instanceof Error ? e.message : 'Failed to delete account');
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
+    }
   };
 
   const fieldRows = [
@@ -344,6 +376,24 @@ function ProfileV2Content() {
                     Role / department / location are local-only for now and will not be saved.
                   </p>
                 </section>
+                {/* Danger Zone card */}
+                {!profileLoading && (
+                  <section className="w-full rounded-lg border border-red-200 bg-white p-5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-red-500 mb-3">
+                      Danger Zone
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Permanently remove your account and personal data. Projects and tasks you created will be kept.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setDeleteConfirmText(''); setIsDeleteModalOpen(true); }}
+                      className="w-full px-3 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      Delete Account
+                    </button>
+                  </section>
+                )}
               </div>
 
               {/* RIGHT: sections */}
@@ -382,6 +432,55 @@ function ProfileV2Content() {
           </div>
         </div>
       </div>
+      {/* Delete Account Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+              <h2 className="text-xl font-bold text-gray-900">Delete Your Account</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              This action is <span className="font-semibold text-red-600">irreversible</span>. The following data will be permanently removed:
+            </p>
+            <ul className="text-sm text-gray-600 list-disc list-inside mb-4 space-y-1">
+              <li>Your profile and login credentials</li>
+              <li>Team and project memberships</li>
+              <li>Role assignments and permissions</li>
+              <li>Notification settings and integrations</li>
+            </ul>
+            <p className="text-sm text-gray-600 mb-4">
+              Projects and tasks you created will <span className="font-semibold">remain</span> so your team can continue working on them.
+            </p>
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              Type <span className="font-mono bg-gray-100 px-1 rounded">DELETE MY ACCOUNT</span> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE MY ACCOUNT"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-red-400"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE MY ACCOUNT' || isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Deleting...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

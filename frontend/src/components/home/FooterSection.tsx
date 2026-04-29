@@ -3,33 +3,26 @@ import Image from "next/image"
 
 const footerLinks: Record<string, { label: string; href: string }[]> = {
   Product: [
-    { label: "AI Agent", href: "/agent" },
-    { label: "Spreadsheets", href: "/spreadsheets" },
-    { label: "Campaigns", href: "/campaigns" },
-    { label: "Meetings", href: "/meetings" },
-    { label: "Tasks", href: "/tasks" },
-    { label: "Calendar", href: "/calendar" },
-    { label: "Notion", href: "/notion" },
+    { label: "Home", href: "/" },
+    { label: "Product", href: "/docs/product" },
+    { label: "Solutions", href: "/solutions" },
+    { label: "Pricing", href: "/docs/pricing" },
   ],
   Resources: [
-    { label: "Blog", href: "#" },
-    { label: "Help Center", href: "#" },
-    { label: "Tutorials", href: "#" },
-    { label: "API Docs", href: "#" },
-    { label: "Community", href: "#" },
-    { label: "Templates", href: "/campaigns/templates" },
+    { label: "Docs", href: "/docs" },
+    { label: "Workflow Guides", href: "/docs" },
+    { label: "Policy Guide", href: "/docs/policy" },
+    { label: "Pricing Q&A", href: "/docs/pricing" },
   ],
   Company: [
-    { label: "About", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Contact", href: "#" },
-    { label: "Partners", href: "#" },
+    { label: "Start Trial", href: "/login" },
+    { label: "Contact", href: "/docs" },
+    { label: "Platform Overview", href: "/docs/product" },
   ],
   Legal: [
-    { label: "Privacy", href: "#" },
-    { label: "Terms", href: "#" },
-    { label: "Security", href: "#" },
-    { label: "Cookies", href: "#" },
+    { label: "Policy", href: "/docs/policy" },
+    { label: "Data Use", href: "/docs/policy" },
+    { label: "Platform Responsibilities", href: "/docs/policy" },
   ],
 }
 
