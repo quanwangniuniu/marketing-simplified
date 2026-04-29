@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -27,7 +28,7 @@ export interface RankingTableSelection {
   selectedIds: Set<number>;
   onToggle: (id: number) => void;
   cap: number;
-  headerSlot?: React.ReactNode;
+  headerSlot?: ReactNode;
 }
 
 interface RankingTableProps {
@@ -219,7 +220,7 @@ function Row({
             disabled={checkboxDisabled}
             onChange={() => selection.onToggle(row.id)}
             title={checkboxDisabled ? `Cap reached (${selection.cap} ads max)` : undefined}
-            className={`h-4 w-4 rounded accent-[#3CCED7] ${checkboxDisabled ? "cursor-not-allowed opacity-50" : ""}`}
+            className={`h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 ${checkboxDisabled ? "cursor-not-allowed opacity-50" : ""}`}
           />
         </td>
       )}

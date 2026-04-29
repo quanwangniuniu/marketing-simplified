@@ -115,13 +115,22 @@ export default function ComparisonTable({
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: accent }}
                         />
-                        <Link
-                          href={`/meta-ads/ad_accounts/${row.adset_id ? "" : ""}#`}
-                          className="truncate text-sm font-medium text-gray-900"
-                          title={row.name || row.meta_ad_id}
-                        >
-                          {row.name || row.meta_ad_id}
-                        </Link>
+                        {row.creative?.id ? (
+                          <Link
+                            href={`/meta-ads/creatives/${row.creative.id}`}
+                            className="truncate text-sm font-medium text-gray-900 hover:text-[#1a9ba3]"
+                            title={row.name || row.meta_ad_id}
+                          >
+                            {row.name || row.meta_ad_id}
+                          </Link>
+                        ) : (
+                          <span
+                            className="truncate text-sm font-medium text-gray-900"
+                            title={row.name || row.meta_ad_id}
+                          >
+                            {row.name || row.meta_ad_id}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 truncate text-[10px] text-gray-400">
                         {row.campaign_name}
@@ -139,7 +148,6 @@ export default function ComparisonTable({
             const groupDims = COMPARISON_DIMENSIONS.filter(
               (d) => d.group === group
             );
-            const groupRowSpan = groupDims.length;
             return (
               <GroupRows
                 key={group}
@@ -148,7 +156,6 @@ export default function ComparisonTable({
                 rows={rows}
                 currency={currency}
                 dimensions={groupDims}
-                groupRowSpan={groupRowSpan}
               />
             );
           })}
@@ -170,14 +177,13 @@ function GroupRows({
   rows: MetaAdPerformanceRow[];
   currency: string;
   dimensions: ComparisonDimension[];
-  groupRowSpan: number;
 }) {
   return (
     <>
       <tr>
         <td
           colSpan={1 + rows.length}
-          className={`px-4 ${isFirst ? "pb-1.5 pt-1" : "border-t border-gray-100 mt-3 pb-1.5 pt-3"}`}
+          className={`px-4 ${isFirst ? "pb-1.5 pt-1" : "border-t border-gray-100 pb-1.5 pt-3"}`}
         >
           <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
             {groupName}
