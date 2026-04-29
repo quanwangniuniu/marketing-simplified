@@ -46,6 +46,19 @@ MESSAGE_PRIORITY = [
     "messaging_conversation_started_7d",
 ]
 
+# Landing page views: omni rolls up across web/app/on-Facebook surfaces, so it
+# typically reports a higher-or-equal count than the plain pixel-only variant.
+LANDING_PAGE_VIEW_PRIORITY = ["omni_landing_page_view", "landing_page_view"]
+
+# 3-second video views: per Meta's 2018 video-metrics changelog, the legacy
+# `video_3_sec_watched_actions` field was removed. The replacement is the
+# `video_view` action_type inside the `actions` array.
+VIDEO_3SEC_PRIORITY = ["video_view"]
+
+# Comments: prefer the gross count (raw creative-resonance signal) and fall
+# back to the on-Facebook net-of-removals variant when only that is reported.
+COMMENT_PRIORITY = ["comment", "onsite_conversion.post_net_comment"]
+
 CAMPAIGN_FIELDS = (
     "id,name,objective,status,effective_status,start_time,stop_time,"
     "daily_budget,lifetime_budget,special_ad_categories"
@@ -341,9 +354,13 @@ def sync_insights(ad_account: MetaAdAccount, access_token: str, *, days: int = 3
             date_str = row.get("date_start")
             if not date_str:
                 continue
-            action_counts = _parse_actions(row.get("actions") or [])
+            actions = row.get("actions") or []
+            action_counts = _parse_actions(actions)
             revenue = _parse_revenue(row.get("action_values") or [])
             video = _parse_video(row)
+            lpv_count = _parse_landing_page_views(actions)
+            video_3sec_count = _parse_video_3sec(actions)
+            comment_count = _parse_comments(actions)
             MetaInsightDaily.objects.update_or_create(
                 ad=ad,
                 date=_dt.date.fromisoformat(date_str),
@@ -366,6 +383,9 @@ def sync_insights(ad_account: MetaAdAccount, access_token: str, *, days: int = 3
                     "video_p75": video["p75"],
                     "video_p100": video["p100"],
                     "video_avg_watch_seconds": video["avg_seconds"],
+                    "lpv_count": lpv_count,
+                    "video_3sec_count": video_3sec_count,
+                    "comment_count": comment_count,
                     "raw": row,
                 },
             )
@@ -399,6 +419,18 @@ def _parse_actions(actions: list[dict[str, Any]]) -> dict[str, int]:
 def _parse_revenue(action_values: list[dict[str, Any]]) -> Decimal:
     value = _pick_by_priority(action_values, PURCHASE_PRIORITY, "value")
     return _to_decimal(value)
+
+
+def _parse_landing_page_views(actions: list[dict[str, Any]]) -> int:
+    return _to_int(_pick_by_priority(actions, LANDING_PAGE_VIEW_PRIORITY, "value")) or 0
+
+
+def _parse_video_3sec(actions: list[dict[str, Any]]) -> int:
+    return _to_int(_pick_by_priority(actions, VIDEO_3SEC_PRIORITY, "value")) or 0
+
+
+def _parse_comments(actions: list[dict[str, Any]]) -> int:
+    return _to_int(_pick_by_priority(actions, COMMENT_PRIORITY, "value")) or 0
 
 
 def _parse_video(row: dict[str, Any]) -> dict[str, Any]:

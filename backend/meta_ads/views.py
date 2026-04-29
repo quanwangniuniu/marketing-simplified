@@ -67,7 +67,7 @@ class MetaCampaignPerformanceView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, ad_account_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
@@ -203,7 +203,7 @@ class MetaSummaryView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request):
         ad_account_id = request.query_params.get("ad_account")
@@ -335,7 +335,7 @@ class MetaCreativePerformanceView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, ad_account_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
@@ -478,7 +478,7 @@ class MetaAdSetPerformanceView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, ad_account_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
@@ -590,18 +590,43 @@ class MetaAdPerformanceView(APIView):
     creative summary — so the frontend picker can show thumbnails and
     core perf in a single list without a second round-trip.
 
-    Accepts optional `campaign_id` and `adset_id` filters so the drill-down
-    panel can narrow the left list when a filter dropdown is active.
+    Filters
+    -------
+    `campaign_id`, `adset_id` (int): narrow the list to ads under a specific
+    campaign or ad set.
+
+    `min_impressions` (int, default 0), `min_spend` (decimal, default 0),
+    `min_events` (int, default 0), `min_days_with_data` (int, default 0):
+    drop low-data rows so ranking isn't polluted by paused / under-delivered
+    ads. `min_spend` is in the ad account's native currency — cross-account
+    comparisons should normalise on the client. `min_events` is the sum of
+    leads + calls + purchases + messages within the window.
+    `min_days_with_data` counts days where impressions > 0.
+
+    `include_inactive` (bool, default false): when false, ads with zero
+    impressions in the window are excluded so paused ads don't pollute
+    rankings. Pass `?include_inactive=true` to return them anyway.
+
+    Each row carries `is_in_learning` (events/week < 50) plus the raw
+    `total_events`, `days_with_data`, `lpv_count`, `comment_count`, and
+    `video_3sec_count` so the frontend can grey out low-confidence entries.
+    `is_in_learning` is null when `days < 7` (window too short to judge).
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, ad_account_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
         since = today - _dt.timedelta(days=days - 1)
+
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+        include_inactive = _parse_qp_bool(request, "include_inactive", default=False)
 
         base_qs = MetaAd.objects.filter(adset__campaign__ad_account=ad_account)
         campaign_id = request.query_params.get("campaign_id")
@@ -621,68 +646,48 @@ class MetaAdPerformanceView(APIView):
                     {"detail": "adset_id must be an integer."}, status=400
                 )
 
+        window_q = models.Q(
+            insights_daily__date__gte=since,
+            insights_daily__date__lte=today,
+        )
+
         qs = (
             base_qs
             .select_related("adset", "adset__campaign", "creative")
             .annotate(
-                total_spend=Sum(
-                    "insights_daily__spend",
+                total_spend=Sum("insights_daily__spend", filter=window_q),
+                total_impressions=Sum("insights_daily__impressions", filter=window_q),
+                total_clicks=Sum("insights_daily__clicks", filter=window_q),
+                total_leads=Sum("insights_daily__leads", filter=window_q),
+                total_calls=Sum("insights_daily__calls", filter=window_q),
+                total_purchases=Sum("insights_daily__purchases", filter=window_q),
+                total_messages=Sum("insights_daily__messages", filter=window_q),
+                total_revenue=Sum("insights_daily__revenue", filter=window_q),
+                total_video_p25=Sum("insights_daily__video_p25", filter=window_q),
+                total_video_p75=Sum("insights_daily__video_p75", filter=window_q),
+                total_video_p100=Sum("insights_daily__video_p100", filter=window_q),
+                total_video_3sec=Sum("insights_daily__video_3sec_count", filter=window_q),
+                total_lpv=Sum("insights_daily__lpv_count", filter=window_q),
+                total_comments=Sum("insights_daily__comment_count", filter=window_q),
+                n_days_with_data=models.Count(
+                    "insights_daily",
                     filter=models.Q(
                         insights_daily__date__gte=since,
                         insights_daily__date__lte=today,
-                    ),
-                ),
-                total_impressions=Sum(
-                    "insights_daily__impressions",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_clicks=Sum(
-                    "insights_daily__clicks",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_leads=Sum(
-                    "insights_daily__leads",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_purchases=Sum(
-                    "insights_daily__purchases",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_revenue=Sum(
-                    "insights_daily__revenue",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_video_p25=Sum(
-                    "insights_daily__video_p25",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
-                    ),
-                ),
-                total_video_p75=Sum(
-                    "insights_daily__video_p75",
-                    filter=models.Q(
-                        insights_daily__date__gte=since,
-                        insights_daily__date__lte=today,
+                        insights_daily__impressions__gt=0,
                     ),
                 ),
             )
         )
+
+        if not include_inactive:
+            qs = qs.filter(total_impressions__gt=0)
+        if min_impressions > 0:
+            qs = qs.filter(total_impressions__gte=min_impressions)
+        if min_spend > 0:
+            qs = qs.filter(total_spend__gte=min_spend)
+        if min_days_with_data > 0:
+            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
 
         rows = []
         for ad in qs:
@@ -691,9 +696,21 @@ class MetaAdPerformanceView(APIView):
             imp = ad.total_impressions or 0
             clicks = ad.total_clicks or 0
             leads = ad.total_leads or 0
+            calls = ad.total_calls or 0
             purchases = ad.total_purchases or 0
+            messages = ad.total_messages or 0
             p25 = ad.total_video_p25 or 0
             p75 = ad.total_video_p75 or 0
+            p100 = ad.total_video_p100 or 0
+            v3 = ad.total_video_3sec or 0
+            lpv = ad.total_lpv or 0
+            comments = ad.total_comments or 0
+            days_with_data = ad.n_days_with_data or 0
+            total_events = leads + calls + purchases + messages
+            if days < 7:
+                is_in_learning = None
+            else:
+                is_in_learning = (total_events * 7) < (50 * days)
             creative = ad.creative
             rows.append({
                 "id": ad.id,
@@ -720,7 +737,9 @@ class MetaAdPerformanceView(APIView):
                 "impressions": imp,
                 "clicks": clicks,
                 "leads": leads,
+                "calls": calls,
                 "purchases": purchases,
+                "messages": messages,
                 "revenue": str(rev),
                 "ctr": str(_safe_ratio(clicks, imp) * Decimal("100")),
                 "cpc": str(_safe_ratio(spend, clicks)),
@@ -728,14 +747,33 @@ class MetaAdPerformanceView(APIView):
                 "cpa": str(_safe_ratio(spend, purchases)),
                 "roas": str(_safe_ratio(rev, spend)),
                 "hook_rate": str(_safe_ratio(p25, imp) * Decimal("100")),
+                "hook_rate_strict": str(_safe_ratio(v3, imp) * Decimal("100")),
                 "hold_rate": str(_safe_ratio(p75, p25) * Decimal("100")),
+                "completion_rate": str(_safe_ratio(p100, p25) * Decimal("100")),
+                "video_3sec_count": v3,
+                "lpv_count": lpv,
+                "cost_per_lpv": str(_safe_ratio(spend, lpv)),
+                "comment_count": comments,
+                "cost_per_comment": str(_safe_ratio(spend, comments)),
+                "total_events": total_events,
+                "days_with_data": days_with_data,
+                "is_in_learning": is_in_learning,
             })
+        if min_events > 0:
+            rows = [r for r in rows if r["total_events"] >= min_events]
         rows.sort(key=lambda r: Decimal(r["spend"]), reverse=True)
         return Response({
             "ad_account_id": ad_account.id,
             "currency": ad_account.currency,
             "days": days,
             "window": {"since": since.isoformat(), "until": today.isoformat()},
+            "filters": {
+                "min_impressions": min_impressions,
+                "min_spend": str(min_spend),
+                "min_events": min_events,
+                "min_days_with_data": min_days_with_data,
+                "include_inactive": include_inactive,
+            },
             "ads": rows,
         })
 
@@ -749,7 +787,7 @@ class MetaCreativeDetailView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, creative_id: int):
         creative = get_object_or_404(
@@ -1002,7 +1040,7 @@ class MetaCreativeInsightTimeseriesView(APIView):
     """Daily aggregates for a creative — summed across every linked ad."""
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, creative_id: int):
         creative = get_object_or_404(
@@ -1074,7 +1112,7 @@ class MetaCampaignDetailView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, campaign_id: int):
         campaign = get_object_or_404(
@@ -1215,7 +1253,7 @@ class MetaCampaignInsightTimeseriesView(APIView):
     """Daily aggregates for a campaign — summed across every descendant ad."""
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, campaign_id: int):
         campaign = get_object_or_404(
@@ -1270,7 +1308,7 @@ class MetaAdSetDetailView(APIView):
     """Full metadata for a single adset plus its ads, with window aggregates."""
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, adset_id: int):
         adset = get_object_or_404(
@@ -1429,7 +1467,7 @@ class MetaAdSetInsightTimeseriesView(APIView):
     """Daily aggregates for an adset — summed across every descendant ad."""
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, adset_id: int):
         adset = get_object_or_404(
@@ -1500,7 +1538,7 @@ class MetaAdInsightTimeseriesView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28}
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
 
     def get(self, request, ad_account_id: int, ad_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
@@ -1581,3 +1619,31 @@ def _normalize_days(value, allowed: set[int], default: int) -> int:
     except (TypeError, ValueError):
         return default
     return days if days in allowed else default
+
+
+def _parse_qp_int(request, name: str, default: int = 0) -> int:
+    raw = request.query_params.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return max(int(raw), 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_qp_decimal(request, name: str, default: Decimal = Decimal("0")) -> Decimal:
+    raw = request.query_params.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = Decimal(str(raw))
+    except Exception:
+        return default
+    return value if value >= 0 else default
+
+
+def _parse_qp_bool(request, name: str, default: bool = False) -> bool:
+    raw = request.query_params.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}

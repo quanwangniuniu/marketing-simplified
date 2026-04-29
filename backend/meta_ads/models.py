@@ -143,6 +143,9 @@ class MetaInsightDaily(models.Model):
     calls = models.IntegerField(default=0)
     purchases = models.IntegerField(default=0)
     messages = models.IntegerField(default=0)
+    lpv_count = models.IntegerField(default=0)
+    video_3sec_count = models.IntegerField(default=0)
+    comment_count = models.IntegerField(default=0)
 
     # Revenue (usually 0 until Meta Pixel has purchase events with value, or Hyros backfill)
     revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0)
