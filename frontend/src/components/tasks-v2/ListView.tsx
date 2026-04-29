@@ -704,54 +704,23 @@ export default function ListView({ tasks, loading, error, projectId }: ListViewP
                 return (
                   <tr
                     key={task.id}
-                    className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50/50 ${task.id && recentlyUpdatedIds.includes(task.id)
-                        ? 'bg-emerald-50/45'
-                        : bulkMode && isSelected
-                          ? 'bg-cyan-50/40'
-                          : ''
-                      }`}
-                    onClick={() => {
-                      if (!task.id) return;
-                      if (bulkMode) {
-                        toggleSelection(task.id, !isSelected);
-                        return;
-                      }
-                      router.push(`/tasks/${task.id}`);
-                    }}
-                    onContextMenu={(e) => openRowMenu(e, task)}
+                    className="cursor-pointer transition hover:bg-gray-50/80"
+                    onClick={() => router.push(`/tasks/${task.id}`)}
                   >
-                    <td className={`${TABLE_COLUMN_WIDTHS.icon} align-middle px-4 ${density === 'compact' ? 'py-1.5' : 'py-2'}`}>
-                      <div className="relative" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenDuePickerTaskId(null);
-                            setOpenPriorityTaskId((prev) => (prev === task.id ? null : task.id ?? null));
-                          }}
-                          className={`inline-block h-2.5 w-2.5 rounded-full ${PRIORITY_META[priority]?.dot ?? 'bg-gray-300'} ring-2 ring-white transition hover:scale-110`}
-                          title={`Priority: ${PRIORITY_META[priority]?.label ?? priority}`}
-                        />
-                        {openPriorityTaskId === task.id ? (
-                          <div
-                            className={`absolute left-0 z-20 min-w-[136px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openPriorityUpward ? 'bottom-5' : 'top-5'
-                              }`}
-                          >
-                            {PRIORITY_OPTIONS.map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void updatePriority(task, opt);
-                                }}
-                                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition ${opt === priority ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'
-                                  }`}
-                              >
-                                <span className={`h-2 w-2 rounded-full ${PRIORITY_META[opt]?.dot ?? 'bg-gray-300'}`} />
-                                <span>{PRIORITY_META[opt]?.label ?? opt}</span>
-                              </button>
-                            ))}
+                    <td className={`${TABLE_COLUMN_WIDTHS.icon} px-4 py-3`}>
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${PRIORITY_META[priority]?.dot ?? 'bg-gray-300'}`}
+                        title={`Priority: ${priority}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="min-w-0 max-w-[32rem]">
+                        <div className="truncate font-medium text-gray-900">
+                          {task.summary || `Task #${task.id}`}
+                        </div>
+                        {task.description?.trim() ? (
+                          <div className="mt-0.5 line-clamp-2 text-sm font-bold text-gray-900">
+                            {task.description.trim()}
                           </div>
                         ) : null}
                       </div>

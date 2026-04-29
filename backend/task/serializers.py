@@ -22,9 +22,18 @@ User = get_user_model()
 
 class UserSummarySerializer(serializers.ModelSerializer):
     """Serializer for user summary information"""
+    avatar = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']
+        fields = ['id', 'username', 'email', 'avatar']
+
+    def get_avatar(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+        return None
 
 
 class ProjectSummarySerializer(serializers.ModelSerializer):

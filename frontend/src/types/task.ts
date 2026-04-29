@@ -103,6 +103,7 @@ export interface UserSummary {
   id: number;
   username: string;
   email: string;
+  avatar?: string | null;
 }
 
 export interface ProjectSummary {

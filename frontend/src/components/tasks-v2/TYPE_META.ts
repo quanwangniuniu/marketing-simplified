@@ -22,14 +22,58 @@ export const TASK_TYPES: TypeMeta[] = [
   { value: 'platform_policy_update',  label: 'Platform Policy Update',  shortLabel: 'Policy',    hex: '#64748B' },
 ];
 
-export const STATUS_META: Record<string, { label: string; classes: string }> = {
-  DRAFT:        { label: 'Draft',        classes: 'bg-gray-100 text-gray-700' },
-  SUBMITTED:    { label: 'Submitted',    classes: 'bg-sky-50 text-sky-700' },
-  UNDER_REVIEW: { label: 'In review',    classes: 'bg-amber-50 text-amber-700' },
-  APPROVED:     { label: 'Approved',     classes: 'bg-emerald-50 text-emerald-700' },
-  REJECTED:     { label: 'Rejected',     classes: 'bg-rose-50 text-rose-700' },
-  LOCKED:       { label: 'Locked',       classes: 'bg-violet-50 text-violet-700' },
-  CANCELLED:    { label: 'Cancelled',    classes: 'bg-gray-100 text-gray-500 line-through' },
+export interface StatusMetaEntry {
+  label: string;
+  classes: string;
+  /** Kanban mini-card top bar (`border-t-*`). */
+  cardTopBorder: string;
+  /** Title row text + tint; driven by API `status`, not task `type`. */
+  summaryStrip: string;
+}
+
+export const STATUS_META: Record<string, StatusMetaEntry> = {
+  DRAFT: {
+    label: 'Draft',
+    classes: 'bg-gray-100 text-gray-700',
+    cardTopBorder: 'border-t-gray-500',
+    summaryStrip: 'bg-gray-100 text-gray-900',
+  },
+  SUBMITTED: {
+    label: 'Submitted',
+    classes: 'bg-sky-50 text-sky-700',
+    cardTopBorder: 'border-t-sky-500',
+    summaryStrip: 'bg-sky-50 text-sky-800',
+  },
+  UNDER_REVIEW: {
+    label: 'In review',
+    classes: 'bg-amber-50 text-amber-700',
+    cardTopBorder: 'border-t-amber-500',
+    summaryStrip: 'bg-amber-50 text-amber-900',
+  },
+  APPROVED: {
+    label: 'Approved',
+    classes: 'bg-emerald-50 text-emerald-700',
+    cardTopBorder: 'border-t-emerald-500',
+    summaryStrip: 'bg-emerald-50 text-emerald-900',
+  },
+  REJECTED: {
+    label: 'Rejected',
+    classes: 'bg-rose-50 text-rose-700',
+    cardTopBorder: 'border-t-rose-500',
+    summaryStrip: 'bg-rose-50 text-rose-900',
+  },
+  LOCKED: {
+    label: 'Locked',
+    classes: 'bg-violet-50 text-violet-700',
+    cardTopBorder: 'border-t-violet-500',
+    summaryStrip: 'bg-violet-50 text-violet-900',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    classes: 'bg-gray-100 text-gray-500 line-through',
+    cardTopBorder: 'border-t-gray-400',
+    summaryStrip: 'bg-gray-100 text-gray-600',
+  },
 };
 
 export const STATUS_OPTIONS = Object.keys(STATUS_META);

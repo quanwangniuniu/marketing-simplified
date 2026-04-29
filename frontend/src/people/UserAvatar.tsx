@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface UserAvatarProps {
@@ -13,6 +14,11 @@ export interface UserAvatarProps {
   className?: string;
   showTooltip?: boolean;
   fallbackText?: string;
+  /**
+   * When there is no profile image: `initials` (default) or a neutral person icon on gray
+   * (e.g. compact task cards when the API omits `avatar`).
+   */
+  emptyAvatar?: 'initials' | 'user-icon';
 }
 
 const sizeClasses = {
@@ -33,7 +39,12 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
   className = '',
   showTooltip = false,
   fallbackText,
+  emptyAvatar = 'initials',
 }) => {
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => {
+    setImgError(false);
+  }, [user?.avatar]);
   const getInitials = (name: string): string => {
     if (!name) return '?';
     const parts = name.trim().split(/\s+/);
@@ -58,35 +69,40 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
   const initials = getInitials(displayName);
   const bgColor = getAvatarColor(displayName);
   const sizeClass = sizeClasses[size];
+  const showUserIcon =
+    emptyAvatar === 'user-icon' && (!user?.avatar || imgError);
+  const showImg = user?.avatar && !imgError;
+
+  const userIconClass = { xs: 'h-2.5 w-2.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5', xl: 'h-6 w-6' }[size];
+
+  const neutralPlaceholder = (
+    <User className={cn('shrink-0 text-gray-500', userIconClass)} strokeWidth={2} aria-hidden />
+  );
 
   const avatarContent = (
     <div
       className={cn(
         'relative flex items-center justify-center rounded-full overflow-hidden',
-        'bg-gray-200 border border-gray-300',
+        showUserIcon
+          ? 'bg-gray-200 text-gray-500'
+          : 'bg-gray-200 border border-gray-300',
         sizeClass,
         className
       )}
-      style={user?.avatar ? undefined : { backgroundColor: bgColor, color: 'white' }}
+      style={showUserIcon || showImg ? undefined : { backgroundColor: bgColor, color: 'white' }}
       title={showTooltip ? displayName : undefined}
     >
-      {user?.avatar ? (
+      {showImg ? (
         <img
-          src={user.avatar}
+          src={user!.avatar!}
           alt={displayName}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            // Fallback to initials if image fails to load
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            const parent = target.parentElement;
-            if (parent) {
-              parent.innerHTML = `<span class="font-medium">${initials}</span>`;
-              parent.style.backgroundColor = bgColor;
-              parent.style.color = 'white';
-            }
+          className="h-full w-full object-cover"
+          onError={() => {
+            setImgError(true);
           }}
         />
+      ) : showUserIcon ? (
+        neutralPlaceholder
       ) : (
         <span className="font-medium select-none">{initials}</span>
       )}

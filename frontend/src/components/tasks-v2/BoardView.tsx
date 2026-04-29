@@ -81,7 +81,7 @@ export default function BoardView({ tasks, loading, error }: BoardViewProps) {
                   </div>
                 ) : (
                   tasksInColumn.map((task) => (
-                    <TaskCardMini key={task.id} task={task} />
+                    <TaskCardMini key={task.id} task={task} columnAccentHex={meta.hex} />
                   ))
                 )}
 
