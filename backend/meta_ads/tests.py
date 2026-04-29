@@ -1135,3 +1135,92 @@ class SyncInsightsActionCountsRegressionTests(APITestCase):
 
 
 _OMITTED = object()
+
+
+class MetaSyncRunPhaseFieldsTests(APITestCase):
+    """Cover the phase signal fields on MetaSyncRun and the phase boundary
+    updates inside sync_ad_account.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username="phase_test_user",
+            email="phase_test@example.com",
+            password="x",
+        )
+        cls.connection = FacebookConnection.objects.create(
+            user=cls.user, fb_user_id="fb-test-phase", is_active=True
+        )
+        cls.ad_account = MetaAdAccount.objects.create(
+            connection=cls.connection,
+            meta_account_id="888",
+            name="Phase Test Account",
+            currency="USD",
+        )
+
+    def test_phase_fields_default_to_empty_string(self):
+        from meta_ads.models import MetaSyncRun
+
+        run = MetaSyncRun.objects.create(
+            ad_account=self.ad_account, kind="manual", status="running"
+        )
+        self.assertEqual(run.current_phase, "")
+        self.assertEqual(run.current_progress, "")
+
+    def test_sync_ad_account_updates_phase_through_boundaries(self):
+        """Patch each per-level syncer with a wrapper that captures the row's
+        current_phase at entry. Assert the captured sequence matches the six
+        boundaries in order, then assert the row resets to empty at the end.
+        """
+        from meta_ads import services
+        from meta_ads.models import MetaSyncRun
+
+        captured: list[str] = []
+
+        def make_capture(label: str, return_value):
+            def _capture(ad_account, access_token, *args, **kwargs):
+                row = MetaSyncRun.objects.filter(
+                    ad_account=ad_account, status="running"
+                ).order_by("-started_at").first()
+                if row is not None:
+                    captured.append(row.current_phase)
+                return return_value
+
+            return _capture
+
+        with patch.object(
+            services, "sync_campaigns", side_effect=make_capture("campaigns", 0)
+        ), patch.object(
+            services, "sync_adsets", side_effect=make_capture("adsets", 0)
+        ), patch.object(
+            services, "sync_creatives", side_effect=make_capture("creatives", 0)
+        ), patch.object(
+            services, "sync_ads", side_effect=make_capture("ads", 0)
+        ), patch.object(
+            services,
+            "backfill_missing_creative_fks",
+            side_effect=make_capture("creative_fk_backfill", 0),
+        ), patch.object(
+            services, "sync_insights", side_effect=make_capture("insights", 0)
+        ):
+            run = services.sync_ad_account(
+                self.ad_account, "fake-token", days=14, kind="manual"
+            )
+
+        self.assertEqual(
+            captured,
+            [
+                "campaigns",
+                "adsets",
+                "creatives",
+                "ads",
+                "creative_fk_backfill",
+                "insights",
+            ],
+        )
+        # Final reset: status flips to ok and the phase signals clear.
+        self.assertEqual(run.status, "ok")
+        self.assertEqual(run.current_phase, "")
+        self.assertEqual(run.current_progress, "")

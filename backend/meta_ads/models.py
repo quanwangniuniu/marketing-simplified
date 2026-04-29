@@ -192,6 +192,12 @@ class MetaSyncRun(TimeStampedModel):
     level_counts = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True, default="")
 
+    # Phase signals updated at each step boundary inside sync_ad_account so
+    # callers can poll a running row and render which step is in flight. Both
+    # are reset to "" when the sync completes (success or failure).
+    current_phase = models.CharField(max_length=32, default="", blank=True)
+    current_progress = models.CharField(max_length=120, default="", blank=True)
+
     class Meta:
         db_table = "meta_sync_runs"
         ordering = ["-started_at"]

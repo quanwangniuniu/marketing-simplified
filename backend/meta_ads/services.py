@@ -87,32 +87,79 @@ INSIGHT_FIELDS = (
 )
 
 
+def _set_phase(run_id: int, phase: str, progress: str) -> None:
+    """Write the phase signals on a running MetaSyncRun without re-fetching it.
+
+    Single .filter().update() so the phase write does not race with the row's
+    own status / level_counts / error_message writes that the orchestrator
+    issues on completion.
+    """
+    MetaSyncRun.objects.filter(pk=run_id).update(
+        current_phase=phase,
+        current_progress=progress,
+        updated_at=timezone.now(),
+    )
+
+
 def sync_ad_account(ad_account: MetaAdAccount, access_token: str, *, days: int = 30, kind: str = "hourly") -> MetaSyncRun:
     """Run a full hydration pass. Returns the MetaSyncRun log row."""
     run = MetaSyncRun.objects.create(ad_account=ad_account, kind=kind, status="running")
     counts: dict[str, int] = {}
+    error_message = ""
     try:
+        _set_phase(run.id, "campaigns", "Fetching campaigns")
         counts["campaigns"] = sync_campaigns(ad_account, access_token)
+        _set_phase(
+            run.id,
+            "adsets",
+            f"Fetching ad sets (after {counts['campaigns']} campaigns)",
+        )
         counts["adsets"] = sync_adsets(ad_account, access_token)
+        _set_phase(
+            run.id,
+            "creatives",
+            f"Fetching creatives (after {counts['adsets']} ad sets)",
+        )
         counts["creatives"] = sync_creatives(ad_account, access_token)
+        _set_phase(
+            run.id,
+            "ads",
+            f"Fetching ads (after {counts['creatives']} creatives)",
+        )
         counts["ads"] = sync_ads(ad_account, access_token)
+        _set_phase(
+            run.id,
+            "creative_fk_backfill",
+            f"Linking creatives to {counts['ads']} ads",
+        )
         counts["creative_fk_backfilled"] = backfill_missing_creative_fks(
             ad_account, access_token
+        )
+        _set_phase(
+            run.id,
+            "insights",
+            f"Streaming insights for {days}d window across {counts['ads']} ads",
         )
         counts["insights_rows"] = sync_insights(ad_account, access_token, days=days)
         status = "ok"
     except MetaApiError as err:
         logger.warning("sync_ad_account %s failed: %s", ad_account.meta_account_id, err)
-        run.error_message = str(err)[:2000]
+        error_message = str(err)[:2000]
         status = "error"
     except Exception as err:  # pragma: no cover - defensive
         logger.exception("sync_ad_account %s exploded", ad_account.meta_account_id)
-        run.error_message = f"unhandled: {err}"[:2000]
+        error_message = f"unhandled: {err}"[:2000]
         status = "error"
-    run.status = status
-    run.level_counts = counts
-    run.finished_at = timezone.now()
-    run.save(update_fields=["status", "level_counts", "error_message", "finished_at", "updated_at"])
+    MetaSyncRun.objects.filter(pk=run.id).update(
+        status=status,
+        level_counts=counts,
+        error_message=error_message,
+        finished_at=timezone.now(),
+        current_phase="",
+        current_progress="",
+        updated_at=timezone.now(),
+    )
+    run.refresh_from_db()
     return run
 
 
