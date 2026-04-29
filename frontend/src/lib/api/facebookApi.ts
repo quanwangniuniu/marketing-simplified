@@ -167,7 +167,9 @@ export interface MetaAdPerformanceRow {
   impressions: number;
   clicks: number;
   leads: number;
+  calls: number;
   purchases: number;
+  messages: number;
   revenue: string;
   ctr: string;
   cpc: string;
@@ -175,7 +177,25 @@ export interface MetaAdPerformanceRow {
   cpa: string;
   roas: string;
   hook_rate: string;
+  hook_rate_strict: string;
   hold_rate: string;
+  completion_rate: string;
+  video_3sec_count: number;
+  lpv_count: number;
+  cost_per_lpv: string;
+  comment_count: number;
+  cost_per_comment: string;
+  total_events: number;
+  days_with_data: number;
+  is_in_learning: boolean | null;
+}
+
+export interface MetaAdPerformanceFilters {
+  min_impressions: number;
+  min_spend: string;
+  min_events: number;
+  min_days_with_data: number;
+  include_inactive: boolean;
 }
 
 export interface MetaAdPerformance {
@@ -183,6 +203,7 @@ export interface MetaAdPerformance {
   currency: string;
   days: number;
   window: { since: string; until: string };
+  filters: MetaAdPerformanceFilters;
   ads: MetaAdPerformanceRow[];
 }
 
@@ -558,11 +579,24 @@ export const facebookApi = {
   getMetaAdPerformance: async (
     adAccountId: number,
     days: number,
-    filters?: { campaignId?: number | null; adsetId?: number | null }
+    filters?: {
+      campaignId?: number | null;
+      adsetId?: number | null;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+    }
   ): Promise<MetaAdPerformance> => {
-    const params: Record<string, number> = { days };
+    const params: Record<string, string | number> = { days };
     if (filters?.campaignId) params.campaign_id = filters.campaignId;
     if (filters?.adsetId) params.adset_id = filters.adsetId;
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) params.min_days_with_data = filters.minDaysWithData;
+    if (filters?.includeInactive) params.include_inactive = "true";
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/`,
       { params }

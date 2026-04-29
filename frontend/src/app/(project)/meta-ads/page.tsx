@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   AlertCircle,
@@ -36,6 +37,7 @@ import AccountPicker from '@/components/meta-ads/AccountPicker';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
+import RankingPanel from '@/components/meta-ads/RankingPanel';
 import {
   facebookApi,
   type FacebookAdAccount,
@@ -60,6 +62,7 @@ const VIEW_TABS = [
   { key: 'overview', label: 'Overview', hint: 'KPI + campaigns' },
   { key: 'creatives', label: 'Creatives', hint: 'Hook / hold rate' },
   { key: 'drilldown', label: 'Ad drill-down', hint: 'Per-ad time series' },
+  { key: 'ranking', label: 'Ranking', hint: 'Composite-score ad rank' },
 ] as const;
 
 type ViewKey = (typeof VIEW_TABS)[number]['key'];
@@ -158,6 +161,12 @@ export default function MetaAdsPage() {
 }
 
 function MetaAdsContent() {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<ViewKey>(() => {
+    const raw = searchParams.get('tab');
+    return VIEW_TABS.some((t) => t.key === raw) ? (raw as ViewKey) : 'overview';
+  }, [searchParams]);
+
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [connected, setConnected] = useState(false);
   const [adAccounts, setAdAccounts] = useState<FacebookAdAccount[]>([]);
@@ -169,7 +178,7 @@ function MetaAdsContent() {
   const [metricTab, setMetricTab] = useState<MetricKey>('spend');
   const [syncing, setSyncing] = useState(false);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
-  const [viewTab, setViewTab] = useState<ViewKey>('overview');
+  const [viewTab, setViewTab] = useState<ViewKey>(initialTab);
 
   useEffect(() => {
     let active = true;
@@ -515,6 +524,10 @@ function MetaAdsContent() {
 
       {viewTab === 'drilldown' && selectedId && (
         <AdsDrilldownPanel adAccountId={selectedId} days={days} currency={currency} />
+      )}
+
+      {viewTab === 'ranking' && selectedId && (
+        <RankingPanel adAccountId={selectedId} currency={currency} />
       )}
     </div>
   );
