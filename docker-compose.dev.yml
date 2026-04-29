@@ -163,6 +163,26 @@ services:
       - ./backend:/app
     command: celery -A backend worker --loglevel=info
 
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: celery-beat-dev
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=host.docker.internal
+      - DEBUG=True
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A backend beat -l info
+
   # Ngrok tunnel service
   # ngrok:
   #   image: ngrok/ngrok:latest

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from facebook_integration.models import FacebookConnection, MetaAdAccount
@@ -1224,3 +1225,138 @@ class MetaSyncRunPhaseFieldsTests(APITestCase):
         self.assertEqual(run.status, "ok")
         self.assertEqual(run.current_phase, "")
         self.assertEqual(run.current_progress, "")
+
+
+class SyncAllActiveAdAccountsTests(APITestCase):
+    """Cover the daily fan-out task: active-account selection, Meta-disabled
+    skipping, and the lock that prevents duplicate runs while a sync is
+    still in flight for the same account.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+
+        # Active connection with two ad accounts: one healthy, one Meta-disabled.
+        cls.active_user = User.objects.create_user(
+            username="fanout_active_user",
+            email="fanout_active@example.com",
+            password="x",
+        )
+        cls.active_connection = FacebookConnection.objects.create(
+            user=cls.active_user, fb_user_id="fb-active", is_active=True
+        )
+        cls.healthy_account = MetaAdAccount.objects.create(
+            connection=cls.active_connection,
+            meta_account_id="active-1",
+            name="Healthy",
+            currency="USD",
+            account_status=1,
+        )
+        cls.disabled_account = MetaAdAccount.objects.create(
+            connection=cls.active_connection,
+            meta_account_id="active-2",
+            name="Disabled on Meta",
+            currency="USD",
+            account_status=2,
+        )
+
+        # Inactive connection — its accounts must be skipped regardless of
+        # account_status because the parent connection is off.
+        cls.inactive_user = User.objects.create_user(
+            username="fanout_inactive_user",
+            email="fanout_inactive@example.com",
+            password="x",
+        )
+        cls.inactive_connection = FacebookConnection.objects.create(
+            user=cls.inactive_user, fb_user_id="fb-inactive", is_active=False
+        )
+        cls.dormant_account = MetaAdAccount.objects.create(
+            connection=cls.inactive_connection,
+            meta_account_id="inactive-1",
+            name="Inactive",
+            currency="USD",
+            account_status=1,
+        )
+
+        # Active connection, account_status null (legacy / unknown) — should
+        # be treated as active.
+        cls.legacy_user = User.objects.create_user(
+            username="fanout_legacy_user",
+            email="fanout_legacy@example.com",
+            password="x",
+        )
+        cls.legacy_connection = FacebookConnection.objects.create(
+            user=cls.legacy_user, fb_user_id="fb-legacy", is_active=True
+        )
+        cls.legacy_account = MetaAdAccount.objects.create(
+            connection=cls.legacy_connection,
+            meta_account_id="legacy-1",
+            name="Legacy",
+            currency="USD",
+            account_status=None,
+        )
+
+    @patch("meta_ads.tasks.sync_single_ad_account.delay")
+    def test_dispatches_only_for_active_connections(self, mock_delay):
+        from meta_ads.tasks import sync_all_active_ad_accounts
+
+        result = sync_all_active_ad_accounts()
+
+        dispatched_ids = sorted(
+            call.kwargs["ad_account_id"] for call in mock_delay.call_args_list
+        )
+        self.assertEqual(
+            dispatched_ids,
+            sorted([self.healthy_account.id, self.legacy_account.id]),
+        )
+        self.assertNotIn(self.dormant_account.id, dispatched_ids)
+        self.assertEqual(result["dispatched"], 2)
+        self.assertEqual(result["skipped_locked"], 0)
+
+    @patch("meta_ads.tasks.sync_single_ad_account.delay")
+    def test_skips_accounts_disabled_on_meta(self, mock_delay):
+        from meta_ads.tasks import sync_all_active_ad_accounts
+
+        sync_all_active_ad_accounts()
+
+        dispatched_ids = [
+            call.kwargs["ad_account_id"] for call in mock_delay.call_args_list
+        ]
+        self.assertNotIn(self.disabled_account.id, dispatched_ids)
+
+    @patch("meta_ads.tasks.sync_single_ad_account.delay")
+    def test_lock_skips_in_flight_and_releases_after_window(self, mock_delay):
+        from meta_ads.models import MetaSyncRun
+        from meta_ads.tasks import sync_all_active_ad_accounts, LOCK_WINDOW_MINUTES
+
+        # Fresh running row → lock holds, fan-out skips this account.
+        recent_run = MetaSyncRun.objects.create(
+            ad_account=self.healthy_account, kind="manual", status="running"
+        )
+
+        result = sync_all_active_ad_accounts()
+        dispatched_ids = [
+            call.kwargs["ad_account_id"] for call in mock_delay.call_args_list
+        ]
+        self.assertNotIn(self.healthy_account.id, dispatched_ids)
+        self.assertIn(self.legacy_account.id, dispatched_ids)
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(result["skipped_locked"], 1)
+
+        # Same row aged past the lock window → next call dispatches normally.
+        mock_delay.reset_mock()
+        MetaSyncRun.objects.filter(pk=recent_run.pk).update(
+            started_at=timezone.now()
+            - _dt.timedelta(minutes=LOCK_WINDOW_MINUTES + 1)
+        )
+        result = sync_all_active_ad_accounts()
+        dispatched_ids = sorted(
+            call.kwargs["ad_account_id"] for call in mock_delay.call_args_list
+        )
+        self.assertEqual(
+            dispatched_ids,
+            sorted([self.healthy_account.id, self.legacy_account.id]),
+        )
+        self.assertEqual(result["dispatched"], 2)
+        self.assertEqual(result["skipped_locked"], 0)

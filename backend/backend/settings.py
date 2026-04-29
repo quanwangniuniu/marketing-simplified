@@ -392,6 +392,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(minute=7),  # offset from other :00 hourly tasks
         'options': {'timezone': 'UTC'},
     },
+    'meta-ads-daily-fan-out': {
+        'task': 'meta_ads.tasks.sync_all_active_ad_accounts',
+        'schedule': crontab(hour=6, minute=0),  # daily at 06:00 UTC
+        'options': {'timezone': 'UTC'},
+    },
 }
 
 # Redis Configuration
