@@ -374,7 +374,7 @@ broker_connection_retry_on_startup = True
 CELERY_BEAT_SCHEDULE = {
     'reset-daily-usage': {
         'task': 'stripe_meta.tasks.reset_daily_usage',
-        'schedule': 0.0,  # Run at midnight (00:00) every day
+        'schedule': crontab(hour=0, minute=0),  # Run at midnight (00:00) every day
         'options': {'timezone': 'UTC'}
     },
     'cleanup-expired-tiktok-previews': {
