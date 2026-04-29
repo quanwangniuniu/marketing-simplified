@@ -50,6 +50,17 @@ import {
 
 const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 
+const PHASE_LABEL: Record<string, string> = {
+  campaigns: "Campaigns",
+  adsets: "Ad sets",
+  creatives: "Creatives",
+  ads: "Ads",
+  creative_fk_backfill: "Linking creatives",
+  insights: "Insights",
+};
+
+const SYNC_POLL_INTERVAL_MS = 3000;
+
 const METRIC_TABS = [
   { key: 'spend', label: 'Spend' },
   { key: 'leads', label: 'Leads' },
@@ -252,12 +263,81 @@ function MetaAdsContent() {
     };
   }, [selectedId]);
 
+  // Auto-poll the latest sync run every SYNC_POLL_INTERVAL_MS while it is in
+  // 'running' state so the banner reflects the in-flight phase / progress text.
+  // Pauses on tab hide and fires one immediate refetch on resume so a buyer
+  // returning to the tab sees the current state right away. Stops naturally
+  // once the row transitions to a terminal status.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (latestRun?.status !== 'running') return;
+
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchOnce = async () => {
+      if (stopped) return;
+      try {
+        const runs = await facebookApi.getSyncRuns(selectedId);
+        if (stopped) return;
+        setLatestRun(runs[0] ?? null);
+      } catch {
+        // keep polling — transient failures should not stop the effect
+      }
+    };
+
+    const schedule = () => {
+      if (stopped) return;
+      timer = setTimeout(async () => {
+        await fetchOnce();
+        if (stopped) return;
+        if (document.visibilityState === 'visible') schedule();
+      }, SYNC_POLL_INTERVAL_MS);
+    };
+
+    const onVisibility = () => {
+      if (stopped) return;
+      if (document.visibilityState === 'visible') {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        fetchOnce().then(() => {
+          if (!stopped && document.visibilityState === 'visible') schedule();
+        });
+      } else if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    schedule();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [selectedId, latestRun?.status]);
+
   const handleSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
     try {
       await facebookApi.triggerAdAccountSync(selectedId);
       toast.success('Sync started. Data will refresh when it finishes.');
+      // Short delay before the first refetch so the Celery worker has time
+      // to create the MetaSyncRun row; without it the immediate poll race
+      // would still see the prior completed run, hiding the running phase
+      // line for one full polling interval.
+      const accountId = selectedId;
+      setTimeout(() => {
+        facebookApi
+          .getSyncRuns(accountId)
+          .then((runs) => setLatestRun(runs[0] ?? null))
+          .catch(() => undefined);
+      }, 500);
       pollSync(selectedId);
     } catch {
       toast.error('Failed to start sync.');
@@ -733,6 +813,22 @@ function SyncStatusCard({ run }: { run: MetaSyncRun }) {
                 </>
               )}
             </div>
+            {run.status === 'running' &&
+              (run.current_phase || run.current_progress) && (
+                <div className="mt-1 truncate text-[13px] text-amber-700">
+                  {run.current_phase && (
+                    <span className="font-medium">
+                      {PHASE_LABEL[run.current_phase] ?? run.current_phase}
+                    </span>
+                  )}
+                  {run.current_phase && run.current_progress && (
+                    <span className="text-amber-600"> · </span>
+                  )}
+                  {run.current_progress && (
+                    <span className="text-amber-600">{run.current_progress}</span>
+                  )}
+                </div>
+              )}
           </div>
         </div>
         <ChevronDown

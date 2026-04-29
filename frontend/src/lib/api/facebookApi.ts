@@ -104,6 +104,8 @@ export interface MetaSyncRun {
   error_message: string;
   started_at: string;
   finished_at: string | null;
+  current_phase: string;
+  current_progress: string;
 }
 
 export interface MetaCreativePerformanceRow {
