@@ -1,19 +1,4 @@
 services:
-  # PostgreSQL (Docker) — backend/celery use DB_HOST=db; no host Postgres required for dev.
-  db:
-    image: postgres:17-alpine
-    container_name: postgres-dev
-    restart: always
-    env_file:
-      - .env
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   # Redis Service for WebSocket functionality
   redis:
     image: redis:7-alpine
@@ -81,16 +66,16 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=db
+      - DB_HOST=host.docker.internal
       - DEBUG=True
       # - SONAR_USER=${SONAR_USER}
       # - SONAR_PWD=${SONAR_PWD}
       - OTEL_SERVICE_NAME=django-backend
       - OTEL_TRACES_SAMPLER=always_on
       - KAFKA_BROKER=${KAFKA_BROKER}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       clamav:
@@ -165,11 +150,11 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=db
+      - DB_HOST=host.docker.internal
       - DEBUG=True
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       clamav:
@@ -407,7 +392,6 @@ services:
     # Services are accessible by their container names (e.g., backend-dev, frontend-dev, influxdb-k6)
 
 volumes:
-  postgres_data:
   clamav_data: 
   # sonar-token-data:
   frontend_node_modules:
