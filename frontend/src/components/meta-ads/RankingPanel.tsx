@@ -236,17 +236,35 @@ export default function RankingPanel({
     setWeights(next);
   }, []);
 
-  const toggleSelected = useCallback((id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else if (next.size < COMPARE_MAX) {
-        next.add(id);
-      }
-      return next;
-    });
+  type SelectionMode = "compare" | "manage";
+  const [mode, setModeState] = useState<SelectionMode>("manage");
+
+  const setMode = useCallback((next: SelectionMode) => {
+    setModeState(next);
+    setSelectedIds(new Set());
   }, []);
+
+  const toggleSelected = useCallback(
+    (id: number) => {
+      setSelectedIds((prev) => {
+        if (prev.has(id)) {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        }
+        if (mode === "compare" && prev.size >= COMPARE_MAX) {
+          toast.error(
+            `Compare allows up to ${COMPARE_MAX} ads. Switch to Manage to select more.`
+          );
+          return prev;
+        }
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    },
+    [mode]
+  );
 
   const compareReady =
     selectedIds.size >= COMPARE_MIN && selectedIds.size <= COMPARE_MAX;
@@ -289,15 +307,52 @@ export default function RankingPanel({
     </button>
   );
 
+  const modeToggle = (
+    <div
+      role="group"
+      aria-label="Selection mode"
+      className="inline-flex items-center gap-1 rounded-full bg-gray-100 p-1"
+    >
+      <button
+        type="button"
+        aria-pressed={mode === "compare"}
+        onClick={() => setMode("compare")}
+        className={
+          mode === "compare"
+            ? "rounded-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+            : "rounded-full px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+        }
+      >
+        Compare
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === "manage"}
+        onClick={() => setMode("manage")}
+        className={
+          mode === "manage"
+            ? "rounded-full bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+            : "rounded-full px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+        }
+      >
+        Manage
+      </button>
+    </div>
+  );
+
   const headerSlot = (
     <div className="flex items-center gap-2">
-      {compareButton}
-      <ExportActionMenu
-        unit="ad"
-        selectedIds={selectedAds.map((a) => a.id)}
-        adAccountId={adAccountId}
-        days={filters.days}
-      />
+      {modeToggle}
+      {mode === "compare" ? (
+        compareButton
+      ) : (
+        <ExportActionMenu
+          unit="ad"
+          selectedIds={selectedAds.map((a) => a.id)}
+          adAccountId={adAccountId}
+          days={filters.days}
+        />
+      )}
     </div>
   );
 
@@ -320,8 +375,13 @@ export default function RankingPanel({
         selection={{
           selectedIds,
           onToggle: toggleSelected,
-          cap: COMPARE_MAX,
+          cap: mode === "compare" ? COMPARE_MAX : Number.POSITIVE_INFINITY,
           headerSlot,
+          headerCheckboxDisabled: mode === "compare",
+          headerCheckboxDisabledTitle:
+            mode === "compare"
+              ? `Compare mode allows up to ${COMPARE_MAX}; pick rows manually or switch to Manage.`
+              : undefined,
         }}
       />
     </div>

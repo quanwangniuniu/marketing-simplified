@@ -8,6 +8,8 @@ interface Props {
   onSelectAll: () => void;
   onClear: () => void;
   ariaLabel?: string;
+  disabled?: boolean;
+  disabledTitle?: string;
 }
 
 /**
@@ -27,19 +29,22 @@ export default function SelectAllHeader({
   onSelectAll,
   onClear,
   ariaLabel = "Select all visible rows",
+  disabled = false,
+  disabledTitle,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isFull = totalCount > 0 && selectedCount === totalCount;
   const isPartial = selectedCount > 0 && selectedCount < totalCount;
+  const isDisabled = disabled || totalCount === 0;
 
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current.indeterminate = isPartial;
+      inputRef.current.indeterminate = isPartial && !isDisabled;
     }
-  }, [isPartial]);
+  }, [isPartial, isDisabled]);
 
   const handleChange = () => {
-    if (totalCount === 0) return;
+    if (isDisabled) return;
     if (selectedCount === 0) {
       onSelectAll();
     } else {
@@ -52,10 +57,11 @@ export default function SelectAllHeader({
       ref={inputRef}
       type="checkbox"
       aria-label={ariaLabel}
+      title={isDisabled ? disabledTitle : undefined}
       checked={isFull}
-      disabled={totalCount === 0}
+      disabled={isDisabled}
       onChange={handleChange}
-      className={`h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 ${totalCount === 0 ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+      className={`h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
     />
   );
 }

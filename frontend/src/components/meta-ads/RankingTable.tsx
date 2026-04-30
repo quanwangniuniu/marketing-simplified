@@ -37,6 +37,8 @@ export interface RankingTableSelection {
   onToggle: (id: number) => void;
   cap: number;
   headerSlot?: ReactNode;
+  headerCheckboxDisabled?: boolean;
+  headerCheckboxDisabledTitle?: string;
 }
 
 interface RankingTableProps {
@@ -128,6 +130,8 @@ export default function RankingTable({
                       ).length
                     }
                     totalCount={paged.length}
+                    disabled={selection.headerCheckboxDisabled}
+                    disabledTitle={selection.headerCheckboxDisabledTitle}
                     onSelectAll={() => {
                       for (const r of paged) {
                         if (!selection.selectedIds.has(r.row.id)) {
