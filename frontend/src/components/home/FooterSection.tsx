@@ -29,9 +29,9 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
 export default function FooterSection() {
   return (
     <footer className="bg-white border-t border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
-          <div className="col-span-2">
+      <div className="max-w-7xl mx-auto px-6 py-10 sm:py-14 lg:py-16">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-10 gap-y-10">
+          <div className="col-span-2 md:col-span-4 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <Image
                 src="/marketing_simplified_logo.png"
@@ -39,10 +39,10 @@ export default function FooterSection() {
                 width={898}
                 height={423}
                 sizes="212px"
-                className="h-20 w-auto"
+                className="h-14 w-auto sm:h-16 lg:h-20"
               />
             </Link>
-            <p className="text-gray-500 mb-6 max-w-xs">
+            <p className="mb-8 max-w-sm text-base leading-7 text-gray-600">
               Plan campaigns, coordinate work, and turn performance signals into decisions your media team can act on.
             </p>
           </div>
@@ -54,13 +54,13 @@ export default function FooterSection() {
                 {links.map((link) => (
                   <li key={link.label}>
                     {link.href === "#" ? (
-                      <span className="text-gray-500 hover:text-gray-900 transition-colors text-sm cursor-default">
+                      <span className="cursor-default text-sm leading-6 text-gray-600 transition-colors hover:text-gray-950">
                         {link.label}
                       </span>
                     ) : (
                       <Link
                         href={link.href}
-                        className="text-gray-500 hover:text-gray-900 transition-colors text-sm"
+                        className="text-sm leading-6 text-gray-600 transition-colors hover:text-gray-950"
                       >
                         {link.label}
                       </Link>

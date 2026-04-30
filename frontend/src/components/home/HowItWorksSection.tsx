@@ -132,7 +132,7 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
           </p>
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-12 items-center mb-12">
+        <div className="grid lg:grid-cols-2 gap-12 items-center lg:mb-12 mb-6">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
@@ -245,10 +245,10 @@ export default function HowItWorksSection({ onGetStartedClick }: HowItWorksSecti
         >
           <button
             onClick={onGetStartedClick}
-            className="inline-flex items-center gap-2 px-8 py-4 bg-brand-gradient text-white rounded-full hover:saturate-150 transition-all font-medium text-lg glow-brand"
+            className="inline-flex w-full max-w-[min(100%,22rem)] items-center justify-center gap-2 rounded-full bg-brand-gradient px-6 py-3.5 text-base font-medium text-white transition-all hover:saturate-150 glow-brand sm:w-auto sm:max-w-full sm:px-8 sm:py-4 sm:text-lg"
           >
-            Start Your Journey Today
-            <ArrowRight className="w-5 h-5" />
+            <span className="truncate">Start Your Journey Today</span>
+            <ArrowRight className="h-5 w-5 flex-shrink-0" />
           </button>
         </motion.div>
       </div>
