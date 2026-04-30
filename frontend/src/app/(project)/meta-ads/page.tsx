@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   AlertCircle,
@@ -36,6 +37,9 @@ import AccountPicker from '@/components/meta-ads/AccountPicker';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
+import CreativeRankPanel from '@/components/meta-ads/CreativeRankPanel';
+import ExportActionMenu from '@/components/meta-ads/ExportActionMenu';
+import RankingPanel from '@/components/meta-ads/RankingPanel';
 import {
   facebookApi,
   type FacebookAdAccount,
@@ -45,7 +49,18 @@ import {
   type MetaSyncRun,
 } from '@/lib/api/facebookApi';
 
-const DAY_OPTIONS = [1, 2, 3, 7, 14, 28] as const;
+const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
+
+const PHASE_LABEL: Record<string, string> = {
+  campaigns: "Campaigns",
+  adsets: "Ad sets",
+  creatives: "Creatives",
+  ads: "Ads",
+  creative_fk_backfill: "Linking creatives",
+  insights: "Insights",
+};
+
+const SYNC_POLL_INTERVAL_MS = 3000;
 
 const METRIC_TABS = [
   { key: 'spend', label: 'Spend' },
@@ -60,6 +75,8 @@ const VIEW_TABS = [
   { key: 'overview', label: 'Overview', hint: 'KPI + campaigns' },
   { key: 'creatives', label: 'Creatives', hint: 'Hook / hold rate' },
   { key: 'drilldown', label: 'Ad drill-down', hint: 'Per-ad time series' },
+  { key: 'ranking', label: 'Ranking', hint: 'Composite-score ad rank' },
+  { key: 'creative-rank', label: 'Creative Rank', hint: '1:1 creative leaderboard' },
 ] as const;
 
 type ViewKey = (typeof VIEW_TABS)[number]['key'];
@@ -158,6 +175,12 @@ export default function MetaAdsPage() {
 }
 
 function MetaAdsContent() {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<ViewKey>(() => {
+    const raw = searchParams.get('tab');
+    return VIEW_TABS.some((t) => t.key === raw) ? (raw as ViewKey) : 'overview';
+  }, [searchParams]);
+
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [connected, setConnected] = useState(false);
   const [adAccounts, setAdAccounts] = useState<FacebookAdAccount[]>([]);
@@ -169,7 +192,28 @@ function MetaAdsContent() {
   const [metricTab, setMetricTab] = useState<MetricKey>('spend');
   const [syncing, setSyncing] = useState(false);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
-  const [viewTab, setViewTab] = useState<ViewKey>('overview');
+  const [viewTab, setViewTab] = useState<ViewKey>(initialTab);
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<number>>(
+    new Set()
+  );
+
+  const toggleSelectedCampaign = (id: number) => {
+    setSelectedCampaignIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Reset campaign selection whenever the data source changes so a stale
+  // id from a previous account or window does not survive.
+  useEffect(() => {
+    setSelectedCampaignIds(new Set());
+  }, [selectedId, days]);
 
   useEffect(() => {
     let active = true;
@@ -241,12 +285,81 @@ function MetaAdsContent() {
     };
   }, [selectedId]);
 
+  // Auto-poll the latest sync run every SYNC_POLL_INTERVAL_MS while it is in
+  // 'running' state so the banner reflects the in-flight phase / progress text.
+  // Pauses on tab hide and fires one immediate refetch on resume so a buyer
+  // returning to the tab sees the current state right away. Stops naturally
+  // once the row transitions to a terminal status.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (latestRun?.status !== 'running') return;
+
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchOnce = async () => {
+      if (stopped) return;
+      try {
+        const runs = await facebookApi.getSyncRuns(selectedId);
+        if (stopped) return;
+        setLatestRun(runs[0] ?? null);
+      } catch {
+        // keep polling — transient failures should not stop the effect
+      }
+    };
+
+    const schedule = () => {
+      if (stopped) return;
+      timer = setTimeout(async () => {
+        await fetchOnce();
+        if (stopped) return;
+        if (document.visibilityState === 'visible') schedule();
+      }, SYNC_POLL_INTERVAL_MS);
+    };
+
+    const onVisibility = () => {
+      if (stopped) return;
+      if (document.visibilityState === 'visible') {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        fetchOnce().then(() => {
+          if (!stopped && document.visibilityState === 'visible') schedule();
+        });
+      } else if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    schedule();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [selectedId, latestRun?.status]);
+
   const handleSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
     try {
       await facebookApi.triggerAdAccountSync(selectedId);
       toast.success('Sync started. Data will refresh when it finishes.');
+      // Short delay before the first refetch so the Celery worker has time
+      // to create the MetaSyncRun row; without it the immediate poll race
+      // would still see the prior completed run, hiding the running phase
+      // line for one full polling interval.
+      const accountId = selectedId;
+      setTimeout(() => {
+        facebookApi
+          .getSyncRuns(accountId)
+          .then((runs) => setLatestRun(runs[0] ?? null))
+          .catch(() => undefined);
+      }, 500);
       pollSync(selectedId);
     } catch {
       toast.error('Failed to start sync.');
@@ -499,12 +612,31 @@ function MetaAdsContent() {
           </section>
 
           {selectedId && (
-            <CampaignHierarchyTable
-              campaigns={campaigns}
-              currency={currency}
-              adAccountId={selectedId}
-              days={days}
-            />
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500">
+                  {selectedCampaignIds.size > 0
+                    ? `${selectedCampaignIds.size} campaign${selectedCampaignIds.size === 1 ? '' : 's'} selected`
+                    : 'Select campaigns to export'}
+                </div>
+                <ExportActionMenu
+                  unit="campaign"
+                  selectedIds={Array.from(selectedCampaignIds)}
+                  adAccountId={selectedId}
+                  days={days}
+                />
+              </div>
+              <CampaignHierarchyTable
+                campaigns={campaigns}
+                currency={currency}
+                adAccountId={selectedId}
+                days={days}
+                selection={{
+                  selectedIds: selectedCampaignIds,
+                  onToggle: toggleSelectedCampaign,
+                }}
+              />
+            </>
           )}
         </>
       )}
@@ -515,6 +647,14 @@ function MetaAdsContent() {
 
       {viewTab === 'drilldown' && selectedId && (
         <AdsDrilldownPanel adAccountId={selectedId} days={days} currency={currency} />
+      )}
+
+      {viewTab === 'ranking' && selectedId && (
+        <RankingPanel adAccountId={selectedId} currency={currency} />
+      )}
+
+      {viewTab === 'creative-rank' && selectedId && (
+        <CreativeRankPanel adAccountId={selectedId} currency={currency} />
       )}
     </div>
   );
@@ -714,6 +854,22 @@ function SyncStatusCard({ run }: { run: MetaSyncRun }) {
                 </>
               )}
             </div>
+            {run.status === 'running' &&
+              (run.current_phase || run.current_progress) && (
+                <div className="mt-1 truncate text-[13px] text-amber-700">
+                  {run.current_phase && (
+                    <span className="font-medium">
+                      {PHASE_LABEL[run.current_phase] ?? run.current_phase}
+                    </span>
+                  )}
+                  {run.current_phase && run.current_progress && (
+                    <span className="text-amber-600"> · </span>
+                  )}
+                  {run.current_progress && (
+                    <span className="text-amber-600">{run.current_progress}</span>
+                  )}
+                </div>
+              )}
           </div>
         </div>
         <ChevronDown

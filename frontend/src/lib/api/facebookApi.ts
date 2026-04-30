@@ -104,6 +104,8 @@ export interface MetaSyncRun {
   error_message: string;
   started_at: string;
   finished_at: string | null;
+  current_phase: string;
+  current_progress: string;
 }
 
 export interface MetaCreativePerformanceRow {
@@ -121,7 +123,9 @@ export interface MetaCreativePerformanceRow {
   impressions: number;
   clicks: number;
   leads: number;
+  calls: number;
   purchases: number;
+  messages: number;
   revenue: string;
   ctr: string;
   cpc: string;
@@ -132,8 +136,27 @@ export interface MetaCreativePerformanceRow {
   video_p75: number;
   video_p100: number;
   hook_rate: string;
+  hook_rate_strict: string;
   hold_rate: string;
   completion_rate: string;
+  video_3sec_count: number;
+  lpv_count: number;
+  cost_per_lpv: string;
+  comment_count: number;
+  cost_per_comment: string;
+  total_events: number;
+  days_with_data: number;
+  is_in_learning: boolean | null;
+  ad_count: number;
+}
+
+export interface MetaCreativePerformanceFilters {
+  min_impressions: number;
+  min_spend: string;
+  min_events: number;
+  min_days_with_data: number;
+  include_inactive: boolean;
+  include_shared_creatives: boolean;
 }
 
 export interface MetaCreativePerformance {
@@ -141,6 +164,7 @@ export interface MetaCreativePerformance {
   currency: string;
   days: number;
   window: { since: string; until: string };
+  filters: MetaCreativePerformanceFilters;
   creatives: MetaCreativePerformanceRow[];
 }
 
@@ -167,7 +191,9 @@ export interface MetaAdPerformanceRow {
   impressions: number;
   clicks: number;
   leads: number;
+  calls: number;
   purchases: number;
+  messages: number;
   revenue: string;
   ctr: string;
   cpc: string;
@@ -175,7 +201,26 @@ export interface MetaAdPerformanceRow {
   cpa: string;
   roas: string;
   hook_rate: string;
+  hook_rate_strict: string;
   hold_rate: string;
+  completion_rate: string;
+  video_3sec_count: number;
+  lpv_count: number;
+  cost_per_lpv: string;
+  comment_count: number;
+  cost_per_comment: string;
+  total_events: number;
+  days_with_data: number;
+  is_in_learning: boolean | null;
+}
+
+export interface MetaAdPerformanceFilters {
+  min_impressions: number;
+  min_spend: string;
+  min_events: number;
+  min_days_with_data: number;
+  include_inactive: boolean;
+  ids: number[];
 }
 
 export interface MetaAdPerformance {
@@ -183,6 +228,7 @@ export interface MetaAdPerformance {
   currency: string;
   days: number;
   window: { since: string; until: string };
+  filters: MetaAdPerformanceFilters;
   ads: MetaAdPerformanceRow[];
 }
 
@@ -546,11 +592,26 @@ export const facebookApi = {
 
   getMetaCreativePerformance: async (
     adAccountId: number,
-    days: number
+    days: number,
+    filters?: {
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+      includeSharedCreatives?: boolean;
+    }
   ): Promise<MetaCreativePerformance> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) params.min_days_with_data = filters.minDaysWithData;
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.includeSharedCreatives) params.include_shared_creatives = "true";
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/creative_performance/`,
-      { params: { days } }
+      { params }
     );
     return response.data;
   },
@@ -558,13 +619,229 @@ export const facebookApi = {
   getMetaAdPerformance: async (
     adAccountId: number,
     days: number,
-    filters?: { campaignId?: number | null; adsetId?: number | null }
+    filters?: {
+      campaignId?: number | null;
+      adsetId?: number | null;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+      ids?: number[];
+    }
   ): Promise<MetaAdPerformance> => {
-    const params: Record<string, number> = { days };
+    const params: Record<string, string | number> = { days };
     if (filters?.campaignId) params.campaign_id = filters.campaignId;
     if (filters?.adsetId) params.adset_id = filters.adsetId;
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) params.min_days_with_data = filters.minDaysWithData;
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
     const response = await api.get(
       `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/`,
+      { params }
+    );
+    return response.data;
+  },
+
+  getMetaAdExportCsv: async (
+    adAccountId: number,
+    days: number,
+    filters?: {
+      ids?: number[];
+      campaignId?: number | null;
+      adsetId?: number | null;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+      includeInactive?: boolean;
+    }
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.campaignId) params.campaign_id = filters.campaignId;
+    if (filters?.adsetId) params.adset_id = filters.adsetId;
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) {
+      params.min_days_with_data = filters.minDaysWithData;
+    }
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.get<Blob>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/export.csv/`,
+      { params, responseType: "blob" }
+    );
+    const disposition =
+      (response.headers["content-disposition"] as string | undefined) ?? "";
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] ?? `meta-ads-${adAccountId}-${days}d.csv`;
+    return { blob: response.data, filename };
+  },
+
+  getMetaCreativePerformanceCsv: async (
+    adAccountId: number,
+    days: number,
+    filters?: {
+      ids?: number[];
+      includeInactive?: boolean;
+      includeSharedCreatives?: boolean;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+    }
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) {
+      params.min_days_with_data = filters.minDaysWithData;
+    }
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.includeSharedCreatives) {
+      params.include_shared_creatives = "true";
+    }
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.get<Blob>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/creative_performance/export.csv/`,
+      { params, responseType: "blob" }
+    );
+    const disposition =
+      (response.headers["content-disposition"] as string | undefined) ?? "";
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename =
+      match?.[1] ?? `meta-creatives-${adAccountId}-${days}d.csv`;
+    return { blob: response.data, filename };
+  },
+
+  getMetaCampaignPerformanceCsv: async (
+    adAccountId: number,
+    days: number,
+    filters?: { ids?: number[] }
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const params: Record<string, string | number> = { days };
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.get<Blob>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/campaign_performance/export.csv/`,
+      { params, responseType: "blob" }
+    );
+    const disposition =
+      (response.headers["content-disposition"] as string | undefined) ?? "";
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename =
+      match?.[1] ?? `meta-campaigns-${adAccountId}-${days}d.csv`;
+    return { blob: response.data, filename };
+  },
+
+  exportAdsToSpreadsheet: async (
+    adAccountId: number,
+    projectId: number,
+    name: string,
+    days: number,
+    filters?: {
+      ids?: number[];
+      includeInactive?: boolean;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+    }
+  ): Promise<{ id: number; name: string; url: string }> => {
+    const params: Record<string, string | number> = { project_id: projectId, days };
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) {
+      params.min_days_with_data = filters.minDaysWithData;
+    }
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.post<{
+      id: number;
+      name: string;
+      url: string;
+    }>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/ad_performance/export.spreadsheet/`,
+      { name },
+      { params }
+    );
+    return response.data;
+  },
+
+  exportCreativesToSpreadsheet: async (
+    adAccountId: number,
+    projectId: number,
+    name: string,
+    days: number,
+    filters?: {
+      ids?: number[];
+      includeInactive?: boolean;
+      includeSharedCreatives?: boolean;
+      minImpressions?: number;
+      minSpend?: number | string;
+      minEvents?: number;
+      minDaysWithData?: number;
+    }
+  ): Promise<{ id: number; name: string; url: string }> => {
+    const params: Record<string, string | number> = { project_id: projectId, days };
+    if (filters?.minImpressions) params.min_impressions = filters.minImpressions;
+    if (filters?.minSpend) params.min_spend = String(filters.minSpend);
+    if (filters?.minEvents) params.min_events = filters.minEvents;
+    if (filters?.minDaysWithData) {
+      params.min_days_with_data = filters.minDaysWithData;
+    }
+    if (filters?.includeInactive) params.include_inactive = "true";
+    if (filters?.includeSharedCreatives) {
+      params.include_shared_creatives = "true";
+    }
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.post<{
+      id: number;
+      name: string;
+      url: string;
+    }>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/creative_performance/export.spreadsheet/`,
+      { name },
+      { params }
+    );
+    return response.data;
+  },
+
+  exportCampaignsToSpreadsheet: async (
+    adAccountId: number,
+    projectId: number,
+    name: string,
+    days: number,
+    filters?: { ids?: number[] }
+  ): Promise<{ id: number; name: string; url: string }> => {
+    const params: Record<string, string | number> = { project_id: projectId, days };
+    if (filters?.ids && filters.ids.length > 0) {
+      params.ids = filters.ids.join(",");
+    }
+    const response = await api.post<{
+      id: number;
+      name: string;
+      url: string;
+    }>(
+      `/api/meta_ads/ad_accounts/${adAccountId}/campaign_performance/export.spreadsheet/`,
+      { name },
       { params }
     );
     return response.data;

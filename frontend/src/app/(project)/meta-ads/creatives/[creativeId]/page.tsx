@@ -37,7 +37,7 @@ import {
   thumbnailOrFallback,
 } from '@/components/meta-ads/metaAdsUtils';
 
-const DAY_OPTIONS = [1, 2, 3, 7, 14, 28] as const;
+const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 
 const CHART_METRIC_TABS: StockMetric[] = [
   'spend',

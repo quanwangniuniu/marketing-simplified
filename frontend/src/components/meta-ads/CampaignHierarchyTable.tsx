@@ -29,9 +29,15 @@ import {
   hookRateBandClass,
   thumbnailOrFallback,
 } from './metaAdsUtils';
+import SelectAllHeader from './SelectAllHeader';
 import VideoModal from './VideoModal';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
+
+export interface CampaignHierarchyTableSelection {
+  selectedIds: Set<number>;
+  onToggle: (id: number) => void;
+}
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -60,11 +66,13 @@ export default function CampaignHierarchyTable({
   currency,
   adAccountId,
   days,
+  selection,
 }: {
   campaigns: MetaCampaignPerformanceRow[];
   currency: string;
   adAccountId: number;
   days: number;
+  selection?: CampaignHierarchyTableSelection;
 }) {
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -106,6 +114,31 @@ export default function CampaignHierarchyTable({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-[11px] uppercase text-gray-500">
             <tr>
+              {selection && (
+                <th className="w-10 px-3 py-2 font-medium">
+                  <SelectAllHeader
+                    selectedCount={
+                      paged.filter((c) => selection.selectedIds.has(c.id))
+                        .length
+                    }
+                    totalCount={paged.length}
+                    onSelectAll={() => {
+                      for (const c of paged) {
+                        if (!selection.selectedIds.has(c.id)) {
+                          selection.onToggle(c.id);
+                        }
+                      }
+                    }}
+                    onClear={() => {
+                      for (const c of paged) {
+                        if (selection.selectedIds.has(c.id)) {
+                          selection.onToggle(c.id);
+                        }
+                      }
+                    }}
+                  />
+                </th>
+              )}
               <th className="w-10 px-2 py-2 font-medium"></th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Campaign</th>
@@ -123,7 +156,7 @@ export default function CampaignHierarchyTable({
             {paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={selection ? 12 : 11}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   No campaign data. Try refreshing.
@@ -132,12 +165,25 @@ export default function CampaignHierarchyTable({
             ) : (
               paged.map((c) => {
                 const expanded = expandedCampaigns.has(c.id);
+                const isSelected =
+                  selection?.selectedIds.has(c.id) ?? false;
                 return (
                   <>
                     <tr
                       key={c.id}
-                      className="hover:bg-gray-50/60"
+                      className={`hover:bg-gray-50/60 ${isSelected ? 'bg-[#3CCED7]/5' : ''}`}
                     >
+                      {selection && (
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select campaign ${c.name || c.meta_campaign_id} for export`}
+                            checked={isSelected}
+                            onChange={() => selection.onToggle(c.id)}
+                            className="h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+                          />
+                        </td>
+                      )}
                       <td className="px-2 py-2.5 text-center">
                         <button
                           type="button"
@@ -202,7 +248,7 @@ export default function CampaignHierarchyTable({
                     {expanded && (
                       <tr key={`${c.id}-expand`}>
                         <td
-                          colSpan={11}
+                          colSpan={selection ? 12 : 11}
                           className="bg-gradient-to-b from-[#3CCED7]/5 to-transparent px-4 py-3"
                         >
                           <AdSetInset
