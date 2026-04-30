@@ -215,7 +215,7 @@ export function WeekView({
                       slotStart,
                       "EEEE, MMMM d 'at' h:mm a",
                     )}`}
-                    className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/10 flex flex-col"
+                    className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/5 flex flex-col"
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const position = computePanelPosition(rect);
@@ -272,17 +272,22 @@ export function WeekView({
                         originalEnd: new Date(event.end_datetime),
                       });
                     }}
-                    className="absolute left-1 right-1 rounded-md px-1.5 py-0.5 pb-2 text-[11px] text-white shadow-sm"
-                    style={{ top: `${topPx}px`, height: `${heightPx}px`, backgroundColor }}
+                    className="absolute left-1 right-1 rounded-md px-1.5 py-0.5 pb-2 text-[11px] text-gray-900"
+                    style={{
+                      top: `${topPx}px`,
+                      height: `${heightPx}px`,
+                      borderLeft: `3px solid ${backgroundColor}`,
+                      backgroundColor: `color-mix(in srgb, ${backgroundColor} 15%, white)`,
+                    }}
                   >
                     <div className="truncate font-semibold">{event.title}</div>
-                    <div className="truncate opacity-90">
+                    <div className="truncate text-gray-600">
                       {format(evStart, "HH:mm")} - {format(evEnd, "HH:mm")}
                     </div>
                     {!event.is_recurring && (
                       <div
                         data-resize-handle="true"
-                        className="absolute bottom-1 left-1/2 h-1 w-[80%] -translate-x-1/2 cursor-row-resize rounded-full bg-white/60"
+                        className="absolute bottom-1 left-1/2 h-1 w-[80%] -translate-x-1/2 cursor-row-resize rounded-full bg-gray-300"
                         onMouseDown={(e) => {
                           if (e.button !== 0) return;
                           e.preventDefault();
@@ -447,7 +452,7 @@ export function DayView({
                   slotStart,
                   "EEEE, MMMM d 'at' h:mm a",
                 )}`}
-                className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/10"
+                className="h-12 w-full border-b border-gray-100 bg-white text-left hover:bg-[#3CCED7]/5"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const position = computePanelPosition(rect, "day");
@@ -498,17 +503,22 @@ export function DayView({
                     originalEnd: new Date(event.end_datetime),
                   });
                 }}
-                className="absolute left-1 right-1 rounded-md px-1.5 py-0.5 pb-2 text-[11px] text-white shadow-sm"
-                style={{ top: `${topPercent}%`, height: `${heightPercent}%`, backgroundColor }}
+                className="absolute left-1 right-1 rounded-md px-1.5 py-0.5 pb-2 text-[11px] text-gray-900"
+                style={{
+                  top: `${topPercent}%`,
+                  height: `${heightPercent}%`,
+                  borderLeft: `3px solid ${backgroundColor}`,
+                  backgroundColor: `color-mix(in srgb, ${backgroundColor} 15%, white)`,
+                }}
               >
                 <div className="truncate font-semibold">{event.title}</div>
-                <div className="truncate opacity-90">
+                <div className="truncate text-gray-600">
                   {format(evStart, "HH:mm")} - {format(evEnd, "HH:mm")}
                 </div>
                 {!event.is_recurring && (
                   <div
                     data-resize-handle="true"
-                    className="absolute bottom-1 left-1/2 h-1 w-[90%] -translate-x-1/2 cursor-row-resize rounded-full bg-white/60"
+                    className="absolute bottom-1 left-1/2 h-1 w-[90%] -translate-x-1/2 cursor-row-resize rounded-full bg-gray-300"
                     onMouseDown={(e) => {
                       if (e.button !== 0) return;
                       e.preventDefault();
@@ -625,7 +635,7 @@ export function MonthView({
                       isSelected
                         ? "bg-[#3CCED7] text-white"
                         : isToday
-                        ? "border border-[#3CCED7] text-[#1a9ba3]"
+                        ? "border border-[#3CCED7] text-[#3CCED7]"
                         : inMonth
                         ? "text-gray-800"
                         : "text-gray-300"
@@ -809,7 +819,7 @@ export function YearView({ currentDate, onDaySelect }: YearViewProps) {
                     !inMonth
                       ? "text-gray-300"
                       : isToday
-                      ? "border border-[#3CCED7] bg-white text-[#1a9ba3]"
+                      ? "border border-[#3CCED7] bg-white text-[#3CCED7]"
                       : "text-gray-700 hover:bg-white"
                   }`;
                   return (
@@ -863,12 +873,12 @@ export function MiniMonthCalendar({ currentDate, onDateChange }: MiniMonthCalend
           const isToday = isSameDay(day, today);
           const className = `flex h-7 w-7 items-center justify-center rounded-full text-xs ${
             isSelected
-              ? "bg-[#C2E7FF]"
+              ? "bg-[#3CCED7]/20 text-[#3CCED7] font-semibold"
               : isToday
-              ? "bg-[#0B57D0] text-white"
+              ? "bg-[#3CCED7] text-white"
               : !inMonth
               ? "text-gray-300"
-              : "text-gray-700 hover:bg-[#E4E8ED]"
+              : "text-gray-700 hover:bg-[#3CCED7]/10"
           }`;
           return (
             <button

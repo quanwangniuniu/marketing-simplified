@@ -221,7 +221,7 @@ describe('HomeSidebar — Project members integration', () => {
     render(<HomeSidebar {...defaultProps} isLoadingMembers={true} />);
 
     expect(screen.getByText('Project members')).toBeInTheDocument();
-    const skeletons = document.querySelectorAll('.animate-pulse');
+    const skeletons = document.querySelectorAll('.skeleton-fade');
     expect(skeletons.length).toBeGreaterThan(0);
   });
 });

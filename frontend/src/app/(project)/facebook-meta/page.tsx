@@ -4,14 +4,14 @@ import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import AdDraftStatusPill from '@/components/ads-draft-v2/pills/AdDraftStatusPill';
+import AdDraftStatusPill from '@/components/ads-draft/pills/AdDraftStatusPill';
 import AdCreativeCreateModal, {
   type AdCreativeCreatePayload,
-} from '@/components/ads-draft-v2/facebook_meta/AdCreativeCreateModal';
-import AdCreativeTableV2 from '@/components/ads-draft-v2/facebook_meta/AdCreativeTableV2';
-import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
-import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
+} from '@/components/ads-draft/facebook_meta/AdCreativeCreateModal';
+import AdCreativeTableV2 from '@/components/ads-draft/facebook_meta/AdCreativeTableV2';
+import CampaignScopeBanner from '@/components/ads-draft/CampaignScopeBanner';
+import PlatformBadge from '@/components/ads-draft/PlatformBadge';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useFacebookMetaData } from '@/hooks/useFacebookMetaData';
 import { FacebookMetaAPI } from '@/lib/api/facebookMetaApi';

@@ -52,7 +52,7 @@ export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSecti
           {top.showSettingsLink ? (
             <>
               {' '}
-              <Link href="/settings?open_zoom=1" className="font-medium text-[#1a9ba3] underline">
+              <Link href="/integrations?open_zoom=1" className="font-medium text-[#1a9ba3] underline">
                 Settings
               </Link>
             </>

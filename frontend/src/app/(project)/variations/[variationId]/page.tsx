@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import { AdVariationAPI } from '@/lib/api/adVariationApi';
 import { useProjectStore } from '@/lib/projectStore';
 import type {

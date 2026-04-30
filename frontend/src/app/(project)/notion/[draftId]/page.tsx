@@ -17,11 +17,11 @@ import {
 import { toast } from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import NotionEditor, { createEmptyBlock } from '@/components/notion-v2/NotionEditor';
-import NotionStatusPill from '@/components/notion-v2/NotionStatusPill';
-import VersionHistoryPanel from '@/components/notion-v2/VersionHistoryPanel';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
-import ConfirmDialog from '@/components/tasks-v2/detail/ConfirmDialog';
+import NotionEditor, { createEmptyBlock } from '@/components/notion/NotionEditor';
+import NotionStatusPill from '@/components/notion/NotionStatusPill';
+import VersionHistoryPanel from '@/components/notion/VersionHistoryPanel';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
+import ConfirmDialog from '@/components/tasks/detail/ConfirmDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,

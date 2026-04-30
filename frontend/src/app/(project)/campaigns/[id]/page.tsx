@@ -11,17 +11,17 @@ import { useProjectStore } from '@/lib/projectStore';
 import { useCampaignData } from '@/hooks/useCampaignData';
 import type { CampaignCheckIn, CampaignData, PerformanceSnapshot } from '@/types/campaign';
 import CampaignHeader from '@/components/campaigns/CampaignHeader';
-import TimelineSection, { type TimelineSectionHandle } from '@/components/campaigns-v2/sections/TimelineSection';
-import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns-v2/sections/CheckInsSection';
-import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns-v2/sections/SnapshotsSection';
-import StatusHistorySection, { type StatusHistorySectionHandle } from '@/components/campaigns-v2/sections/StatusHistorySection';
-import TasksSection, { type TasksSectionHandle } from '@/components/campaigns-v2/sections/TasksSection';
-import CampaignFSMActionBar from '@/components/campaigns-v2/detail/CampaignFSMActionBar';
-import CreateCheckInDialog from '@/components/campaigns-v2/modals/CreateCheckInDialog';
-import EditCheckInDialog from '@/components/campaigns-v2/modals/EditCheckInDialog';
-import CreateSnapshotDialog from '@/components/campaigns-v2/modals/CreateSnapshotDialog';
-import EditSnapshotDialog from '@/components/campaigns-v2/modals/EditSnapshotDialog';
-import SaveAsTemplateDialog from '@/components/campaigns-v2/modals/SaveAsTemplateDialog';
+import TimelineSection, { type TimelineSectionHandle } from '@/components/campaigns/sections/TimelineSection';
+import CheckInsSection, { type CheckInsSectionHandle } from '@/components/campaigns/sections/CheckInsSection';
+import SnapshotsSection, { type SnapshotsSectionHandle } from '@/components/campaigns/sections/SnapshotsSection';
+import StatusHistorySection, { type StatusHistorySectionHandle } from '@/components/campaigns/sections/StatusHistorySection';
+import TasksSection, { type TasksSectionHandle } from '@/components/campaigns/sections/TasksSection';
+import CampaignFSMActionBar from '@/components/campaigns/detail/CampaignFSMActionBar';
+import CreateCheckInDialog from '@/components/campaigns/modals/CreateCheckInDialog';
+import EditCheckInDialog from '@/components/campaigns/modals/EditCheckInDialog';
+import CreateSnapshotDialog from '@/components/campaigns/modals/CreateSnapshotDialog';
+import EditSnapshotDialog from '@/components/campaigns/modals/EditSnapshotDialog';
+import SaveAsTemplateDialog from '@/components/campaigns/modals/SaveAsTemplateDialog';
 
 export default function CampaignV2DetailPage() {
   const router = useRouter();

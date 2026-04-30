@@ -23,7 +23,6 @@ type EventPanelDialogProps = {
   end: Date | null;
   event: EventDTO | null;
   calendars: CalendarDTO[];
-  /** User's primary calendar from listCalendars; used to default create + merge into options when missing from view. */
   primaryCalendar?: CalendarDTO | null;
   preferredCalendarId?: string | null;
   onSave: (payload: { action: () => Promise<void> }) => Promise<void>;
@@ -152,7 +151,7 @@ export function EventPanelDialog({
           role="dialog"
           aria-label="View event"
           data-testid="calendar-event-dialog"
-          className="fixed z-50 w-[360px] rounded-3xl border bg-[#f0f4f9] shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
+          className="fixed z-50 w-[360px] rounded-3xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
           style={{ top: position.top, left: position.left }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -310,7 +309,7 @@ export function EventPanelDialog({
         role="dialog"
         aria-label={mode === "edit" ? "Edit event" : "Create event"}
         data-testid="calendar-event-dialog"
-        className="fixed z-50 w-[420px] rounded-3xl border bg-[#f0f4f9] shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
+        className="fixed z-50 w-[420px] rounded-3xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
         style={{ top: position.top, left: position.left }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -329,7 +328,7 @@ export function EventPanelDialog({
             <div className="mb-3 flex gap-2 text-sm">
               <button
                 type="button"
-                className="rounded-full bg-[#3CCED7]/15 px-3 py-1 text-xs font-medium text-[#1a9ba3]"
+                className="rounded-full bg-[#3CCED7]/10 px-3 py-1 text-xs font-medium text-[#3CCED7]"
               >
                 Event
               </button>
@@ -362,7 +361,7 @@ export function EventPanelDialog({
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     <input
                       type="datetime-local"
-                      className="w-full rounded-md border border-gray-300 bg-[#dde3ea] px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
                       value={formatForInput(localStart)}
                       onChange={(e) => {
                         const next = new Date(e.target.value);
@@ -373,7 +372,7 @@ export function EventPanelDialog({
                     />
                     <input
                       type="datetime-local"
-                      className="w-full rounded-md border border-gray-300 bg-[#dde3ea] px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
+                      className="w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
                       value={formatForInput(localEnd)}
                       onChange={(e) => {
                         const next = new Date(e.target.value);
@@ -390,7 +389,7 @@ export function EventPanelDialog({
               <div className="flex items-start gap-4">
                 <AlignLeft className="mt-1 h-4 w-4 text-gray-500" />
                 <textarea
-                  className="min-h-[72px] w-full resize-none rounded-md border border-gray-300 bg-[#dde3ea] px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
+                  className="min-h-[72px] w-full resize-none rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
                   placeholder="Add description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -403,7 +402,7 @@ export function EventPanelDialog({
                   <div className="flex-1">
                     <p className="text-xs text-gray-500">Calendar</p>
                     <select
-                      className="mt-1 w-full rounded-md border border-gray-300 bg-[#dde3ea] px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#3CCED7]"
                       value={calendarId}
                       onChange={(e) => setCalendarId(e.target.value)}
                     >
@@ -448,7 +447,7 @@ export function EventPanelDialog({
           <div className="flex items-center justify-between border-t bg-inherit px-6 py-3">
             <button
               type="button"
-              className="text-sm font-medium text-[#3CCED7] hover:text-[#1a9ba3]"
+              className="text-sm font-medium text-[#3CCED7] hover:opacity-80"
               onClick={() => {}}
             >
               More options
@@ -472,7 +471,7 @@ export function EventPanelDialog({
               </button>
               <button
                 type="button"
-                className="rounded-full bg-[#3CCED7] px-5 py-1.5 text-sm font-medium text-white hover:bg-[#2AB5BD]"
+                className="rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-95"
                 onClick={handleSubmit}
               >
                 Save

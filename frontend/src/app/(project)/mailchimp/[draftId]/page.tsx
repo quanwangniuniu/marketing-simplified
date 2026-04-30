@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { EmailDraftStatusPill } from "@/components/email-draft-v2";
+import { EmailDraftStatusPill } from "@/components/email-draft";
 import {
   Monitor,
   Smartphone,

@@ -125,7 +125,7 @@ export default function NotionLayout({
             <button
               type="button"
               onClick={onImportGoogleDoc}
-              className="px-3 py-1.5 text-sm bg-emerald-600 text-white hover:bg-emerald-700 rounded-md transition-colors font-medium disabled:opacity-60"
+              className="px-3 py-1.5 text-sm bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white hover:opacity-95 rounded-md transition-colors font-medium disabled:opacity-60"
               disabled={!selectedDraftId || googleDocsImportBusy || googleDocsExportBusy}
             >
               {googleDocsImportBusy ? 'Importing…' : 'Import Doc'}
@@ -133,7 +133,7 @@ export default function NotionLayout({
             <button
               type="button"
               onClick={onExportGoogleDoc}
-              className="px-3 py-1.5 text-sm bg-violet-600 text-white hover:bg-violet-700 rounded-md transition-colors font-medium disabled:opacity-60"
+              className="px-3 py-1.5 text-sm bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white hover:opacity-95 rounded-md transition-colors font-medium disabled:opacity-60"
               disabled={!selectedDraftId || googleDocsImportBusy || googleDocsExportBusy}
             >
               {googleDocsExportBusy ? 'Exporting…' : 'Export Doc'}
@@ -141,7 +141,7 @@ export default function NotionLayout({
             <button
               type="button"
               onClick={onSave}
-              className="px-3 py-1.5 text-sm bg-[#3CCED7] text-white hover:bg-[#2AB5BD] rounded-md transition-colors font-medium disabled:opacity-60"
+              className="px-3 py-1.5 text-sm bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white hover:opacity-95 rounded-md transition-colors font-medium disabled:opacity-60"
               disabled={!selectedDraftId || isSaving || !hasChanges}
             >
               {isSaving ? 'Saving…' : 'Save'}
@@ -172,7 +172,7 @@ export default function NotionLayout({
               <button
                 type="button"
                 onClick={onCreateDraft}
-                className="rounded-md bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#2AB5BD] focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2"
+                className="rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:ring-offset-2"
               >
                 New draft
               </button>

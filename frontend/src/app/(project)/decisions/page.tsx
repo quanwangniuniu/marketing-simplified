@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import DecisionsPageCard from '@/components/decisions-v2/DecisionsPageCard';
+import DecisionsPageCard from '@/components/decisions/DecisionsPageCard';
 import { useAuthStore } from '@/lib/authStore';
 import { useProjectStore } from '@/lib/projectStore';
 

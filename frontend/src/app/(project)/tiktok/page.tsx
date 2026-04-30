@@ -11,20 +11,20 @@ import {
 import { toast } from 'react-hot-toast';
 import AdDraftActionBar, {
   type ActionSpec,
-} from '@/components/ads-draft-v2/AdDraftActionBar';
-import CampaignScopeBanner from '@/components/ads-draft-v2/CampaignScopeBanner';
-import PlatformBadge from '@/components/ads-draft-v2/PlatformBadge';
-import SharePreviewModal from '@/components/ads-draft-v2/SharePreviewModal';
+} from '@/components/ads-draft/AdDraftActionBar';
+import CampaignScopeBanner from '@/components/ads-draft/CampaignScopeBanner';
+import PlatformBadge from '@/components/ads-draft/PlatformBadge';
+import SharePreviewModal from '@/components/ads-draft/SharePreviewModal';
 import DraftEditor, {
   type CtaMode,
   type DraftEditorValue,
-} from '@/components/ads-draft-v2/tiktok/DraftEditor';
-import MediaLibraryDialog from '@/components/ads-draft-v2/tiktok/MediaLibraryDialog';
-import WorkspaceSidebar from '@/components/ads-draft-v2/tiktok/WorkspaceSidebar';
+} from '@/components/ads-draft/tiktok/DraftEditor';
+import MediaLibraryDialog from '@/components/ads-draft/tiktok/MediaLibraryDialog';
+import WorkspaceSidebar from '@/components/ads-draft/tiktok/WorkspaceSidebar';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import TiktokPreview from '@/components/tiktok/TiktokPreview';
-import BrandDialog from '@/components/tasks-v2/detail/BrandDialog';
+import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import {
   deleteAdDraft,
   deleteAdGroup,
@@ -41,7 +41,7 @@ import { Share2, Save, Trash2 } from 'lucide-react';
 const SECTION_CLS = 'rounded-xl bg-white shadow-sm ring-1 ring-gray-100';
 const H2_CLS = 'text-[13px] font-semibold uppercase tracking-wide text-gray-900';
 const EYEBROW_CLS = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
-const STORAGE_KEY = 'tiktok-v2-selection';
+const STORAGE_KEY = 'tiktok-selection';
 
 type Placement = 'In feed' | 'Search feed';
 

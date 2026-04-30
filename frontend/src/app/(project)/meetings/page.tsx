@@ -17,15 +17,15 @@ import {
   type MeetingSortKey,
 } from '@/lib/meetings/meetingSectionSort';
 import { splitMeetingRowsBySchedule } from '@/lib/meetings/meetingScheduleSplit';
-import MeetingsHeader from '@/components/meetings-v2/MeetingsHeader';
-import MeetingsFilterBar from '@/components/meetings-v2/MeetingsFilterBar';
-import MeetingsHubColumns from '@/components/meetings-v2/MeetingsHubColumns';
-import CreateMeetingDialog from '@/components/meetings-v2/CreateMeetingDialog';
+import MeetingsHeader from '@/components/meetings/MeetingsHeader';
+import MeetingsFilterBar from '@/components/meetings/MeetingsFilterBar';
+import MeetingsHubColumns from '@/components/meetings/MeetingsHubColumns';
+import CreateMeetingDialog from '@/components/meetings/CreateMeetingDialog';
 import {
   EMPTY_ADVANCED_FILTER,
   advancedFilterToParams,
   type AdvancedFilterState,
-} from '@/components/meetings-v2/AdvancedFilterDialog';
+} from '@/components/meetings/AdvancedFilterDialog';
 
 const DEFAULT_TYPE_FALLBACKS = [
   'Planning',

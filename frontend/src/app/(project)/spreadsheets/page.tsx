@@ -12,9 +12,9 @@ import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI, ProjectData } from '@/lib/api/projectApi';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import type { SpreadsheetData } from '@/types/spreadsheet';
-import SpreadsheetsHeader from '@/components/spreadsheets-v2/SpreadsheetsHeader';
-import SpreadsheetCard from '@/components/spreadsheets-v2/SpreadsheetCard';
-import CreateSpreadsheetDialog from '@/components/spreadsheets-v2/CreateSpreadsheetDialog';
+import SpreadsheetsHeader from '@/components/spreadsheets/SpreadsheetsHeader';
+import SpreadsheetCard from '@/components/spreadsheets/SpreadsheetCard';
+import CreateSpreadsheetDialog from '@/components/spreadsheets/CreateSpreadsheetDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE_SIZE = 12;

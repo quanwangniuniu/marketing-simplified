@@ -8,8 +8,8 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/lib/projectStore';
-import { useCampaignTemplates } from '@/hooks/campaigns-v2/useCampaignTemplates';
-import TemplateListTable from '@/components/campaigns-v2/templates/TemplateListTable';
+import { useCampaignTemplates } from '@/hooks/campaigns/useCampaignTemplates';
+import TemplateListTable from '@/components/campaigns/templates/TemplateListTable';
 import type { TemplateSharingScope } from '@/types/campaign';
 
 const SCOPE_OPTIONS: Array<{ value: string; label: string }> = [

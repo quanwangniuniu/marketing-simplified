@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
-import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';
+import InlineSelect from '@/components/tasks/detail/InlineSelect';
 import { AdVariationAPI } from '@/lib/api/adVariationApi';
 import attachmentApi, { validateFile } from '@/lib/api/attachmentApi';
 import type {

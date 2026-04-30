@@ -1,7 +1,7 @@
 import React from "react";
 import type { CalendarViewType } from "@/lib/api/calendarApi";
-import { ChevronDown, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
-import { VIEW_LABELS, VIEW_SHORTCUTS } from "@/components/calendar/utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { VIEW_LABELS } from "@/components/calendar/utils";
 
 type CalendarToolbarProps = {
   headerTitle: string;
@@ -15,32 +15,36 @@ type CalendarToolbarProps = {
   onAskAgent?: () => void;
 };
 
+const VIEW_ORDER: CalendarViewType[] = ["day", "week", "month", "year", "agenda"];
+
 export function CalendarToolbar({
   headerTitle,
   currentView,
-  viewSwitcherOpen,
   viewSwitcherRef,
-  onToggleViewSwitcher,
   onSelectView,
   onToday,
   onOffset,
   onAskAgent,
 }: CalendarToolbarProps) {
   return (
-    <header className="flex items-center justify-between bg-inherit px-4 py-3">
+    <header
+      className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5"
+      data-testid="calendar-toolbar"
+    >
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onToday}
-          className="inline-flex items-center rounded-full border border-gray-400 px-4 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-200"
+          className="inline-flex items-center rounded-md border border-[#3CCED7] px-3 py-1.5 text-sm font-medium text-[#3CCED7] transition-colors hover:bg-[#3CCED7]/10"
+          data-testid="calendar-today"
         >
           Today
         </button>
-        <div className="flex items-center rounded-full">
+        <div className="flex items-center">
           <button
             type="button"
             onClick={() => onOffset("prev")}
-            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
             aria-label="Previous period"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -48,67 +52,58 @@ export function CalendarToolbar({
           <button
             type="button"
             onClick={() => onOffset("next")}
-            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
             aria-label="Next period"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            data-testid="calendar-header-title"
-            className="text-lg font-semibold text-gray-900"
-          >
-            {headerTitle}
-          </span>
-        </div>
+        <span
+          data-testid="calendar-header-title"
+          className="text-base font-semibold text-gray-900"
+        >
+          {headerTitle}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2" ref={viewSwitcherRef}>
+      <div className="flex items-center gap-3" ref={viewSwitcherRef}>
         {onAskAgent && (
           <button
             type="button"
             onClick={onAskAgent}
-            className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+            className="inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 transition-colors hover:bg-violet-100"
+            data-testid="calendar-ask-agent"
           >
-            <Sparkles className="h-3.5 w-3.5" />
             Ask Agent
           </button>
         )}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={onToggleViewSwitcher}
-            aria-label="Calendar view"
-            aria-expanded={viewSwitcherOpen}
-            aria-haspopup="listbox"
-            className="inline-flex items-center gap-1.5 rounded-full border border-gray-400 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            {VIEW_LABELS[currentView]}
-            <ChevronDown className="h-4 w-4 text-gray-500" />
-          </button>
-
-          {viewSwitcherOpen && (
-            <div
-              className="absolute right-0 z-50 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
-              role="listbox"
-            >
-              {(Object.keys(VIEW_LABELS) as CalendarViewType[]).map((view) => (
-                <button
-                  key={view}
-                  type="button"
-                  role="option"
-                  aria-selected={currentView === view}
-                  onClick={() => onSelectView(view)}
-                  className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  {VIEW_LABELS[view]}
-                  <span className="text-xs text-gray-400">{VIEW_SHORTCUTS[view]}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <nav
+          className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-gray-50 p-0.5"
+          data-testid="calendar-view-tabs"
+          role="tablist"
+        >
+          {VIEW_ORDER.map((view) => {
+            const isActive = currentView === view;
+            return (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => onSelectView(view)}
+                data-testid={`calendar-view-${view}`}
+                data-active={isActive ? "true" : "false"}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "bg-white text-[#3CCED7] shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {VIEW_LABELS[view]}
+              </button>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );

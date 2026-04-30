@@ -30,7 +30,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const { needsOnboarding, checking } = useOnboarding();
   const shouldShowOnboardingWizard = !isAuthRoute && !isRootRoute && !isPublicSeoRoute && needsOnboarding;
   // Legacy "Preparing your workspace" blue spinner is intentionally disabled
-  // (G-09): per-page skeletons in dashboard-v2 already cover the brief check
+  // (G-09): per-page skeletons in dashboard already cover the brief check
   // window, and stacking two overlays in a row was jarring.
   const shouldShowBlockingCheck = false;
   const shouldBlockBackground = shouldShowOnboardingWizard || shouldShowBlockingCheck;

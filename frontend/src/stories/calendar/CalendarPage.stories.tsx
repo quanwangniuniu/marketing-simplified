@@ -42,6 +42,9 @@ function CalendarPageStory(props: CalendarPageStoryProps = {}) {
   } = props;
   const [currentView, setCurrentView] = React.useState<CalendarViewType>("week");
   const [currentDate, setCurrentDate] = React.useState<Date>(() => new Date());
+  const [activeEventTypes, setActiveEventTypes] = React.useState<Set<string>>(
+    () => new Set(["decision", "task"]),
+  );
   const [viewSwitcherOpen, setViewSwitcherOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [dialogPos, setDialogPos] = React.useState<EventPanelPosition | null>(
@@ -106,6 +109,18 @@ function CalendarPageStory(props: CalendarPageStoryProps = {}) {
     [currentView],
   );
 
+  const handleToggleActivityType = React.useCallback((type: string) => {
+    setActiveEventTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }, []);
+
   React.useEffect(() => {
     setEvents(getSampleEvents(currentDate));
   }, [currentDate]);
@@ -142,14 +157,16 @@ function CalendarPageStory(props: CalendarPageStoryProps = {}) {
       <div className="flex flex-1 overflow-hidden">
         <div className="[&_aside]:!block">
           <CalendarSidebarPanel
-          currentDate={currentDate}
-          onDateChange={setCurrentDate}
-          selectedCalendarId={getSampleSidebarMyCalendars()[0].calendarId}
-          myCalendars={getSampleSidebarMyCalendars()}
-          otherCalendars={getSampleSidebarOtherCalendars()}
-          isLoading={sidebarLoading}
-          error={sidebarError}
-          onCalendarItemClick={() => {}}
+            currentDate={currentDate}
+            onDateChange={setCurrentDate}
+            selectedCalendarId={getSampleSidebarMyCalendars()[0].calendarId}
+            myCalendars={getSampleSidebarMyCalendars()}
+            otherCalendars={getSampleSidebarOtherCalendars()}
+            isLoading={sidebarLoading}
+            error={sidebarError}
+            onCalendarItemClick={() => {}}
+            activeEventTypes={activeEventTypes}
+            onToggleActivityType={handleToggleActivityType}
           />
         </div>
 

@@ -8,10 +8,10 @@ import ChatFAB from '@/components/global-chat/ChatFAB';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useTaskData } from '@/hooks/useTaskData';
 import { useProjectStore } from '@/lib/projectStore';
-import TabNav, { type TasksTab } from '@/components/tasks-v2/TabNav';
-import SummaryView from '@/components/tasks-v2/SummaryView';
-import ListView from '@/components/tasks-v2/ListView';
-import BoardView from '@/components/tasks-v2/BoardView';
+import TabNav, { type TasksTab } from '@/components/tasks/TabNav';
+import SummaryView from '@/components/tasks/SummaryView';
+import ListView from '@/components/tasks/ListView';
+import BoardView from '@/components/tasks/BoardView';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const VALID_TABS: TasksTab[] = ['summary', 'tasks', 'board'];

@@ -8,7 +8,7 @@ import Button from '@/components/button/Button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, Minus, Plus, Edit, Trash2, Paperclip, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
-import BrandConfirmDialog from '@/components/campaigns-v2/BrandConfirmDialog';
+import BrandConfirmDialog from '@/components/campaigns/BrandConfirmDialog';
 
 interface CampaignSnapshotsProps {
   campaignId: string;

@@ -8,10 +8,10 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { useProjectStore } from '@/lib/projectStore';
 import { useCampaignData } from '@/hooks/useCampaignData';
-import CampaignListFilters from '@/components/campaigns-v2/CampaignListFilters';
-import CampaignListTable from '@/components/campaigns-v2/CampaignListTable';
-import CreateCampaignDialog from '@/components/campaigns-v2/modals/CreateCampaignDialog';
-import CreateCampaignFromTemplateDialog from '@/components/campaigns-v2/modals/CreateCampaignFromTemplateDialog';
+import CampaignListFilters from '@/components/campaigns/CampaignListFilters';
+import CampaignListTable from '@/components/campaigns/CampaignListTable';
+import CreateCampaignDialog from '@/components/campaigns/modals/CreateCampaignDialog';
+import CreateCampaignFromTemplateDialog from '@/components/campaigns/modals/CreateCampaignFromTemplateDialog';
 
 export default function CampaignsV2Page() {
   const router = useRouter();

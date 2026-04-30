@@ -3,6 +3,7 @@ import { addDays, format, startOfDay } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { CalendarAPI, type CalendarSubscriptionDTO, type EventDTO } from '@/lib/api/calendarApi';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type DayGroup = { dayKey: string; label: string; events: EventDTO[] };
 
@@ -122,8 +123,39 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
 
   if (isLoading) {
     return (
-      <div className="p-4">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#3CCED7]" />
+      <div className="flex-1 flex flex-col">
+        <div className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          Activity
+        </div>
+        <div className="space-y-5 p-3">
+          {[
+            { key: 'messages-activity-skeleton-day-1', cards: [true, false] },
+            { key: 'messages-activity-skeleton-day-2', cards: [false] },
+          ].map((group) => (
+            <div key={group.key}>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600">
+                <Skeleton className="h-3.5 w-3.5 rounded-sm" />
+                <Skeleton className="h-5 w-28" />
+              </div>
+              <div className="mt-2 space-y-3">
+                {group.cards.map((showDescription, index) => (
+                  <div
+                    key={`${group.key}-card-${index}`}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Skeleton className="mt-0.5 h-6 w-16 rounded-sm" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-7 w-40" />
+                        {showDescription ? <Skeleton className="h-5 w-32" /> : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -226,4 +258,3 @@ export default function ActivitySidebarView({ selectedProjectId }: { selectedPro
     </div>
   );
 }
-

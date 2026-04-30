@@ -7,6 +7,8 @@ type CalendarSidebarContainerProps = {
   onVisibleCalendarsChange: (calendarIds: string[] | undefined) => void;
   onDateChange: (next: Date) => void;
   selectedCalendarId: string | null;
+  activeEventTypes: Set<string>;
+  onToggleActivityType: (type: string) => void;
 };
 
 export function CalendarSidebarContainer({
@@ -14,6 +16,8 @@ export function CalendarSidebarContainer({
   onVisibleCalendarsChange,
   onDateChange,
   selectedCalendarId,
+  activeEventTypes,
+  onToggleActivityType,
 }: CalendarSidebarContainerProps) {
   const { myCalendars, otherCalendars, isLoading, error } = useCalendarSidebarData();
 
@@ -58,6 +62,8 @@ export function CalendarSidebarContainer({
       isLoading={isLoading}
       error={error}
       onCalendarItemClick={handleCalendarItemClick}
+      activeEventTypes={activeEventTypes}
+      onToggleActivityType={onToggleActivityType}
     />
   );
 }

@@ -12,7 +12,7 @@ import type {
   CreativeType,
   VariationStatus,
 } from "@/types/adVariation";
-import BrandButton from "@/components/campaigns-v2/BrandButton";
+import BrandButton from "@/components/campaigns/BrandButton";
 import AdVariationStatusPill from "@/components/ad-variations/pills/AdVariationStatusPill";
 import CreativeTypeBadge from "@/components/ad-variations/pills/CreativeTypeBadge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

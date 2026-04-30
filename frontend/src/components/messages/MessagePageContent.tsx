@@ -9,21 +9,17 @@ import { useChatData } from '@/hooks/useChatData';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { useProjectMemberRoles } from '@/hooks/useProjectMemberRoles';
 import { useProjectMembers } from '@/hooks/useProjectMembers';
-import ProjectSelector from './ProjectSelector';
+import { useProjectStore } from '@/lib/projectStore';
 import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
 
-interface MessagePageContentProps {
-  loading?: boolean;
-}
-
-export default function MessagePageContent({
-  loading = false,
-}: MessagePageContentProps) {
+export default function MessagePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore(state => state.user);
+  const activeProject = useProjectStore((s) => s.activeProject);
+  const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreateChannelDialogOpen, setIsCreateChannelDialogOpen] = useState(false);
@@ -53,7 +49,7 @@ export default function MessagePageContent({
   
   // Connect to WebSocket for real-time updates
   const { connected } = useChatSocket(userId, {
-    enabled: !loading,
+    enabled: true,
     onMessage: (message) => {
       console.log('[MessagePage] New message received:', message);
     },
@@ -70,8 +66,6 @@ export default function MessagePageContent({
   const hasFetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (loading) return;
-
     const projectIdParam = searchParams.get('projectId');
     const chatIdParam = searchParams.get('chatId');
     const projectIdFromQuery = projectIdParam ? Number(projectIdParam) : NaN;
@@ -83,6 +77,12 @@ export default function MessagePageContent({
       projectIdFromQuery !== selectedProjectId
     ) {
       setSelectedProjectId(projectIdFromQuery);
+    } else if (
+      !Number.isFinite(projectIdFromQuery) &&
+      activeProject?.id &&
+      activeProject.id !== selectedProjectId
+    ) {
+      setSelectedProjectId(activeProject.id);
     }
 
     if (
@@ -92,7 +92,7 @@ export default function MessagePageContent({
     ) {
       setCurrentChat(chatIdFromQuery);
     }
-  }, [currentChatId, loading, searchParams, selectedProjectId, setCurrentChat]);
+  }, [searchParams, selectedProjectId, currentChatId, setCurrentChat, activeProject?.id]);
 
   const replaceMessagesQuery = useCallback(
     (next: { projectId?: number | null; chatId?: number | null; messageId?: number | null }) => {
@@ -129,7 +129,7 @@ export default function MessagePageContent({
         fetchChats();
       }
     }
-  }, [connected, selectedProjectId, fetchChats]);
+  }, [selectedProjectId, connected, fetchChats]);
   
   // Get current chat from store
   const currentChat = chats.find(chat => chat.id === currentChatId);
@@ -155,13 +155,14 @@ export default function MessagePageContent({
     
     return false;
   });
-  
-  const handleSelectProject = useCallback((projectId: number) => {
-    setSelectedProjectId(projectId);
-    // Clear current chat when switching projects
-    setCurrentChat(null);
-    replaceMessagesQuery({ projectId, chatId: null, messageId: null });
-  }, [replaceMessagesQuery, setCurrentChat]);
+
+  const projectIdFromQuery = searchParams.get('projectId');
+  const parsedProjectIdFromQuery = projectIdFromQuery ? Number(projectIdFromQuery) : NaN;
+  const hasProjectCandidate =
+    (Number.isFinite(parsedProjectIdFromQuery) && parsedProjectIdFromQuery > 0) ||
+    Boolean(activeProject?.id);
+  const projectSelectionLoading =
+    selectedProjectId === null && (!hasProjectStoreHydrated || hasProjectCandidate);
   
   const handleSelectChat = (chatId: number) => {
     setCurrentChat(chatId);
@@ -182,12 +183,10 @@ export default function MessagePageContent({
   };
   
   const handleCreateChat = () => {
-    if (loading) return;
     setIsCreateDialogOpen(true);
   };
 
   const handleCreateChannel = () => {
-    if (loading) return;
     setIsCreateChannelDialogOpen(true);
   };
   
@@ -236,46 +235,34 @@ export default function MessagePageContent({
   }, [selectedProjectId, chats, createNewChat, setCurrentChat, replaceMessagesQuery]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="flex-1 flex flex-col bg-white min-h-0">
       {/* Header */}
       <div
-        className="bg-white border-b border-gray-200 px-6 py-4"
+        className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4"
         data-testid="messages-header"
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-[#3CCED7]" />
-              <h1 className="text-xl font-semibold text-gray-900">Messages</h1>
-            </div>
-            
-            {/* Project Selector */}
-            <ProjectSelector
-              loading={loading}
-              selectedProjectId={selectedProjectId}
-              onSelectProject={handleSelectProject}
-            />
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <MessageSquare className="w-5 h-5 text-[#3CCED7]" />
+          <h1 className="text-lg font-semibold text-gray-900">Messages</h1>
+          {activeProject?.name && (
+            <span className="text-sm text-gray-400 ml-2">· {activeProject.name}</span>
+          )}
         </div>
-        
-        {/* Search Bar */}
-        <div className="mt-4 relative max-w-md">
+        <div className="relative flex-1 max-w-md ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent text-sm"
+            className="w-full pl-10 pr-4 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 focus:border-[#3CCED7] text-sm"
             data-testid="messages-search"
           />
         </div>
       </div>
-      
+
       <SlackMessagesLayout
-        loadingProjects={loading}
         selectedProjectId={selectedProjectId}
-        onSelectProject={handleSelectProject}
         chats={filteredChats}
         currentChatId={currentChatId}
         onSelectChat={handleSelectChat}
@@ -287,19 +274,21 @@ export default function MessagePageContent({
         isLoadingMembers={isLoadingMembers}
         onStartDM={handleStartDM}
         chatListEmptyState={
-          !selectedProjectId ? (
+          selectedProjectId ? (
+            <div className="p-6 text-sm text-gray-500">No chats yet</div>
+          ) : projectSelectionLoading ? null : (
             <div className="flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">Select a project to view chats</p>
               </div>
             </div>
-          ) : (
-            <div className="p-6 text-sm text-gray-500">No chats yet</div>
           )
         }
         chatPanel={
-          !selectedProjectId ? (
+          projectSelectionLoading ? (
+            <div className="flex-1" />
+          ) : !selectedProjectId ? (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
               <div>
                 <MessageSquare className="w-16 h-16 text-gray-200 mx-auto mb-4" />

@@ -19,15 +19,15 @@ import type {
   ZoomPostMeeting,
 } from '@/types/meeting';
 import type { TaskData } from '@/types/task';
-import MeetingDetailHeader from '@/components/meetings-v2/detail/MeetingDetailHeader';
-import OverviewSection from '@/components/meetings-v2/detail/OverviewSection';
-import SchedulePanel from '@/components/meetings-v2/detail/SchedulePanel';
-import ZoomPanel from '@/components/meetings-v2/detail/ZoomPanel';
-import ParticipantsPanel from '@/components/meetings-v2/detail/ParticipantsPanel';
-import AgendaSection from '@/components/meetings-v2/detail/AgendaSection';
-import ActionItemsSection from '@/components/meetings-v2/detail/ActionItemsSection';
-import ContextualKnowledgeSection from '@/components/meetings-v2/detail/ContextualKnowledgeSection';
-import RelatedArtifactsSection from '@/components/meetings-v2/detail/RelatedArtifactsSection';
+import MeetingDetailHeader from '@/components/meetings/detail/MeetingDetailHeader';
+import OverviewSection from '@/components/meetings/detail/OverviewSection';
+import SchedulePanel from '@/components/meetings/detail/SchedulePanel';
+import ZoomPanel from '@/components/meetings/detail/ZoomPanel';
+import ParticipantsPanel from '@/components/meetings/detail/ParticipantsPanel';
+import AgendaSection from '@/components/meetings/detail/AgendaSection';
+import ActionItemsSection from '@/components/meetings/detail/ActionItemsSection';
+import ContextualKnowledgeSection from '@/components/meetings/detail/ContextualKnowledgeSection';
+import RelatedArtifactsSection from '@/components/meetings/detail/RelatedArtifactsSection';
 
 interface Member {
   id: number;

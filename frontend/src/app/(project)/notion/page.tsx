@@ -6,8 +6,8 @@ import { Notebook, Plus, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import NotionDraftCard from '@/components/notion-v2/NotionDraftCard';
-import ConfirmDialog from '@/components/tasks-v2/detail/ConfirmDialog';
+import NotionDraftCard from '@/components/notion/NotionDraftCard';
+import ConfirmDialog from '@/components/tasks/detail/ConfirmDialog';
 import { NotionDraftAPI } from '@/lib/api/notionDraftApi';
 import type { DraftStatus, DraftSummary } from '@/types/notion';
 

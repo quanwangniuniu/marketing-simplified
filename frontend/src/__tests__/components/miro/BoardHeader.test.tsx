@@ -46,9 +46,9 @@ describe('BoardHeader Component', () => {
     test('renders all control buttons', () => {
       render(<BoardHeader {...defaultProps} />);
       expect(screen.getByTitle('Back to Boards')).toBeInTheDocument();
-      expect(screen.getByTitle('Zoom Out')).toBeInTheDocument();
-      expect(screen.getByTitle('Zoom In')).toBeInTheDocument();
-      expect(screen.getByTitle('Fit to Screen')).toBeInTheDocument();
+      expect(screen.getByTitle('Zoom out')).toBeInTheDocument();
+      expect(screen.getByTitle('Zoom in')).toBeInTheDocument();
+      expect(screen.getByTitle('Fit to screen')).toBeInTheDocument();
     });
   });
 
@@ -79,7 +79,7 @@ describe('BoardHeader Component', () => {
       const onZoomIn = jest.fn();
       render(<BoardHeader {...defaultProps} onZoomIn={onZoomIn} />);
       
-      const zoomInButton = screen.getByTitle('Zoom In');
+      const zoomInButton = screen.getByTitle('Zoom in');
       fireEvent.click(zoomInButton);
       
       expect(onZoomIn).toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('BoardHeader Component', () => {
       const onZoomOut = jest.fn();
       render(<BoardHeader {...defaultProps} onZoomOut={onZoomOut} />);
       
-      const zoomOutButton = screen.getByTitle('Zoom Out');
+      const zoomOutButton = screen.getByTitle('Zoom out');
       fireEvent.click(zoomOutButton);
       
       expect(onZoomOut).toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('BoardHeader Component', () => {
       const onFitToScreen = jest.fn();
       render(<BoardHeader {...defaultProps} onFitToScreen={onFitToScreen} />);
       
-      const fitButton = screen.getByTitle('Fit to Screen');
+      const fitButton = screen.getByTitle('Fit to screen');
       fireEvent.click(fitButton);
       
       expect(onFitToScreen).toHaveBeenCalled();
@@ -116,20 +116,20 @@ describe('BoardHeader Component', () => {
       const onSave = jest.fn();
       render(<BoardHeader {...defaultProps} onSave={onSave} />);
       
-      expect(screen.getByTitle('Save')).toBeInTheDocument();
+      expect(screen.getByTitle('Save snapshot')).toBeInTheDocument();
     });
 
     test('does not render save button when onSave not provided', () => {
       render(<BoardHeader {...defaultProps} />);
       
-      expect(screen.queryByTitle('Save')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Save snapshot')).not.toBeInTheDocument();
     });
 
     test('calls onSave when save button clicked', () => {
       const onSave = jest.fn();
       render(<BoardHeader {...defaultProps} onSave={onSave} />);
       
-      const saveButton = screen.getByTitle('Save');
+      const saveButton = screen.getByTitle('Save snapshot');
       fireEvent.click(saveButton);
       
       expect(onSave).toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe('BoardHeader Component', () => {
     test('disables save button when isSaving is true', () => {
       render(<BoardHeader {...defaultProps} onSave={jest.fn()} isSaving={true} />);
       
-      const saveButton = screen.getByTitle('Save');
+      const saveButton = screen.getByTitle('Save snapshot');
       expect(saveButton).toBeDisabled();
     });
   });
@@ -211,19 +211,15 @@ describe('BoardHeader Component', () => {
   });
 
   describe('Navigation', () => {
-    test('back button calls router.back', () => {
-      const mockBack = jest.fn();
-      jest.spyOn(require('next/navigation'), 'useRouter').mockReturnValue({
-        back: mockBack,
-      });
-      
-      render(<BoardHeader {...defaultProps} />);
-      
+    test('back button calls onBack', () => {
+      const onBack = jest.fn();
+
+      render(<BoardHeader {...defaultProps} onBack={onBack} />);
+
       const backButton = screen.getByTitle('Back to Boards');
       fireEvent.click(backButton);
-      
-      expect(mockBack).toHaveBeenCalled();
+
+      expect(onBack).toHaveBeenCalled();
     });
   });
 });
-

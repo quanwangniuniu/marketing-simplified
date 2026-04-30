@@ -516,7 +516,7 @@ export function MeetingSummaryPanel({
                 </Button>
                 {!zoomStatusLoading && !zoomConnected && (
                   <Link
-                    href="/settings?open_zoom=1"
+                    href="/integrations?open_zoom=1"
                     className="flex items-center justify-center gap-1 text-xs text-slate-500 transition-colors hover:text-[#3CCED7]"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Users, UserPlus, Mail, Shield, Trash2, Loader2, Crown, Check, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import InlineSelect from '@/components/tasks-v2/detail/InlineSelect';
+import InlineSelect from '@/components/tasks/detail/InlineSelect';
 import {
   ProjectAPI,
   type ProjectMemberData,

@@ -90,8 +90,8 @@ export default function OutlineSidebar({
         items.map((item) => {
           const isActive = activeId === item.id;
           const isHovered = hoveredId === item.id && !isActive;
-          const bgStyle = isActive ? 'rgba(239, 246, 255, 0.5)' : isHovered ? '#f3f4f6' : 'transparent';
-          const barColor = isActive ? '#3b82f6' : 'transparent';
+          const bgStyle = isActive ? 'rgba(60, 206, 215, 0.08)' : isHovered ? '#f3f4f6' : 'transparent';
+          const barColor = isActive ? '#3CCED7' : 'transparent';
           const fontWeight = isActive ? 600 : 400;
           const textColor = isActive ? '#111' : '#6b7280';
           return (
@@ -108,7 +108,7 @@ export default function OutlineSidebar({
                 paddingLeft: 0,
                 margin: 0,
                 border: 'none',
-                borderLeft: isActive ? '2px solid #3b82f6' : '2px solid transparent',
+                borderLeft: isActive ? '2px solid #3CCED7' : '2px solid transparent',
                 background: bgStyle,
                 cursor: 'pointer',
                 textAlign: 'left',
