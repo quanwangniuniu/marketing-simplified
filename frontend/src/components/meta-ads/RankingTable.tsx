@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import AdActionMenu from "./AdActionMenu";
-import AdNoteIndicator from "./AdNoteIndicator";
 import {
   formatCurrency,
   formatPercent,
@@ -48,7 +47,6 @@ interface RankingTableProps {
   selection?: RankingTableSelection;
   adAccountId: number;
   days: number;
-  projectId: number | null;
 }
 
 interface RankedRow {
@@ -65,7 +63,6 @@ export default function RankingTable({
   selection,
   adAccountId,
   days,
-  projectId,
 }: RankingTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -174,7 +171,6 @@ export default function RankingTable({
                   atCap={atCap}
                   adAccountId={adAccountId}
                   days={days}
-                  projectId={projectId}
                 />
               ))
             )}
@@ -205,7 +201,6 @@ function Row({
   atCap,
   adAccountId,
   days,
-  projectId,
 }: {
   row: MetaAdPerformanceRow;
   score: number;
@@ -215,7 +210,6 @@ function Row({
   atCap?: boolean;
   adAccountId: number;
   days: number;
-  projectId: number | null;
 }) {
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
@@ -279,10 +273,6 @@ function Row({
           <span className="truncate text-xs font-medium text-gray-900">
             {row.name || row.meta_ad_id}
           </span>
-          <AdNoteIndicator
-            adAccountId={adAccountId}
-            adMetaId={row.meta_ad_id}
-          />
           {isLearning && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
               Learning
@@ -355,7 +345,6 @@ function Row({
           ads={[row]}
           adAccountId={adAccountId}
           days={days}
-          projectId={projectId}
         />
       </td>
     </tr>

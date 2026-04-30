@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
-import { useProjectStore } from "@/lib/projectStore";
 import {
   facebookApi,
   type MetaAdPerformanceRow,
@@ -140,9 +139,6 @@ export default function RankingPanel({
   const [rows, setRows] = useState<MetaAdPerformanceRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const projectId = useProjectStore(
-    (state) => state.activeProject?.id ?? null
-  );
 
   const lastSyncedSearchRef = useRef<string>("");
 
@@ -302,7 +298,6 @@ export default function RankingPanel({
           ads={selectedAds}
           adAccountId={adAccountId}
           days={filters.days}
-          projectId={projectId}
         />
       )}
     </div>
@@ -326,7 +321,6 @@ export default function RankingPanel({
         loading={loading}
         adAccountId={adAccountId}
         days={filters.days}
-        projectId={projectId}
         selection={{
           selectedIds,
           onToggle: toggleSelected,
