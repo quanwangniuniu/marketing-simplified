@@ -9,10 +9,11 @@ import csv
 import datetime as _dt
 import secrets as _secrets
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.db.models import IntegerField, OuterRef, Subquery, Sum
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
@@ -20,7 +21,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.models import Project
 from facebook_integration.models import MetaAdAccount
+from spreadsheet.models import (
+    Cell,
+    CellValueType,
+    ComputedCellType,
+    Sheet,
+    SheetColumn,
+    SheetRow,
+)
+from spreadsheet.services import SheetService, SpreadsheetService
 
 from .meta_client import MetaApiError, graph_get
 from .models import (
@@ -63,6 +74,41 @@ class MetaCampaignListView(APIView):
         return Response(MetaCampaignSerializer(qs, many=True).data)
 
 
+def _build_campaign_perf_queryset(
+    *,
+    ad_account: MetaAdAccount,
+    since: _dt.date,
+    today: _dt.date,
+    ids: list[int] | None = None,
+):
+    """Annotated, scoped queryset for campaign-level performance reads.
+
+    Both the JSON perf endpoint and the new CSV / Spreadsheet exports call
+    this. When `ids` is non-empty the returned queryset is restricted to
+    those campaign primary keys; otherwise every campaign in the account
+    is returned and the caller filters/sorts as needed.
+    """
+    window_q = models.Q(
+        adsets__ads__insights_daily__date__gte=since,
+        adsets__ads__insights_daily__date__lte=today,
+    )
+    qs = MetaCampaign.objects.filter(ad_account=ad_account).annotate(
+        total_spend=Sum("adsets__ads__insights_daily__spend", filter=window_q),
+        total_impressions=Sum(
+            "adsets__ads__insights_daily__impressions", filter=window_q
+        ),
+        total_clicks=Sum("adsets__ads__insights_daily__clicks", filter=window_q),
+        total_leads=Sum("adsets__ads__insights_daily__leads", filter=window_q),
+        total_purchases=Sum(
+            "adsets__ads__insights_daily__purchases", filter=window_q
+        ),
+        total_revenue=Sum("adsets__ads__insights_daily__revenue", filter=window_q),
+    )
+    if ids:
+        qs = qs.filter(id__in=ids)
+    return qs
+
+
 class MetaCampaignPerformanceView(APIView):
     """Per-campaign aggregates over a trailing window.
 
@@ -85,49 +131,8 @@ class MetaCampaignPerformanceView(APIView):
         today = _dt.date.today()
         since = today - _dt.timedelta(days=days - 1)
 
-        qs = MetaCampaign.objects.filter(ad_account=ad_account).annotate(
-            total_spend=Sum(
-                "adsets__ads__insights_daily__spend",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_impressions=Sum(
-                "adsets__ads__insights_daily__impressions",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_clicks=Sum(
-                "adsets__ads__insights_daily__clicks",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_leads=Sum(
-                "adsets__ads__insights_daily__leads",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_purchases=Sum(
-                "adsets__ads__insights_daily__purchases",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_revenue=Sum(
-                "adsets__ads__insights_daily__revenue",
-                filter=models.Q(
-                    adsets__ads__insights_daily__date__gte=since,
-                    adsets__ads__insights_daily__date__lte=today,
-                ),
-            ),
+        qs = _build_campaign_perf_queryset(
+            ad_account=ad_account, since=since, today=today
         )
 
         rows = []
@@ -363,6 +368,86 @@ class MetaSyncRunListView(APIView):
         return Response(MetaSyncRunSerializer(qs, many=True).data)
 
 
+def _build_creative_perf_queryset(
+    *,
+    ad_account: MetaAdAccount,
+    since: _dt.date,
+    today: _dt.date,
+    ids: list[int] | None = None,
+    include_inactive: bool = False,
+    include_shared_creatives: bool = False,
+    min_impressions: int = 0,
+    min_spend: Decimal = Decimal("0"),
+    min_days_with_data: int = 0,
+):
+    """Annotated, scoped, filtered queryset for creative-level perf reads.
+
+    Both the JSON leaderboard endpoint and the new CSV / Spreadsheet exports
+    call this. When `ids` is non-empty the activity / shared / data-quality
+    filters are bypassed because the caller has explicitly picked those
+    creatives. Orphan creatives (zero ad references) are always excluded
+    even in `ids` mode because they have no measurable performance.
+    """
+    window_q = models.Q(
+        ads__insights_daily__date__gte=since,
+        ads__insights_daily__date__lte=today,
+    )
+    qs = MetaAdCreative.objects.filter(ad_account=ad_account).annotate(
+        total_spend=Sum("ads__insights_daily__spend", filter=window_q),
+        total_impressions=Sum(
+            "ads__insights_daily__impressions", filter=window_q
+        ),
+        total_clicks=Sum("ads__insights_daily__clicks", filter=window_q),
+        total_leads=Sum("ads__insights_daily__leads", filter=window_q),
+        total_calls=Sum("ads__insights_daily__calls", filter=window_q),
+        total_purchases=Sum(
+            "ads__insights_daily__purchases", filter=window_q
+        ),
+        total_messages=Sum("ads__insights_daily__messages", filter=window_q),
+        total_revenue=Sum("ads__insights_daily__revenue", filter=window_q),
+        total_video_p25=Sum(
+            "ads__insights_daily__video_p25", filter=window_q
+        ),
+        total_video_p50=Sum(
+            "ads__insights_daily__video_p50", filter=window_q
+        ),
+        total_video_p75=Sum(
+            "ads__insights_daily__video_p75", filter=window_q
+        ),
+        total_video_p100=Sum(
+            "ads__insights_daily__video_p100", filter=window_q
+        ),
+        total_video_3sec=Sum(
+            "ads__insights_daily__video_3sec_count", filter=window_q
+        ),
+        total_lpv=Sum("ads__insights_daily__lpv_count", filter=window_q),
+        total_comments=Sum(
+            "ads__insights_daily__comment_count", filter=window_q
+        ),
+        n_days_with_data=models.Count(
+            "ads__insights_daily",
+            filter=window_q
+            & models.Q(ads__insights_daily__impressions__gt=0),
+        ),
+        ad_count=models.Count("ads", distinct=True),
+    ).filter(ad_count__gte=1)
+
+    if ids:
+        qs = qs.filter(id__in=ids)
+    else:
+        if not include_shared_creatives:
+            qs = qs.filter(ad_count=1)
+        if not include_inactive:
+            qs = qs.filter(total_impressions__gt=0)
+        if min_impressions > 0:
+            qs = qs.filter(total_impressions__gte=min_impressions)
+        if min_spend > 0:
+            qs = qs.filter(total_spend__gte=min_spend)
+        if min_days_with_data > 0:
+            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
+    return qs
+
+
 class MetaCreativePerformanceView(APIView):
     """Creative-level leaderboard with hook/hold rates + core perf.
 
@@ -413,136 +498,16 @@ class MetaCreativePerformanceView(APIView):
             request, "include_shared_creatives", default=False
         )
 
-        qs = MetaAdCreative.objects.filter(ad_account=ad_account).annotate(
-            total_spend=Sum(
-                "ads__insights_daily__spend",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_impressions=Sum(
-                "ads__insights_daily__impressions",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_clicks=Sum(
-                "ads__insights_daily__clicks",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_leads=Sum(
-                "ads__insights_daily__leads",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_calls=Sum(
-                "ads__insights_daily__calls",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_purchases=Sum(
-                "ads__insights_daily__purchases",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_messages=Sum(
-                "ads__insights_daily__messages",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_revenue=Sum(
-                "ads__insights_daily__revenue",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_video_p25=Sum(
-                "ads__insights_daily__video_p25",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_video_p50=Sum(
-                "ads__insights_daily__video_p50",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_video_p75=Sum(
-                "ads__insights_daily__video_p75",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_video_p100=Sum(
-                "ads__insights_daily__video_p100",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_video_3sec=Sum(
-                "ads__insights_daily__video_3sec_count",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_lpv=Sum(
-                "ads__insights_daily__lpv_count",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            total_comments=Sum(
-                "ads__insights_daily__comment_count",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                ),
-            ),
-            n_days_with_data=models.Count(
-                "ads__insights_daily",
-                filter=models.Q(
-                    ads__insights_daily__date__gte=since,
-                    ads__insights_daily__date__lte=today,
-                    ads__insights_daily__impressions__gt=0,
-                ),
-            ),
-            ad_count=models.Count("ads", distinct=True),
+        qs = _build_creative_perf_queryset(
+            ad_account=ad_account,
+            since=since,
+            today=today,
+            include_inactive=include_inactive,
+            include_shared_creatives=include_shared_creatives,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
         )
-
-        # Orphan exclusion (always on): creatives with no ad references
-        # have no measurable performance and only pollute the leaderboard.
-        qs = qs.filter(ad_count__gte=1)
-        if not include_shared_creatives:
-            qs = qs.filter(ad_count=1)
-        if not include_inactive:
-            qs = qs.filter(total_impressions__gt=0)
-        if min_impressions > 0:
-            qs = qs.filter(total_impressions__gte=min_impressions)
-        if min_spend > 0:
-            qs = qs.filter(total_spend__gte=min_spend)
-        if min_days_with_data > 0:
-            qs = qs.filter(n_days_with_data__gte=min_days_with_data)
 
         rows = []
         for cr in qs:
@@ -1273,6 +1238,648 @@ class MetaAdExportCsvView(APIView):
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+
+CREATIVE_CSV_EXPORT_HEADER: tuple[str, ...] = (
+    "Creative ID",
+    "Creative Name",
+    "Title",
+    "Body",
+    "Object Type",
+    "Call To Action",
+    "Spend (account currency)",
+    "Impressions",
+    "Clicks",
+    "Days with data",
+    "ROAS",
+    "CPA",
+    "CVR",
+    "Hook Rate (strict)",
+    "Hold Rate",
+    "CTR",
+    "Completion Rate",
+    "LPV Count",
+    "Comment Count",
+    "3-sec Views",
+    "Total Events",
+    "In Learning",
+    "Ad Count",
+)
+
+
+CAMPAIGN_CSV_EXPORT_HEADER: tuple[str, ...] = (
+    "Campaign ID",
+    "Campaign Name",
+    "Objective",
+    "Status",
+    "Spend (account currency)",
+    "Impressions",
+    "Clicks",
+    "Leads",
+    "Purchases",
+    "Revenue",
+    "ROAS",
+    "CPA",
+    "CVR",
+    "CTR",
+    "CPC",
+    "CPM",
+)
+
+
+def _csv_row_for_creative(cr, days: int) -> tuple[str, ...]:
+    """Build the CSV row tuple for one annotated MetaAdCreative."""
+    spend = cr.total_spend or Decimal("0")
+    rev = cr.total_revenue or Decimal("0")
+    imp = cr.total_impressions or 0
+    clicks = cr.total_clicks or 0
+    leads = cr.total_leads or 0
+    calls = cr.total_calls or 0
+    purchases = cr.total_purchases or 0
+    messages = cr.total_messages or 0
+    p25 = cr.total_video_p25 or 0
+    p75 = cr.total_video_p75 or 0
+    p100 = cr.total_video_p100 or 0
+    v3 = cr.total_video_3sec or 0
+    lpv = cr.total_lpv or 0
+    comments = cr.total_comments or 0
+    days_with_data = cr.n_days_with_data or 0
+    total_events = leads + calls + purchases + messages
+    if days < 7:
+        is_in_learning = None
+    else:
+        is_in_learning = (total_events * 7) < (50 * days)
+
+    if clicks:
+        cvr_cell = _csv_decimal4(
+            Decimal(str(purchases)) / Decimal(str(clicks))
+        )
+    else:
+        cvr_cell = ""
+
+    return (
+        cr.meta_creative_id,
+        cr.name,
+        cr.title,
+        cr.body,
+        cr.object_type,
+        cr.call_to_action_type,
+        _csv_money(spend),
+        _csv_int(imp),
+        _csv_int(clicks),
+        _csv_int(days_with_data),
+        _csv_decimal4(_safe_ratio(rev, spend)),
+        _csv_decimal4(_safe_ratio(spend, purchases)),
+        cvr_cell,
+        _csv_decimal4(_safe_ratio(v3, imp) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(p75, p25) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(clicks, imp) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(p100, p25) * Decimal("100")),
+        _csv_int(lpv),
+        _csv_int(comments),
+        _csv_int(v3),
+        _csv_int(total_events),
+        _csv_yes_no_blank(is_in_learning),
+        _csv_int(cr.ad_count or 0),
+    )
+
+
+def _csv_row_for_campaign(camp) -> tuple[str, ...]:
+    """Build the CSV row tuple for one annotated MetaCampaign."""
+    spend = camp.total_spend or Decimal("0")
+    rev = camp.total_revenue or Decimal("0")
+    imp = camp.total_impressions or 0
+    clicks = camp.total_clicks or 0
+    leads = camp.total_leads or 0
+    purchases = camp.total_purchases or 0
+
+    if clicks:
+        cvr_cell = _csv_decimal4(
+            Decimal(str(purchases)) / Decimal(str(clicks))
+        )
+    else:
+        cvr_cell = ""
+
+    return (
+        camp.meta_campaign_id,
+        camp.name,
+        camp.objective,
+        camp.effective_status,
+        _csv_money(spend),
+        _csv_int(imp),
+        _csv_int(clicks),
+        _csv_int(leads),
+        _csv_int(purchases),
+        _csv_money(rev),
+        _csv_decimal4(_safe_ratio(rev, spend)),
+        _csv_decimal4(_safe_ratio(spend, purchases)),
+        cvr_cell,
+        _csv_decimal4(_safe_ratio(clicks, imp) * Decimal("100")),
+        _csv_decimal4(_safe_ratio(spend, clicks)),
+        _csv_decimal4(_safe_ratio(spend, imp) * Decimal("1000")),
+    )
+
+
+def _column_letter(index: int) -> str:
+    """Return the Excel-style column name for a 0-based column index.
+
+    0 -> 'A', 1 -> 'B', 25 -> 'Z', 26 -> 'AA', 27 -> 'AB', and so on.
+    """
+    if index < 0:
+        raise ValueError("column index must be non-negative")
+    letters = ""
+    n = index + 1
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def _classify_cell_value(value: str) -> tuple[str, str | None, Decimal | None]:
+    """Classify a CSV cell string as either a number or a plain string.
+
+    Empty strings stay empty. Anything that parses cleanly as a Decimal is
+    stored as a number; everything else is stored as a string. Booleans
+    and formulas are not auto-detected at this layer.
+    """
+    if value == "":
+        return CellValueType.EMPTY, None, None
+    try:
+        number = Decimal(value)
+    except (InvalidOperation, ValueError):
+        return CellValueType.STRING, value, None
+    return CellValueType.NUMBER, None, number
+
+
+@transaction.atomic
+def _populate_spreadsheet_with_grid(
+    spreadsheet,
+    sheet_name: str,
+    headers: tuple[str, ...],
+    rows: list[tuple[str, ...]],
+):
+    """Create a sheet under `spreadsheet` and populate it with `rows`.
+
+    Row 0 carries the column headers. Subsequent rows carry the data.
+    Columns are named with Excel letters (A, B, C, ...). Cells are
+    classified as number when the string parses as a Decimal, otherwise
+    as string. The whole population happens inside a transaction so a
+    failure leaves no half-built sheet.
+    """
+    sheet = SheetService.create_sheet(spreadsheet, sheet_name)
+
+    column_objects = SheetColumn.objects.bulk_create([
+        SheetColumn(sheet=sheet, name=_column_letter(i), position=i)
+        for i in range(len(headers))
+    ])
+
+    total_rows = 1 + len(rows)
+    row_objects = SheetRow.objects.bulk_create([
+        SheetRow(sheet=sheet, position=i) for i in range(total_rows)
+    ])
+
+    cells: list[Cell] = []
+    # Header row.
+    for col_index, header in enumerate(headers):
+        cells.append(
+            Cell(
+                sheet=sheet,
+                row=row_objects[0],
+                column=column_objects[col_index],
+                value_type=CellValueType.STRING,
+                string_value=header,
+                computed_type=ComputedCellType.STRING,
+                computed_string=header,
+                raw_input=header,
+            )
+        )
+    # Data rows.
+    for data_index, row_values in enumerate(rows):
+        sheet_row = row_objects[data_index + 1]
+        for col_index, value in enumerate(row_values):
+            value_type, string_value, number_value = _classify_cell_value(value)
+            if value_type == CellValueType.EMPTY:
+                cells.append(
+                    Cell(
+                        sheet=sheet,
+                        row=sheet_row,
+                        column=column_objects[col_index],
+                        value_type=CellValueType.EMPTY,
+                        computed_type=ComputedCellType.EMPTY,
+                        raw_input="",
+                    )
+                )
+            elif value_type == CellValueType.NUMBER:
+                cells.append(
+                    Cell(
+                        sheet=sheet,
+                        row=sheet_row,
+                        column=column_objects[col_index],
+                        value_type=CellValueType.NUMBER,
+                        number_value=number_value,
+                        computed_type=ComputedCellType.NUMBER,
+                        computed_number=number_value,
+                        raw_input=value,
+                    )
+                )
+            else:
+                cells.append(
+                    Cell(
+                        sheet=sheet,
+                        row=sheet_row,
+                        column=column_objects[col_index],
+                        value_type=CellValueType.STRING,
+                        string_value=string_value,
+                        computed_type=ComputedCellType.STRING,
+                        computed_string=string_value,
+                        raw_input=value,
+                    )
+                )
+    Cell.objects.bulk_create(cells, batch_size=1000)
+    return sheet
+
+
+def _resolve_export_project(request) -> Project | None:
+    """Read project_id from query params and return the Project, or None."""
+    raw = request.query_params.get("project_id")
+    if not raw:
+        return None
+    try:
+        project_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    try:
+        return Project.objects.get(pk=project_id, is_deleted=False)
+    except Project.DoesNotExist:
+        return None
+
+
+class MetaCreativePerformanceCsvExportView(APIView):
+    """Stream a CSV of per-creative performance, mirroring the ad-level export.
+
+    Accepts the same filter shape as MetaCreativePerformanceView plus an
+    optional `ids` query param so the frontend can export only the creatives
+    the buyer has selected.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def get(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        days = _normalize_days(
+            request.query_params.get("days"), self.ALLOWED_DAYS, default=28
+        )
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        ids = _parse_ids(request.query_params.get("ids", ""))
+        include_inactive = _parse_qp_bool(
+            request, "include_inactive", default=False
+        )
+        include_shared_creatives = _parse_qp_bool(
+            request, "include_shared_creatives", default=False
+        )
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+
+        qs = _build_creative_perf_queryset(
+            ad_account=ad_account,
+            since=since,
+            today=today,
+            ids=ids,
+            include_inactive=include_inactive,
+            include_shared_creatives=include_shared_creatives,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
+        )
+
+        creatives = list(qs)
+        if not ids and min_events > 0:
+            creatives = [
+                c
+                for c in creatives
+                if (
+                    (c.total_leads or 0)
+                    + (c.total_calls or 0)
+                    + (c.total_purchases or 0)
+                    + (c.total_messages or 0)
+                )
+                >= min_events
+            ]
+        if ids:
+            order_index = {pk: i for i, pk in enumerate(ids)}
+            creatives.sort(key=lambda c: order_index[c.id])
+        else:
+            creatives.sort(
+                key=lambda c: c.total_spend or Decimal("0"), reverse=True
+            )
+
+        pseudo = _CsvEcho()
+        writer = csv.writer(pseudo)
+
+        def stream():
+            yield writer.writerow(CREATIVE_CSV_EXPORT_HEADER)
+            for cr in creatives:
+                yield writer.writerow(_csv_row_for_creative(cr, days))
+
+        ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        filename = f"meta-creatives-{ad_account.id}-{days}d-{ts}.csv"
+        response = StreamingHttpResponse(
+            stream(), content_type="text/csv; charset=utf-8"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class MetaCampaignPerformanceCsvExportView(APIView):
+    """Stream a CSV of per-campaign performance.
+
+    Accepts an optional `ids` query param so the frontend can scope the
+    export to selected campaigns.
+    """
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def get(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        days = _normalize_days(
+            request.query_params.get("days"), self.ALLOWED_DAYS, default=28
+        )
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+        ids = _parse_ids(request.query_params.get("ids", ""))
+
+        qs = _build_campaign_perf_queryset(
+            ad_account=ad_account, since=since, today=today, ids=ids
+        )
+
+        campaigns = list(qs)
+        if ids:
+            order_index = {pk: i for i, pk in enumerate(ids)}
+            campaigns.sort(key=lambda c: order_index[c.id])
+        else:
+            campaigns.sort(
+                key=lambda c: c.total_spend or Decimal("0"), reverse=True
+            )
+
+        pseudo = _CsvEcho()
+        writer = csv.writer(pseudo)
+
+        def stream():
+            yield writer.writerow(CAMPAIGN_CSV_EXPORT_HEADER)
+            for camp in campaigns:
+                yield writer.writerow(_csv_row_for_campaign(camp))
+
+        ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        filename = f"meta-campaigns-{ad_account.id}-{days}d-{ts}.csv"
+        response = StreamingHttpResponse(
+            stream(), content_type="text/csv; charset=utf-8"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+def _build_export_to_spreadsheet_response(
+    *,
+    request,
+    project: Project,
+    sheet_name: str,
+    headers: tuple[str, ...],
+    rows: list[tuple[str, ...]],
+):
+    """Common Spreadsheet-creation path for the three export endpoints.
+
+    Validates and pulls the requested name out of the body, creates a
+    Spreadsheet via SpreadsheetService.create_spreadsheet, then writes a
+    populated sheet under it and returns the 201 envelope.
+    """
+    raw_name = request.data.get("name") if hasattr(request, "data") else None
+    name = (raw_name or "").strip()
+    if not name:
+        return Response(
+            {"detail": "name is required."}, status=400
+        )
+    try:
+        spreadsheet = SpreadsheetService.create_spreadsheet(
+            project=project, name=name
+        )
+    except ValidationError as err:
+        return Response(
+            {"detail": err.messages[0] if err.messages else str(err)},
+            status=400,
+        )
+    _populate_spreadsheet_with_grid(spreadsheet, sheet_name, headers, rows)
+    return Response(
+        {
+            "id": spreadsheet.id,
+            "name": spreadsheet.name,
+            "url": f"/spreadsheets/{spreadsheet.id}",
+        },
+        status=201,
+    )
+
+
+class MetaAdExportToSpreadsheetView(APIView):
+    """Create a populated Spreadsheet from an ad-level export query."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def post(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        project = _resolve_export_project(request)
+        if project is None:
+            return Response(
+                {"detail": "project_id is required."}, status=400
+            )
+        days = _normalize_days(
+            request.query_params.get("days"), self.ALLOWED_DAYS, default=28
+        )
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        ids = _parse_ids(request.query_params.get("ids", ""))
+        include_inactive = _parse_qp_bool(
+            request, "include_inactive", default=False
+        )
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+
+        qs = _build_ad_perf_queryset(
+            ad_account=ad_account,
+            days=days,
+            since=since,
+            today=today,
+            ids=ids,
+            include_inactive=include_inactive,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
+        )
+        qs = qs.annotate(
+            creative_ad_count=Subquery(
+                MetaAd.objects.filter(
+                    creative_id=OuterRef("creative_id"),
+                    adset__campaign__ad_account=ad_account,
+                )
+                .values("creative_id")
+                .annotate(reuse=models.Count("id"))
+                .values("reuse"),
+                output_field=IntegerField(),
+            )
+        )
+
+        ads = list(qs)
+        if not ids and min_events > 0:
+            ads = [
+                a
+                for a in ads
+                if (
+                    (a.total_leads or 0)
+                    + (a.total_calls or 0)
+                    + (a.total_purchases or 0)
+                    + (a.total_messages or 0)
+                )
+                >= min_events
+            ]
+        if ids:
+            order_index = {pk: i for i, pk in enumerate(ids)}
+            ads.sort(key=lambda a: order_index[a.id])
+        else:
+            ads.sort(key=lambda a: a.total_spend or Decimal("0"), reverse=True)
+
+        rows = [_csv_row_for_ad(ad, days) for ad in ads]
+        return _build_export_to_spreadsheet_response(
+            request=request,
+            project=project,
+            sheet_name="Ads",
+            headers=CSV_EXPORT_HEADER,
+            rows=rows,
+        )
+
+
+class MetaCreativeExportToSpreadsheetView(APIView):
+    """Create a populated Spreadsheet from a creative-level export query."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def post(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        project = _resolve_export_project(request)
+        if project is None:
+            return Response(
+                {"detail": "project_id is required."}, status=400
+            )
+        days = _normalize_days(
+            request.query_params.get("days"), self.ALLOWED_DAYS, default=28
+        )
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+
+        ids = _parse_ids(request.query_params.get("ids", ""))
+        include_inactive = _parse_qp_bool(
+            request, "include_inactive", default=False
+        )
+        include_shared_creatives = _parse_qp_bool(
+            request, "include_shared_creatives", default=False
+        )
+        min_impressions = _parse_qp_int(request, "min_impressions")
+        min_events = _parse_qp_int(request, "min_events")
+        min_days_with_data = _parse_qp_int(request, "min_days_with_data")
+        min_spend = _parse_qp_decimal(request, "min_spend")
+
+        qs = _build_creative_perf_queryset(
+            ad_account=ad_account,
+            since=since,
+            today=today,
+            ids=ids,
+            include_inactive=include_inactive,
+            include_shared_creatives=include_shared_creatives,
+            min_impressions=min_impressions,
+            min_spend=min_spend,
+            min_days_with_data=min_days_with_data,
+        )
+
+        creatives = list(qs)
+        if not ids and min_events > 0:
+            creatives = [
+                c
+                for c in creatives
+                if (
+                    (c.total_leads or 0)
+                    + (c.total_calls or 0)
+                    + (c.total_purchases or 0)
+                    + (c.total_messages or 0)
+                )
+                >= min_events
+            ]
+        if ids:
+            order_index = {pk: i for i, pk in enumerate(ids)}
+            creatives.sort(key=lambda c: order_index[c.id])
+        else:
+            creatives.sort(
+                key=lambda c: c.total_spend or Decimal("0"), reverse=True
+            )
+
+        rows = [_csv_row_for_creative(cr, days) for cr in creatives]
+        return _build_export_to_spreadsheet_response(
+            request=request,
+            project=project,
+            sheet_name="Creatives",
+            headers=CREATIVE_CSV_EXPORT_HEADER,
+            rows=rows,
+        )
+
+
+class MetaCampaignExportToSpreadsheetView(APIView):
+    """Create a populated Spreadsheet from a campaign-level export query."""
+
+    permission_classes = [IsAuthenticated]
+    ALLOWED_DAYS = {1, 2, 3, 7, 14, 28, 30}
+
+    def post(self, request, ad_account_id: int):
+        ad_account = _user_ad_account(request, ad_account_id)
+        project = _resolve_export_project(request)
+        if project is None:
+            return Response(
+                {"detail": "project_id is required."}, status=400
+            )
+        days = _normalize_days(
+            request.query_params.get("days"), self.ALLOWED_DAYS, default=28
+        )
+        today = _dt.date.today()
+        since = today - _dt.timedelta(days=days - 1)
+        ids = _parse_ids(request.query_params.get("ids", ""))
+
+        qs = _build_campaign_perf_queryset(
+            ad_account=ad_account, since=since, today=today, ids=ids
+        )
+
+        campaigns = list(qs)
+        if ids:
+            order_index = {pk: i for i, pk in enumerate(ids)}
+            campaigns.sort(key=lambda c: order_index[c.id])
+        else:
+            campaigns.sort(
+                key=lambda c: c.total_spend or Decimal("0"), reverse=True
+            )
+
+        rows = [_csv_row_for_campaign(camp) for camp in campaigns]
+        return _build_export_to_spreadsheet_response(
+            request=request,
+            project=project,
+            sheet_name="Campaigns",
+            headers=CAMPAIGN_CSV_EXPORT_HEADER,
+            rows=rows,
+        )
 
 
 class MetaCreativeDetailView(APIView):

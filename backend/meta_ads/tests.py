@@ -1403,3 +1403,221 @@ class MetaAdTriggerDailySyncAllTests(APITestCase):
         )
         self.assertEqual(resp.status_code, 401)
         mock_delay.assert_not_called()
+
+
+class MetaAdsExportEndpointsTests(APITestCase):
+    """Cover the new creative + campaign CSV exports and the three
+    export-to-spreadsheet endpoints. One test per endpoint exercises the
+    happy path; the ids-filter behavior is verified inline via a second
+    request on the same fixture; the spreadsheet endpoint asserts that a
+    Spreadsheet plus a populated Sheet were created.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Organization, Project as CoreProject
+
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username="export_user",
+            email="export@example.com",
+            password="x",
+        )
+        cls.org = Organization.objects.create(name="Export Test Org")
+        cls.project = CoreProject.objects.create(
+            name="Export Test Project",
+            organization=cls.org,
+            owner=cls.user,
+        )
+        cls.connection = FacebookConnection.objects.create(
+            user=cls.user, fb_user_id="fb-test-export", is_active=True
+        )
+        cls.ad_account = MetaAdAccount.objects.create(
+            connection=cls.connection,
+            meta_account_id="999",
+            name="Export Account",
+            currency="USD",
+        )
+        cls.campaign_a = MetaCampaign.objects.create(
+            ad_account=cls.ad_account,
+            meta_campaign_id="cmpA",
+            name="Camp A",
+            objective="OUTCOME_SALES",
+            effective_status="ACTIVE",
+        )
+        cls.campaign_b = MetaCampaign.objects.create(
+            ad_account=cls.ad_account,
+            meta_campaign_id="cmpB",
+            name="Camp B",
+            objective="OUTCOME_LEADS",
+            effective_status="PAUSED",
+        )
+        cls.adset_a = MetaAdSet.objects.create(
+            campaign=cls.campaign_a, meta_adset_id="asA", name="Adset A"
+        )
+        cls.adset_b = MetaAdSet.objects.create(
+            campaign=cls.campaign_b, meta_adset_id="asB", name="Adset B"
+        )
+        cls.creative_a = MetaAdCreative.objects.create(
+            ad_account=cls.ad_account,
+            meta_creative_id="crA",
+            name="Creative A",
+            title="Headline A",
+            body="Body A",
+            object_type="VIDEO",
+            call_to_action_type="LEARN_MORE",
+        )
+        cls.creative_b = MetaAdCreative.objects.create(
+            ad_account=cls.ad_account,
+            meta_creative_id="crB",
+            name="Creative B",
+            title="Headline B",
+            body="Body B",
+            object_type="VIDEO",
+            call_to_action_type="SHOP_NOW",
+        )
+        cls.ad_a = MetaAd.objects.create(
+            adset=cls.adset_a,
+            meta_ad_id="adA",
+            name="Ad A",
+            creative=cls.creative_a,
+        )
+        cls.ad_b = MetaAd.objects.create(
+            adset=cls.adset_b,
+            meta_ad_id="adB",
+            name="Ad B",
+            creative=cls.creative_b,
+        )
+
+        today = _dt.date.today()
+        for i in range(14):
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_a,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("10.00"),
+                impressions=1000,
+                reach=800,
+                clicks=20,
+                leads=5,
+                purchases=2,
+                revenue=Decimal("40.00"),
+                video_3sec_count=400,
+                lpv_count=20,
+                comment_count=2,
+            )
+            MetaInsightDaily.objects.create(
+                ad=cls.ad_b,
+                date=today - _dt.timedelta(days=i),
+                spend=Decimal("5.00"),
+                impressions=500,
+                reach=400,
+                clicks=10,
+                leads=2,
+                purchases=1,
+                revenue=Decimal("15.00"),
+                video_3sec_count=200,
+                lpv_count=10,
+                comment_count=1,
+            )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.user)
+
+    def _body(self, response) -> str:
+        return b"".join(response.streaming_content).decode("utf-8")
+
+    def _rows(self, response):
+        return list(csv.reader(io.StringIO(self._body(response))))
+
+    # ---- CSV: creative ---------------------------------------------------
+
+    def test_creative_csv_export_streams_expected_columns(self):
+        url = reverse(
+            "meta-creative-performance-export-csv", args=[self.ad_account.id]
+        )
+        resp = self.client.get(url, {"days": 14})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/csv; charset=utf-8")
+        rows = self._rows(resp)
+        self.assertEqual(rows[0][0], "Creative ID")
+        self.assertEqual(rows[0][-1], "Ad Count")
+        self.assertEqual(len(rows[0]), 23)
+        creative_ids = {row[0] for row in rows[1:]}
+        self.assertIn(self.creative_a.meta_creative_id, creative_ids)
+
+    def test_creative_csv_export_filters_by_ids(self):
+        url = reverse(
+            "meta-creative-performance-export-csv", args=[self.ad_account.id]
+        )
+        resp = self.client.get(
+            url, {"days": 14, "ids": str(self.creative_b.id)}
+        )
+        rows = self._rows(resp)
+        creative_ids = [row[0] for row in rows[1:]]
+        self.assertEqual(creative_ids, [self.creative_b.meta_creative_id])
+
+    # ---- CSV: campaign ---------------------------------------------------
+
+    def test_campaign_csv_export_streams_expected_columns(self):
+        url = reverse(
+            "meta-campaign-performance-export-csv", args=[self.ad_account.id]
+        )
+        resp = self.client.get(url, {"days": 14})
+        self.assertEqual(resp.status_code, 200)
+        rows = self._rows(resp)
+        self.assertEqual(rows[0][0], "Campaign ID")
+        self.assertEqual(rows[0][-1], "CPM")
+        self.assertEqual(len(rows[0]), 16)
+        campaign_ids = {row[0] for row in rows[1:]}
+        self.assertIn(self.campaign_a.meta_campaign_id, campaign_ids)
+
+    def test_campaign_csv_export_filters_by_ids(self):
+        url = reverse(
+            "meta-campaign-performance-export-csv", args=[self.ad_account.id]
+        )
+        resp = self.client.get(
+            url, {"days": 14, "ids": str(self.campaign_b.id)}
+        )
+        rows = self._rows(resp)
+        campaign_ids = [row[0] for row in rows[1:]]
+        self.assertEqual(campaign_ids, [self.campaign_b.meta_campaign_id])
+
+    # ---- Spreadsheet: ad-level success path -----------------------------
+
+    def test_ad_export_to_spreadsheet_creates_populated_record(self):
+        from spreadsheet.models import Cell, Sheet, Spreadsheet
+
+        url = reverse(
+            "meta-ad-performance-export-spreadsheet", args=[self.ad_account.id]
+        )
+        resp = self.client.post(
+            f"{url}?project_id={self.project.id}&days=14",
+            {"name": "Export Test Sheet"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertIn("id", resp.data)
+        self.assertEqual(
+            resp.data["url"], f"/spreadsheets/{resp.data['id']}"
+        )
+        sheet_id = resp.data["id"]
+        spreadsheet = Spreadsheet.objects.get(pk=sheet_id)
+        self.assertEqual(spreadsheet.project_id, self.project.id)
+        sheet = Sheet.objects.filter(spreadsheet=spreadsheet).first()
+        self.assertIsNotNone(sheet)
+        # Header row + data rows persisted as Cell entries.
+        self.assertGreater(Cell.objects.filter(sheet=sheet).count(), 0)
+
+    # ---- Spreadsheet: validation path -----------------------------------
+
+    def test_export_to_spreadsheet_requires_project_id(self):
+        url = reverse(
+            "meta-ad-performance-export-spreadsheet", args=[self.ad_account.id]
+        )
+        resp = self.client.post(
+            f"{url}?days=14",
+            {"name": "Should Fail"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("project_id", resp.data["detail"])

@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     MetaAdExportCsvView,
+    MetaAdExportToSpreadsheetView,
     MetaAdInsightTimeseriesView,
     MetaAdListView,
     MetaAdPerformanceView,
@@ -10,11 +11,15 @@ from .views import (
     MetaAdSetPerformanceView,
     MetaAdTriggerDailySyncAllView,
     MetaCampaignDetailView,
+    MetaCampaignExportToSpreadsheetView,
     MetaCampaignInsightTimeseriesView,
     MetaCampaignListView,
+    MetaCampaignPerformanceCsvExportView,
     MetaCampaignPerformanceView,
     MetaCreativeDetailView,
+    MetaCreativeExportToSpreadsheetView,
     MetaCreativeInsightTimeseriesView,
+    MetaCreativePerformanceCsvExportView,
     MetaCreativePerformanceView,
     MetaCreativeVideoSourceView,
     MetaInsightListView,
@@ -54,6 +59,31 @@ urlpatterns = [
         "ad_accounts/<int:ad_account_id>/ad_performance/export.csv/",
         MetaAdExportCsvView.as_view(),
         name="meta-ad-performance-export-csv",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/ad_performance/export.spreadsheet/",
+        MetaAdExportToSpreadsheetView.as_view(),
+        name="meta-ad-performance-export-spreadsheet",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/creative_performance/export.csv/",
+        MetaCreativePerformanceCsvExportView.as_view(),
+        name="meta-creative-performance-export-csv",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/creative_performance/export.spreadsheet/",
+        MetaCreativeExportToSpreadsheetView.as_view(),
+        name="meta-creative-performance-export-spreadsheet",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/campaign_performance/export.csv/",
+        MetaCampaignPerformanceCsvExportView.as_view(),
+        name="meta-campaign-performance-export-csv",
+    ),
+    path(
+        "ad_accounts/<int:ad_account_id>/campaign_performance/export.spreadsheet/",
+        MetaCampaignExportToSpreadsheetView.as_view(),
+        name="meta-campaign-performance-export-spreadsheet",
     ),
     path(
         "ad_accounts/<int:ad_account_id>/ads/",
