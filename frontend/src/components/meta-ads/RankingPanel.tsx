@@ -8,7 +8,7 @@ import {
   facebookApi,
   type MetaAdPerformanceRow,
 } from "@/lib/api/facebookApi";
-import AdActionMenu from "./AdActionMenu";
+import ExportActionMenu from "./ExportActionMenu";
 import FilterPanel, {
   DEFAULT_RANKING_FILTERS,
   RANKING_DAY_OPTIONS,
@@ -292,14 +292,12 @@ export default function RankingPanel({
   const headerSlot = (
     <div className="flex items-center gap-2">
       {compareButton}
-      {selectedAds.length > 0 && (
-        <AdActionMenu
-          mode="bulk"
-          ads={selectedAds}
-          adAccountId={adAccountId}
-          days={filters.days}
-        />
-      )}
+      <ExportActionMenu
+        unit="ad"
+        selectedIds={selectedAds.map((a) => a.id)}
+        adAccountId={adAccountId}
+        days={filters.days}
+      />
     </div>
   );
 
@@ -319,8 +317,6 @@ export default function RankingPanel({
         weights={weights}
         currency={currency}
         loading={loading}
-        adAccountId={adAccountId}
-        days={filters.days}
         selection={{
           selectedIds,
           onToggle: toggleSelected,

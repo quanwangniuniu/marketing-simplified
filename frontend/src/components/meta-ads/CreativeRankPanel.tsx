@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import ExportActionMenu from "./ExportActionMenu";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -144,8 +145,21 @@ export default function CreativeRankPanel({
   const [weights, setWeights] = useState<WeightSet>(initial.weights);
   const [rows, setRows] = useState<MetaCreativePerformanceRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const lastSyncedSearchRef = useRef<string>("");
+
+  const toggleSelected = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams.toString());
@@ -284,6 +298,18 @@ export default function CreativeRankPanel({
         weights={weights}
         currency={currency}
         loading={loading}
+        selection={{
+          selectedIds,
+          onToggle: toggleSelected,
+          headerSlot: (
+            <ExportActionMenu
+              unit="creative"
+              selectedIds={Array.from(selectedIds)}
+              adAccountId={adAccountId}
+              days={filters.days}
+            />
+          ),
+        }}
       />
     </div>
   );

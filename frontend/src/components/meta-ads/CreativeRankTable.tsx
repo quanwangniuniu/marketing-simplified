@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { MetaCreativePerformanceRow } from "@/lib/api/facebookApi";
+import SelectAllHeader from "./SelectAllHeader";
 import {
   formatCurrency,
   formatPercent,
@@ -23,11 +25,18 @@ import { computeCompositeScores, type WeightSet } from "./rankingScoring";
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const LOW_CONFIDENCE_EVENTS_THRESHOLD = 50;
 
+export interface CreativeRankTableSelection {
+  selectedIds: Set<number>;
+  onToggle: (id: number) => void;
+  headerSlot?: ReactNode;
+}
+
 interface CreativeRankTableProps {
   rows: MetaCreativePerformanceRow[];
   weights: WeightSet;
   currency: string;
   loading: boolean;
+  selection?: CreativeRankTableSelection;
 }
 
 interface RankedRow {
@@ -41,6 +50,7 @@ export default function CreativeRankTable({
   weights,
   currency,
   loading,
+  selection,
 }: CreativeRankTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -81,16 +91,49 @@ export default function CreativeRankTable({
               {total}
             </span>
           )}
+          {selection && selection.selectedIds.size > 0 && (
+            <span className="ml-3 text-[11px] font-medium normal-case text-[#1a9ba3]">
+              {selection.selectedIds.size} selected
+            </span>
+          )}
         </h2>
-        <span className="text-[11px] text-gray-400">
-          Higher score = better fit for the current weights
-        </span>
+        {selection?.headerSlot ?? (
+          <span className="text-[11px] text-gray-400">
+            Higher score = better fit for the current weights
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
             <tr>
+              {selection && (
+                <th className="w-10 px-3 py-2.5">
+                  <SelectAllHeader
+                    selectedCount={
+                      paged.filter((r) =>
+                        selection.selectedIds.has(r.row.id)
+                      ).length
+                    }
+                    totalCount={paged.length}
+                    onSelectAll={() => {
+                      for (const r of paged) {
+                        if (!selection.selectedIds.has(r.row.id)) {
+                          selection.onToggle(r.row.id);
+                        }
+                      }
+                    }}
+                    onClear={() => {
+                      for (const r of paged) {
+                        if (selection.selectedIds.has(r.row.id)) {
+                          selection.onToggle(r.row.id);
+                        }
+                      }
+                    }}
+                  />
+                </th>
+              )}
               <th className="w-12 px-4 py-2.5">#</th>
               <th className="px-4 py-2.5">Creative</th>
               <th className="px-4 py-2.5 text-right">Score</th>
@@ -109,7 +152,7 @@ export default function CreativeRankTable({
             {loading && rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={selection ? 13 : 12}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   Loading…
@@ -118,7 +161,7 @@ export default function CreativeRankTable({
             ) : paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={selection ? 13 : 12}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   No creatives match the current filters.
@@ -132,6 +175,7 @@ export default function CreativeRankTable({
                   score={score}
                   rank={rank}
                   currency={currency}
+                  selection={selection}
                 />
               ))
             )}
@@ -158,11 +202,13 @@ function Row({
   score,
   rank,
   currency,
+  selection,
 }: {
   row: MetaCreativePerformanceRow;
   score: number;
   rank: number;
   currency: string;
+  selection?: CreativeRankTableSelection;
 }) {
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
@@ -172,11 +218,29 @@ function Row({
   const detailHref = `/meta-ads/creatives/${row.id}`;
   const altText = row.name || row.title || "Creative thumbnail";
   const display = row.title || row.name || row.meta_creative_id;
+  const isSelected = selection?.selectedIds.has(row.id) ?? false;
 
   return (
     <tr
-      className={`align-top hover:bg-gray-50/60 ${lowConfidence ? "opacity-50" : ""}`}
+      className={[
+        "align-top hover:bg-gray-50/60",
+        lowConfidence ? "opacity-50" : "",
+        isSelected ? "bg-[#3CCED7]/5" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
+      {selection && (
+        <td className="px-3 py-3">
+          <input
+            type="checkbox"
+            aria-label={`Select creative ${display} for export`}
+            checked={isSelected}
+            onChange={() => selection.onToggle(row.id)}
+            className="h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+          />
+        </td>
+      )}
       <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
         {rank}
       </td>

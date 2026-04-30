@@ -38,6 +38,7 @@ import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
 import CreativeRankPanel from '@/components/meta-ads/CreativeRankPanel';
+import ExportActionMenu from '@/components/meta-ads/ExportActionMenu';
 import RankingPanel from '@/components/meta-ads/RankingPanel';
 import {
   facebookApi,
@@ -192,6 +193,27 @@ function MetaAdsContent() {
   const [syncing, setSyncing] = useState(false);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
   const [viewTab, setViewTab] = useState<ViewKey>(initialTab);
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<number>>(
+    new Set()
+  );
+
+  const toggleSelectedCampaign = (id: number) => {
+    setSelectedCampaignIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Reset campaign selection whenever the data source changes so a stale
+  // id from a previous account or window does not survive.
+  useEffect(() => {
+    setSelectedCampaignIds(new Set());
+  }, [selectedId, days]);
 
   useEffect(() => {
     let active = true;
@@ -590,12 +612,31 @@ function MetaAdsContent() {
           </section>
 
           {selectedId && (
-            <CampaignHierarchyTable
-              campaigns={campaigns}
-              currency={currency}
-              adAccountId={selectedId}
-              days={days}
-            />
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500">
+                  {selectedCampaignIds.size > 0
+                    ? `${selectedCampaignIds.size} campaign${selectedCampaignIds.size === 1 ? '' : 's'} selected`
+                    : 'Select campaigns to export'}
+                </div>
+                <ExportActionMenu
+                  unit="campaign"
+                  selectedIds={Array.from(selectedCampaignIds)}
+                  adAccountId={selectedId}
+                  days={days}
+                />
+              </div>
+              <CampaignHierarchyTable
+                campaigns={campaigns}
+                currency={currency}
+                adAccountId={selectedId}
+                days={days}
+                selection={{
+                  selectedIds: selectedCampaignIds,
+                  onToggle: toggleSelectedCampaign,
+                }}
+              />
+            </>
           )}
         </>
       )}

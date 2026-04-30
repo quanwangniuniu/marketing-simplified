@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import AdActionMenu from "./AdActionMenu";
+import SelectAllHeader from "./SelectAllHeader";
 import {
   formatCurrency,
   formatPercent,
@@ -45,8 +45,6 @@ interface RankingTableProps {
   currency: string;
   loading: boolean;
   selection?: RankingTableSelection;
-  adAccountId: number;
-  days: number;
 }
 
 interface RankedRow {
@@ -61,8 +59,6 @@ export default function RankingTable({
   currency,
   loading,
   selection,
-  adAccountId,
-  days,
 }: RankingTableProps) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -123,7 +119,32 @@ export default function RankingTable({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              {selection && <th className="w-10 px-3 py-2.5"></th>}
+              {selection && (
+                <th className="w-10 px-3 py-2.5">
+                  <SelectAllHeader
+                    selectedCount={
+                      paged.filter((r) =>
+                        selection.selectedIds.has(r.row.id)
+                      ).length
+                    }
+                    totalCount={paged.length}
+                    onSelectAll={() => {
+                      for (const r of paged) {
+                        if (!selection.selectedIds.has(r.row.id)) {
+                          selection.onToggle(r.row.id);
+                        }
+                      }
+                    }}
+                    onClear={() => {
+                      for (const r of paged) {
+                        if (selection.selectedIds.has(r.row.id)) {
+                          selection.onToggle(r.row.id);
+                        }
+                      }
+                    }}
+                  />
+                </th>
+              )}
               <th className="w-12 px-4 py-2.5">#</th>
               <th className="w-14 px-3 py-2.5"></th>
               <th className="px-4 py-2.5">Ad</th>
@@ -137,14 +158,13 @@ export default function RankingTable({
               <th className="px-4 py-2.5 text-right">CPL</th>
               <th className="px-4 py-2.5 text-right">CPLPV</th>
               <th className="px-4 py-2.5 text-right">CPCMT</th>
-              <th className="w-10 px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading && rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={selection ? 15 : 14}
+                  colSpan={selection ? 14 : 13}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   Loading…
@@ -153,7 +173,7 @@ export default function RankingTable({
             ) : paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={selection ? 15 : 14}
+                  colSpan={selection ? 14 : 13}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   No ads match the current filters.
@@ -169,8 +189,6 @@ export default function RankingTable({
                   currency={currency}
                   selection={selection}
                   atCap={atCap}
-                  adAccountId={adAccountId}
-                  days={days}
                 />
               ))
             )}
@@ -199,8 +217,6 @@ function Row({
   currency,
   selection,
   atCap,
-  adAccountId,
-  days,
 }: {
   row: MetaAdPerformanceRow;
   score: number;
@@ -208,8 +224,6 @@ function Row({
   currency: string;
   selection?: RankingTableSelection;
   atCap?: boolean;
-  adAccountId: number;
-  days: number;
 }) {
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
@@ -338,14 +352,6 @@ function Row({
         {row.comment_count > 0
           ? formatCurrency(row.cost_per_comment, currency)
           : "—"}
-      </td>
-      <td className="px-3 py-2.5 align-middle">
-        <AdActionMenu
-          mode="row"
-          ads={[row]}
-          adAccountId={adAccountId}
-          days={days}
-        />
       </td>
     </tr>
   );
