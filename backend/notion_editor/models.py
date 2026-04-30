@@ -482,3 +482,68 @@ class MediaFile(models.Model):
         """Get the file name"""
         return self.file.name if self.file else None
 
+
+class NotionConnection(models.Model):
+    """
+    Stores OAuth connection info for a user's Notion workspace.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notion_connection',
+    )
+    workspace_id = models.CharField(max_length=128, blank=True, null=True)
+    workspace_name = models.CharField(max_length=255, blank=True, null=True)
+    workspace_icon = models.URLField(blank=True, null=True)
+    bot_id = models.CharField(max_length=128, blank=True, null=True)
+    bot_name = models.CharField(max_length=255, blank=True, null=True)
+    encrypted_access_token = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=False)
+    connected_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'notion_connections'
+        indexes = [
+            models.Index(fields=['is_active']),
+            models.Index(fields=['workspace_id']),
+        ]
+
+    def __str__(self):
+        return f"NotionConnection(user={self.user_id}, active={self.is_active})"
+
+    def set_access_token(self, token: str | None):
+        from google_docs_integration.crypto import encrypt_token
+
+        self.encrypted_access_token = encrypt_token(token)
+
+    def get_access_token(self) -> str | None:
+        from google_docs_integration.crypto import decrypt_token
+
+        return decrypt_token(self.encrypted_access_token)
+
+    def disconnect(self):
+        self.is_active = False
+        self.workspace_id = None
+        self.workspace_name = None
+        self.workspace_icon = None
+        self.bot_id = None
+        self.bot_name = None
+        self.set_access_token(None)
+        self.connected_at = None
+        self.save(
+            update_fields=[
+                'is_active',
+                'workspace_id',
+                'workspace_name',
+                'workspace_icon',
+                'bot_id',
+                'bot_name',
+                'encrypted_access_token',
+                'connected_at',
+                'updated_at',
+            ]
+        )
+
