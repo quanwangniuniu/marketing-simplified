@@ -117,4 +117,6 @@ class MetaSyncRunSerializer(serializers.ModelSerializer):
             "error_message",
             "started_at",
             "finished_at",
+            "current_phase",
+            "current_progress",
         ]

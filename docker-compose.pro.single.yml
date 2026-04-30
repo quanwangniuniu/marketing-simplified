@@ -208,7 +208,7 @@ services:
         condition: service_healthy
       clamav:
         condition: service_healthy
-    command: celery -A backend worker --loglevel=info
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=4
     networks:
       - app-network
 

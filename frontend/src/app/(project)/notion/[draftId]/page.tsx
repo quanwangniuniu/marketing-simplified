@@ -9,6 +9,7 @@ import {
   FileUp,
   FileDown,
   Clock,
+  ChevronDown,
   MoreHorizontal,
   Trash2,
   X,
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { NotionDraftAPI } from '@/lib/api/notionDraftApi';
 import { GoogleDocListItem, googleDocsApi } from '@/lib/api/googleDocsApi';
+import { notionIntegrationApi } from '@/lib/api/notionIntegrationApi';
 import type {
   DraftStatus,
   EditorBlock,
@@ -46,6 +48,12 @@ import type {
 
 const TODO_STATE_REGEX = /data-todo-state="(checked|unchecked)"/i;
 const GOOGLE_DOC_URL_ID_REGEX = /\/document\/(?:u\/\d+\/)?d\/([a-zA-Z0-9_-]+)/i;
+
+const getApiErrorMessage = (error: any, fallback: string) =>
+  error?.response?.data?.error ||
+  error?.response?.data?.detail ||
+  error?.response?.data?.message ||
+  fallback;
 
 const extractGoogleDocId = (value: string): string => {
   const trimmed = value.trim();
@@ -257,6 +265,12 @@ function NotionV2DetailContent() {
   const [googleDocsListError, setGoogleDocsListError] = useState<string | null>(null);
   const [googleDocsImportBusy, setGoogleDocsImportBusy] = useState(false);
   const [googleDocsExportBusy, setGoogleDocsExportBusy] = useState(false);
+  const [isNotionImportModalOpen, setIsNotionImportModalOpen] = useState(false);
+  const [isNotionExportModalOpen, setIsNotionExportModalOpen] = useState(false);
+  const [notionImportPageRef, setNotionImportPageRef] = useState('');
+  const [notionExportParentPageRef, setNotionExportParentPageRef] = useState('');
+  const [notionImportBusy, setNotionImportBusy] = useState(false);
+  const [notionExportBusy, setNotionExportBusy] = useState(false);
 
   const snapshotRef = useRef<string>(buildSnapshot(title, status, blocks));
 
@@ -423,6 +437,16 @@ function NotionV2DetailContent() {
     setIsImportModalOpen(true);
   }, []);
 
+  const handleOpenImportNotion = useCallback(() => {
+    setNotionImportPageRef('');
+    setIsNotionImportModalOpen(true);
+  }, []);
+
+  const handleOpenExportNotion = useCallback(() => {
+    setNotionExportParentPageRef('');
+    setIsNotionExportModalOpen(true);
+  }, []);
+
   useEffect(() => {
     if (!isImportModalOpen) return;
     let cancelled = false;
@@ -503,6 +527,72 @@ function NotionV2DetailContent() {
     }
   }, [blocks, draftId, htmlToPlainText, title]);
 
+  const handleConfirmImportNotion = useCallback(async () => {
+    const page = notionImportPageRef.trim();
+    if (!draftId) {
+      toast.error('Open a saved draft before importing.');
+      return;
+    }
+    if (!page) {
+      toast.error('Paste a Notion page URL or page ID.');
+      return;
+    }
+    if (hasChanges) {
+      toast.error('Save your current changes before importing from Notion.');
+      return;
+    }
+
+    setNotionImportBusy(true);
+    try {
+      const result = await notionIntegrationApi.importPage({
+        page,
+        draft_id: draftId,
+      });
+      setIsNotionImportModalOpen(false);
+      await loadDraft();
+      toast.success(`Imported from Notion: ${result.draft.title || 'Untitled'}`);
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, 'Failed to import Notion page.'));
+    } finally {
+      setNotionImportBusy(false);
+    }
+  }, [draftId, hasChanges, loadDraft, notionImportPageRef]);
+
+  const handleConfirmExportNotion = useCallback(async () => {
+    const parentPageId = notionExportParentPageRef.trim();
+    if (!draftId) {
+      toast.error('Open a saved draft before exporting.');
+      return;
+    }
+    if (!parentPageId) {
+      toast.error('Paste the Notion parent page URL or page ID.');
+      return;
+    }
+    if (hasChanges) {
+      toast.error('Save your current changes before exporting to Notion.');
+      return;
+    }
+
+    setNotionExportBusy(true);
+    try {
+      const result = await notionIntegrationApi.exportDraft({
+        draft_id: draftId,
+        parent_page_id: parentPageId,
+        title: title || 'Untitled',
+      });
+      setIsNotionExportModalOpen(false);
+      if (result.url) window.open(result.url, '_blank');
+      toast.success('Exported to Notion.');
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, 'Failed to export to Notion.'));
+    } finally {
+      setNotionExportBusy(false);
+    }
+  }, [draftId, hasChanges, notionExportParentPageRef, title]);
+
+  const integrationActionBusy =
+    googleDocsImportBusy || googleDocsExportBusy || notionImportBusy || notionExportBusy;
+
   return (
     <DashboardLayout>
       <div className="-m-5 h-[calc(100vh-3rem)] flex flex-col bg-white overflow-hidden">
@@ -533,24 +623,33 @@ function NotionV2DetailContent() {
             >
               <Eye className="w-4 h-4" /> Preview
             </button>
-            <button
-              type="button"
-              onClick={handleOpenImportGoogleDoc}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
-            >
-              <FileUp className="w-4 h-4" />
-              {googleDocsImportBusy ? 'Importing…' : 'Import Doc'}
-            </button>
-            <button
-              type="button"
-              onClick={handleExportGoogleDoc}
-              disabled={isLoading || googleDocsImportBusy || googleDocsExportBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
-            >
-              <FileDown className="w-4 h-4" />
-              {googleDocsExportBusy ? 'Exporting…' : 'Export Doc'}
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isLoading || integrationActionBusy}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium border border-[#3CCED7]/30 text-[#3CCED7] hover:bg-[#3CCED7]/8 rounded-md transition disabled:opacity-50"
+                >
+                  {integrationActionBusy ? 'Working…' : 'Import / Export'}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={handleOpenImportGoogleDoc}>
+                  <FileUp className="w-4 h-4 mr-2" /> Import from Google Docs
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleExportGoogleDoc}>
+                  <FileDown className="w-4 h-4 mr-2" /> Export to Google Docs
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleOpenImportNotion}>
+                  <FileUp className="w-4 h-4 mr-2" /> Import from Notion
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleOpenExportNotion}>
+                  <FileDown className="w-4 h-4 mr-2" /> Export to Notion
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -746,6 +845,104 @@ function NotionV2DetailContent() {
               disabled={googleDocsImportBusy || !importDocumentId.trim()}
             >
               {googleDocsImportBusy ? 'Importing…' : 'Import'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isNotionImportModalOpen} onOpenChange={setIsNotionImportModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Notion Page</DialogTitle>
+            <DialogDescription>
+              Paste a Notion page URL or ID. The imported content will replace this saved draft.
+            </DialogDescription>
+          </DialogHeader>
+          {hasChanges ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Save your current changes before importing from Notion.
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <label htmlFor="notion-page-url-or-id" className="text-sm font-medium text-gray-700">
+              Notion page URL or ID
+            </label>
+            <input
+              id="notion-page-url-or-id"
+              value={notionImportPageRef}
+              onChange={(event) => setNotionImportPageRef(event.target.value)}
+              placeholder="https://www.notion.so/... or page ID"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20"
+            />
+            <p className="text-xs text-gray-500">
+              The page must be shared with the connected MediaJira integration in Notion.
+            </p>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsNotionImportModalOpen(false)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              disabled={notionImportBusy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmImportNotion}
+              className="rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-60"
+              disabled={notionImportBusy || hasChanges || !notionImportPageRef.trim()}
+            >
+              {notionImportBusy ? 'Importing…' : 'Import'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isNotionExportModalOpen} onOpenChange={setIsNotionExportModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export to Notion</DialogTitle>
+            <DialogDescription>
+              Paste the Notion parent page where MediaJira should create a new page.
+            </DialogDescription>
+          </DialogHeader>
+          {hasChanges ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Save your current changes before exporting to Notion.
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <label htmlFor="notion-parent-page-url-or-id" className="text-sm font-medium text-gray-700">
+              Parent page URL or ID
+            </label>
+            <input
+              id="notion-parent-page-url-or-id"
+              value={notionExportParentPageRef}
+              onChange={(event) => setNotionExportParentPageRef(event.target.value)}
+              placeholder="https://www.notion.so/... or parent page ID"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/20"
+            />
+            <p className="text-xs text-gray-500">
+              The connected integration needs access to this parent page in Notion.
+            </p>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsNotionExportModalOpen(false)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              disabled={notionExportBusy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmExportNotion}
+              className="rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-60"
+              disabled={notionExportBusy || hasChanges || !notionExportParentPageRef.trim()}
+            >
+              {notionExportBusy ? 'Exporting…' : 'Export'}
             </button>
           </DialogFooter>
         </DialogContent>

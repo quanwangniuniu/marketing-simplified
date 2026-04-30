@@ -9,18 +9,20 @@ import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
 import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
 import GoogleCalendarIntegrationModal from '@/components/google-calendar/GoogleCalendarIntegrationModal';
 import FacebookIntegrationModal from '@/components/facebook/FacebookIntegrationModal';
+import NotionIntegrationModal from '@/components/notion/NotionIntegrationModal';
 import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
 import { zoomApi } from '@/lib/api/zoomApi';
 import { googleDocsApi } from '@/lib/api/googleDocsApi';
 import { googleCalendarApi, type GoogleCalendarStatus } from '@/lib/api/googleCalendarApi';
 import { facebookApi, type FacebookStatus } from '@/lib/api/facebookApi';
+import { notionIntegrationApi } from '@/lib/api/notionIntegrationApi';
 import { useProjectStore } from '@/lib/projectStore';
 
 interface IntegrationsPanelProps {
   userId: number | string | null;
 }
 
-type IntegrationId = 'slack' | 'zoom' | 'gdocs' | 'gcal' | 'meta';
+type IntegrationId = 'slack' | 'zoom' | 'gdocs' | 'gcal' | 'meta' | 'notion';
 
 interface IntegrationRow {
   id: IntegrationId;
@@ -86,6 +88,13 @@ const INTEGRATIONS: IntegrationRow[] = [
       </svg>
     ),
   },
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Connect your own workspace',
+    iconBg: '#111827',
+    iconNode: <span className="text-sm font-semibold text-white">N</span>,
+  },
 ];
 
 export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
@@ -98,6 +107,7 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
   const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
   const [isGoogleCalendarModalOpen, setIsGoogleCalendarModalOpen] = useState(false);
   const [isFacebookModalOpen, setIsFacebookModalOpen] = useState(false);
+  const [isNotionModalOpen, setIsNotionModalOpen] = useState(false);
 
   const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
   const [zoomConnected, setZoomConnected] = useState<boolean | null>(null);
@@ -105,6 +115,8 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
   const [googleDocsEmail, setGoogleDocsEmail] = useState<string | null>(null);
   const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus | null>(null);
+  const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
+  const [notionWorkspaceName, setNotionWorkspaceName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const hasOpenedSlackRef = useRef(false);
@@ -112,6 +124,7 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
   const hasOpenedGoogleDocsRef = useRef(false);
   const hasOpenedGoogleCalendarRef = useRef(false);
   const hasOpenedFacebookRef = useRef(false);
+  const hasOpenedNotionRef = useRef(false);
 
   useEffect(() => {
     if (!userId) {
@@ -119,6 +132,9 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       setZoomConnected(null);
       setGoogleDocsConnected(null);
       setGcalStatus(null);
+      setFacebookStatus(null);
+      setNotionConnected(null);
+      setNotionWorkspaceName(null);
       setLoading(false);
       return;
     }
@@ -127,12 +143,13 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
     const context = activeProject?.id ? { projectId: activeProject.id } : undefined;
 
     const loadAll = async () => {
-      const [slackRes, zoomRes, gdocsRes, gcalRes, metaRes] = await Promise.allSettled([
+      const [slackRes, zoomRes, gdocsRes, gcalRes, metaRes, notionRes] = await Promise.allSettled([
         slackApi.getStatus(context),
         zoomApi.getStatus(),
         googleDocsApi.getStatus(),
         googleCalendarApi.getStatus(),
         facebookApi.getStatus(),
+        notionIntegrationApi.getStatus(),
       ]);
       if (!isActive) return;
       if (slackRes.status === 'fulfilled') {
@@ -160,6 +177,13 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
         setFacebookStatus(metaRes.value);
       } else {
         setFacebookStatus({ connected: false });
+      }
+      if (notionRes.status === 'fulfilled') {
+        setNotionConnected(notionRes.value.connected);
+        setNotionWorkspaceName(notionRes.value.workspace_name ?? null);
+      } else {
+        setNotionConnected(false);
+        setNotionWorkspaceName(null);
       }
       setLoading(false);
     };
@@ -205,6 +229,11 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       hasOpenedFacebookRef.current = true;
       toast.success('Meta connected.');
       stripParam('facebook_connected');
+    }
+    if (searchParams.get('open_notion') === '1' && !hasOpenedNotionRef.current) {
+      setIsNotionModalOpen(true);
+      hasOpenedNotionRef.current = true;
+      stripParam('open_notion');
     }
 
     const zoomError = searchParams.get('zoom_error');
@@ -254,6 +283,18 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       };
       toast.error(messages[facebookError] ?? 'Meta connection failed. Please try again.');
       stripParam('facebook_error');
+    }
+    const notionError = searchParams.get('notion_error');
+    if (notionError) {
+      const messages: Record<string, string> = {
+        missing_code: 'Notion connection failed: missing callback code.',
+        state_expired: 'Notion connection failed: authorization expired. Please try again.',
+        invalid_state: 'Notion connection failed: invalid state.',
+        token_exchange_failed: 'Notion connection failed: token exchange failed.',
+        access_denied: 'Notion connection cancelled.',
+      };
+      toast.error(messages[notionError] ?? 'Notion connection failed. Please try again.');
+      stripParam('notion_error');
     }
   }, [slackStatus, loading, searchParams, router]);
 
@@ -316,6 +357,10 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
                 : 'Connected',
             }
           : { connected: false, label: 'Not connected' };
+      case 'notion':
+        return notionConnected
+          ? { connected: true, label: notionWorkspaceName ? `Connected · ${notionWorkspaceName}` : 'Connected' }
+          : { connected: false, label: 'Not connected' };
     }
   };
 
@@ -329,8 +374,10 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       setIsGoogleDocsModalOpen(true);
     } else if (id === 'gcal') {
       setIsGoogleCalendarModalOpen(true);
-    } else {
+    } else if (id === 'meta') {
       setIsFacebookModalOpen(true);
+    } else {
+      setIsNotionModalOpen(true);
     }
   };
 
@@ -413,6 +460,10 @@ export default function IntegrationsPanel({ userId }: IntegrationsPanelProps) {
       <FacebookIntegrationModal
         isOpen={isFacebookModalOpen}
         onClose={() => setIsFacebookModalOpen(false)}
+      />
+      <NotionIntegrationModal
+        isOpen={isNotionModalOpen}
+        onClose={() => setIsNotionModalOpen(false)}
       />
     </div>
   );

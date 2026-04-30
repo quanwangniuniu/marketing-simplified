@@ -250,3 +250,32 @@ class MediaFileUploadSerializer(serializers.ModelSerializer):
         return media_file
 
 
+class NotionStatusSerializer(serializers.Serializer):
+    connected = serializers.BooleanField()
+    workspace_id = serializers.CharField(allow_null=True, required=False)
+    workspace_name = serializers.CharField(allow_null=True, required=False)
+    workspace_icon = serializers.CharField(allow_null=True, required=False)
+    bot_id = serializers.CharField(allow_null=True, required=False)
+    bot_name = serializers.CharField(allow_null=True, required=False)
+    connected_at = serializers.DateTimeField(allow_null=True, required=False)
+
+
+class NotionConnectSerializer(serializers.Serializer):
+    auth_url = serializers.URLField()
+    state = serializers.CharField()
+
+
+class NotionDisconnectSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+
+
+class NotionImportSerializer(serializers.Serializer):
+    page = serializers.CharField(max_length=500, allow_blank=False)
+    draft_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+
+
+class NotionExportSerializer(serializers.Serializer):
+    draft_id = serializers.IntegerField(min_value=1)
+    parent_page_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    title = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=255)
+

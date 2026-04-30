@@ -28,6 +28,8 @@ import {
   holdRateBandClass,
   thumbnailOrFallback,
 } from './metaAdsUtils';
+import ExportActionMenu from './ExportActionMenu';
+import SelectAllHeader from './SelectAllHeader';
 import VideoModal from './VideoModal';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
@@ -59,6 +61,19 @@ export default function CreativesPanel({
   const [hidePerfEmpty, setHidePerfEmpty] = useState(true);
   const [previewCreativeId, setPreviewCreativeId] = useState<number | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -113,6 +128,11 @@ export default function CreativesPanel({
         <div>
           <h2 className="text-sm font-semibold text-gray-900">
             Creative performance · {filtered.length} creatives
+            {selectedIds.size > 0 && (
+              <span className="ml-2 text-[11px] font-medium normal-case text-[#1a9ba3]">
+                · {selectedIds.size} selected
+              </span>
+            )}
           </h2>
           <p className="mt-0.5 text-[11px] text-gray-500">
             Hook rate = video watched to 25% / impressions · Hold rate = reached 75% / reached 25%
@@ -139,6 +159,12 @@ export default function CreativesPanel({
               </option>
             ))}
           </select>
+          <ExportActionMenu
+            unit="creative"
+            selectedIds={Array.from(selectedIds)}
+            adAccountId={adAccountId}
+            days={days}
+          />
         </div>
       </div>
 
@@ -146,6 +172,24 @@ export default function CreativesPanel({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-[11px] uppercase text-gray-500">
             <tr>
+              <th className="w-10 px-3 py-2 font-medium">
+                <SelectAllHeader
+                  selectedCount={
+                    paged.filter((c) => selectedIds.has(c.id)).length
+                  }
+                  totalCount={paged.length}
+                  onSelectAll={() => {
+                    const next = new Set(selectedIds);
+                    for (const c of paged) next.add(c.id);
+                    setSelectedIds(next);
+                  }}
+                  onClear={() => {
+                    const next = new Set(selectedIds);
+                    for (const c of paged) next.delete(c.id);
+                    setSelectedIds(next);
+                  }}
+                />
+              </th>
               <th className="px-4 py-2 font-medium">Creative</th>
               <th className="px-4 py-2 font-medium text-right">Spend</th>
               <th className="px-4 py-2 font-medium text-right">Impr.</th>
@@ -162,7 +206,7 @@ export default function CreativesPanel({
             {paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-4 py-8 text-center text-xs text-gray-400"
                 >
                   {rows.length === 0
@@ -176,6 +220,8 @@ export default function CreativesPanel({
                   key={c.id}
                   c={c}
                   currency={currency}
+                  selected={selectedIds.has(c.id)}
+                  onToggle={() => toggleSelected(c.id)}
                   onPlay={() => {
                     setPreviewTitle(c.title || c.name || c.meta_creative_id);
                     setPreviewCreativeId(c.id);
@@ -212,16 +258,32 @@ function CreativeRow({
   c,
   currency,
   onPlay,
+  selected,
+  onToggle,
 }: {
   c: MetaCreativePerformanceRow;
   currency: string;
   onPlay: () => void;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const thumb = thumbnailOrFallback(c.thumbnail_url);
   const isVideo = c.object_type === 'VIDEO' || !!c.video_id;
   const detailHref = `/meta-ads/creatives/${c.id}`;
+  const display = c.title || c.name || c.meta_creative_id;
   return (
-    <tr className="align-top hover:bg-gray-50/60">
+    <tr
+      className={`align-top hover:bg-gray-50/60 ${selected ? 'bg-[#3CCED7]/5' : ''}`}
+    >
+      <td className="px-3 py-3">
+        <input
+          type="checkbox"
+          aria-label={`Select creative ${display} for export`}
+          checked={selected}
+          onChange={onToggle}
+          className="h-4 w-4 rounded accent-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+        />
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-start gap-3">
           <button
