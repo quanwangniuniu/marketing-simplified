@@ -28,3 +28,5 @@ figma/
 nul
 .claude/
 .cursorrules
+backend/celerybeat-schedule
+backend/celerybeat.pid

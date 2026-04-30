@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FileText, MoreHorizontal, Copy, Download, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -45,9 +45,16 @@ export default function NotionDraftCard({
   onExport,
   onDelete,
 }: NotionDraftCardProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const handleRowClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-prevent-open]')) return;
     onOpen(draft.id);
+  };
+
+  const handleDeleteSelect = () => {
+    setIsMenuOpen(false);
+    window.setTimeout(() => onDelete(draft.id), 150);
   };
 
   return (
@@ -80,18 +87,23 @@ export default function NotionDraftCard({
         </div>
       </div>
       <div data-prevent-open className="shrink-0">
-        <DropdownMenu>
+        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              className="opacity-0 group-hover:opacity-100 h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 transition-opacity"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
               aria-label="Draft actions"
             >
-              <MoreHorizontal className="w-4 h-4 text-gray-500" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent
+            align="end"
+            className="w-44"
+            data-prevent-open
+            onClick={(event) => event.stopPropagation()}
+          >
             <DropdownMenuItem onSelect={() => onDuplicate(draft.id)}>
               <Copy className="w-4 h-4 mr-2" /> Duplicate
             </DropdownMenuItem>
@@ -100,7 +112,8 @@ export default function NotionDraftCard({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() => onDelete(draft.id)}
+              onClick={(event) => event.stopPropagation()}
+              onSelect={handleDeleteSelect}
               className="text-red-600 focus:text-red-700 focus:bg-red-50"
             >
               <Trash2 className="w-4 h-4 mr-2" /> Delete

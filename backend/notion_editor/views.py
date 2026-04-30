@@ -3,26 +3,259 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 import rest_framework.parsers
+import requests
+from django.conf import settings
+from django.core import signing
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from django.db.models import Max
+from django.utils import timezone
 import os
 import tempfile
 import logging
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile, SimpleUploadedFile
 from django.core.files.base import ContentFile
 from utils.virus_scanner import perform_clamav_scan
-from .models import Draft, ContentBlock, BlockAction, DraftRevision, MediaFile
+from .models import Draft, ContentBlock, BlockAction, DraftRevision, MediaFile, NotionConnection
 from .serializers import (
     DraftSerializer, DraftListSerializer, CreateDraftSerializer, UpdateDraftSerializer,
     ContentBlockSerializer, BlockActionSerializer, BlockActionCreateSerializer,
     DraftRevisionSerializer, DraftRevisionListSerializer,
-    MediaFileSerializer, MediaFileUploadSerializer
+    MediaFileSerializer, MediaFileUploadSerializer,
+    NotionStatusSerializer, NotionConnectSerializer, NotionDisconnectSerializer,
+    NotionImportSerializer, NotionExportSerializer,
+)
+from .services import (
+    build_notion_auth_url,
+    exchange_notion_code_for_token,
+    export_draft_to_notion,
+    fetch_notion_bot_name,
+    import_notion_page_as_draft,
 )
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+NOTION_STATE_SALT = "notion-oauth-state"
+NOTION_STATE_MAX_AGE_SECONDS = 600
+
+
+def _build_notion_oauth_state(user) -> str:
+    return signing.dumps(
+        {"user_id": user.id, "ts": int(timezone.now().timestamp())},
+        salt=NOTION_STATE_SALT,
+    )
+
+
+def _notion_api_error_response(exc: requests.HTTPError) -> Response:
+    status_code = exc.response.status_code if exc.response is not None else None
+    if status_code == 401:
+        return Response(
+            {"error": "Notion session expired. Please reconnect Notion in Integrations."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if status_code == 403:
+        return Response(
+            {"error": "Notion denied access. Share the page with your integration and try again."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if status_code == 404:
+        return Response(
+            {"error": "Notion page not found. Check the page ID and sharing settings."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(
+        {"error": "Notion request failed. Please try again in a moment."},
+        status=status.HTTP_502_BAD_GATEWAY,
+    )
+
+
+def _validation_error_response(exc: DjangoValidationError) -> Response:
+    message = exc.messages[0] if hasattr(exc, "messages") else str(exc)
+    return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _draft_summary(draft: Draft) -> dict:
+    return {
+        "id": draft.id,
+        "title": draft.title,
+        "status": draft.status,
+        "content_blocks_count": draft.get_content_blocks_count(),
+        "updated_at": draft.updated_at,
+    }
+
+
+class NotionStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        connection = NotionConnection.objects.filter(user=request.user, is_active=True).first()
+        has_token = bool(connection and connection.get_access_token())
+        payload = {
+            "connected": has_token,
+            "workspace_id": connection.workspace_id if connection else None,
+            "workspace_name": connection.workspace_name if connection else None,
+            "workspace_icon": connection.workspace_icon if connection else None,
+            "bot_id": connection.bot_id if connection else None,
+            "bot_name": connection.bot_name if connection else None,
+            "connected_at": connection.connected_at if connection and has_token else None,
+        }
+        serializer = NotionStatusSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data)
+
+
+class NotionConnectView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        missing_settings = []
+        if not settings.NOTION_OAUTH_CLIENT_ID:
+            missing_settings.append("NOTION_CLIENT_ID")
+        if not settings.NOTION_OAUTH_CLIENT_SECRET:
+            missing_settings.append("NOTION_CLIENT_SECRET")
+        if not settings.NOTION_OAUTH_REDIRECT_URI:
+            missing_settings.append("NOTION_OAUTH_REDIRECT_URI")
+
+        if missing_settings:
+            return Response(
+                {
+                    "error": "Notion OAuth is not configured.",
+                    "details": {"missing_settings": missing_settings},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        state = _build_notion_oauth_state(request.user)
+        serializer = NotionConnectSerializer(data={"auth_url": build_notion_auth_url(state), "state": state})
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data)
+
+
+class NotionCallbackView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        code = request.query_params.get("code")
+        state = request.query_params.get("state")
+        oauth_error = request.query_params.get("error")
+
+        if oauth_error:
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=access_denied")
+        if not code or not state:
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=missing_code")
+
+        try:
+            payload = signing.loads(
+                state,
+                salt=NOTION_STATE_SALT,
+                max_age=NOTION_STATE_MAX_AGE_SECONDS,
+            )
+        except signing.SignatureExpired:
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=state_expired")
+        except signing.BadSignature:
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=invalid_state")
+
+        user_id = payload.get("user_id")
+        if not user_id:
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=invalid_state")
+
+        try:
+            token_data = exchange_notion_code_for_token(code)
+            access_token = token_data.get("access_token")
+            if not access_token:
+                raise ValueError("No access token returned by Notion.")
+
+            connection, _ = NotionConnection.objects.get_or_create(user_id=user_id)
+            connection.workspace_id = token_data.get("workspace_id")
+            connection.workspace_name = token_data.get("workspace_name")
+            connection.workspace_icon = token_data.get("workspace_icon")
+            owner_data = token_data.get("owner", {}) if isinstance(token_data.get("owner"), dict) else {}
+            owner_user = owner_data.get("user", {}) if isinstance(owner_data.get("user"), dict) else {}
+            connection.bot_id = owner_user.get("id")
+            connection.bot_name = fetch_notion_bot_name(access_token)
+            connection.set_access_token(access_token)
+            connection.is_active = True
+            connection.connected_at = timezone.now()
+            connection.save()
+        except Exception:
+            logger.exception("Failed to connect Notion integration")
+            return redirect(f"{settings.FRONTEND_URL}/integrations?notion_error=token_exchange_failed")
+
+        return redirect(f"{settings.FRONTEND_URL}/integrations?open_notion=1")
+
+
+class NotionDisconnectView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        connection = NotionConnection.objects.filter(user=request.user, is_active=True).first()
+        if connection:
+            connection.disconnect()
+        serializer = NotionDisconnectSerializer(data={"success": True})
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data)
+
+
+class NotionImportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = NotionImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            draft, source_page_id = import_notion_page_as_draft(
+                user=request.user,
+                page_ref=serializer.validated_data["page"],
+                draft_id=serializer.validated_data.get("draft_id"),
+            )
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
+        except requests.HTTPError as exc:
+            return _notion_api_error_response(exc)
+        except requests.RequestException:
+            return Response(
+                {"error": "Notion service is temporarily unavailable. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(
+            {
+                "source_page_id": source_page_id,
+                "draft": _draft_summary(draft),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class NotionExportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = NotionExportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            payload = export_draft_to_notion(
+                user=request.user,
+                draft_id=serializer.validated_data["draft_id"],
+                parent_page_id=serializer.validated_data.get("parent_page_id"),
+                title=serializer.validated_data.get("title"),
+            )
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
+        except requests.HTTPError as exc:
+            return _notion_api_error_response(exc)
+        except requests.RequestException:
+            return Response(
+                {"error": "Notion service is temporarily unavailable. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class DraftViewSet(viewsets.ModelViewSet):

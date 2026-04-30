@@ -11,6 +11,7 @@ import SlackIntegrationModal from '@/components/slack/SlackIntegrationModal';
 import ZoomIntegrationModal from '@/components/zoom/ZoomIntegrationModal';
 import GoogleDocsIntegrationModal from '@/components/google-docs/GoogleDocsIntegrationModal';
 import GoogleCalendarIntegrationModal from '@/components/google-calendar/GoogleCalendarIntegrationModal';
+import NotionIntegrationModal from '@/components/notion/NotionIntegrationModal';
 import { slackApi, SlackConnectionStatus } from '@/lib/api/slackApi';
 import { useProjectStore } from '@/lib/projectStore';
 
@@ -23,12 +24,14 @@ function SettingsPageContent() {
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
     const [isGoogleDocsModalOpen, setIsGoogleDocsModalOpen] = useState(false);
     const [isGoogleCalendarModalOpen, setIsGoogleCalendarModalOpen] = useState(false);
+    const [isNotionModalOpen, setIsNotionModalOpen] = useState(false);
     const [slackStatus, setSlackStatus] = useState<SlackConnectionStatus | null>(null);
     const [slackStatusLoading, setSlackStatusLoading] = useState(true);
     const hasOpenedSlackRef = useRef(false);
     const hasOpenedZoomRef = useRef(false);
     const hasOpenedGoogleDocsRef = useRef(false);
     const hasOpenedGoogleCalendarRef = useRef(false);
+    const hasOpenedNotionRef = useRef(false);
     const userId = user?.id ?? null;
 
     // Refresh user data once on mount only — not in a loop.
@@ -130,6 +133,18 @@ function SettingsPageContent() {
             router.replace(newUrl, { scroll: false });
         }
 
+        if (searchParams.get('open_notion') === '1' && !hasOpenedNotionRef.current) {
+            setIsNotionModalOpen(true);
+            hasOpenedNotionRef.current = true;
+
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('open_notion');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
+
         const zoomError = searchParams.get('zoom_error');
         if (zoomError) {
             const messages: Record<string, string> = {
@@ -182,6 +197,24 @@ function SettingsPageContent() {
                 : window.location.pathname;
             router.replace(newUrl, { scroll: false });
         }
+
+        const notionError = searchParams.get('notion_error');
+        if (notionError) {
+            const messages: Record<string, string> = {
+                missing_code: 'Notion connection failed: missing callback code.',
+                state_expired: 'Notion connection failed: authorization expired. Please try again.',
+                invalid_state: 'Notion connection failed: invalid state.',
+                token_exchange_failed: 'Notion connection failed: token exchange failed.',
+                access_denied: 'Notion connection cancelled.',
+            };
+            toast.error(messages[notionError] ?? 'Notion connection failed. Please try again.');
+            const newParams = new URLSearchParams(searchParams.toString());
+            newParams.delete('notion_error');
+            const newUrl = newParams.toString()
+                ? `${window.location.pathname}?${newParams.toString()}`
+                : window.location.pathname;
+            router.replace(newUrl, { scroll: false });
+        }
     }, [slackStatus, slackStatusLoading, searchParams, router]);
 
     const canManageSlack = !!slackStatus?.can_manage_slack;
@@ -208,7 +241,7 @@ function SettingsPageContent() {
 
     return (
         <Layout user={layoutUser} onUserAction={handleUserAction}>
-            <div className="flex h-full flex-col bg-gray-50 p-6 md:p-8">
+            <div className="flex flex-col bg-gray-50 p-6 md:p-8">
                 <div className="max-w-7xl mx-auto w-full">
                     {/* Header */}
                     <div className="mb-8">
@@ -342,8 +375,33 @@ function SettingsPageContent() {
                                         Configure
                                     </button>
                                 </div>
+
+                                {/* Notion Card */}
+                                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-[#111827] rounded-lg flex items-center justify-center text-white font-semibold">
+                                                N
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900">Notion</h3>
+                                                <p className="text-sm text-gray-500">Connect your own workspace</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                                        Connect Notion to prepare import and export workflows for your drafts.
+                                    </p>
+                                    <button
+                                        onClick={() => setIsNotionModalOpen(true)}
+                                        className="w-full px-4 py-2 bg-[#3CCED7] text-white rounded-lg text-sm font-medium hover:bg-[#2AB5BD] transition-colors shadow-sm"
+                                    >
+                                        Configure
+                                    </button>
+                                </div>
                             </div>
                         </section>
+
                     </div>
                 </div>
             </div>
@@ -362,6 +420,10 @@ function SettingsPageContent() {
             <GoogleCalendarIntegrationModal
                 isOpen={isGoogleCalendarModalOpen}
                 onClose={() => setIsGoogleCalendarModalOpen(false)}
+            />
+            <NotionIntegrationModal
+                isOpen={isNotionModalOpen}
+                onClose={() => setIsNotionModalOpen(false)}
             />
         </Layout>
     );

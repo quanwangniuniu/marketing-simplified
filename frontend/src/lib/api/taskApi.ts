@@ -10,6 +10,8 @@ import {
   TaskRelationAddRequest,
   TaskAttachment,
   TaskListFilters,
+  TaskBulkUpdateRequest,
+  TaskBulkActionResponse,
 } from "@/types/task";
 
 export const TaskAPI = {
@@ -45,6 +47,13 @@ export const TaskAPI = {
   // Update a task
   updateTask: (taskId: number, data: Partial<TaskData>) =>
     api.patch(`/api/tasks/${taskId}/`, data),
+
+  bulkAction: async (
+    payload: TaskBulkUpdateRequest
+  ): Promise<TaskBulkActionResponse> => {
+    const response = await api.post('/api/tasks/bulk_action/', payload);
+    return response.data as TaskBulkActionResponse;
+  },
 
   // Create a new task
   createTask: (data: CreateTaskData) => api.post("/api/tasks/", data),

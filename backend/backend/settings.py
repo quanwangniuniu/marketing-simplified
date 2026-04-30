@@ -374,7 +374,7 @@ broker_connection_retry_on_startup = True
 CELERY_BEAT_SCHEDULE = {
     'reset-daily-usage': {
         'task': 'stripe_meta.tasks.reset_daily_usage',
-        'schedule': 0.0,  # Run at midnight (00:00) every day
+        'schedule': crontab(hour=0, minute=0),  # Run at midnight (00:00) every day
         'options': {'timezone': 'UTC'}
     },
     'cleanup-expired-tiktok-previews': {
@@ -392,7 +392,16 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(minute=7),  # offset from other :00 hourly tasks
         'options': {'timezone': 'UTC'},
     },
+    'meta-ads-daily-fan-out': {
+        'task': 'meta_ads.tasks.sync_all_active_ad_accounts',
+        'schedule': crontab(hour=6, minute=0),  # daily at 06:00 UTC
+        'options': {'timezone': 'UTC'},
+    },
 }
+
+# Shared secret for the platform-native cron endpoint that triggers the
+# daily Meta ads fan-out. Empty string disables the endpoint (always 401).
+INTERNAL_CRON_SECRET = config('INTERNAL_CRON_SECRET', default='')
 
 # Redis Configuration
 REDIS_HOST = config('REDIS_HOST', default='localhost')
@@ -543,6 +552,11 @@ GOOGLE_CALENDAR_OAUTH_REDIRECT_URI = config(
     'GOOGLE_CALENDAR_OAUTH_REDIRECT_URI',
     default='http://localhost:8000/api/google-calendar/callback/',
 ).strip()
+
+# Notion OAuth Configuration
+NOTION_OAUTH_CLIENT_ID = config('NOTION_CLIENT_ID', default='').strip()
+NOTION_OAUTH_CLIENT_SECRET = config('NOTION_CLIENT_SECRET', default='').strip()
+NOTION_OAUTH_REDIRECT_URI = config('NOTION_OAUTH_REDIRECT_URI', default='').strip()
 
 # Logging Configuration
 import logging

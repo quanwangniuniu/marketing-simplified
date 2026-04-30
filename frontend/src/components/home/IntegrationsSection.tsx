@@ -12,8 +12,7 @@ const integrations = [
   { name: "Slack", icon: "/icons/slack.svg" },
   { name: "Zoom", icon: "/icons/zoom.svg" },
   { name: "Stripe", icon: "/icons/stripe.svg" },
-  { name: "Gemini", icon: "/icons/gemini.svg" },
-  { name: "Google Sheets", icon: "/icons/google-spreadsheet.svg" },
+  { name: "Google Sheets", icon: "/icons/google-sheets.svg" },
   { name:"Google Gemini", icon: "/icons/google-gemini.svg" },
 ]
 

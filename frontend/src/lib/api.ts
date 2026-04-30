@@ -172,6 +172,13 @@ export const authAPI = {
     const response = await api.post('/auth/reset-password/', { token, new_password });
     return response.data;
   },
+
+  deleteAccount: async (refreshToken: string): Promise<{ message: string }> => {
+    const response = await api.delete('/auth/me/delete/', {
+      data: { confirm: 'DELETE MY ACCOUNT', refresh_token: refreshToken },
+    });
+    return response.data;
+  },
 };
 
 export default api; 
