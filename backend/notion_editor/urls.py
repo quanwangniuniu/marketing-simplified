@@ -14,6 +14,14 @@ router.register(r'revisions', views.DraftRevisionViewSet)
 router.register(r'media', views.MediaFileViewSet)
 
 urlpatterns = [
+    # External Notion integration endpoints
+    path('status/', views.NotionStatusView.as_view(), name='notion-status'),
+    path('connect/', views.NotionConnectView.as_view(), name='notion-connect'),
+    path('callback/', views.NotionCallbackView.as_view(), name='notion-callback'),
+    path('disconnect/', views.NotionDisconnectView.as_view(), name='notion-disconnect'),
+    path('import/', views.NotionImportView.as_view(), name='notion-import'),
+    path('export/', views.NotionExportView.as_view(), name='notion-export'),
+
     # Media upload endpoints - must be before router to avoid conflicts
     path('api/media/upload/', views.MediaUploadView.as_view(), name='media-upload'),
     path('api/web-bookmark/', views.WebBookmarkView.as_view(), name='web-bookmark'),

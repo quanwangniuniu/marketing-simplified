@@ -143,6 +143,9 @@ class MetaInsightDaily(models.Model):
     calls = models.IntegerField(default=0)
     purchases = models.IntegerField(default=0)
     messages = models.IntegerField(default=0)
+    lpv_count = models.IntegerField(default=0)
+    video_3sec_count = models.IntegerField(default=0)
+    comment_count = models.IntegerField(default=0)
 
     # Revenue (usually 0 until Meta Pixel has purchase events with value, or Hyros backfill)
     revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -188,6 +191,12 @@ class MetaSyncRun(TimeStampedModel):
     )
     level_counts = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True, default="")
+
+    # Phase signals updated at each step boundary inside sync_ad_account so
+    # callers can poll a running row and render which step is in flight. Both
+    # are reset to "" when the sync completes (success or failure).
+    current_phase = models.CharField(max_length=32, default="", blank=True)
+    current_progress = models.CharField(max_length=120, default="", blank=True)
 
     class Meta:
         db_table = "meta_sync_runs"
