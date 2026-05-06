@@ -10,6 +10,7 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
   ],
   Resources: [
     { label: "Docs", href: "/docs" },
+    { label: "Blog", href: "/blog" },
     { label: "Workflow Guides", href: "/docs" },
     { label: "Policy Guide", href: "/docs/policy" },
     { label: "Pricing Q&A", href: "/docs/pricing" },
@@ -21,6 +22,10 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
   ],
   Legal: [
     { label: "Policy", href: "/docs/policy" },
+    { label: "Terms of Service", href: "/terms" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Security", href: "/security" },
+    { label: "Cookie Policy", href: "/cookie-policy" },
     { label: "Data Use", href: "/docs/policy" },
     { label: "Platform Responsibilities", href: "/docs/policy" },
   ],

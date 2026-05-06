@@ -20,7 +20,7 @@ export default function HeaderSection({
   onLoginClick,
   onGetStartedClick,
   onRedirectToLogin,
-}: HeaderSectionProps) {
+}: Readonly<HeaderSectionProps>) {
   return (
     <>
       <header className="hidden md:block fixed top-0 left-0 right-0 border-b border-gray-200 bg-white z-50">
