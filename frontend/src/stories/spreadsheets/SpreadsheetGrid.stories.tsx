@@ -65,7 +65,7 @@ export const Default: Story = {
     const canvas = within(canvasElement);
     await waitFor(() => expect(canvas.getByRole('button', { name: /Export/i })).toBeInTheDocument());
     await expect(canvas.getByRole('button', { name: /Undo/i })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: /Import/i })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^Import$/i })).toBeInTheDocument();
     await expect(canvas.getByTestId('highlight-button')).toBeInTheDocument();
     await expect(canvas.getByTestId('select-all-cell')).toBeInTheDocument();
   },
@@ -144,7 +144,7 @@ export const ExcelImport: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await waitFor(() => expect(canvas.getByRole('button', { name: /Import/i })).toBeInTheDocument());
+    await waitFor(() => expect(canvas.getByRole('button', { name: /^Import$/i })).toBeInTheDocument());
     const file = await createTestXlsxFile();
     const fileInput = canvasElement.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
