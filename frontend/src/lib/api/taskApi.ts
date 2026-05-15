@@ -15,6 +15,19 @@ import {
   GanttChartPayload,
 } from "@/types/task";
 
+export type MentionUser = {
+  id: number;
+  username?: string | null;
+  email?: string | null;
+  name?: string | null;
+  team_id?: number | null;
+  team_name?: string | null;
+  team?: {
+    id?: number | null;
+    name?: string | null;
+  } | null;
+};
+
 export const TaskAPI = {
   // Get available task types
   getTaskTypes: async (): Promise<{ value: string; label: string }[]> => {
@@ -113,9 +126,34 @@ export const TaskAPI = {
     return (data.results || []) as TaskComment[];
   },
 
+  getMentionUsers: async (
+    taskId: number,
+    query = ''
+  ): Promise<MentionUser[]> => {
+    const response = await api.get(`/api/tasks/${taskId}/mention-users/`, {
+      params: { q: query },
+    });
+
+    const data: any = response.data;
+
+    if (Array.isArray(data)) {
+      return data as MentionUser[];
+    }
+
+    return (data.results || []) as MentionUser[];
+  },
+
   createComment: async (
     taskId: number,
-    data: { body: string }
+    data: { body: string; mentions?: number[]; is_clarification?: boolean }
+  ): Promise<TaskComment> => {
+    const response = await api.post(`/api/tasks/${taskId}/comments/`, data);
+    return response.data as TaskComment;
+  },
+
+  createReply: async (
+    taskId: number,
+    data: { body: string; parent: number; mentions?: number[]; is_clarification?: boolean }
   ): Promise<TaskComment> => {
     const response = await api.post(`/api/tasks/${taskId}/comments/`, data);
     return response.data as TaskComment;

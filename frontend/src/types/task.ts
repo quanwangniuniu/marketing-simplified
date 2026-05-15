@@ -134,6 +134,10 @@ export interface TaskComment {
   user: UserSummary;
   body: string;
   created_at: string;
+  parent: number | null;
+  is_clarification: boolean;
+  response_time_secs: number | null;
+  replies: TaskComment[];
 }
 
 // Task relation types

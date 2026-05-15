@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django_fsm import FSMField, transition
 from django.contrib.contenttypes.models import ContentType
@@ -592,8 +593,18 @@ class TaskComment(models.Model):
         related_name='task_comments',
         help_text="User who made the comment"
     )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='replies',
+        help_text="Parent comment if this is a reply",
+    )
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    is_clarification = models.BooleanField(default=False)
+    response_time_secs = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'task_comments'
@@ -601,7 +612,80 @@ class TaskComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user_id} on Task {self.task_id}"
+    
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        if is_new:
+            if self.parent_id:
+                prev = self.parent
+            else:
+                prev = (
+                    TaskComment.objects
+                    .filter(task_id=self.task_id, parent__isnull=True)
+                    .order_by('-created_at')
+                    .first()
+                )
 
+            if prev:
+                self.response_time_secs = int(
+                    (timezone.now() - prev.created_at).total_seconds()
+                )
+
+            if not self.is_clarification:
+                self.is_clarification = '?' in self.body
+
+        super().save(*args, **kwargs)
+
+        if is_new:
+            CollaborationEvent.objects.create(
+                task_id=self.task_id,
+                user=self.user,
+                event_type='comment',
+                meta={
+                    'comment_id':         self.pk,
+                    'parent_id':          self.parent_id,
+                    'is_clarification':   self.is_clarification,
+                    'response_time_secs': self.response_time_secs,
+                },
+            )
+
+class CollaborationEvent(models.Model):
+    class EventType(models.TextChoices):
+        COMMENT = 'comment', 'Comment'
+        CLARIFICATION = 'clarification', 'Clarification'
+        REVIEWER_PING = 'reviewer_ping', 'Reviewer Ping'
+        CROSS_TEAM_MENTION = 'cross_team_mention', 'Cross Team Mention'
+        SHARED_ACCESS = 'shared_access', 'Shared Access'
+        SHARED_TASK_ACCESS = 'shared_task_access', 'Shared Task Access'
+        APPROVAL_REVIEW_STARTED = 'approval_review_started', 'Approval Review Started'
+        APPROVAL_DELAY = 'approval_delay', 'Approval Delay'
+        DOCUMENTATION_REVISIT = 'documentation_revisit', 'Documentation Revisit'
+        INTERNAL_SEARCH = 'internal_search', 'Internal Search'
+        AI_HELP_REQUEST = 'ai_help_request', 'AI Help Request'
+        SNIPPET_INTERACTION = 'snippet_interaction', 'Snippet Interaction'
+    class EventType(models.TextChoices):
+        COMMENT        = 'comment',        'Comment'
+        CLARIFICATION  = 'clarification',  'Clarification'
+        REVIEWER_PING  = 'reviewer_ping',  'Reviewer Ping'
+        SHARED_ACCESS  = 'shared_access',  'Shared Access'
+        APPROVAL_DELAY = 'approval_delay', 'Approval Delay'
+
+    task = models.ForeignKey(
+        Task, on_delete=models.CASCADE, related_name='collaboration_events'
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='collaboration_events'
+    )
+    event_type = models.CharField(max_length=50, choices=EventType.choices)
+    meta       = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'collaboration_events'
+        indexes  = [
+            models.Index(fields=['task', 'event_type']),
+            models.Index(fields=['created_at']),
+        ]
 
 class TaskAttachment(models.Model):
     """Task attachment model for storing files attached to tasks"""

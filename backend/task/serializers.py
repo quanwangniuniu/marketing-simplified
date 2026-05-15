@@ -5,7 +5,7 @@ from rest_framework import serializers
 from meetings.knowledge_links import serialize_origin_meeting, serialize_origin_action_item
 from meetings.models import MeetingTaskOrigin
 from meetings.services import validate_meeting_for_origin_link
-from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskHierarchy, TaskRelation
+from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskHierarchy, TaskRelation, CollaborationEvent
 from core.models import Project, ProjectMember
 from core.utils.project import get_user_active_project
 from django.contrib.auth import get_user_model
@@ -22,9 +22,39 @@ User = get_user_model()
 
 class UserSummarySerializer(serializers.ModelSerializer):
     """Serializer for user summary information"""
+    
     class Meta:
         model = User
         fields = ['id', 'username', 'email']
+
+class MentionUserSerializer(serializers.ModelSerializer):
+    """Serializer for users that can be mentioned in task comments."""
+    name = serializers.SerializerMethodField()
+    team_id = serializers.SerializerMethodField()
+    team_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'email',
+            'name',
+            'team_id',
+            'team_name',
+        ]
+
+    def get_name(self, obj):
+        full_name = obj.get_full_name() if hasattr(obj, 'get_full_name') else ''
+        return full_name or getattr(obj, 'username', None) or getattr(obj, 'email', None)
+
+    def get_team_id(self, obj):
+        team = getattr(obj, 'team', None)
+        return getattr(team, 'id', None)
+
+    def get_team_name(self, obj):
+        team = getattr(obj, 'team', None)
+        return getattr(team, 'name', None)
 
 
 class ProjectSummarySerializer(serializers.ModelSerializer):
@@ -634,12 +664,28 @@ class ApprovalRecordSerializer(serializers.ModelSerializer):
 class TaskCommentSerializer(serializers.ModelSerializer):
     """Serializer for TaskComment model."""
     user = UserSummarySerializer(read_only=True)
+    replies = serializers.SerializerMethodField()
+    is_clarification = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = TaskComment
-        fields = ['id', 'task', 'user', 'body', 'created_at']
-        read_only_fields = ['id', 'task', 'user', 'created_at']
+        fields = ['id', 'task', 'user', 'body', 'created_at',
+            'parent',
+            'replies',
+            'is_clarification',
+            'response_time_secs',]
+        read_only_fields = ['id', 'task', 'user', 'created_at', 'response_time_secs',]
+    def get_replies(self, obj):
+        qs = obj.replies.order_by('created_at')
+        return TaskCommentSerializer(qs, many=True, context=self.context).data
 
+    def validate_parent(self, value):
+        if value is not None:
+            if value.parent_id is not None:
+                raise serializers.ValidationError(
+                    "Replies cannot be nested more than one level."
+                )
+        return value
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):
     """Serializer for TaskAttachment model"""
@@ -739,3 +785,12 @@ class TaskBulkActionSerializer(serializers.Serializer):
                 }
             )
         return attrs
+
+class CollaborationEventSerializer(serializers.ModelSerializer):
+    """Serializer for CollaborationEvent model."""
+    user = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = CollaborationEvent
+        fields = ['id', 'user', 'event_type', 'meta', 'created_at']
+        read_only_fields = ['id', 'user', 'event_type', 'meta', 'created_at']
