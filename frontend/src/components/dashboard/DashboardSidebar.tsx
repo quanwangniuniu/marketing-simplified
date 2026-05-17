@@ -10,7 +10,7 @@ import {
   Bot, ChevronsUpDown, ChevronDown, ChevronRight,
   Target, Mail, Notebook, Facebook, Video, Presentation,
   User as UserIcon, CreditCard, Plug, LogOut,
-  Shield, UserCog, UserCheck, BarChart3, Sparkles, PiggyBank,
+  Shield, UserCog, UserCheck, BarChart3, Sparkles, PiggyBank, Headphones,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/lib/authStore';
@@ -131,6 +131,7 @@ const adminGroup: NavGroup = {
     { label: 'Roles', href: '/admin/roles', icon: UserCog },
     { label: 'Permissions', href: '/admin/permissions', icon: Shield },
     { label: 'Approvers', href: '/admin/approvers', icon: UserCheck },
+    { label: 'Support Channels', href: '/admin/channels', icon: Headphones },
   ],
 };
 

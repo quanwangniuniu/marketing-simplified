@@ -51,6 +51,7 @@ urlpatterns = [
     path("api/v1/linear/", include("linear_integration.urls")),
     path('api/', include('task.urls')),
     path('api/policy/', include('policy.urls')),
+    path('api/support/', include('support_channels.urls')),
     path('api/dashboard/', include('dashboard.urls')),
     path('api/optimization/', include('optimization.urls')),
     path('api/notion/', include('notion_editor.urls')),
