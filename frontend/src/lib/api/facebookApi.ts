@@ -10,6 +10,10 @@ export interface FacebookAdAccount {
   business_id: string;
   is_owned: boolean;
   project_id: number | null;
+  connected_by_current_user: boolean;
+  can_manage: boolean;
+  can_sync: boolean;
+  connector_name: string;
 }
 
 export interface FacebookStatus {
@@ -21,6 +25,20 @@ export interface FacebookStatus {
   token_expires_at?: string | null;
   last_synced_at?: string | null;
   ad_accounts?: FacebookAdAccount[];
+}
+
+export interface FacebookAdAccountListParams {
+  project_id?: number;
+  page?: number;
+  page_size?: number;
+  search?: string;
+}
+
+export interface FacebookAdAccountListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  results: FacebookAdAccount[];
 }
 
 export interface FacebookConnectPayload {
@@ -520,8 +538,20 @@ export interface MetaAdSetTimeseries {
 }
 
 export const facebookApi = {
-  getStatus: async (): Promise<FacebookStatus> => {
-    const response = await api.get("/api/facebook_integration/status/");
+  getStatus: async (projectId?: number | null): Promise<FacebookStatus> => {
+    const response = await api.get("/api/facebook_integration/status/", {
+      params: projectId ? { project_id: projectId } : undefined,
+    });
+    return response.data;
+  },
+
+  listAdAccounts: async (
+    params?: FacebookAdAccountListParams
+  ): Promise<FacebookAdAccountListResponse> => {
+    const response = await api.get<FacebookAdAccountListResponse>(
+      "/api/facebook_integration/ad_accounts/",
+      { params }
+    );
     return response.data;
   },
 

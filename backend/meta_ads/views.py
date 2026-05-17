@@ -22,6 +22,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import Project
+from facebook_integration.access import (
+    get_accessible_meta_ad_account_or_404,
+    get_accessible_meta_ad_accounts,
+    user_can_sync_meta_ad_account,
+)
 from facebook_integration.models import MetaAdAccount
 from spreadsheet.models import (
     Cell,
@@ -55,11 +60,11 @@ from .tasks import sync_all_active_ad_accounts, sync_single_ad_account
 
 
 def _user_ad_account(request, ad_account_id: int) -> MetaAdAccount:
-    return get_object_or_404(
-        MetaAdAccount,
-        pk=ad_account_id,
-        connection__user=request.user,
-    )
+    return get_accessible_meta_ad_account_or_404(request.user, ad_account_id)
+
+
+def _accessible_ad_accounts_for_user(user):
+    return get_accessible_meta_ad_accounts(user).values("id")
 
 
 # Views -----------------------------------------------------------------------
@@ -219,10 +224,8 @@ class MetaSummaryView(APIView):
         if not ad_account_id:
             return Response({"detail": "ad_account query parameter is required."}, status=400)
         try:
-            ad_account = MetaAdAccount.objects.get(
-                pk=int(ad_account_id), connection__user=request.user
-            )
-        except (MetaAdAccount.DoesNotExist, ValueError):
+            ad_account = _user_ad_account(request, int(ad_account_id))
+        except ValueError:
             return Response({"detail": "Ad account not found."}, status=404)
 
         try:
@@ -313,6 +316,11 @@ class MetaSyncRunTriggerView(APIView):
 
     def post(self, request, ad_account_id: int):
         ad_account = _user_ad_account(request, ad_account_id)
+        if not user_can_sync_meta_ad_account(request.user, ad_account):
+            return Response(
+                {"detail": "You do not have permission to sync this ad account."},
+                status=403,
+            )
         async_result = sync_single_ad_account.delay(ad_account.id)
         return Response(
             {
@@ -1508,10 +1516,10 @@ def _resolve_export_project(request) -> Project | None:
         project_id = int(raw)
     except (TypeError, ValueError):
         return None
-    try:
-        return Project.objects.get(pk=project_id, is_deleted=False)
-    except Project.DoesNotExist:
+    project = Project.objects.filter(pk=project_id, is_deleted=False).first()
+    if project is None:
         return None
+    return project
 
 
 class MetaCreativePerformanceCsvExportView(APIView):
@@ -1897,7 +1905,7 @@ class MetaCreativeDetailView(APIView):
         creative = get_object_or_404(
             MetaAdCreative,
             pk=creative_id,
-            ad_account__connection__user=request.user,
+            ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
@@ -2075,7 +2083,7 @@ class MetaCreativeVideoSourceView(APIView):
         creative = get_object_or_404(
             MetaAdCreative,
             pk=creative_id,
-            ad_account__connection__user=request.user,
+            ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         ad = creative.ads.order_by("-updated_at").first()
         if ad is None:
@@ -2150,7 +2158,7 @@ class MetaCreativeInsightTimeseriesView(APIView):
         creative = get_object_or_404(
             MetaAdCreative,
             pk=creative_id,
-            ad_account__connection__user=request.user,
+            ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
@@ -2222,7 +2230,7 @@ class MetaCampaignDetailView(APIView):
         campaign = get_object_or_404(
             MetaCampaign,
             pk=campaign_id,
-            ad_account__connection__user=request.user,
+            ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
@@ -2363,7 +2371,7 @@ class MetaCampaignInsightTimeseriesView(APIView):
         campaign = get_object_or_404(
             MetaCampaign,
             pk=campaign_id,
-            ad_account__connection__user=request.user,
+            ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
@@ -2418,7 +2426,7 @@ class MetaAdSetDetailView(APIView):
         adset = get_object_or_404(
             MetaAdSet.objects.select_related("campaign", "campaign__ad_account"),
             pk=adset_id,
-            campaign__ad_account__connection__user=request.user,
+            campaign__ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()
@@ -2577,7 +2585,7 @@ class MetaAdSetInsightTimeseriesView(APIView):
         adset = get_object_or_404(
             MetaAdSet,
             pk=adset_id,
-            campaign__ad_account__connection__user=request.user,
+            campaign__ad_account_id__in=_accessible_ad_accounts_for_user(request.user),
         )
         days = _normalize_days(request.query_params.get("days"), self.ALLOWED_DAYS, default=28)
         today = _dt.date.today()

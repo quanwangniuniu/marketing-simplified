@@ -15,13 +15,22 @@ from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.core.signing import BadSignature, SignatureExpired
+from django.db.models import Q
 from django.shortcuts import redirect
 from rest_framework import status as drf_status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.models import Project, ProjectMember
+
+from .access import (
+    get_accessible_meta_ad_account_or_404,
+    get_accessible_meta_ad_accounts,
+    user_can_manage_meta_ad_account,
+)
 from .models import FacebookConnection, MetaAdAccount
 from .serializers import (
     ConnectInitSerializer,
@@ -35,22 +44,68 @@ from . import services
 logger = logging.getLogger(__name__)
 
 
-def _status_payload(user) -> dict:
+def _parse_optional_int(raw) -> int | None:
+    if raw in (None, ""):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_positive_int(raw, default: int, *, max_value: int | None = None) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    if value < 1:
+        value = default
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
+
+
+def _status_payload(request) -> dict:
+    user = request.user
+    project_id = _parse_optional_int(request.query_params.get("project_id"))
     try:
         connection = FacebookConnection.objects.get(user=user, is_active=True)
     except FacebookConnection.DoesNotExist:
-        return {"connected": False}
-    ad_accounts = MetaAdAccount.objects.filter(connection=connection)
+        connection = None
+
+    if project_id is None:
+        ad_accounts = MetaAdAccount.objects.filter(
+            connection__user=user,
+            connection__is_active=True,
+        ).select_related("connection", "connection__user", "project")
+    else:
+        ad_accounts = get_accessible_meta_ad_accounts(
+            user,
+            project_id=project_id,
+        )
+    ad_accounts = ad_accounts.order_by("name", "id")
+
+    if connection is None and not ad_accounts.exists():
+        return {"connected": False, "ad_accounts": []}
+
     return {
         "connected": True,
-        "fb_user_name": connection.fb_user_name,
-        "fb_email": connection.fb_email,
-        "business_id": connection.business_id,
-        "business_name": connection.business_name,
-        "token_expires_at": connection.token_expires_at,
-        "last_synced_at": connection.last_synced_at,
-        "ad_accounts": MetaAdAccountSerializer(ad_accounts, many=True).data,
+        "fb_user_name": connection.fb_user_name if connection else "",
+        "fb_email": connection.fb_email if connection else None,
+        "business_id": connection.business_id if connection else "",
+        "business_name": connection.business_name if connection else "",
+        "token_expires_at": connection.token_expires_at if connection else None,
+        "last_synced_at": connection.last_synced_at if connection else None,
+        "ad_accounts": ad_accounts,
     }
+
+
+def _serialized_status_payload(request) -> dict:
+    serializer = FacebookConnectionStatusSerializer(
+        _status_payload(request),
+        context={"request": request},
+    )
+    return serializer.data
 
 
 class FacebookConnectView(APIView):
@@ -123,9 +178,51 @@ class FacebookStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        payload = _status_payload(request.user)
-        serializer = FacebookConnectionStatusSerializer(payload)
-        return Response(serializer.data)
+        return Response(_serialized_status_payload(request))
+
+
+class MetaAdAccountListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        project_id = _parse_optional_int(request.query_params.get("project_id"))
+        queryset = get_accessible_meta_ad_accounts(
+            request.user,
+            project_id=project_id,
+        )
+
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search)
+                | Q(meta_account_id__icontains=search)
+                | Q(business_id__icontains=search)
+            )
+
+        queryset = queryset.order_by("name", "id")
+
+        page = _parse_positive_int(request.query_params.get("page"), 1)
+        page_size = _parse_positive_int(
+            request.query_params.get("page_size"),
+            5,
+            max_value=100,
+        )
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+        serializer = MetaAdAccountSerializer(
+            page_obj,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(
+            {
+                "count": paginator.count,
+                "page": page,
+                "page_size": page_size,
+                "results": serializer.data,
+            }
+        )
 
 
 class FacebookDisconnectView(APIView):
@@ -187,7 +284,7 @@ class FacebookSyncView(APIView):
 
         if connection.business_id:
             services._sync_ad_accounts_for_business(connection, access_token, connection.business_id)
-        return Response(_status_payload(request.user))
+        return Response(_serialized_status_payload(request))
 
 
 class MetaAdAccountLinkProjectView(APIView):
@@ -196,15 +293,46 @@ class MetaAdAccountLinkProjectView(APIView):
     def post(self, request, pk: int):
         serializer = LinkProjectSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            account = MetaAdAccount.objects.get(
-                pk=pk, connection__user=request.user
-            )
-        except MetaAdAccount.DoesNotExist:
+        account = get_accessible_meta_ad_account_or_404(request.user, pk)
+
+        target_project = None
+        target_project_id = serializer.validated_data.get("project_id")
+        if target_project_id:
+            try:
+                target_project = Project.objects.get(
+                    pk=target_project_id,
+                    is_deleted=False,
+                )
+            except Project.DoesNotExist:
+                return Response(
+                    {"detail": "Project not found."},
+                    status=drf_status.HTTP_404_NOT_FOUND,
+                )
+            if not ProjectMember.objects.filter(
+                user=request.user,
+                project=target_project,
+                is_active=True,
+            ).exists():
+                return Response(
+                    {"detail": "You do not have access to this project."},
+                    status=drf_status.HTTP_403_FORBIDDEN,
+                )
+
+        if not user_can_manage_meta_ad_account(
+            request.user,
+            account,
+            target_project=target_project,
+        ):
             return Response(
-                {"detail": "Ad account not found."},
-                status=drf_status.HTTP_404_NOT_FOUND,
+                {"detail": "You do not have permission to manage this ad account."},
+                status=drf_status.HTTP_403_FORBIDDEN,
             )
-        account.project_id = serializer.validated_data.get("project_id") or None
+
+        account.project = target_project
         account.save(update_fields=["project", "updated_at"])
-        return Response(MetaAdAccountSerializer(account).data)
+        return Response(
+            MetaAdAccountSerializer(
+                account,
+                context={"request": request},
+            ).data
+        )
