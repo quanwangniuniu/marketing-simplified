@@ -26,6 +26,20 @@ interface UseCalendarViewResult {
 // Cache stores all merged events (regular + derived) keyed by view/date/calendar.
 const cache = new Map<string, { events: EventDTO[]; calendars: CalendarDTO[] }>();
 
+function hasValidEventDates(event: EventDTO): boolean {
+  if (
+    typeof event.start_datetime !== "string" ||
+    !event.start_datetime.trim() ||
+    typeof event.end_datetime !== "string" ||
+    !event.end_datetime.trim()
+  ) {
+    return false;
+  }
+  const startTime = new Date(event.start_datetime).getTime();
+  const endTime = new Date(event.end_datetime).getTime();
+  return Number.isFinite(startTime) && Number.isFinite(endTime);
+}
+
 // Build cache key from view type, date, and calendar IDs only.
 // activeEventTypes is intentionally excluded so toggling filters
 // does not trigger a new network request.
@@ -136,7 +150,7 @@ export function useCalendarView(
 
         // Merge regular and derived events; cache without filtering so that
         // toggling activeEventTypes is instant (no re-fetch needed).
-        const merged = [...response.data.events, ...derivedEvents];
+        const merged = [...response.data.events, ...derivedEvents].filter(hasValidEventDates);
         cache.set(key, { events: merged, calendars: response.data.calendars });
         setAllEvents(merged);
         setCalendars(response.data.calendars);

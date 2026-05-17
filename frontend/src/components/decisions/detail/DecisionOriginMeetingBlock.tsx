@@ -28,7 +28,7 @@ export default function DecisionOriginMeetingBlock({ origin, projectId }: Props)
   const dateLabel = formatDate((origin as any).scheduled_date ?? (origin as any).scheduled_start);
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <section className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
         Origin meeting
       </h3>
@@ -41,7 +41,7 @@ export default function DecisionOriginMeetingBlock({ origin, projectId }: Props)
           className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 group-hover:text-[#3CCED7]"
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-gray-900 group-hover:text-[#3CCED7]">
+          <div className="break-words text-sm font-medium text-gray-900 group-hover:text-[#3CCED7] sm:truncate">
             {title}
           </div>
           {dateLabel && <div className="text-[11px] text-gray-500">{dateLabel}</div>}

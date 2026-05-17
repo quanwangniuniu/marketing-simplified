@@ -193,7 +193,7 @@ export function PivotEditorPanel({
   );
 
   return (
-    <div className="w-80 h-full bg-white border-l border-gray-200 flex flex-col shadow-lg">
+    <div className="fixed bottom-0 right-0 top-12 z-30 flex w-[min(360px,calc(100vw-3.5rem))] flex-col border-l border-gray-200 bg-white shadow-2xl sm:static sm:top-auto sm:h-full sm:w-80 sm:shadow-lg">
       <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-green-50 to-blue-50">
         <div className="flex items-center gap-2">
           <Table2 className="h-5 w-5 text-green-600" />

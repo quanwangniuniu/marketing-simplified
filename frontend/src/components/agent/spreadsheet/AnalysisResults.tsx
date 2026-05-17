@@ -42,17 +42,10 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
     setLoading(false)
   }, [filename])
 
-  const toggleSelection = (id: number) => {
-    setAnomalies((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, selected: !a.selected } : a))
-    )
-  }
-
   const dismissAnomaly = (id: number) => {
     setAnomalies((prev) => prev.filter((a) => a.id !== id))
   }
 
-  const selectedCount = anomalies.filter((a) => a.selected).length
   const isLoading = loadingOverride || loading
 
   return (
@@ -116,15 +109,6 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
                       <p className="text-sm font-medium text-foreground">{anomaly.title}</p>
                       <p className="text-xs text-muted-foreground mt-1">{anomaly.description}</p>
                       <div className="flex items-center gap-3 mt-2">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={anomaly.selected}
-                            onChange={() => toggleSelection(anomaly.id)}
-                            className="rounded border-input bg-muted text-blue-500 focus:ring-blue-500 focus:ring-offset-0 w-3.5 h-3.5"
-                          />
-                          <span className="text-xs text-muted-foreground">Include in Decision</span>
-                        </label>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -142,11 +126,6 @@ export function AnalysisResults({ filename, loading: loadingOverride = false }: 
             })
           )}
 
-          {selectedCount > 0 && (
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
-              Create Decision from {selectedCount} Selected
-            </Button>
-          )}
         </CardContent>
       )}
     </Card>

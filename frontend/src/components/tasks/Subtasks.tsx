@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Plus, Square } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
-import { TaskData } from '@/types/task';
+import { TaskData, userDisplayName } from '@/types/task';
 import SubtaskModal from './SubtaskModal';
 
 interface SubtasksProps {
@@ -120,11 +120,11 @@ export default function Subtasks({ taskId, taskProjectId, parentTaskIsSubtask }:
                     <div className="mt-1 flex items-center space-x-1">
                       <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200">
                         <span className="text-[10px] text-slate-700">
-                          {subtask.owner.username?.[0]?.toUpperCase() || '?'}
+                          {userDisplayName(subtask.owner)[0]?.toUpperCase() || '?'}
                         </span>
                       </div>
                       <span className="text-xs text-slate-500">
-                        {subtask.owner.username || subtask.owner.email || `User #${subtask.owner.id}`}
+                        {userDisplayName(subtask.owner)}
                       </span>
                     </div>
                   )}

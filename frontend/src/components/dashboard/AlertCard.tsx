@@ -27,16 +27,16 @@ export default function AlertCard({ alert, onAction }: AlertCardProps) {
 
       <div className="pl-4 pr-3 py-3">
         {/* Header */}
-        <div className="flex items-start justify-between mb-1.5">
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${severity.bgColor} ${severity.textColor}`}>
+        <div className="mb-1.5 flex min-w-0 items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`shrink-0 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${severity.bgColor} ${severity.textColor}`}>
               {severity.label}
             </span>
-            <span className="text-[13px] font-medium text-gray-900">{alert.title}</span>
+            <span className="min-w-0 truncate text-[13px] font-medium text-gray-900">{alert.title}</span>
           </div>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+            className="shrink-0 p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
           >
             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -60,7 +60,7 @@ export default function AlertCard({ alert, onAction }: AlertCardProps) {
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-1.5 mt-2.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <Button
             size="sm"
             onClick={() => onAction(alert.id, 'accepted')}

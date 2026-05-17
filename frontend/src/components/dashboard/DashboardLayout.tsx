@@ -88,6 +88,16 @@ const ROOT_PATHS = new Set([
   '/timeline',
 ]);
 
+const MOBILE_VIEWPORT_QUERY = '(max-width: 639px)';
+
+const isMobileViewport = (): boolean =>
+  typeof window !== 'undefined' && window.matchMedia(MOBILE_VIEWPORT_QUERY).matches;
+
+const persistUpcomingMeetingsPanelPreference = (next: boolean) => {
+  localStorage.setItem(UPCOMING_MEETINGS_PANEL_STORAGE_KEY, String(next));
+  document.cookie = `${UPCOMING_MEETINGS_PANEL_STORAGE_KEY}=${String(next)}; path=/; max-age=31536000; samesite=lax`;
+};
+
 export default function DashboardLayout({
   children,
   alerts = [],
@@ -117,13 +127,33 @@ export default function DashboardLayout({
   const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
 
   useEffect(() => {
-    const stored = localStorage.getItem(UPCOMING_MEETINGS_PANEL_STORAGE_KEY);
-    if (stored === 'false' || stored === 'true') {
-      const storedOpen = normalizeUpcomingMeetingsPanelOpen(stored);
-      setIsPanelOpen(storedOpen);
-      document.cookie = `${UPCOMING_MEETINGS_PANEL_STORAGE_KEY}=${String(storedOpen)}; path=/; max-age=31536000; samesite=lax`;
-    }
+    const mediaQuery = window.matchMedia(MOBILE_VIEWPORT_QUERY);
+    const syncPanelStateForViewport = () => {
+      if (mediaQuery.matches) {
+        setIsPanelOpen(false);
+        return;
+      }
+      const stored = localStorage.getItem(UPCOMING_MEETINGS_PANEL_STORAGE_KEY);
+      if (stored === 'false' || stored === 'true') {
+        const storedOpen = normalizeUpcomingMeetingsPanelOpen(stored);
+        setIsPanelOpen(storedOpen);
+        document.cookie = `${UPCOMING_MEETINGS_PANEL_STORAGE_KEY}=${String(storedOpen)}; path=/; max-age=31536000; samesite=lax`;
+      }
+    };
+
+    syncPanelStateForViewport();
+    mediaQuery.addEventListener('change', syncPanelStateForViewport);
+
+    return () => {
+      mediaQuery.removeEventListener('change', syncPanelStateForViewport);
+    };
   }, [setIsPanelOpen]);
+
+  useEffect(() => {
+    if (isMobileViewport()) {
+      setIsPanelOpen(false);
+    }
+  }, [pathname, setIsPanelOpen]);
 
   useEffect(() => {
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -177,23 +207,26 @@ export default function DashboardLayout({
 
   const meetingsForPanel = useExplicit ? upcomingMeetings! : autoMeetings;
   const toggleMeetingsPanel = () => {
+    if (isMobileViewport()) {
+      setIsPanelOpen((prev) => !prev);
+      return;
+    }
     setIsPanelOpen((prev) => {
       const next = !prev;
-      localStorage.setItem(UPCOMING_MEETINGS_PANEL_STORAGE_KEY, String(next));
-      document.cookie = `${UPCOMING_MEETINGS_PANEL_STORAGE_KEY}=${String(next)}; path=/; max-age=31536000; samesite=lax`;
+      persistUpcomingMeetingsPanelPreference(next);
       return next;
     });
   };
 
   return (
-    <div className="fixed inset-0 flex bg-[#F7F8FA] overflow-hidden">
+    <div className="flex h-screen w-full bg-[#F7F8FA] overflow-hidden">
       <DashboardSidebar />
 
       {/* Main content */}
       <div className="min-h-0 flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="flex items-center justify-between px-5 h-12 border-b border-gray-200 bg-white shrink-0">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
             {showBack && (
               <button
                 type="button"
@@ -205,9 +238,9 @@ export default function DashboardLayout({
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
-            <span className="text-gray-400">{breadcrumb.root}</span>
+            <span className="truncate text-gray-400">{breadcrumb.root}</span>
             <span className="text-gray-300">/</span>
-            <span className="font-medium text-gray-900">{breadcrumb.leaf}</span>
+            <span className="truncate font-medium text-gray-900">{breadcrumb.leaf}</span>
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell alerts={alerts} />
@@ -216,12 +249,12 @@ export default function DashboardLayout({
                 variant="ghost"
                 size="sm"
                 onClick={toggleMeetingsPanel}
-                className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700"
+                className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700 [&_svg]:mr-0 sm:[&_svg]:mr-1"
               >
                 {isPanelOpen ? (
-                  <><PanelRightClose className="w-4 h-4 mr-1" /> Hide Panel</>
+                  <><PanelRightClose className="w-4 h-4" /> <span className="hidden sm:inline">Hide Panel</span></>
                 ) : (
-                  <><PanelRightOpen className="w-4 h-4 mr-1" /> Show Panel</>
+                  <><PanelRightOpen className="w-4 h-4" /> <span className="hidden sm:inline">Show Panel</span></>
                 )}
               </Button>
             )}
@@ -229,17 +262,28 @@ export default function DashboardLayout({
         </header>
 
         {/* Scrollable content */}
-        <main className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-4 ${mainClassName}`}>
+        <main className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4 sm:p-5 ${mainClassName}`}>
           {children}
         </main>
       </div>
 
       {!hideRightPanel && (
-        <UpcomingMeetingsPanel
-          meetings={meetingsForPanel}
-          isOpen={isPanelOpen}
-          loading={meetingsLoading}
-        />
+        <>
+          {isPanelOpen && (
+            <button
+              type="button"
+              aria-label="Close upcoming meetings overlay"
+              className="fixed bottom-0 left-14 right-0 top-12 z-30 bg-gray-900/20 sm:hidden"
+              onClick={() => setIsPanelOpen(false)}
+            />
+          )}
+          <UpcomingMeetingsPanel
+            meetings={meetingsForPanel}
+            isOpen={isPanelOpen}
+            loading={meetingsLoading}
+            onClose={() => setIsPanelOpen(false)}
+          />
+        </>
       )}
       <AgentSidePanel />
     </div>

@@ -27,10 +27,7 @@ export const AGENT_MESSAGES = {
   CHAT_WELCOME: 'Welcome! Upload your ad performance CSV file to begin analysis.',
   CHAT_THINKING: 'Thinking...',
   CHAT_GENERAL_GUIDANCE:
-    "I can help you analyze spreadsheet data and create decisions. To get started, select a spreadsheet and use the 'analyze' action.",
-  // Decision
-  DECISION_NO_PENDING: 'No pending analysis to confirm.',
-  DECISION_NOT_FOUND: 'No decision found to create tasks from.',
+    "I can help you analyze spreadsheet data and recommended tasks. To get started, select a spreadsheet and use the 'analyze' action.",
   // Empty states
   EMPTY_PERFORMANCE_CHART: 'Upload a CSV report via the Pipeline to see performance trends',
   EMPTY_ANOMALY_ALERTS: 'No active alerts',

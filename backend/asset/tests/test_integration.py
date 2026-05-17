@@ -135,7 +135,7 @@ class AssetCreationAndVersionManagementIntegrationTest(BaseIntegrationTestCase):
         
         # Verify asset was created correctly
         self.assertEqual(asset_data['status'], Asset.NOT_SUBMITTED)
-        self.assertEqual(asset_data['owner'], self.owner.id)
+        self.assertEqual(asset_data['owner'], self.owner.get_full_name().strip() or self.owner.username or self.owner.email)
         self.assertEqual(asset_data['task'], self.task.id)
         self.assertEqual(asset_data['team'], self.team.id)
         self.assertEqual(asset_data['tags'], ['integration', 'test'])

@@ -5327,8 +5327,8 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       ) : null}
 
       {/* Unified toolbar: undo/redo, freeze, import/export, highlight & formatting */}
-      <div className="flex items-center justify-between gap-3 px-2 py-1.5 border-b border-gray-200 bg-white">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-3 overflow-x-auto px-2 py-1.5 border-b border-gray-200 bg-white">
+        <div className="flex shrink-0 items-center gap-1.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -5487,7 +5487,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
         </div>
 
         {/* Highlight & Text formatting controls */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <div className="relative" ref={highlightMenuRef}>
             <button
               type="button"
@@ -5949,7 +5949,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
           document.body
         )}
 
-      <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-200 bg-white">
+      <div className="flex min-w-0 items-center gap-2 px-2 py-2 border-b border-gray-200 bg-white">
         <span className="text-xs font-semibold text-gray-500">fx</span>
         <input
           type="text"

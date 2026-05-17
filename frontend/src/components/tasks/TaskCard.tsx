@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { TaskData, TaskAttachment } from '@/types/task';
+import { TaskData, TaskAttachment, userDisplayName } from '@/types/task';
 import RetrospectiveDetail from '@/components/tasks/RetrospectiveDetail';
 import AssetDetail from '@/components/tasks/AssetDetail';
 import { RetrospectiveAPI, RetrospectiveTaskData } from '@/lib/api/retrospectiveApi';
@@ -229,17 +229,17 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, onDelete, index }) =
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
         <div className="flex items-center gap-2">
           {/* Owner Avatar */}
-          {task.owner?.username && (
+          {task.owner && (
             <div
               className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 text-xs font-semibold"
-              title={`Owner: ${task.owner.username}`}
+              title={`Owner: ${userDisplayName(task.owner)}`}
             >
-              {task.owner.username.charAt(0).toUpperCase()}
+              {userDisplayName(task.owner).charAt(0).toUpperCase()}
             </div>
           )}
           {/* Current Approver */}
           <span className="text-xs text-slate-500">
-            {task.current_approver?.username || 'Unassigned'}
+            {task.current_approver ? userDisplayName(task.current_approver) : 'Unassigned'}
           </span>
         </div>
 

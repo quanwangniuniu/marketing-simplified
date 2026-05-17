@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { DollarSign, Megaphone, AlertCircle, TrendingUp } from "lucide-react"
 import { KPICard } from "./KPICard"
 import { PerformanceChart } from "./PerformanceChart"
-import { TaskStatusChart } from "./TaskStatusChart"
 import { CampaignRanking } from "./CampaignRanking"
 import { ActivityFeed } from "./ActivityFeed"
 import { AgentAPI } from "@/lib/api/agentApi"
@@ -67,13 +66,7 @@ export function OverviewDashboard() {
         )}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <PerformanceChart />
-        </div>
-        <TaskStatusChart />
-      </div>
+      <PerformanceChart />
 
       {/* Bottom Row */}
       <div className="grid grid-cols-2 gap-4">

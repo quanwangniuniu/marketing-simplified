@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, Clock, Users } from 'lucide-react';
+import { CalendarDays, Clock, Users, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { MeetingListItem } from '@/types/meeting';
 
@@ -8,6 +8,7 @@ interface UpcomingMeetingsPanelProps {
   meetings: MeetingListItem[];
   isOpen: boolean;
   loading?: boolean;
+  onClose?: () => void;
 }
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
@@ -49,19 +50,21 @@ export default function UpcomingMeetingsPanel({
   meetings,
   isOpen,
   loading = false,
+  onClose,
 }: UpcomingMeetingsPanelProps) {
   const today = meetings.filter((m) => m.scheduled_date === TODAY_ISO);
   const nextSeven = meetings.filter((m) => m.scheduled_date && m.scheduled_date > TODAY_ISO);
 
   return (
     <aside
-      className={`h-full border-l border-gray-200 bg-white shrink-0 transition-all duration-300 overflow-hidden ${
-        isOpen ? 'w-[320px]' : 'w-0'
+      className={`fixed bottom-0 right-0 top-12 z-40 w-[min(360px,calc(100vw-3.5rem))] shrink-0 overflow-hidden border-l-0 bg-white shadow-none transition-transform duration-300 md:border-l md:border-gray-200 sm:static sm:top-auto sm:z-auto sm:h-full sm:translate-x-0 sm:transition-all ${
+        isOpen ? 'translate-x-0 sm:w-[320px]' : 'translate-x-full sm:w-0'
       }`}
       data-upcoming-meetings-panel
+      aria-hidden={!isOpen}
     >
       {!isOpen ? null : (
-      <div className="w-[320px] h-full flex flex-col">
+      <div className="h-full w-full flex flex-col sm:w-[320px]">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-gray-500" />
@@ -69,6 +72,16 @@ export default function UpcomingMeetingsPanel({
           <span className="ml-auto text-[11px] text-gray-400">
             {loading ? <Skeleton className="h-3 w-14" /> : `${today.length} today`}
           </span>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 sm:hidden"
+              aria-label="Close upcoming meetings"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
 
         {/* List */}

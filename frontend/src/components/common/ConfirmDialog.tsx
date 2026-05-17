@@ -9,6 +9,7 @@ interface ConfirmDialogProps {
   type?: "warning" | "danger" | "info";
   confirmText?: string;
   cancelText?: string;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -20,6 +21,7 @@ export default function ConfirmDialog({
   type = "warning",
   confirmText = "OK",
   cancelText = "Cancel",
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -44,7 +46,7 @@ export default function ConfirmDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
       <div className="bg-white rounded-lg overflow-hidden shadow-xl w-full max-w-md mx-4 animate-in fade-in zoom-in duration-200">
         {/* Icon and Title */}
         <div className={`flex items-start gap-4 px-6 py-5 ${bgColorMap[type]} border-b`}>
@@ -74,14 +76,17 @@ export default function ConfirmDialog({
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t">
           <button
+            type="button"
             onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
           >
             {cancelText}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${buttonColorMap[type]}`}
+            disabled={confirmDisabled}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${buttonColorMap[type]}`}
           >
             {confirmText}
           </button>

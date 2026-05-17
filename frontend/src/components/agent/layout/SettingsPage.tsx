@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { RotateCcw, Workflow, ChevronDown, ChevronRight } from "lucide-react"
-import { getDebugMode, setDebugMode } from "@/lib/agentDebug"
 import { AgentAPI } from "@/lib/api/agentApi"
 import type { AgentWorkflowDefinition, AgentWorkflowStep } from "@/types/agent"
 import {
@@ -122,15 +121,10 @@ function WorkflowItem({ workflow }: { workflow: AgentWorkflowDefinition }) {
 }
 
 export function SettingsPage() {
-  const [debugEnabled, setDebugEnabled] = useState(true)
   const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null)
   const [configLoading, setConfigLoading] = useState(true)
   const [workflows, setWorkflows] = useState<AgentWorkflowDefinition[]>([])
   const [workflowsLoading, setWorkflowsLoading] = useState(true)
-
-  useEffect(() => {
-    setDebugEnabled(getDebugMode())
-  }, [])
 
   useEffect(() => {
     AgentAPI.getConfigStatus()
@@ -145,12 +139,6 @@ export function SettingsPage() {
       .catch(() => setWorkflows([]))
       .finally(() => setWorkflowsLoading(false))
   }, [])
-
-  const handleToggleDebug = () => {
-    const next = !debugEnabled
-    setDebugEnabled(next)
-    setDebugMode(next)
-  }
 
   const handleRestartTour = () => {
     localStorage.removeItem("agent-tour-completed")
@@ -172,29 +160,7 @@ export function SettingsPage() {
         <section className="space-y-4">
           <h2 className="text-sm font-medium text-foreground uppercase tracking-wider">General</h2>
 
-          <div className="rounded-lg border border-border divide-y divide-border">
-            {/* Debug Mode */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div>
-                <span className="text-sm text-card-foreground">Debug Mode</span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Log agent events to browser console
-                </p>
-              </div>
-              <button
-                onClick={handleToggleDebug}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                  debugEnabled ? "bg-blue-600" : "bg-input"
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                    debugEnabled ? "translate-x-[18px]" : "translate-x-[3px]"
-                  }`}
-                />
-              </button>
-            </div>
-
+          <div className="rounded-lg border border-border">
             {/* Agent Tour */}
             <div className="flex items-center justify-between px-4 py-3">
               <div>

@@ -19,7 +19,7 @@ export const ReportAPI = {
 
   getReport: (id: number) => api.get<ReportTask>(`${BASE}/${id}/`),
 
-  updateReport: (id: number, data: ReportTaskUpdateRequest) =>
+  updateReport: (id: string | number, data: ReportTaskUpdateRequest) =>
     api.patch<ReportTask>(`${BASE}/${id}/`, data),
 
   listKeyActions: (reportId: number) =>

@@ -100,20 +100,19 @@ export function computePanelPosition(
   rect: DOMRect | null,
   view?: CalendarViewType,
 ): EventPanelPosition {
-  const panelWidth = 420;
-  const panelHeight = 388;
   const viewportWidth =
     typeof window !== "undefined" ? window.innerWidth : 1024;
   const viewportHeight =
     typeof window !== "undefined" ? window.innerHeight : 768;
+  const margin = 16;
+  const panelWidth = Math.min(420, viewportWidth - margin * 2);
+  const panelHeight = Math.min(388, viewportHeight - margin * 2);
 
   if (view === "day" || !rect) {
-    const top = Math.max(0, (viewportHeight - panelHeight) / 2);
-    const left = Math.max(0, (viewportWidth - panelWidth) / 2);
+    const top = Math.max(margin, (viewportHeight - panelHeight) / 2);
+    const left = Math.max(margin, (viewportWidth - panelWidth) / 2);
     return { top, left };
   }
-
-  const margin = 16;
 
   let left = rect.right + margin;
   if (left + panelWidth > viewportWidth - margin) {

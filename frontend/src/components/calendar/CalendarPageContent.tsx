@@ -416,8 +416,8 @@ export default function CalendarPageContent() {
       />
 
       {gcalStatus?.connected && (gcalStatus.needs_reconnect || gcalStatus.last_error_message) ? (
-        <div className="mx-4 mt-2 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
-          <span>
+        <div className="mx-3 mt-2 flex shrink-0 flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 sm:mx-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4">
+          <span className="min-w-0">
             {gcalStatus.last_error_message ||
               "Google Calendar authorization expired or was revoked. Reconnect in Integrations."}
           </span>
@@ -432,7 +432,7 @@ export default function CalendarPageContent() {
       ) : null}
 
       {gcalStatus?.connected && !gcalStatus.needs_reconnect && !gcalStatus.last_error_message ? (
-        <div className="mx-4 mt-2 flex shrink-0 flex-wrap items-center gap-2">
+        <div className="mx-3 mt-2 flex shrink-0 flex-wrap items-center gap-2 sm:mx-4">
           <GoogleCalendarConnectedBadge googleEmail={gcalStatus.google_email} />
           <button
             type="button"
@@ -455,7 +455,7 @@ export default function CalendarPageContent() {
         </div>
       ) : null}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <CalendarSidebarContainer
           currentDate={currentDate}
           onVisibleCalendarsChange={handleVisibleCalendarsChange}
@@ -465,7 +465,7 @@ export default function CalendarPageContent() {
           onToggleActivityType={toggleActivityType}
         />
 
-        <section className="flex-1 overflow-auto bg-white" data-testid="calendar-canvas">
+        <section className="min-w-0 flex-1 overflow-auto bg-white" data-testid="calendar-canvas">
           <CalendarViewRouter
             currentView={currentView}
             currentDate={currentDate}

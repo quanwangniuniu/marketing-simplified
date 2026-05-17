@@ -64,7 +64,12 @@ class PlatformPolicyUpdateViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         try:
-            serializer.save()
+            policy_update = serializer.save()
+            # Link the task's GenericFK so task.linked_object is populated in the API
+            task = policy_update.task
+            if task:
+                task.link_to_object(policy_update)
+                task.save()
         except ValidationError as e:
             raise DRFValidationError(
                 e.message_dict if hasattr(e, 'message_dict') else {'detail': e.messages}

@@ -20,6 +20,7 @@ class BudgetRequestStatus(models.TextChoices):
     APPROVED = 'APPROVED', 'Approved'
     REJECTED = 'REJECTED', 'Rejected'
     LOCKED = 'LOCKED', 'Locked'
+    CANCELLED = 'CANCELLED', 'Cancelled'
 
 
 class BudgetPool(models.Model):
@@ -27,8 +28,9 @@ class BudgetPool(models.Model):
     Budget Pool Model - Budget pool for specific 
     projects, advertising channels, and currency
     """
+    name = models.CharField(max_length=200, blank=True, default='', help_text="Optional label to distinguish pools with the same channel/currency")
     project = models.ForeignKey(
-      Project, 
+      Project,
       on_delete=models.CASCADE,
       related_name='budget_pools',
       help_text="Associated project ID"
@@ -53,6 +55,7 @@ class BudgetPool(models.Model):
         help_text="Amount of budget used from this pool"
     )
     currency = models.CharField(max_length=3, help_text="Currency code (e.g., AUD, USD)")
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
         # Removed unique_together constraint to allow multiple pools with same (project, ad_channel, currency)
@@ -147,6 +150,8 @@ class BudgetRequest(models.Model):
         User,
         on_delete=models.PROTECT,
         related_name='pending_budget_requests',
+        null=True,
+        blank=True,
         help_text="Current approver assigned to this request"
     )
     ad_channel = models.ForeignKey(
@@ -194,11 +199,31 @@ class BudgetRequest(models.Model):
         self.budget_pool.used_amount += self.amount
         self.budget_pool.save()
 
-    @transition(field=status, source=BudgetRequestStatus.REJECTED, target=BudgetRequestStatus.DRAFT)
+    @transition(field=status, source=[BudgetRequestStatus.REJECTED, BudgetRequestStatus.CANCELLED], target=BudgetRequestStatus.DRAFT)
     def revise(self):
-        """Transition from REJECTED to DRAFT state for revision"""
+        """Transition from REJECTED or CANCELLED back to DRAFT for revision"""
         pass
-    
+
+    @transition(
+        field=status,
+        source=[
+            BudgetRequestStatus.DRAFT,
+            BudgetRequestStatus.SUBMITTED,
+            BudgetRequestStatus.UNDER_REVIEW,
+            BudgetRequestStatus.APPROVED,
+            BudgetRequestStatus.REJECTED,
+            BudgetRequestStatus.LOCKED,
+        ],
+        target=BudgetRequestStatus.CANCELLED,
+    )
+    def cancel(self):
+        """Cancel the budget request. If already locked, reverses the pool deduction."""
+        if self.status == BudgetRequestStatus.LOCKED and self.budget_pool:
+            self.budget_pool.used_amount = max(
+                Decimal('0'), self.budget_pool.used_amount - self.amount
+            )
+            self.budget_pool.save()
+
     @transition(field=status, source=BudgetRequestStatus.APPROVED, target=BudgetRequestStatus.UNDER_REVIEW)
     def forward_to_next(self):
         """Transition from APPROVED to UNDER_REVIEW state for next approver"""

@@ -15,7 +15,7 @@ export const tourSteps: TourStep[] = [
     type: "spotlight",
     target: "tour-nav",
     title: "Navigate Your Workspace",
-    description: "Switch between Overview, Spreadsheets, Decisions, and Tasks to manage different aspects of your campaigns.",
+    description: "Switch between Overview, Spreadsheets, and Tasks to manage different aspects of your campaigns.",
   },
   {
     type: "spotlight",
@@ -32,8 +32,8 @@ export const tourSteps: TourStep[] = [
   {
     type: "spotlight",
     target: "tour-right-panel",
-    title: "Alerts & Decisions Panel",
-    description: "Track anomalies and recent decisions. Alerts auto-populate from analysis results so nothing slips through.",
+    title: "Alerts Panel",
+    description: "Track anomalies from analysis results so nothing slips through.",
   },
   {
     type: "modal",

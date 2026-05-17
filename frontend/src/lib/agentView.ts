@@ -3,7 +3,6 @@ export const AGENT_VIEW_COOKIE_NAME = "agent-active-view";
 export const AGENT_VIEWS = [
   "overview",
   "spreadsheets",
-  "decisions",
   "tasks",
   "workflows",
   "settings",
@@ -12,6 +11,10 @@ export const AGENT_VIEWS = [
 export type AgentView = (typeof AGENT_VIEWS)[number];
 
 export function normalizeAgentView(value: string | null | undefined): AgentView {
+  if (value === "decisions") {
+    return "overview";
+  }
+
   if (value && AGENT_VIEWS.includes(value as AgentView)) {
     return value as AgentView;
   }

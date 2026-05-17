@@ -280,7 +280,7 @@ export default function MessageList({
         <div 
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto p-4 space-y-4"
+          className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-4"
         >
           {messageGroups.map((group) => (
             <div key={group.date}>

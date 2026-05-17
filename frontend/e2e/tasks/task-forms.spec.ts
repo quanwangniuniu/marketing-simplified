@@ -1,10 +1,15 @@
 import { test, expect } from '@playwright/test';
 import {
   navigateToTasksAndSelectProject,
-  ensureOnTasksPage,
-  submitCreateAndGetId,
+  navigateToNewTaskPage,
+  submitNewTaskAndGetId,
   deleteTaskById,
+  deleteAllE2ETasks,
+  selectFirstAvailableApprover,
 } from './tasks-helpers';
+
+const tomorrow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const nextWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 test.describe('Task-type specific forms', () => {
   test.describe.configure({ mode: 'serial' });
@@ -13,199 +18,144 @@ test.describe('Task-type specific forms', () => {
   let projectId: number;
 
   test.beforeAll(async ({ browser }) => {
-    const context = await browser.newContext({
-      storageState: 'e2e/.auth/user.json',
-    });
+    const context = await browser.newContext({ storageState: 'e2e/.auth/user.json' });
     const page = await context.newPage();
     projectId = await navigateToTasksAndSelectProject(page);
+    // Clean up any E2E tasks left over from interrupted prior runs.
+    await deleteAllE2ETasks(page);
     await context.close();
   });
 
   test.beforeEach(async ({ page }) => {
     createdTaskId = null;
-    await ensureOnTasksPage(page, projectId);
-
-    await page.getByRole('button', { name: 'Create Task' }).first().click();
-    await expect(page.getByTestId('task-create-panel')).toBeVisible();
+    await navigateToNewTaskPage(page, projectId);
   });
 
   test.afterEach(async ({ page }) => {
     if (createdTaskId) {
-      try {
-        await deleteTaskById(page, createdTaskId);
-      } catch {
-        /* cleanup is best-effort */
-      }
+      try { await deleteTaskById(page, createdTaskId); } catch { /* best-effort */ }
       createdTaskId = null;
     }
   });
 
   test('user can fill a Report task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Report Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'report' });
-    await panel.locator('#task-summary').fill('E2E Report Task');
+    // required: audience_type
+    await expect(page.locator('#task-field-report-audience_type')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-report-audience_type').selectOption('client');
+    await selectFirstAvailableApprover(page);
 
-    const expandBtn = panel.getByLabel('Expand create panel');
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
-
-    await panel.getByRole('button', { name: 'Last week' }).click();
-
-    await panel
-      .getByPlaceholder(/Performance became unstable/)
-      .fill('Performance dipped after scaling spend last Monday.');
-
-    await panel
-      .getByPlaceholder(/Summarize the outcome|Campaign stabilized/)
-      .fill('Campaign stabilized within 48 hours after budget reallocation.');
-
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
   test('user can fill a Scaling task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Scaling', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Scaling Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'scaling' });
+    // required: scaling_target
+    await expect(page.locator('#task-field-scaling-scaling_target')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-scaling-scaling_target').fill('Scale Meta campaigns by 20%');
+    await selectFirstAvailableApprover(page);
 
-    // Type change may collapse the panel; expand if needed
-    const expandBtn = panel.getByLabel('Expand create panel');
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
-
-    // Wait for the Scaling form to render — the type change triggers a
-    // re-render that can auto-fill/reset the summary field.
-    await expect(panel.getByText('Scaling strategy')).toBeVisible();
-
-    await panel.locator('#task-summary').fill('E2E Scaling Task');
-
-    await panel
-      .locator('select:has(option[value="horizontal"])')
-      .selectOption('horizontal');
-
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
   test('user can fill an Alert task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Alert', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Alert Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'alert' });
-    await panel.locator('#task-summary').fill('E2E Alert Task');
+    // required: alert_type, severity
+    await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
+    await page.locator('#task-field-alert-severity').selectOption('medium');
+    await selectFirstAvailableApprover(page);
 
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
   test('user can fill an Experiment task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Experiment', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Experiment Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'experiment' });
-    await panel.locator('#task-summary').fill('E2E Experiment Task');
+    // required: hypothesis
+    await expect(page.locator('#task-field-experiment-hypothesis')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-experiment-hypothesis').fill('Test if increasing budget improves ROAS');
 
-    const expandBtn = panel.getByLabel('Expand create panel');
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
+    // set start + due dates so experiment date validation passes
+    const dateInputs = page.locator('input[type="date"]');
+    const count = await dateInputs.count();
+    if (count >= 2) {
+      await dateInputs.nth(count - 2).fill(tomorrow());
+      await dateInputs.nth(count - 1).fill(nextWeek());
     }
+    await selectFirstAvailableApprover(page);
 
-    // Label is not associated via htmlFor — use the placeholder instead
-    await panel
-      .getByPlaceholder(/New video creative increases CTR/)
-      .fill('Test if increasing budget improves ROAS');
-
-    await panel
-      .locator('#task-start-date')
-      .fill(new Date().toISOString().slice(0, 10));
-    await panel
-      .locator('#task-due-date')
-      .fill(
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10),
-      );
-
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
   test('user can fill an Optimization task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Optimization', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Optimization Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'optimization' });
-    await panel.locator('#task-summary').fill('E2E Optimization Task');
+    // required: action_type
+    await expect(page.locator('#task-field-optimization-action_type')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-optimization-action_type').selectOption('edit');
+    await selectFirstAvailableApprover(page);
 
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
-  test('user can fill a Client Communication task-type form', async ({
-    page,
-  }) => {
-    const panel = page.getByTestId('task-create-panel');
+  test('user can fill a Client Communication task-type form', async ({ page }) => {
+    await page.getByRole('button', { name: 'Client Communication', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Client Communication Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'communication' });
-    await panel.locator('#task-summary').fill('E2E Client Communication Task');
+    // required: communication_type
+    await expect(page.locator('#task-field-communication-communication_type')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-communication-communication_type').selectOption('budget_change');
 
-    await panel.locator('#communication-type').selectOption('budget_change');
-    await panel.getByRole('checkbox', { name: 'Budget' }).check();
-    await panel
-      .locator('#communication-required-actions')
-      .fill('Review and approve budget change');
+    // required: impacted_areas (tags field — plain text input)
+    await page.locator('#task-field-communication-impacted_areas').fill('budget, creative');
+    await selectFirstAvailableApprover(page);
 
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
   test('user can fill a Retrospective task-type form', async ({ page }) => {
-    const panel = page.getByTestId('task-create-panel');
+    await page.getByRole('button', { name: 'Retrospective', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Retrospective Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'retrospective' });
-    await panel.locator('#task-summary').fill('E2E Retrospective Task');
+    // Select approver (required for all task types); do this before the button check
+    await selectFirstAvailableApprover(page);
+    await expect(page.getByRole('button', { name: 'Create task', exact: true })).not.toBeDisabled({ timeout: 5_000 });
 
-    const expandBtn = panel.getByLabel('Expand create panel');
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
-
-    await expect(panel.locator('#retrospective-campaign')).toBeVisible();
-    await expect(panel.locator('#retrospective-campaign')).not.toHaveValue('');
-
-    await panel.locator('#retrospective-status').selectOption('scheduled');
-
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
 
-  test('user can fill a Platform Policy Update task-type form', async ({
-    page,
-  }) => {
-    const panel = page.getByTestId('task-create-panel');
+  test('user can fill a Platform Policy Update task-type form', async ({ page }) => {
+    await page.getByRole('button', { name: 'Platform Policy Update', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Platform Policy Update Task');
 
-    await panel
-      .locator('#task-type')
-      .selectOption({ value: 'platform_policy_update' });
-    await panel.locator('#task-summary').fill('E2E Platform Policy Update Task');
+    // required: platform, policy_change_type, policy_description, immediate_actions_required
+    await expect(page.locator('#task-field-platform_policy_update-platform')).not.toBeDisabled({ timeout: 10_000 });
+    await page.locator('#task-field-platform_policy_update-platform').selectOption({ index: 1 });
 
-    const expandBtn = panel.getByLabel('Expand create panel');
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
+    await expect(page.locator('#task-field-platform_policy_update-policy_change_type')).not.toBeDisabled({ timeout: 10_000 });
+    await page.locator('#task-field-platform_policy_update-policy_change_type').selectOption({ index: 1 });
 
-    await expect(panel.locator('#policy-platform')).not.toBeDisabled({
-      timeout: 10_000,
-    });
-    await panel.locator('#policy-platform').selectOption({ index: 1 });
+    await page.locator('#task-field-platform_policy_update-policy_description').fill('New targeting restrictions on paid social.');
+    await page.locator('#task-field-platform_policy_update-immediate_actions_required').fill('Audit active campaigns for compliance.');
+    await selectFirstAvailableApprover(page);
 
-    await expect(panel.locator('#policy-change-type')).not.toBeDisabled({
-      timeout: 10_000,
-    });
-    await panel.locator('#policy-change-type').selectOption({ index: 1 });
-
-    await panel
-      .locator('#policy-description')
-      .fill('E2E test: new targeting restrictions on paid social.');
-
-    await panel
-      .locator('#policy-immediate-actions')
-      .fill('Audit active campaigns for compliance.');
-
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    createdTaskId = await submitNewTaskAndGetId(page);
+    expect(createdTaskId).toBeTruthy();
   });
-
 });

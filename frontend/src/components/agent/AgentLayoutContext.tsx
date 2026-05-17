@@ -34,9 +34,6 @@ interface AgentLayoutContextType {
   setFloatingSessionId: (id: string | null) => void
   isInSnapZone: boolean
   setIsInSnapZone: (v: boolean) => void
-  // Pending navigation
-  pendingDecisionId: number | null
-  setPendingDecisionId: (id: number | null) => void
 }
 
 const AgentLayoutContext = createContext<AgentLayoutContextType | null>(null)
@@ -58,8 +55,6 @@ export function AgentLayoutProvider({
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
   const [theme, setThemeState] = useState<AgentTheme>("light")
   const [isInSnapZone, setIsInSnapZone] = useState(false)
-  const [pendingDecisionId, setPendingDecisionId] = useState<number | null>(null)
-
   const [floatingChat, setFloatingChat] = useState<FloatingChatState>({
     mode: "closed",
     sessionId: null,
@@ -168,8 +163,6 @@ export function AgentLayoutProvider({
         setFloatingSessionId,
         isInSnapZone,
         setIsInSnapZone,
-        pendingDecisionId,
-        setPendingDecisionId,
       }}
     >
       {children}

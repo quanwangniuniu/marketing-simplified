@@ -120,10 +120,12 @@ function MetricRow({ label, value, valueColor = TEXT_PRIMARY, tooltip }: {
         padding: '7px 0', borderBottom: '1px solid #f2f3f5',
         position: 'relative',
         transition: 'background 0.12s',
+        gap: 8,
+        minWidth: 0,
       }}
     >
-      <span style={{ fontSize: 12, color: TEXT_SECONDARY }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: valueColor, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: TEXT_SECONDARY }}>{label}</span>
+      <span style={{ minWidth: 0, maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right', fontSize: 13, fontWeight: 600, color: valueColor, fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </span>
       {/* Tooltip — shown on hover when tooltip prop is provided */}
@@ -165,7 +167,7 @@ function LegendItem({ color, label, tooltip }: { color: string; label: string; t
     <span
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#888', position: 'relative' }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#888', position: 'relative' }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
       {label}
@@ -245,7 +247,7 @@ function SummaryCard({
   const shownValue = `${animated}${suffix}`;
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', minWidth: 0 }}>
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -258,12 +260,14 @@ function SummaryCard({
           transform: 'translateY(0)',
           transition: 'all 0.18s ease',
           position: 'relative',
+          minWidth: 0,
+          overflow: 'hidden',
         }}
       >
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: TEXT_MUTED, marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: TEXT_MUTED, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {label}
         </div>
-        <div style={{ fontSize: 32, fontWeight: 700, color: valueColor, lineHeight: 1, letterSpacing: '-0.5px' }}>
+        <div style={{ fontSize: 32, fontWeight: 700, color: valueColor, lineHeight: 1, letterSpacing: 0 }}>
           {shownValue}
         </div>
         {barFill !== undefined && (
@@ -275,7 +279,7 @@ function SummaryCard({
             }} />
           </div>
         )}
-        {sub && <div style={{ fontSize: 10, color: subColor, marginTop: 5 }}>{sub}</div>}
+        {sub && <div style={{ fontSize: 10, color: subColor, marginTop: 5, overflowWrap: 'anywhere' }}>{sub}</div>}
       </div>
     </div>
   );
@@ -297,14 +301,16 @@ function ZonePanel({ iconSvg, iconBg, title, badge, viewAllHref, children }: {
         border: `1px solid ${hovered ? '#d1d5db' : SURFACE_BORDER}`,
         boxShadow: 'none',
         transition: 'all 0.18s ease',
+        minWidth: 0,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: 7, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {iconSvg}
           </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_PRIMARY, whiteSpace: 'nowrap' }}>{title}</span>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 13, fontWeight: 600, color: TEXT_PRIMARY, whiteSpace: 'nowrap' }}>{title}</span>
         </div>
         {badge ? (
           <span style={{ fontSize: 11, color: TEXT_SECONDARY, background: '#f8fafc', borderRadius: 9999, padding: '2px 8px', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -326,10 +332,10 @@ function ChartPanel({ section, title, children, right, full = false }: {
   section: string; title: string; children: React.ReactNode; right?: React.ReactNode; full?: boolean;
 }) {
   return (
-    <div style={{ background: '#fff', borderRadius: SURFACE_RADIUS, border: `1px solid ${SURFACE_BORDER}`, padding: PANEL_PAD, gridColumn: full ? '1 / -1' : undefined, boxShadow: 'none' }}>
-      <div style={{ fontSize: 10, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{section}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_PRIMARY }}>{title}</span>
+    <div style={{ background: '#fff', borderRadius: SURFACE_RADIUS, border: `1px solid ${SURFACE_BORDER}`, padding: PANEL_PAD, gridColumn: full ? '1 / -1' : undefined, boxShadow: 'none', minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ fontSize: 9, color: TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{section}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, minWidth: 0 }}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: TEXT_PRIMARY }}>{title}</span>
         {right}
       </div>
       {children}
@@ -376,7 +382,12 @@ function HorizontalBarChart({ labels, values, colors }: {
           >
             {/* invisible hit area for easier hover */}
             <rect x={LABEL_W} y={y - 14} width={BAR_AREA} height={28} fill="transparent" />
-            <text x={LABEL_W - 8} y={y + 4} textAnchor="end" fontSize={11}
+            <text
+              x={LABEL_W - 8}
+              y={y}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fontSize={6}
               fill={dimmed ? '#ccc' : '#555'}
               style={{ transition: 'fill 0.15s' }}
             >
@@ -390,7 +401,10 @@ function HorizontalBarChart({ labels, values, colors }: {
             />
             {/* count label */}
             <text
-              x={LABEL_W + barW + 6} y={y + 4} fontSize={11}
+              x={LABEL_W + barW + 6}
+              y={y}
+              dominantBaseline="middle"
+              fontSize={11}
               fill={dimmed ? '#ddd' : '#aaa'}
               style={{ transition: 'fill 0.15s' }}
             >
@@ -433,7 +447,7 @@ function DonutChart({ labels, values, colors }: {
   // Empty state
   if (total === 0 || labels.length === 0) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 14, padding: '8px 0', minWidth: 0 }}>
         <svg width={80} height={80} style={{ flexShrink: 0 }}>
           <circle cx={40} cy={40} r={30} fill="none" stroke="#f0f0f0" strokeWidth={12} />
           <circle cx={40} cy={40} r={16} fill="#f7f8fa" />
@@ -453,7 +467,7 @@ function DonutChart({ labels, values, colors }: {
     const activeIdx = values.findIndex(v => v > 0);
     const isHovered = hoveredIdx === activeIdx;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, minWidth: 0 }}>
         <svg width={128} height={128} style={{ flexShrink: 0 }}>
           <circle
             cx={CX} cy={CY} r={isHovered ? R + 4 : R}
@@ -508,7 +522,7 @@ function DonutChart({ labels, values, colors }: {
   const hov = hoveredIdx !== null ? segments.find(s => s.index === hoveredIdx) : null;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, minWidth: 0 }}>
       <svg width={128} height={128} style={{ flexShrink: 0, cursor: 'pointer' }}>
         {segments.map((seg) => {
           const isHov = hoveredIdx === seg.index;
@@ -601,7 +615,7 @@ function LineChart({ labels, series }: {
   }
 
   // Tooltip box dimensions
-  const TIP_W = 110, TIP_H = series.length * 16 + 18;
+  const TIP_W = 82, TIP_H = series.length * 11 + 13;
 
   return (
     <svg
@@ -618,7 +632,7 @@ function LineChart({ labels, series }: {
           <g key={gv}>
             <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
               stroke="rgba(0,0,0,0.05)" strokeWidth={1} />
-            <text x={PAD.left - 4} y={y + 4} textAnchor="end" fontSize={9} fill="#aaa">{gv}</text>
+            <text x={PAD.left - 4} y={y + 1.4} textAnchor="end" fontSize={3.5} fill="#aaa">{gv}</text>
           </g>
         );
       })}
@@ -628,7 +642,7 @@ function LineChart({ labels, series }: {
         if (!lbl) return null;
         const { x } = toXY(i, 0);
         return (
-          <text key={i} x={x} y={H - 4} textAnchor="middle" fontSize={9}
+          <text key={i} x={x} y={H - 10} textAnchor="middle" fontSize={3.5}
             fill={activeIdx === i ? '#555' : '#aaa'}
             fontWeight={activeIdx === i ? 600 : 400}
             style={{ transition: 'fill 0.1s' }}
@@ -651,7 +665,7 @@ function LineChart({ labels, series }: {
             {points.map((p, i) => (
               <circle
                 key={i} cx={p.x} cy={p.y}
-                r={activeIdx === i ? 5 : 3}
+                r={activeIdx === i ? 4 : 2.5}
                 fill={activeIdx === i ? '#fff' : s.color}
                 stroke={s.color}
                 strokeWidth={activeIdx === i ? 2 : 0}
@@ -677,16 +691,16 @@ function LineChart({ labels, series }: {
               stroke="#c0c0c0" strokeWidth={1} strokeDasharray="3 2"
             />
             {/* Tooltip box */}
-            <rect x={tipX} y={tipY} width={TIP_W} height={TIP_H} rx={5} fill="#475569" />
+            <rect x={tipX} y={tipY} width={TIP_W} height={TIP_H} rx={4} fill="#475569" />
             {/* Date label */}
-            <text x={tipX + 8} y={tipY + 13} fontSize={9} fill="#aaa" fontWeight={600}>
+            <text x={tipX + 6} y={tipY + 8} fontSize={4.5} fill="#aaa" fontWeight={600}>
               {labels[activeIdx] || `Day ${activeIdx + 1}`}
             </text>
             {/* Series values */}
             {series.map((s, si) => (
               <g key={s.label}>
-                <circle cx={tipX + 10} cy={tipY + 22 + si * 16} r={3} fill={s.color} />
-                <text x={tipX + 17} y={tipY + 26 + si * 16} fontSize={10} fill="#fff">
+                <circle cx={tipX + 8} cy={tipY + 12.5 + si * 11} r={2} fill={s.color} />
+                <text x={tipX + 13} y={tipY + 14 + si * 11} fontSize={3.5} fill="#fff">
                   {s.label}: {s.values[activeIdx] ?? 0}
                 </text>
               </g>
@@ -933,7 +947,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
     <div>
       {/* PROJECT OVERVIEW */}
       <SectionLabel>Project Overview</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 10, marginBottom: 20 }}>
 
         {/* Overall Progress */}
         <SummaryCard
@@ -973,7 +987,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
 
       {/* MODULE SUMMARY */}
       <SectionLabel>Module Summary</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 10, marginBottom: 12 }}>
 
         {/* DECISIONS */}
         <ZonePanel
@@ -1005,7 +1019,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
             { flex: dec.medRiskCount, color: RISK_COLOR.MEDIUM, title: `Medium ${pct(dec.medRiskCount, dec.activeCount)}%` },
             { flex: dec.lowRiskCount, color: RISK_COLOR.LOW, title: `Low ${pct(dec.lowRiskCount, dec.activeCount)}%` },
           ]} />
-          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
             {dec.highRiskCount > 0 && <span style={{ fontSize: 10, color: '#888' }}>High {pct(dec.highRiskCount, dec.activeCount)}%</span>}
             {dec.medRiskCount > 0 && <span style={{ fontSize: 10, color: '#888' }}>Medium {pct(dec.medRiskCount, dec.activeCount)}%</span>}
             {dec.lowRiskCount > 0 && <span style={{ fontSize: 10, color: '#888' }}>Low {pct(dec.lowRiskCount, dec.activeCount)}%</span>}
@@ -1099,7 +1113,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
       </div>
 
       {/* CHART ROW */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 12, marginBottom: 12 }}>
         <ChartPanel section="Tasks" title="Status breakdown">
           <HorizontalBarChart labels={statusLabels} values={statusValues} colors={statusColors} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
@@ -1141,7 +1155,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
                 type="button"
                 onClick={() => setTrendDays(d)}
                 style={{
-                  fontSize: 11, padding: '3px 10px',
+                  fontSize: 10, padding: '2px 8px',
                   border: '1px solid #e8eaed', borderRadius: 5,
                   background: trendDays === d ? '#0f766e' : 'transparent',
                   color: trendDays === d ? '#fff' : '#aaa',
@@ -1162,7 +1176,7 @@ export default function WorkspaceDashboard({ projectId }: Props) {
             { label: 'Completed', values: trendCompleted, color: COLOR.green },
           ]}
         />
-        <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
           <LegendItem color={COLOR.blue} label="Created" />
           <LegendItem color={COLOR.green} label="Completed" />
         </div>

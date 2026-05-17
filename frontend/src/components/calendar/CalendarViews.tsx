@@ -25,6 +25,14 @@ const WEEKDAY_LABELS = [
   { key: "sun", label: "S" },
 ] as const;
 
+function parseValidDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export type WeekViewProps = {
   currentDate: Date;
   events: EventDTO[];
@@ -154,11 +162,11 @@ export function WeekView({
 
   return (
     <div
-      className="flex h-full flex-col rounded-3xl bg-white shadow-sm"
+      className="flex h-full min-w-[680px] flex-col rounded-none bg-white shadow-sm sm:rounded-xl lg:min-w-0 lg:rounded-3xl"
       data-testid="calendar-week-view"
       aria-label="Week calendar view"
     >
-      <div className="relative z-0 grid grid-cols-[60px_repeat(7,minmax(0,1fr))] bg-white text-xs font-medium text-gray-500">
+      <div className="relative z-20 grid grid-cols-[60px_repeat(7,minmax(0,1fr))] bg-white text-xs font-medium text-gray-500">
         <div className="relative px-2 py-2 text-gray-400 before:absolute before:bottom-0 before:right-0 before:block before:h-px before:w-3 before:bg-gray-100 before:content-[''] after:absolute after:bottom-0 after:right-0 after:block after:h-4 after:w-px after:bg-gray-100 after:content-['']" />
         {days.map((day) => (
           <div
@@ -174,7 +182,7 @@ export function WeekView({
       </div>
 
       <div
-        className="relative z-10 -mt-6 grid flex-1 grid-cols-[60px_repeat(7,minmax(0,1fr))] overflow-auto pt-6 text-xs"
+        className="relative z-0 grid flex-1 grid-cols-[60px_repeat(7,minmax(0,1fr))] overflow-auto text-xs"
         onMouseMove={handleMouseMove}
         onMouseUp={() => void finishDrag()}
         onMouseLeave={() => void finishDrag()}
@@ -185,7 +193,11 @@ export function WeekView({
               key={hour}
               className="relative h-12 border-gray-100 px-2 text-[11px] text-gray-400 before:absolute before:bottom-0 before:right-0 before:block before:h-px before:w-3 before:bg-gray-100 before:content-['']"
             >
-              <span className="absolute right-3 top-0 -translate-y-1/2 text-right z-10">
+              <span
+                className={`absolute right-3 z-10 text-right ${
+                  hour === 0 ? "top-1" : "top-0 -translate-y-1/2"
+                }`}
+              >
                 {format(new Date().setHours(hour, 0, 0, 0), "ha")}
               </span>
             </div>
@@ -408,11 +420,11 @@ export function DayView({
 
   return (
     <div
-      className="flex flex-col rounded-xl bg-white"
+      className="flex h-full min-w-[320px] flex-col rounded-none bg-white sm:rounded-xl"
       data-testid="calendar-day-view"
       aria-label="Day calendar view"
     >
-      <div className="relative z-0 grid grid-cols-[60px_minmax(0,1fr)] bg-white text-xs font-medium text-gray-500">
+      <div className="relative z-20 grid grid-cols-[60px_minmax(0,1fr)] bg-white text-xs font-medium text-gray-500">
         <div className="relative px-2 py-2 text-gray-400 before:absolute before:bottom-0 before:right-0 before:block before:h-px before:w-3 before:bg-gray-100 before:content-[''] after:absolute after:bottom-0 after:right-0 after:block after:h-2 after:w-px after:bg-gray-100 after:content-['']" />
         <div className="flex flex-col px-2 py-2 border-b">
           <span>{format(currentDate, "EEE")}</span>
@@ -422,7 +434,7 @@ export function DayView({
         </div>
       </div>
       <div
-        className="relative z-10 -mt-6 grid flex-1 grid-cols-[60px_minmax(0,1fr)] overflow-auto pt-6 text-xs"
+        className="relative z-0 grid flex-1 grid-cols-[60px_minmax(0,1fr)] overflow-auto text-xs"
         onMouseMove={handleMouseMove}
         onMouseUp={() => void finishDrag()}
         onMouseLeave={() => void finishDrag()}
@@ -433,7 +445,11 @@ export function DayView({
               key={hour}
               className="relative h-12 border-gray-100 px-2 text-[11px] text-gray-400 before:absolute before:bottom-0 before:right-0 before:block before:h-px before:w-3 before:bg-gray-100 before:content-['']"
             >
-              <span className="absolute right-3 top-0 -translate-y-1/2 text-right z-10">
+              <span
+                className={`absolute right-3 z-10 text-right ${
+                  hour === 0 ? "top-1" : "top-0 -translate-y-1/2"
+                }`}
+              >
                 {format(new Date().setHours(hour, 0, 0, 0), "ha")}
               </span>
             </div>
@@ -600,11 +616,11 @@ export function MonthView({
 
   return (
     <div
-      className="flex h-full flex-col rounded-xl bg-white"
+      className="flex h-full min-w-[560px] flex-col rounded-none bg-white sm:rounded-xl lg:min-w-0"
       data-testid="calendar-month-view"
       aria-label="Month calendar view"
     >
-      <div className="flex items-center justify-between px-4 py-2 text-sm font-semibold text-gray-700">
+      <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-700 sm:px-4">
         {isLoading && <span className="text-xs text-gray-400">Loading…</span>}
         {error && <span className="text-xs text-red-500">Failed to load events.</span>}
       </div>
@@ -626,7 +642,7 @@ export function MonthView({
               <button
                 key={day.toISOString()}
                 type="button"
-                className="flex h-full flex-col border-b border-r bg-white px-1.5 py-1"
+                className="flex h-full min-h-20 flex-col border-b border-r bg-white px-1.5 py-1"
                 onClick={() => onDaySelect(day)}
               >
                 <div className="mb-1 flex items-center justify-center text-[11px]">
@@ -700,12 +716,18 @@ export function AgendaView({
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, EventDTO[]>();
     [...events]
-      .sort(
-        (a, b) =>
-          new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime(),
-      )
+      .filter((event) => parseValidDate(event.start_datetime))
+      .sort((a, b) => {
+        const aTime = parseValidDate(a.start_datetime)?.getTime() ?? 0;
+        const bTime = parseValidDate(b.start_datetime)?.getTime() ?? 0;
+        return aTime - bTime;
+      })
       .forEach((event) => {
-        const key = format(new Date(event.start_datetime), "yyyy-MM-dd");
+        const start = parseValidDate(event.start_datetime);
+        if (!start) {
+          return;
+        }
+        const key = format(start, "yyyy-MM-dd");
         const bucket = grouped.get(key);
         if (bucket) {
           bucket.push(event);
@@ -718,9 +740,9 @@ export function AgendaView({
   const dateKeys = Array.from(eventsByDate.keys());
 
   return (
-    <div className="flex h-full flex-col rounded-xl bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b px-4 py-2 text-sm font-semibold text-gray-700">
-        <span>
+    <div className="flex h-full flex-col rounded-none bg-white shadow-sm sm:rounded-xl">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-sm font-semibold text-gray-700 sm:px-4">
+        <span className="min-w-0">
           {format(currentDate, "MMM d, yyyy")} – {format(addDays(currentDate, 7), "MMM d, yyyy")}
         </span>
         {isLoading && <span className="text-xs text-gray-400">Loading…</span>}
@@ -736,14 +758,17 @@ export function AgendaView({
           const day = new Date(key);
           const dayEvents = eventsByDate.get(key) || [];
           return (
-            <div key={key} className="border-b px-4 py-3 text-sm">
+            <div key={key} className="border-b px-3 py-3 text-sm sm:px-4">
               <div className="mb-2 font-semibold text-gray-800">{format(day, "EEE, MMM d")}</div>
               <ul className="space-y-1">
                 {dayEvents.map((event) => {
                   const color =
                     event.color || calendarColorById.get(event.calendar_id || "") || "#1E88E5";
-                  const start = new Date(event.start_datetime);
-                  const end = new Date(event.end_datetime);
+                  const start = parseValidDate(event.start_datetime);
+                  const end = parseValidDate(event.end_datetime) ?? start;
+                  if (!start || !end) {
+                    return null;
+                  }
                   return (
                     <li key={event.id + event.start_datetime}>
                       <button
@@ -755,9 +780,9 @@ export function AgendaView({
                         }}
                         className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-gray-50"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                          <span className="text-xs text-gray-500">
+                          <span className="shrink-0 text-xs text-gray-500">
                             {format(start, "HH:mm")} – {format(end, "HH:mm")}
                           </span>
                           <span className="truncate text-sm text-gray-900">{event.title}</span>
@@ -794,8 +819,8 @@ export function YearView({ currentDate, onDaySelect }: YearViewProps) {
   const today = new Date();
 
   return (
-    <div className="flex h-full flex-col rounded-xl bg-white">
-      <div className="grid flex-1 grid-cols-3 gap-4 overflow-auto p-4 text-[11px]">
+    <div className="flex h-full flex-col rounded-none bg-white sm:rounded-xl">
+      <div className="grid flex-1 grid-cols-1 gap-3 overflow-auto p-3 text-[11px] sm:grid-cols-2 sm:gap-4 sm:p-4 xl:grid-cols-3">
         {months.map((monthDate) => {
           const startMonth = startOfMonth(monthDate);
           const gridStart = startOfWeek(startMonth, { weekStartsOn: 1 });

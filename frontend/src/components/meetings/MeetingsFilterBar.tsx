@@ -59,7 +59,7 @@ export default function MeetingsFilterBar({
   return (
     <section className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-gray-100">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
+        <div className="relative min-w-0 basis-full sm:min-w-[220px] sm:flex-1 sm:basis-0">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
             aria-hidden="true"
@@ -74,7 +74,7 @@ export default function MeetingsFilterBar({
           />
         </div>
 
-        <div className="w-44">
+        <div className="w-full sm:w-44">
           <InlineSelect
             ariaLabel="Filter by meeting type"
             value={typeSlug || ALL_TYPES_VALUE}
@@ -84,7 +84,7 @@ export default function MeetingsFilterBar({
         </div>
 
         {tagOptions.length > 0 && (
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <InlineSelect
               ariaLabel="Filter by tag"
               value={tagSlug || ALL_TAGS_VALUE}
@@ -97,7 +97,7 @@ export default function MeetingsFilterBar({
         <button
           type="button"
           onClick={() => setAdvancedOpen(true)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition hover:border-gray-300"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition hover:border-gray-300 sm:w-auto"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Advanced</span>

@@ -135,7 +135,7 @@ export function TemplateSidebar({
     <AnimatePresence>
       {isOpen ? (
         <motion.aside
-          className="fixed top-0 right-0 z-40 h-screen w-[350px] border-l border-slate-200 bg-white p-4 shadow-[0_0_30px_rgba(15,23,42,0.08)]"
+          className="fixed top-0 right-0 z-40 h-screen w-[min(100vw,350px)] overflow-y-auto border-l border-slate-200 bg-white p-4 shadow-[0_0_30px_rgba(15,23,42,0.08)]"
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
@@ -337,4 +337,3 @@ export function TemplateSidebar({
     </AnimatePresence>
   );
 }
-

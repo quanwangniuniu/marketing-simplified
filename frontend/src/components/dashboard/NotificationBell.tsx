@@ -86,7 +86,7 @@ export default function NotificationBell({ alerts }: NotificationBellProps) {
       {open && (
         <div
           data-notification-panel
-          className="absolute right-0 top-full mt-2 w-[380px] max-h-[560px] bg-white border border-gray-200 rounded-lg shadow-lg z-50 flex flex-col"
+          className="fixed left-16 right-2 top-14 z-50 mt-0 flex max-h-[calc(100vh-4.5rem)] w-auto flex-col rounded-lg border border-gray-200 bg-white shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[560px] sm:w-[380px]"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">

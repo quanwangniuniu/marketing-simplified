@@ -26,7 +26,7 @@ export const ClientCommunicationAPI = {
   listByTask: (taskId: number) =>
     api.get("/api/client-communications/", { params: { task_id: taskId } }),
 
-  update: (id: number, data: Partial<ClientCommunicationPayload>) =>
+  update: (id: string | number, data: Partial<ClientCommunicationPayload>) =>
     api.patch(`/api/client-communications/${id}/`, data),
 };
 

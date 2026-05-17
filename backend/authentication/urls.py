@@ -11,6 +11,7 @@ from .views import (
     GoogleSetPasswordView,
     OrganizationTokenRefreshView,
     MeView,
+    MeProjectsView,
     UserTeamsView,
     ForgotPasswordView,
     ResetPasswordView,
@@ -25,6 +26,7 @@ urlpatterns = [
     path('me/', MeView.as_view(), name='me'),
     path('me/delete/', DeleteAccountView.as_view(), name='me-delete'),
     path('me/teams/', UserTeamsView.as_view(), name='user-teams'),
+    path('me/projects/', MeProjectsView.as_view(), name='me-projects'),
     
     # SSO endpoints (mock implementation for testing)
     path('sso/redirect/', SsoRedirectView.as_view(), name='sso-redirect'),

@@ -10,7 +10,7 @@ export default function DecisionExecutionSummarySection({ signals }: Props) {
   return (
     <section
       id="decision-section-execution"
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+      className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl sm:p-5"
     >
       <div className="mb-3">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
@@ -26,10 +26,10 @@ export default function DecisionExecutionSummarySection({ signals }: Props) {
         <ul className="divide-y divide-gray-100">
           {signals.map((signal) => (
             <li key={signal.id} className="py-2.5">
-              <div className="text-sm text-gray-900">
+              <div className="break-words text-sm text-gray-900">
                 {signal.displayTextOverride || signal.displayText || '—'}
               </div>
-              <div className="mt-0.5 text-[11px] text-gray-500">
+              <div className="mt-0.5 break-words text-[11px] text-gray-500">
                 {signal.metric} · {signal.movement} · {signal.period}
               </div>
             </li>

@@ -164,8 +164,8 @@ export function QuickCreateMeetingModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-[430px] rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl">
-        <div className="p-6">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[92vw] max-w-[430px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl">
+        <div className="p-4 sm:p-6">
           <div className="mb-5">
             <DialogTitle className="text-[20px] font-semibold text-gray-900">
               Quick Create Meeting
@@ -173,7 +173,7 @@ export function QuickCreateMeetingModal({
             <p className="mt-1 text-sm text-gray-500">Start with a template</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {systemTemplates.map((template) => {
               const Icon = iconForTemplate(template.label);
               const active = template.value === selectedTemplateId;
@@ -214,7 +214,7 @@ export function QuickCreateMeetingModal({
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                 Your templates
               </p>
-              <div className="grid max-h-40 grid-cols-2 gap-2 overflow-y-auto pr-1 text-sm">
+              <div className="grid max-h-40 grid-cols-1 gap-2 overflow-y-auto pr-1 text-sm sm:grid-cols-2">
                 {customTemplates.map((template) => (
                   <button
                     key={template.value}
@@ -281,7 +281,7 @@ export function QuickCreateMeetingModal({
               ))}
             </div>
             {selectedWhenId === 'pick_date' ? (
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <label className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-600">
                   <span className="mb-1 block">Date</span>
                   <input

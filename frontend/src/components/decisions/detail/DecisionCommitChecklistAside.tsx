@@ -82,7 +82,7 @@ export default function DecisionCommitChecklistAside({
   const allReady = okCount === total;
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <section className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
           Commit readiness

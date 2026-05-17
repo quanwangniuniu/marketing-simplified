@@ -62,7 +62,9 @@ class AlertTaskListCreateView(generics.ListCreateAPIView):
         if hasattr(task, "alert_task"):
             raise DRFValidationError({"task": "Alert details already exist for this task."})
 
-        serializer.save()
+        alert_task = serializer.save()
+        task.link_to_object(alert_task)
+        task.save()
 
 
 class AlertTaskRetrieveUpdateView(generics.RetrieveUpdateAPIView):

@@ -73,14 +73,14 @@ export default function DocumentHeader({
   const detailHref = `/meetings/${meeting.id}?project_id=${projectId}`;
 
   return (
-    <header className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-      <nav className="flex items-center justify-between gap-2 text-xs text-gray-500">
+    <header className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+      <nav className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
         <Link
           href={detailHref}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition hover:bg-gray-50 hover:text-gray-900"
+          className="inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <ArrowLeft className="h-3 w-3" aria-hidden="true" />
-          <span className="truncate max-w-[260px]">{meeting.title || 'Meeting'}</span>
+          <span className="max-w-[min(70vw,260px)] truncate">{meeting.title || 'Meeting'}</span>
         </Link>
         <span
           className={`inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-[11px] ${status.text}`}
@@ -92,7 +92,7 @@ export default function DocumentHeader({
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="min-w-0 text-2xl font-semibold leading-tight text-gray-900">
+          <h1 className="min-w-0 text-xl font-semibold leading-tight text-gray-900 sm:text-2xl">
             {meeting.title || 'Untitled meeting'}
           </h1>
           <MeetingStatusPill status={meeting.status} />

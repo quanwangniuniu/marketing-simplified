@@ -104,18 +104,20 @@ export default function TasksV2Page() {
   return (
     <ProtectedRoute renderChildrenWhileLoading>
       <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-        <div className="mx-auto w-full max-w-7xl px-6 py-8">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           <header className="mb-5 flex items-end justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-semibold text-gray-900">Tasks</h1>
-              <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
                 {projectContextLoading ? (
-                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-40 max-w-full" />
                 ) : (
-                  <span>{activeProject?.name ?? (projectId ? '' : 'No project selected')}</span>
+                  <span className="min-w-0 truncate">
+                    {activeProject?.name ?? (projectId ? '' : 'No project selected')}
+                  </span>
                 )}
                 {projectId && !activeProject?.name && !projectContextLoading ? (
-                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-36 max-w-full" />
                 ) : null}
                 <span aria-hidden="true">·</span>
                 <span className="text-gray-400">
@@ -142,6 +144,7 @@ export default function TasksV2Page() {
               projectId={projectId}
               onOpenLinearImport={() => setLinearImportOpen(true)}
               onLinearBulkSynced={refreshTasks}
+              onRefresh={refreshTasks}
             />
           )}
           {tab === 'board' && <BoardView tasks={tasks} loading={taskListLoading} error={error} />}

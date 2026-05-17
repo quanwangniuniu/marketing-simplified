@@ -289,11 +289,11 @@ export default function SpreadsheetsListPage() {
                 </Link>
               </div>
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-                <div>
+                <div className="min-w-0">
                   {projectId && !project ? (
-                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-8 w-48 max-w-full" />
                   ) : (
-                    <h1 className="text-2xl font-semibold text-gray-900">
+                    <h1 className="truncate text-2xl font-semibold text-gray-900">
                       {project?.name ?? 'Project'}
                     </h1>
                   )}
@@ -347,8 +347,25 @@ export default function SpreadsheetsListPage() {
                 renderEmptyState()
               ) : (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  {isPageLoading ? (
+                    <div className="divide-y divide-gray-100 sm:hidden">
+                      {spreadsheetLoadingRows.slice(0, 5).map((row, index) => (
+                        <div key={`spreadsheet-mobile-loading-row-${index}`} className="px-4 py-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-green-50 text-green-700">
+                              <FileSpreadsheet className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <Skeleton className={`h-4 max-w-full ${row.name}`} />
+                              <Skeleton className={`h-3 max-w-full ${row.updated}`} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className={`${isPageLoading ? 'hidden sm:block' : ''} overflow-x-auto`}>
+                    <table className="w-full min-w-[520px]">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
@@ -372,12 +389,12 @@ export default function SpreadsheetsListPage() {
                                     <FileSpreadsheet className="h-5 w-5" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <Skeleton className={`h-4 ${row.name}`} />
+                                    <Skeleton className={`h-4 max-w-full ${row.name}`} />
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <Skeleton className={`h-4 ${row.updated}`} />
+                                <Skeleton className={`h-4 max-w-full ${row.updated}`} />
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center justify-end">

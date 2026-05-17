@@ -4,12 +4,9 @@ import os
 import requests
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Max
-
 from django.utils import timezone as django_timezone
 
 from spreadsheet.models import Spreadsheet, Sheet, Cell
-from decision.models import Decision, Signal, Option
 from task.models import Task
 from .models import (
     AgentSession, AgentMessage, AgentWorkflowRun, ImportedCSVFile,
@@ -110,9 +107,6 @@ def _call_llm(client, spreadsheet_data):
         '{"anomalies": [{"metric": "...", "movement": "...", "scope_type": "...", '
         '"scope_value": "...", "delta_value": ..., "delta_unit": "...", '
         '"period": "...", "description": "..."}], '
-        '"suggested_decision": {"title": "...", "context_summary": "...", '
-        '"reasoning": "...", "risk_level": "LOW|MEDIUM|HIGH", "confidence": 1-5, '
-        '"options": [{"text": "...", "order": 0}]}, '
         '"recommended_tasks": [{"type": "optimization|alert|asset|execution", '
         '"summary": "...", "priority": "HIGH|MEDIUM|LOW"}]}\n\n'
         "Only return valid JSON, no markdown code fences."
@@ -152,16 +146,6 @@ You MUST return ONLY valid JSON (no markdown, no explanation, no code fences) wi
       "description": "Human-readable description of the anomaly"
     }
   ],
-  "suggested_decision": {
-    "title": "Short title for the decision",
-    "context_summary": "Background context explaining why this decision is needed",
-    "reasoning": "Detailed reasoning for the recommended action",
-    "risk_level": "one of: LOW, MEDIUM, HIGH",
-    "confidence": 4,
-    "options": [
-      {"text": "Option description", "order": 0}
-    ]
-  },
   "recommended_tasks": [
     {
       "type": "one of: optimization, alert, asset, execution, budget, report, scaling, communication, retrospective, experiment, platform_policy_update",
@@ -173,9 +157,8 @@ You MUST return ONLY valid JSON (no markdown, no explanation, no code fences) wi
 }
 
 Rules:
-- Suggest at least 2 options and at most 4 for the decision
 - Suggest 1-5 tasks based on the anomalies found
-- If no anomalies found, return empty anomalies array with a simple "no issues" decision
+- If no anomalies found, return empty anomalies array and brief neutral recommended_tasks if appropriate
 - confidence must be an integer from 1 to 5
 - Return ONLY the JSON object, nothing else\
 """
@@ -400,7 +383,6 @@ You must:
 3. Optionally prepare structured forwards when the user explicitly asks to forward or notify project members.
 
 You must not:
-- create decisions
 - create tasks
 - invent project members
 - guess ambiguous recipients
@@ -762,19 +744,24 @@ class AgentOrchestrator:
             return
 
         # --- Resume a paused workflow ---
-        if action in ('confirm_decision', 'create_tasks'):
+        if action == 'create_tasks':
             latest_run = self.session.workflow_runs.filter(
                 is_deleted=False
             ).order_by('-created_at').first()
 
+            if latest_run and self._workflow_run_analysis(latest_run).get('recommended_tasks'):
+                # Commit tasks from the stored analysis instead of resuming the
+                # workflow, which may pause again on legacy await_confirmation steps.
+                yield from self.create_tasks_from_analysis(latest_run)
+                yield {"type": "done"}
+                return
             if latest_run and latest_run.workflow_definition:
                 yield from self._resume_workflow(latest_run)
                 yield {"type": "done"}
                 return
-            else:
-                yield from self._legacy_confirm(action, latest_run)
-                yield {"type": "done"}
-                return
+            yield from self._legacy_confirm(action, latest_run)
+            yield {"type": "done"}
+            return
 
         # Resume after user confirms / edits the detected column mapping.
         if action == 'confirm_columns':
@@ -1373,7 +1360,6 @@ class AgentOrchestrator:
         # Build summary message
         analysis = workflow_run.analysis_result
         anomalies = analysis.get("anomalies", [])
-        suggested = analysis.get("suggested_decision", {})
         tasks = analysis.get("recommended_tasks", [])
 
         lines = [f"📊 Analysis Summary — {project.name}"]
@@ -1383,10 +1369,6 @@ class AgentOrchestrator:
             lines.append("⚠️ Anomalies detected:")
             for a in anomalies[:5]:
                 lines.append(f"  • {a.get('description', str(a))}")
-
-        if suggested:
-            lines.append("")
-            lines.append(f"🎯 Suggested Decision: {suggested.get('title', '')}")
 
         if tasks:
             lines.append("")
@@ -1420,78 +1402,24 @@ class AgentOrchestrator:
         if gate.paused:
             return
 
-    def create_decision_draft(self, analysis_result, workflow_run=None):
-        """Create a Decision draft with Signals and Options from analysis."""
-        yield {"type": "text", "content": "Creating decision pre-draft..."}
+    def _workflow_run_analysis(self, workflow_run):
+        """Return analysis payload for a run, including completed step output."""
+        analysis = workflow_run.analysis_result
+        if isinstance(analysis, dict) and analysis.get('recommended_tasks'):
+            return analysis
 
-        if workflow_run:
-            workflow_run.status = 'creating_decision'
-            workflow_run.save()
+        last_execution = workflow_run.step_executions.filter(
+            status='completed'
+        ).order_by('-step_order').first()
+        output_data = getattr(last_execution, 'output_data', None) or {}
+        if isinstance(output_data, dict):
+            step_analysis = output_data.get('analysis_result')
+            if isinstance(step_analysis, dict) and step_analysis.get('recommended_tasks'):
+                workflow_run.analysis_result = step_analysis
+                workflow_run.save(update_fields=['analysis_result', 'updated_at'])
+                return step_analysis
 
-        suggested = analysis_result.get("suggested_decision", {})
-
-        # Calculate next project_seq
-        max_seq = Decision.objects.filter(
-            project=self.project
-        ).aggregate(Max('project_seq'))['project_seq__max'] or 0
-
-        decision = Decision.objects.create(
-            title=suggested.get("title") or "AI Agent Analysis",
-            context_summary=suggested.get("context_summary", ""),
-            reasoning=suggested.get("reasoning", ""),
-            risk_level=suggested.get("risk_level", "MEDIUM"),
-            confidence=suggested.get("confidence", 3),
-            status=Decision.Status.PREDRAFT,
-            project=self.project,
-            project_seq=max_seq + 1,
-            author=self.user,
-            created_by_agent=True,
-            agent_session_id=self.session.id,
-            is_pre_draft=True,
-        )
-
-        # Create signals from anomalies
-        anomalies = analysis_result.get("anomalies", [])
-        for anomaly in anomalies:
-            Signal.objects.create(
-                decision=decision,
-                author=self.user,
-                metric=anomaly.get("metric", ""),
-                movement=anomaly.get("movement", ""),
-                period=anomaly.get("period", ""),
-                scope_type=anomaly.get("scope_type", ""),
-                scope_value=anomaly.get("scope_value", ""),
-                delta_value=anomaly.get("delta_value"),
-                delta_unit=anomaly.get("delta_unit", ""),
-                display_text=anomaly.get("description", ""),
-            )
-
-        # Create options — first option is selected by default so the decision
-        # satisfies validate_can_commit() (exactly one option must be selected).
-        options = suggested.get("options", [])
-        for idx, opt in enumerate(options):
-            Option.objects.create(
-                decision=decision,
-                text=opt.get("text", ""),
-                order=opt.get("order", idx),
-                is_selected=(idx == 0),
-            )
-
-        if workflow_run:
-            workflow_run.decision = decision
-            workflow_run.status = 'creating_tasks'
-            workflow_run.save()
-
-        yield {
-            "type": "decision_draft",
-            "content": f"Created decision draft: {decision.title}",
-            "data": {"decision_id": decision.id},
-        }
-        yield {
-            "type": "confirmation_request",
-            "content": "Decision draft created. Would you like me to create tasks based on the recommended actions?",
-            "data": {"decision_id": decision.id},
-        }
+        return analysis if isinstance(analysis, dict) else {}
 
     def create_tasks_from_analysis(self, workflow_run):
         """Create Tasks directly from analysis results, optionally linking to Decision if it exists."""
@@ -1510,7 +1438,7 @@ class AgentOrchestrator:
             }
             return
 
-        analysis = workflow_run.analysis_result or {}
+        analysis = self._workflow_run_analysis(workflow_run)
         recommended_tasks = analysis.get("recommended_tasks", [])
         if not recommended_tasks:
             yield {"type": "error", "content": "No recommended tasks found in analysis."}
@@ -1780,15 +1708,8 @@ class AgentOrchestrator:
         yield from self._execute_steps(workflow_run, input_data)
 
     def _legacy_confirm(self, action, workflow_run):
-        """Backward compat: confirm_decision / create_tasks for legacy runs."""
-        if action == 'confirm_decision':
-            if workflow_run and workflow_run.analysis_result:
-                yield from self.create_decision_draft(
-                    workflow_run.analysis_result, workflow_run
-                )
-            else:
-                yield {"type": "error", "content": "No pending analysis to confirm."}
-        elif action == 'create_tasks':
+        """Backward compat: create_tasks for legacy runs."""
+        if action == 'create_tasks':
             if workflow_run and workflow_run.analysis_result:
                 yield from self.create_tasks_from_analysis(workflow_run)
             else:
@@ -1839,16 +1760,6 @@ class AgentOrchestrator:
             yield from self.analyze_csv(csv_filename)
         elif action == 'analyze' and spreadsheet_id:
             yield from self.analyze_spreadsheet(spreadsheet_id)
-        elif action == 'confirm_decision':
-            workflow_run = self.session.workflow_runs.filter(
-                status='awaiting_confirmation'
-            ).order_by('-created_at').first()
-            if workflow_run and workflow_run.analysis_result:
-                yield from self.create_decision_draft(
-                    workflow_run.analysis_result, workflow_run
-                )
-            else:
-                yield {"type": "error", "content": "No pending analysis to confirm."}
         elif action == 'create_tasks':
             workflow_run = self.session.workflow_runs.filter(
                 analysis_result__isnull=False
@@ -1932,7 +1843,7 @@ class AgentOrchestrator:
                 yield {
                     "type": "text",
                     "content": (
-                        "I can help you analyze spreadsheet data and create decisions. "
+                        "I can help you analyze spreadsheet data and recommended tasks. "
                         "To get started, select a spreadsheet and use the 'analyze' action."
                     ),
                 }

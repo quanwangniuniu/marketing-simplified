@@ -22,7 +22,8 @@ class TestTaskIntegration:
         payload = {
             "summary": "Test Task",
             "description": "Test task description",
-            "type": "asset"
+            "type": "asset",
+            "create_as_draft": True,
         }
 
         response = authenticated_client.post(url, payload, format='json')
@@ -47,7 +48,8 @@ class TestTaskIntegration:
             "summary": "Test Task",
             "description": "Test task description",
             "type": "asset",
-            "project_id": other_project.id
+            "project_id": other_project.id,
+            "create_as_draft": True,
         }
 
         response = authenticated_client.post(url, payload, format='json')
@@ -65,7 +67,8 @@ class TestTaskIntegration:
         payload = {
             "summary": "Test Task",
             "description": "Test task description",
-            "type": "asset"
+            "type": "asset",
+            "create_as_draft": True,
         }
 
         response = authenticated_client.post(url, payload, format='json')
@@ -85,7 +88,8 @@ class TestTaskIntegration:
             "summary": "Test Task",
             "description": "Test task description",
             "type": "asset",
-            "project_id": project2.id
+            "project_id": project2.id,
+            "create_as_draft": True,
         }
 
         response = authenticated_client.post(url, payload, format='json')
@@ -226,7 +230,8 @@ class TestTaskIntegration:
             "summary": "Test Task",
             "description": "Test task description",
             "type": "asset",
-            "project_id": other_project.id
+            "project_id": other_project.id,
+            "create_as_draft": True,
         }
 
         response = authenticated_client.post(url, payload, format='json')

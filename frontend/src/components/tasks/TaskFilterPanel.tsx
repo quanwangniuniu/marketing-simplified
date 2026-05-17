@@ -12,7 +12,7 @@ type FilterKey =
   | "status"
   | "priority"
   | "project"
-  | "parent"
+  | "subtasks"
   | "due_date"
   | "created_date";
 
@@ -56,7 +56,7 @@ const FILTER_LIST: { key: FilterKey; label: string }[] = [
   { key: "status", label: "Status" },
   { key: "priority", label: "Priority" },
   { key: "project", label: "Project" },
-  { key: "parent", label: "Parent" },
+  { key: "subtasks", label: "Subtasks" },
   { key: "due_date", label: "Due date" },
   { key: "created_date", label: "Created date" },
 ];
@@ -82,7 +82,6 @@ export function TaskFilterPanel({
       "priority",
       "owner_id",
       "current_approver_id",
-      "has_parent",
       "due_date_after",
       "due_date_before",
       "created_after",
@@ -91,7 +90,7 @@ export function TaskFilterPanel({
     return keys.reduce((acc, key) => {
       const v = filters[key];
       return acc + (v === undefined || v === null || v === "" ? 0 : 1);
-    }, 0);
+    }, 0) + (filters.has_subtasks !== undefined ? 1 : 0);
   }, [filters]);
 
   useEffect(() => {
@@ -133,8 +132,8 @@ export function TaskFilterPanel({
         return len(filters.priority);
       case "project":
         return len(filters.project_id);
-      case "parent":
-        return len(filters.has_parent);
+      case "subtasks":
+        return filters.has_subtasks !== undefined ? 1 : 0;
       case "due_date":
         return (filters.due_date_after ? 1 : 0) + (filters.due_date_before ? 1 : 0);
       case "created_date":
@@ -393,37 +392,37 @@ export function TaskFilterPanel({
             </div>
           </div>
         );
-      case "parent":
+      case "subtasks":
         return (
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              Parent relationship
+              Subtasks
             </label>
             <div className="overflow-hidden rounded-md border border-input bg-background">
               <button
                 type="button"
                 className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                onClick={() => handlePartialChange({ has_parent: undefined })}
+                onClick={() => handlePartialChange({ has_subtasks: undefined })}
               >
-                Any
+                All tasks
               </button>
               <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted">
                 <input
                   type="radio"
-                  name="task-filter-parent"
-                  checked={filters.has_parent === false}
-                  onChange={() => handlePartialChange({ has_parent: false })}
+                  name="task-filter-subtasks"
+                  checked={filters.has_subtasks === true}
+                  onChange={() => handlePartialChange({ has_subtasks: true })}
                 />
-                <span>Top-level only</span>
+                <span>Parent tasks only</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted">
                 <input
                   type="radio"
-                  name="task-filter-parent"
-                  checked={filters.has_parent === true}
-                  onChange={() => handlePartialChange({ has_parent: true })}
+                  name="task-filter-subtasks"
+                  checked={filters.has_subtasks === false}
+                  onChange={() => handlePartialChange({ has_subtasks: false })}
                 />
-                <span>Subtasks only</span>
+                <span>Single tasks only</span>
               </label>
             </div>
           </div>
@@ -507,6 +506,7 @@ export function TaskFilterPanel({
     <div ref={rootRef} className="relative inline-flex text-left">
       <button
         type="button"
+        data-testid="filter-panel-trigger"
         className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
         onClick={() => setOpen((prev) => !prev)}
       >

@@ -1598,6 +1598,13 @@ class CalendarEvent(TimeStampedModel):
             # The front end uses this index when filtering by time range + type
             models.Index(fields=['organization', 'start_time', 'event_type']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event_type', 'task'],
+                condition=models.Q(task__isnull=False),
+                name='unique_cal_event_per_task_type',
+            ),
+        ]
 
     def __str__(self):
         return f"[{self.event_type}] {self.title} @ {self.start_time}"

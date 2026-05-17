@@ -162,6 +162,10 @@ export const TaskAPI = {
   // Delete a task
   deleteTask: (taskId: number) => api.delete(`/api/tasks/${taskId}/`),
 
+  // Field history
+  getFieldHistory: (taskId: number, page = 1, pageSize = 20) =>
+    api.get(`/api/tasks/${taskId}/field-history/`, { params: { page, page_size: pageSize } }),
+
   // Get all relations for a task
   getRelations: async (taskId: number): Promise<TaskRelationsResponse> => {
     const response = await api.get(`/api/tasks/${taskId}/relations/`);

@@ -8,8 +8,6 @@ import { AnalysisResults } from "./AnalysisResults"
 import { AgentAPI } from "@/lib/api/agentApi"
 import { ImportedCSVFile } from "@/types/agent"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
-import { debugLog } from "@/lib/agentDebug"
-
 export function SpreadsheetView() {
   const [reports, setReports] = useState<ImportedCSVFile[]>([])
   const [selectedSheet, setSelectedSheet] = useState("")
@@ -21,9 +19,7 @@ export function SpreadsheetView() {
         const list = await AgentAPI.fetchReports()
         setReports(list)
         if (list.length > 0) setSelectedSheet(list[0].filename)
-        debugLog("reports", "Loaded:", list.length)
       } catch {
-        debugLog("reports", "Load failed")
       } finally {
         setReportsLoading(false)
       }
@@ -41,10 +37,8 @@ export function SpreadsheetView() {
         setSelectedSheet(list.length > 0 ? list[0].filename : "")
       }
       toast.success(AGENT_MESSAGES.DELETE_SUCCESS)
-      debugLog("delete", "Success:", fileId)
-    } catch (err) {
+    } catch {
       toast.error(AGENT_MESSAGES.DELETE_FAILED)
-      debugLog("delete", "Failed:", err)
     }
   }
 

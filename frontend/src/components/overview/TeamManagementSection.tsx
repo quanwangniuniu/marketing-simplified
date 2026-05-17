@@ -205,7 +205,7 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
       className="border-[0.5px] border-gray-200 bg-white shadow-none"
     >
       <CardHeader className="pb-3 px-5 pt-5">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Users className="w-4 h-4 text-gray-500" />
           <CardTitle className="text-sm font-semibold text-gray-900">
             Team Management
@@ -213,7 +213,7 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
           {projectName && (
             <span className="text-xs text-gray-400">· {projectName}</span>
           )}
-          <div className="ml-auto flex items-center gap-1 rounded-md bg-gray-50 p-1">
+          <div className="ml-0 flex max-w-full items-center gap-1 overflow-x-auto rounded-md bg-gray-50 p-1 sm:ml-auto">
             <TabButton active={tab === 'members'} onClick={() => setTab('members')}>
               Members ({members.length})
             </TabButton>
@@ -231,9 +231,9 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
         {isOwner && (
           <form
             onSubmit={handleInvite}
-            className="flex items-center gap-2 rounded-lg border border-[#3CCED7]/20 bg-[#3CCED7]/5 p-3"
+            className="flex flex-col gap-2 rounded-lg border border-[#3CCED7]/20 bg-[#3CCED7]/5 p-3 sm:flex-row sm:items-center"
           >
-            <UserPlus className="w-4 h-4 text-[#3CCED7]" />
+            <UserPlus className="hidden w-4 h-4 text-[#3CCED7] sm:block" />
             <input
               type="email"
               required
@@ -242,7 +242,7 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
               onChange={(e) => setInviteEmail(e.target.value)}
               className="flex-1 h-9 rounded-md border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30"
             />
-            <div className="min-w-[160px]">
+            <div className="w-full sm:min-w-[160px] sm:w-auto">
               <InlineSelect
                 ariaLabel="Invite role"
                 value={inviteRole}
@@ -257,7 +257,7 @@ export default function TeamManagementSection({ projectId, projectName }: Props)
             <button
               type="submit"
               disabled={inviting || !inviteEmail.trim()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
               Invite
@@ -309,7 +309,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+      className={`shrink-0 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
         active
           ? 'bg-white text-gray-900 shadow-sm'
           : 'text-gray-500 hover:text-gray-800'
@@ -352,14 +352,14 @@ function MembersList({
         const canEdit = isOwner && !isMemberOwner;
         const busy = busyId === m.id;
         return (
-          <li key={m.id} className="flex items-center gap-3 py-3">
+          <li key={m.id} className="flex flex-wrap items-center gap-3 py-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">
               <span className="text-white text-[11px] font-semibold">
                 {getInitials(displayName)}
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
                 {isSelf && (
                   <span className="text-[10px] text-gray-400">(you)</span>
@@ -377,7 +377,7 @@ function MembersList({
             </div>
 
             {canEdit ? (
-              <div className="min-w-[150px]">
+              <div className="w-full sm:min-w-[150px] sm:w-auto">
                 <InlineSelect
                   ariaLabel="Member role"
                   value={m.role}
@@ -402,7 +402,7 @@ function MembersList({
             )}
 
             {canEdit && (
-              <>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => onTransferOwner(m)}
@@ -421,7 +421,7 @@ function MembersList({
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
-              </>
+              </div>
             )}
           </li>
         );
@@ -437,7 +437,7 @@ function InvitationsList({ invitations }: { invitations: ProjectInvitationData[]
   return (
     <ul className="divide-y divide-gray-100">
       {invitations.map((inv) => (
-        <li key={inv.id} className="flex items-center gap-3 py-3">
+        <li key={inv.id} className="flex flex-wrap items-center gap-3 py-3">
           <Mail className="w-4 h-4 text-gray-400 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-gray-900 truncate">{inv.email}</p>
@@ -486,7 +486,7 @@ function ApprovalsList({
       {invitations.map((inv) => {
         const busy = busyId === inv.id;
         return (
-          <li key={inv.id} className="flex items-center gap-3 py-3">
+          <li key={inv.id} className="flex flex-wrap items-center gap-3 py-3">
             <Shield className="w-4 h-4 text-amber-500 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm text-gray-900 truncate">{inv.email}</p>
@@ -496,7 +496,7 @@ function ApprovalsList({
               </p>
             </div>
             {canAct && (
-              <>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => onApprove(inv)}
@@ -515,7 +515,7 @@ function ApprovalsList({
                   <X className="w-3.5 h-3.5" />
                   Reject
                 </button>
-              </>
+              </div>
             )}
           </li>
         );

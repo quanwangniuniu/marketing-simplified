@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { MessageSquare, Plus, Search } from 'lucide-react';
+import { MessageSquare, PanelLeftOpen, Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
@@ -14,6 +14,11 @@ import ChatWindow from '@/components/chat/ChatWindow';
 import CreateChatDialog from '@/components/chat/CreateChatDialog';
 import SlackMessagesLayout from '@/components/messages/SlackMessagesLayout';
 
+const MESSAGES_MOBILE_QUERY = '(max-width: 767px)';
+
+const isMessagesMobileViewport = () =>
+  typeof window !== 'undefined' && window.matchMedia(MESSAGES_MOBILE_QUERY).matches;
+
 export default function MessagePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,6 +28,7 @@ export default function MessagePageContent() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreateChannelDialogOpen, setIsCreateChannelDialogOpen] = useState(false);
+  const [isConversationDrawerOpen, setIsConversationDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Ensure userId is a number for consistent comparison in addMessage
@@ -174,6 +180,11 @@ export default function MessagePageContent() {
   };
   
   const handleBackToList = () => {
+    if (isMessagesMobileViewport()) {
+      setIsConversationDrawerOpen(true);
+      return;
+    }
+
     setCurrentChat(null);
     replaceMessagesQuery({
       projectId: selectedProjectId,
@@ -234,30 +245,46 @@ export default function MessagePageContent() {
     }
   }, [selectedProjectId, chats, createNewChat, setCurrentChat, replaceMessagesQuery]);
 
+  const renderSearchInput = (testId: string) => (
+    <div className="relative w-full">
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <input
+        type="text"
+        placeholder="Search conversations..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full rounded-md border border-gray-200 py-1.5 pl-10 pr-4 text-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+        data-testid={testId}
+      />
+    </div>
+  );
+
   return (
     <div className="flex-1 flex flex-col bg-white min-h-0">
       {/* Header */}
       <div
-        className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4"
+        className="flex items-center gap-3 border-b border-gray-200 bg-white px-3 py-2 sm:px-6 sm:py-3"
         data-testid="messages-header"
       >
-        <div className="flex items-center gap-2 shrink-0">
-          <MessageSquare className="w-5 h-5 text-[#3CCED7]" />
-          <h1 className="text-lg font-semibold text-gray-900">Messages</h1>
+        <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
+          <MessageSquare className="h-5 w-5 shrink-0 text-[#3CCED7]" />
+          <h1 className="shrink-0 text-lg font-semibold text-gray-900">Messages</h1>
           {activeProject?.name && (
-            <span className="text-sm text-gray-400 ml-2">· {activeProject.name}</span>
+            <span className="min-w-0 truncate text-sm text-gray-400 sm:ml-2">· {activeProject.name}</span>
           )}
         </div>
-        <div className="relative flex-1 max-w-md ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 focus:border-[#3CCED7] text-sm"
-            data-testid="messages-search"
-          />
+        <button
+          type="button"
+          onClick={() => setIsConversationDrawerOpen(true)}
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 md:hidden"
+          aria-label="Open conversations"
+          title="Open conversations"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+          <span className="hidden min-[380px]:inline">Chats</span>
+        </button>
+        <div className="ml-auto hidden flex-1 md:block md:max-w-md">
+          {renderSearchInput('messages-search')}
         </div>
       </div>
 
@@ -273,6 +300,9 @@ export default function MessagePageContent() {
         projectMembers={projectMembers}
         isLoadingMembers={isLoadingMembers}
         onStartDM={handleStartDM}
+        mobileSidebarOpen={isConversationDrawerOpen}
+        onMobileSidebarOpenChange={setIsConversationDrawerOpen}
+        mobileSidebarHeader={renderSearchInput('messages-mobile-search')}
         chatListEmptyState={
           selectedProjectId ? (
             <div className="p-6 text-sm text-gray-500">No chats yet</div>
@@ -310,6 +340,14 @@ export default function MessagePageContent() {
                 <p className="text-gray-500 text-sm max-w-sm">
                   Choose a chat from the list or start a new conversation with your team members.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setIsConversationDrawerOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-[#3CCED7] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#2AB5BD] md:hidden"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                  Browse conversations
+                </button>
               </div>
             </div>
           ) : (

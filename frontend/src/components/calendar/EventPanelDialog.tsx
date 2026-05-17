@@ -151,7 +151,7 @@ export function EventPanelDialog({
           role="dialog"
           aria-label="View event"
           data-testid="calendar-event-dialog"
-          className="fixed z-50 w-[360px] rounded-3xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
+          className="fixed z-50 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[360px] overflow-y-auto rounded-2xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300 sm:rounded-3xl"
           style={{ top: position.top, left: position.left }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -309,12 +309,12 @@ export function EventPanelDialog({
         role="dialog"
         aria-label={mode === "edit" ? "Edit event" : "Create event"}
         data-testid="calendar-event-dialog"
-        className="fixed z-50 w-[420px] rounded-3xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300"
+        className="fixed z-50 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[420px] overflow-y-auto rounded-2xl border bg-white shadow-xl animate-in slide-in-from-bottom-8 fade-in duration-300 sm:rounded-3xl"
         style={{ top: position.top, left: position.left }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col">
-          <div className="px-6 pt-4 pb-2">
+          <div className="px-4 pt-4 pb-2 sm:px-6">
             <input
               autoFocus
               className="w-full border-b border-gray-200 bg-inherit pb-1 text-xl font-semibold text-gray-900 outline-none focus:border-[#3CCED7]"
@@ -324,8 +324,8 @@ export function EventPanelDialog({
             />
           </div>
 
-          <div className="px-6 pb-4">
-            <div className="mb-3 flex gap-2 text-sm">
+          <div className="px-4 pb-4 sm:px-6">
+            <div className="mb-3 flex flex-wrap gap-2 text-sm">
               <button
                 type="button"
                 className="rounded-full bg-[#3CCED7]/10 px-3 py-1 text-xs font-medium text-[#3CCED7]"
@@ -444,15 +444,15 @@ export function EventPanelDialog({
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t bg-inherit px-6 py-3">
+          <div className="flex flex-col gap-3 border-t bg-inherit px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <button
               type="button"
-              className="text-sm font-medium text-[#3CCED7] hover:opacity-80"
+              className="self-start text-sm font-medium text-[#3CCED7] hover:opacity-80"
               onClick={() => {}}
             >
               More options
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {mode === "edit" && event && !event.is_recurring && (
                 <button
                   type="button"

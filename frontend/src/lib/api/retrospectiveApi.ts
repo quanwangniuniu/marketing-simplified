@@ -75,7 +75,7 @@ export const RetrospectiveAPI = {
     api.get(`/api/retrospective/retrospectives/${id}/`),
 
   // Update a retrospective task
-  updateRetrospective: (id: string, data: UpdateRetrospectiveData) =>
+  updateRetrospective: (id: string | number, data: UpdateRetrospectiveData) =>
     api.patch(`/api/retrospective/retrospectives/${id}/`, data),
 
   // Start retrospective analysis

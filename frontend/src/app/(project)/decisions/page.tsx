@@ -65,9 +65,9 @@ function DecisionsV2Content() {
 
   return (
     <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-      <div className="mx-auto w-full max-w-[1440px] px-6 py-4">
-        <header className="mb-4">
-          <h1 className="text-2xl font-semibold text-gray-900">Decisions</h1>
+      <div className="mx-auto w-full max-w-[1440px] px-3 py-3 sm:px-6 sm:py-4">
+        <header className="mb-3 sm:mb-4">
+          <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">Decisions</h1>
           <p className="mt-1 text-sm text-gray-500">
             Review, create, and connect decisions across your project.
           </p>

@@ -28,12 +28,13 @@ interface TaskListCardProps {
   createdTaskIdByIndex?: Record<number, number>
   /** When true (approval off), but tasks not yet created, show a generating state. */
   generating?: boolean
-  /** When true, render selection + destination + reject/create actions. */
+  /** When true, render selection + destination + create actions. */
   approvalMode?: boolean
+  /** When true, render per-task checkboxes (defaults to approvalMode). */
+  selectionMode?: boolean
   selectedIndexes?: number[]
   onSelectedIndexesChange?: (next: number[]) => void
   onCreateSelected?: (selectedIndexes: number[]) => void
-  onRejectApproval?: () => void
   createButtonDisabled?: boolean
   generationStatus?: TaskGenerationStatus
 }
@@ -47,10 +48,10 @@ export function TaskListCard({
   createdTaskIdByIndex,
   generating,
   approvalMode,
+  selectionMode,
   selectedIndexes,
   onSelectedIndexesChange,
   onCreateSelected,
-  onRejectApproval,
   createButtonDisabled,
   generationStatus = "idle",
 }: TaskListCardProps) {
@@ -68,6 +69,8 @@ export function TaskListCard({
     return new Set(Array.isArray(selectedIndexes) ? selectedIndexes : [])
   }, [selectedIndexes])
 
+  const showSelection = selectionMode ?? Boolean(approvalMode)
+
   const toggleSelected = (idx: number) => {
     const next = new Set(selectedSet)
     if (next.has(idx)) next.delete(idx)
@@ -76,7 +79,6 @@ export function TaskListCard({
   }
 
   const canCreateSelected =
-    approvalMode &&
     typeof onCreateSelected === "function" &&
     selectedSet.size > 0 &&
     !createButtonDisabled
@@ -204,7 +206,7 @@ export function TaskListCard({
               key={i}
               className={cn(
                 "rounded-md hover:bg-muted/40 transition-colors",
-                approvalMode && isSelected && "bg-muted/40"
+                showSelection && isSelected && "bg-muted/40"
               )}
             >
               <button
@@ -212,7 +214,7 @@ export function TaskListCard({
                 className="w-full text-left flex items-start gap-3 py-2 px-2 rounded-md"
                 onClick={() => handleRowClick(i)}
               >
-                {approvalMode && (
+                {showSelection && (
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -246,7 +248,7 @@ export function TaskListCard({
                 </div>
               </button>
               {expandedIndex === i && (
-                <div className={cn("px-2 pb-2", approvalMode ? "pl-[72px]" : "pl-[52px]")}>
+                <div className={cn("px-2 pb-2", showSelection ? "pl-[72px]" : "pl-[52px]")}>
                   <p className="text-xs text-muted-foreground whitespace-pre-wrap">
                     {task.description?.trim() ? task.description : "No description provided."}
                   </p>
@@ -256,33 +258,20 @@ export function TaskListCard({
           )
         })}
 
-        {approvalMode && showCreateActions && onRejectApproval && onCreateSelected && (
-          <div className="pt-2 flex items-center justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={onRejectApproval} disabled={createButtonDisabled}>
-              Reject
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                const selected = Array.from(selectedSet)
-                onSelectedIndexesChange?.([])
-                onCreateSelected(selected)
-              }}
-              disabled={!canCreateSelected}
-            >
-              Create Tasks
-            </Button>
-          </div>
-        )}
-
-        {onCreateAll && !approvalMode && showCreateActions && (
+        {(onCreateSelected || onCreateAll) && showCreateActions && (
           <div className="pt-2">
             <Button
               size="sm"
               onClick={() => {
-                onSelectedIndexesChange?.([])
-                onCreateAll()
+                if (onCreateSelected) {
+                  const selected = Array.from(selectedSet)
+                  onSelectedIndexesChange?.([])
+                  onCreateSelected(selected)
+                  return
+                }
+                onCreateAll?.()
               }}
+              disabled={onCreateSelected ? !canCreateSelected : Boolean(createButtonDisabled)}
             >
               Create Tasks
             </Button>

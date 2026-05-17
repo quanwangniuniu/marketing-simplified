@@ -64,8 +64,8 @@ export default function MeetingDetailHeader({
   };
 
   return (
-    <header className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-      <nav className="flex items-center justify-between gap-2 text-xs text-gray-500">
+    <header className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+      <nav className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
         <Link
           href={`/meetings?project_id=${projectId}`}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition hover:bg-gray-50 hover:text-gray-900"
@@ -85,7 +85,7 @@ export default function MeetingDetailHeader({
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="min-w-0 text-2xl font-semibold leading-tight text-gray-900">
+          <h1 className="min-w-0 text-xl font-semibold leading-tight text-gray-900 sm:text-2xl">
             {meeting.title || 'Untitled meeting'}
           </h1>
           <MeetingStatusPill status={meeting.status} />

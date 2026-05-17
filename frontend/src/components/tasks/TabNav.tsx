@@ -32,6 +32,7 @@ export default function TabNav({ active, onChange, trailing }: TabNavProps) {
             <button
               key={tab.id}
               type="button"
+              data-testid={`tab-${tab.id}`}
               onClick={() => onChange(tab.id)}
               className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-medium transition ${
                 isActive

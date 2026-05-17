@@ -18,7 +18,6 @@ const STEP_TYPE_OPTIONS: { value: WorkflowStepType; label: string }[] = [
   { value: "analyze_data", label: "Analyze Data" },
   { value: "call_dify", label: "Call Dify" },
   { value: "call_llm", label: "Call LLM" },
-  { value: "create_decision", label: "Create Decision" },
   { value: "create_tasks", label: "Create Tasks" },
   { value: "await_confirmation", label: "Await Confirmation" },
   { value: "custom_api", label: "Custom API" },

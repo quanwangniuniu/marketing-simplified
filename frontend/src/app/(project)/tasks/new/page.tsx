@@ -238,7 +238,7 @@ export default function CreateTaskPage() {
       {
         key: 'approver',
         label: 'Approver',
-        required: false,
+        required: type.length > 0,
         filled: approverId.length > 0,
         anchorId: COMMON_ANCHOR.approver,
       },
@@ -246,10 +246,13 @@ export default function CreateTaskPage() {
     if (schema) {
       for (const field of schema.fields) {
         const filled = (typeFormState[field.key] ?? '').toString().trim().length > 0;
+        const isConditionallyRequired = field.conditionalRequired
+        ? field.conditionalRequired.values.includes(typeFormState[field.conditionalRequired.dependsOn] ?? '')
+        : false;
         base.push({
           key: `schema:${field.key}`,
           label: field.label,
-          required: field.required,
+          required: field.required || isConditionallyRequired,
           filled,
           anchorId: fieldId(schema.type, field.key),
         });
@@ -274,7 +277,7 @@ export default function CreateTaskPage() {
       toast.error('No active project. Pick a project first.');
       return;
     }
-    if (!allRequiredReady) {
+    if (!asDraft && !allRequiredReady) {
       toast.error('Fill all required fields first.');
       return;
     }
@@ -306,10 +309,20 @@ export default function CreateTaskPage() {
       }
 
       if (schema && createdTaskId) {
-        const missing = getUnfilledRequiredKeys(schema, typeFormState);
-        if (missing.length > 0) {
-          toast.error(`Missing required fields: ${missing.join(', ')}`);
-          return;
+        // For drafts, skip the linked object entirely if required fields aren't filled yet.
+        if (asDraft) {
+          const missing = getUnfilledRequiredKeys(schema, typeFormState);
+          if (missing.length > 0) {
+            toast.success('Saved as draft');
+            router.push('/tasks');
+            return;
+          }
+        } else {
+          const missing = getUnfilledRequiredKeys(schema, typeFormState);
+          if (missing.length > 0) {
+            toast.error(`Missing required fields: ${missing.join(', ')}`);
+            return;
+          }
         }
         const cfg = TASK_TYPE_CONFIG_STATIC[schema.type];
         if (cfg) {
@@ -329,9 +342,18 @@ export default function CreateTaskPage() {
               if (subId) {
                 await TaskAPI.linkTask(createdTaskId, cfg.contentType, String(subId));
               }
+            } else {
+              if (type === 'budget' && !asDraft) {
+                toast.error('Task created but budget request was not saved — make sure you selected a pool and assigned an approver.');
+              }
             }
-          } catch {
-            toast.error('Task created but failed to save type-specific fields. You can edit the task to retry.');
+          } catch (subErr: unknown) {
+            const detail =
+              (subErr as any)?.response?.data
+                ? JSON.stringify((subErr as any).response.data)
+                : (subErr as any)?.message ?? 'Unknown error';
+            console.error('[task-create] type-specific save failed:', detail);
+            toast.error(`Task created but failed to save type-specific fields: ${detail}`);
           }
         }
       }
@@ -370,7 +392,7 @@ export default function CreateTaskPage() {
   return (
     <ProtectedRoute renderChildrenWhileLoading>
       <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+      <div className="mx-auto w-full max-w-5xl px-0 py-3 sm:px-6 sm:py-8">
         <button
           type="button"
           onClick={() => {
@@ -392,11 +414,11 @@ export default function CreateTaskPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
             <div className="h-[3px] w-full" style={{ background: BRAND_GRADIENT }} aria-hidden />
 
-            <div id={COMMON_ANCHOR.summary} className="px-8 pt-7 pb-2">
+            <div id={COMMON_ANCHOR.summary} className="px-4 pb-2 pt-5 sm:px-8 sm:pt-7">
               <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 New task in{' '}
                 {activeProject?.name ?? (projectId ? '' : 'project')}
@@ -408,7 +430,7 @@ export default function CreateTaskPage() {
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder="Summary of this task"
-                className="mt-2 w-full border-0 bg-transparent p-0 text-[22px] font-semibold leading-tight text-gray-900 outline-none placeholder:text-gray-300 focus:border-b-2 focus:border-[#3CCED7]"
+                className="mt-2 w-full border-0 bg-transparent p-0 text-xl font-semibold leading-tight text-gray-900 outline-none placeholder:text-gray-300 focus:border-b-2 focus:border-[#3CCED7] sm:text-[22px]"
                 autoFocus
               />
               <textarea
@@ -422,7 +444,7 @@ export default function CreateTaskPage() {
 
             <div className="my-2 border-t border-gray-100" />
 
-            <div id={COMMON_ANCHOR.type} className="px-8 py-5">
+            <div id={COMMON_ANCHOR.type} className="px-4 py-5 sm:px-8">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Work type *
               </p>
@@ -457,7 +479,7 @@ export default function CreateTaskPage() {
             {!taskTypesLoading && schema && (
               <>
                 <div className="my-2 border-t border-gray-100" />
-                <div className="px-8 py-5">
+                <div className="px-4 py-5 sm:px-8">
                   <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                     {schema.label} details
                   </p>
@@ -465,12 +487,13 @@ export default function CreateTaskPage() {
                     schema={schema}
                     values={typeFormState}
                     onChange={updateTypeField}
+                    context={{ projectId }}
                   />
                 </div>
               </>
             )}
 
-            <div id={COMMON_ANCHOR.priority} className="px-8 py-5">
+            <div id={COMMON_ANCHOR.priority} className="px-4 py-5 sm:px-8">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Priority
               </p>
@@ -497,11 +520,11 @@ export default function CreateTaskPage() {
 
             <div className="my-2 border-t border-gray-100" />
 
-            <div id={COMMON_ANCHOR.schedule} className="px-8 py-5">
+            <div id={COMMON_ANCHOR.schedule} className="px-4 py-5 sm:px-8">
               <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-gray-400">
                 Schedule
               </p>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <DateField
                   label="Planned start"
                   value={plannedStartDate}
@@ -523,9 +546,9 @@ export default function CreateTaskPage() {
               </div>
             </div>
 
-            <div id={COMMON_ANCHOR.approver} className="px-8 py-5">
+            <div id={COMMON_ANCHOR.approver} className="px-4 py-5 sm:px-8">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-gray-400">
-                Approver
+                Approver{type.length > 0 && <span className="ml-0.5 text-rose-400">*</span>}
               </p>
               <select
                 value={approverId}
@@ -533,7 +556,7 @@ export default function CreateTaskPage() {
                 disabled={membersLoading}
                 className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20 disabled:cursor-wait disabled:bg-gray-50 disabled:text-gray-400"
               >
-                <option value="">{membersLoading ? 'Loading approvers…' : 'Unassigned'}</option>
+                <option value="">{membersLoading ? 'Loading…' : type.length > 0 ? 'Select an approver…' : 'Unassigned'}</option>
                 {members.map((m) => (
                   <option key={m.user.id} value={m.user.id}>
                     {m.user.username || m.user.name || `User ${m.user.id}`}
@@ -543,9 +566,9 @@ export default function CreateTaskPage() {
               </select>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-8 py-4">
+            <div className="flex flex-col gap-2 border-t border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-8">
               {type && (
-                <span className="mr-auto text-[11px] text-gray-400">
+                <span className="text-[11px] text-gray-400 sm:mr-auto">
                   {autosaveLabel}
                 </span>
               )}
@@ -570,7 +593,7 @@ export default function CreateTaskPage() {
               <button
                 type="button"
                 onClick={() => submit(true)}
-                disabled={submitting !== null || !allRequiredReady}
+                disabled={submitting !== null}
                 className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
               >
                 {submitting === 'draft' ? 'Saving…' : 'Save as draft'}
@@ -579,7 +602,7 @@ export default function CreateTaskPage() {
                 type="button"
                 onClick={() => submit(false)}
                 disabled={submitting !== null || !allRequiredReady}
-                className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
               >
                 {submitting === 'submit' ? (
                   <>
@@ -593,7 +616,7 @@ export default function CreateTaskPage() {
             </div>
           </div>
 
-          <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+          <aside className="min-w-0 space-y-3 lg:sticky lg:top-6 lg:self-start">
             <TaskCreateChecklistAside items={checklistItems} onJump={onJump} />
             <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 text-xs text-gray-500 leading-5">
               Drafts can be edited later. Submitting routes the task into the approval chain configured for this project + work type.

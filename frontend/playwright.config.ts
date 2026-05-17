@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { config as loadEnv } from 'dotenv';
+
+// Load .env.local for local dev credentials (gitignored; CI uses env vars directly).
+loadEnv({ path: '.env.local', override: false });
 
 /**
  * See https://playwright.dev/docs/test-configuration.

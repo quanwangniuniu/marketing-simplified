@@ -74,8 +74,8 @@ export default function BoardHeader({
   };
 
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white/95 px-4 backdrop-blur">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-h-14 shrink-0 flex-col gap-2 border-b border-gray-200 bg-white/95 px-3 py-2 backdrop-blur sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-4 sm:py-0">
+      <div className="flex min-w-0 items-center gap-2 sm:flex-1">
         <button
           type="button"
           onClick={onBack}
@@ -98,7 +98,7 @@ export default function BoardHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex w-full items-center gap-1 overflow-x-auto sm:w-auto sm:overflow-visible">
         {onUndo && (
           <button
             type="button"
@@ -193,11 +193,12 @@ export default function BoardHeader({
         <button
           type="button"
           onClick={handleShare}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:border-[#3CCED7] hover:text-[#3CCED7]"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 transition hover:border-[#3CCED7] hover:text-[#3CCED7] sm:px-3"
           title="Copy share link"
+          aria-label="Copy share link"
         >
           <Share2 className="h-3.5 w-3.5" />
-          Share
+          <span className="hidden sm:inline">Share</span>
         </button>
       </div>
     </div>

@@ -9,7 +9,6 @@ import { ThemeToggle } from "./ThemeToggle"
 const viewLabels: Record<AgentView, string> = {
   overview: "Overview Dashboard",
   spreadsheets: "Spreadsheet Analysis",
-  decisions: "Decision Editor",
   tasks: "Task Board",
   workflows: "Workflow Manager",
   settings: "Settings",

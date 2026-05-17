@@ -92,7 +92,7 @@ export default function SchedulePanel({
         <p className="mb-3 text-xs italic text-gray-400">Unscheduled</p>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-500">
             Date

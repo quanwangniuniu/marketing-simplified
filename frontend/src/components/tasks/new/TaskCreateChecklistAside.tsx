@@ -23,13 +23,13 @@ export default function TaskCreateChecklistAside({ items, onJump }: Props) {
   const allReady = total > 0 && readyCount === total;
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+    <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+        <h3 className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500">
           Commit readiness
         </h3>
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
             allReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}
         >
@@ -49,7 +49,7 @@ export default function TaskCreateChecklistAside({ items, onJump }: Props) {
                 }`}
               />
               <span
-                className={`text-[13px] ${
+                className={`min-w-0 break-words text-[13px] ${
                   item.filled ? 'text-gray-500 line-through' : 'text-gray-800'
                 }`}
               >
@@ -64,12 +64,12 @@ export default function TaskCreateChecklistAside({ items, onJump }: Props) {
                 <button
                   type="button"
                   onClick={() => onJump?.(item.anchorId!)}
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition hover:bg-gray-50"
+                  className="flex w-full min-w-0 items-start gap-2 rounded-md px-1.5 py-1 text-left transition hover:bg-gray-50"
                 >
                   {content}
                 </button>
               ) : (
-                <div className="flex items-center gap-2 px-1.5 py-1">{content}</div>
+                <div className="flex min-w-0 items-start gap-2 px-1.5 py-1">{content}</div>
               )}
             </li>
           );

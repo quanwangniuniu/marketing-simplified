@@ -70,7 +70,11 @@ class ExperimentListCreateView(generics.ListCreateAPIView):
         if serializer.is_valid():
             # Create experiment with validated data
             experiment = serializer.save(created_by=request.user)
-            
+            task = getattr(experiment, 'task', None)
+            if task:
+                task.link_to_object(experiment)
+                task.save()
+
             return Response(
                 OptimizationExperimentSerializer(experiment).data,
                 status=status.HTTP_201_CREATED
@@ -343,7 +347,9 @@ class ScalingPlanListCreateView(generics.ListCreateAPIView):
                 {"task": "Scaling plan already exists for this task."}
             )
 
-        serializer.save()
+        plan = serializer.save()
+        task.link_to_object(plan)
+        task.save()
 
 
 class ScalingPlanRetrieveUpdateView(generics.RetrieveUpdateAPIView):

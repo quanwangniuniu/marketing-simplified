@@ -183,7 +183,7 @@ export default function DecisionsPageCard({
 
   return (
     <>
-      <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+      <section className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
         <DecisionsCardHeader
           projectName={projectName}
           decisionCount={decisionCount}
@@ -194,7 +194,7 @@ export default function DecisionsPageCard({
         />
 
         {loading && !hasItems ? (
-          <div className="flex items-center justify-center px-6 py-16 text-gray-500">
+          <div className="flex items-center justify-center px-3 py-12 text-gray-500 sm:px-6 sm:py-16">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Loading decisions…
           </div>
@@ -238,7 +238,7 @@ export default function DecisionsPageCard({
               canDelete={canDelete}
             />
             {filtered.length > PAGE_SIZE && (
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 px-3 py-3 text-sm sm:justify-end sm:px-5">
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}

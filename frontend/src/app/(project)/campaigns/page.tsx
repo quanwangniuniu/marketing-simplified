@@ -61,8 +61,8 @@ export default function CampaignsV2Page() {
 
   return (
     <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-      <div className="mx-auto w-full max-w-7xl px-6 py-8">
-        <header className="mb-5 flex items-end justify-between gap-4">
+      <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
+        <header className="mb-5 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Campaigns</h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -73,11 +73,11 @@ export default function CampaignsV2Page() {
               </span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={() => setFromTemplateOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
             >
               <FileText className="h-4 w-4" />
               From Template
@@ -85,7 +85,7 @@ export default function CampaignsV2Page() {
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
             >
               <Plus className="h-4 w-4" />
               Create Campaign

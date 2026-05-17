@@ -26,9 +26,10 @@ import {
   ListTodo,
   UserRoundCog,
   Notebook,
-  Bot,
   Presentation,
+  PiggyBank,
 } from "lucide-react";
+import { AgentPanelToggleIcon } from "@/components/agent/AgentPanelToggleIcon";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePathname } from "next/navigation";
 
@@ -100,6 +101,12 @@ const getNavigationItems = (
       href: "/decisions",
       icon: CheckSquare,
       description: "Decision workbench and history",
+    },
+    {
+      name: "Budget Pools",
+      href: "/budget-pools",
+      icon: PiggyBank,
+      description: "Manage ad channel budget pools",
     },
     {
       name: t ? t('sidebar.notion') : 'Notion',
@@ -477,7 +484,7 @@ const Sidebar: FC<SidebarProps> = ({
             ${collapsed ? "justify-center" : ""}
           `}
           >
-            <Bot className="h-5 w-5 flex-shrink-0" />
+            <AgentPanelToggleIcon className="h-5 w-5 flex-shrink-0 text-[#1a9ba3]" />
             {!collapsed && (
               <>
                 <span>Agent</span>

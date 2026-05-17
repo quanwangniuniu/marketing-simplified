@@ -28,6 +28,12 @@ class AgentSession(TimeStampedModel):
         default=False,
         help_text="When true, external side effects require user approval before commit.",
     )
+    is_pinned = models.BooleanField(default=False)
+    last_read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="User read cursor; unread when assistant messages exist after this time.",
+    )
 
     class Meta:
         ordering = ['-created_at']

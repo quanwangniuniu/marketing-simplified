@@ -28,19 +28,19 @@ export function CalendarToolbar({
 }: CalendarToolbarProps) {
   return (
     <header
-      className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5"
+      className="flex flex-col gap-2 border-b border-gray-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2.5"
       data-testid="calendar-toolbar"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
         <button
           type="button"
           onClick={onToday}
-          className="inline-flex items-center rounded-md border border-[#3CCED7] px-3 py-1.5 text-sm font-medium text-[#3CCED7] transition-colors hover:bg-[#3CCED7]/10"
+          className="inline-flex shrink-0 items-center rounded-md border border-[#3CCED7] px-3 py-1.5 text-sm font-medium text-[#3CCED7] transition-colors hover:bg-[#3CCED7]/10"
           data-testid="calendar-today"
         >
           Today
         </button>
-        <div className="flex items-center">
+        <div className="flex shrink-0 items-center">
           <button
             type="button"
             onClick={() => onOffset("prev")}
@@ -60,25 +60,25 @@ export function CalendarToolbar({
         </div>
         <span
           data-testid="calendar-header-title"
-          className="text-base font-semibold text-gray-900"
+          className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 sm:text-base"
         >
           {headerTitle}
         </span>
       </div>
 
-      <div className="flex items-center gap-3" ref={viewSwitcherRef}>
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3" ref={viewSwitcherRef}>
         {onAskAgent && (
           <button
             type="button"
             onClick={onAskAgent}
-            className="inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 transition-colors hover:bg-violet-100"
+            className="inline-flex shrink-0 items-center rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 transition-colors hover:bg-violet-100 sm:text-sm"
             data-testid="calendar-ask-agent"
           >
             Ask Agent
           </button>
         )}
         <nav
-          className="flex items-center gap-0.5 rounded-md border border-gray-200 bg-gray-50 p-0.5"
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-0.5 sm:flex-none"
           data-testid="calendar-view-tabs"
           role="tablist"
         >
@@ -93,7 +93,7 @@ export function CalendarToolbar({
                 onClick={() => onSelectView(view)}
                 data-testid={`calendar-view-${view}`}
                 data-active={isActive ? "true" : "false"}
-                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                className={`shrink-0 rounded px-3 py-1 text-xs font-medium transition-colors ${
                   isActive
                     ? "bg-white text-[#3CCED7] shadow-sm"
                     : "text-gray-600 hover:text-gray-900"

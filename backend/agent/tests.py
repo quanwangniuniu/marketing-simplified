@@ -29,17 +29,6 @@ def _test_analysis_data():
                 "description": "Test Campaign ROAS dropped 20%",
             },
         ],
-        "suggested_decision": {
-            "title": "Test Decision",
-            "context_summary": "Test context",
-            "reasoning": "Test reasoning",
-            "risk_level": "MEDIUM",
-            "confidence": 3,
-            "options": [
-                {"text": "Option A", "order": 0},
-                {"text": "Option B", "order": 1},
-            ],
-        },
         "recommended_tasks": [
             {"type": "optimization", "summary": "Test task", "priority": "MEDIUM"},
         ],
@@ -156,6 +145,50 @@ class AgentSessionAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['messages']), 1)
 
+    def test_retrieve_session_excludes_deleted_messages(self):
+        session = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Deleted message session',
+        )
+        AgentMessage.objects.create(
+            session=session,
+            role='user',
+            content='visible',
+        )
+        deleted = AgentMessage.objects.create(
+            session=session,
+            role='assistant',
+            content='hidden',
+        )
+        deleted.is_deleted = True
+        deleted.save(update_fields=['is_deleted'])
+
+        response = self.client.get(
+            f'/api/agent/sessions/{session.id}/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['messages']), 1)
+        self.assertEqual(response.data['messages'][0]['content'], 'visible')
+
+    def test_retrieve_session_preserves_message_order(self):
+        session = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Ordered session',
+        )
+        AgentMessage.objects.create(session=session, role='user', content='first')
+        AgentMessage.objects.create(session=session, role='assistant', content='second')
+
+        response = self.client.get(
+            f'/api/agent/sessions/{session.id}/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contents = [m['content'] for m in response.data['messages']]
+        self.assertEqual(contents, ['first', 'second'])
+
     def test_delete_session(self):
         session = AgentSession.objects.create(
             user=self.user,
@@ -168,6 +201,101 @@ class AgentSessionAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         session.refresh_from_db()
         self.assertTrue(session.is_deleted)
+
+    def test_list_sessions_pinned_first(self):
+        old = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Old',
+            is_pinned=False,
+        )
+        pinned = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Pinned',
+            is_pinned=True,
+        )
+        response = self.client.get(
+            '/api/agent/sessions/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row['id'] for row in response.data]
+        self.assertEqual(ids[0], str(pinned.id))
+        self.assertEqual(ids[1], str(old.id))
+
+    def test_list_sessions_search(self):
+        AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Alpha board',
+        )
+        AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+            title='Beta other',
+        )
+        response = self.client.get(
+            '/api/agent/sessions/',
+            {'search': 'Alpha'},
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], 'Alpha board')
+
+    def test_patch_session_status_and_pin(self):
+        session = AgentSession.objects.create(user=self.user, project=self.project)
+        response = self.client.patch(
+            f'/api/agent/sessions/{session.id}/',
+            {'status': 'archived', 'is_pinned': True},
+            format='json',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'archived')
+        self.assertTrue(session.is_pinned)
+
+    def test_list_has_unread_when_newer_assistant_than_read_cursor(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        session = AgentSession.objects.create(user=self.user, project=self.project)
+        AgentMessage.objects.create(session=session, role='assistant', content='First')
+        session.last_read_at = timezone.now() - timedelta(hours=1)
+        session.save()
+        AgentMessage.objects.create(session=session, role='assistant', content='Second')
+        response = self.client.get(
+            '/api/agent/sessions/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        row = next(r for r in response.data if r['id'] == str(session.id))
+        self.assertTrue(row['has_unread'])
+
+    def test_list_has_unread_false_when_read_cursor_covers_latest_assistant(self):
+        from django.utils import timezone
+
+        session = AgentSession.objects.create(user=self.user, project=self.project)
+        AgentMessage.objects.create(session=session, role='assistant', content='Hi')
+        session.last_read_at = timezone.now()
+        session.save()
+        response = self.client.get(
+            '/api/agent/sessions/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        row = next(r for r in response.data if r['id'] == str(session.id))
+        self.assertFalse(row['has_unread'])
+
+    def test_list_has_unread_false_without_assistant_messages(self):
+        session = AgentSession.objects.create(user=self.user, project=self.project)
+        AgentMessage.objects.create(session=session, role='user', content='Only user')
+        response = self.client.get(
+            '/api/agent/sessions/',
+            HTTP_X_PROJECT_ID=str(self.project.id),
+        )
+        row = next(r for r in response.data if r['id'] == str(session.id))
+        self.assertFalse(row['has_unread'])
 
 
 class ChatAPITests(APITestCase):
@@ -302,21 +430,6 @@ class OrchestratorTests(TestCase):
         types = [c['type'] for c in chunks]
         self.assertIn('text', types)
         self.assertIn('done', types)
-
-    def test_create_decision_draft(self):
-        from decision.models import Decision, Signal, Option
-        orchestrator = AgentOrchestrator(self.user, self.project, self.session)
-        analysis = _test_analysis_data()
-        chunks = list(orchestrator.create_decision_draft(analysis))
-        types = [c['type'] for c in chunks]
-        self.assertIn('decision_draft', types)
-
-        # Verify decision was created
-        decision = Decision.objects.filter(project=self.project).last()
-        self.assertIsNotNone(decision)
-        self.assertEqual(decision.author, self.user)
-        self.assertTrue(decision.signals.exists())
-        self.assertTrue(decision.options.exists())
 
     def test_create_tasks_from_decision(self):
         from decision.models import Decision
@@ -487,7 +600,7 @@ class OrchestratorTests(TestCase):
             {
                 'type': 'text',
                 'content': (
-                    "I can help you analyze spreadsheet data and create decisions. "
+                    "I can help you analyze spreadsheet data and recommended tasks. "
                     "To get started, select a spreadsheet and use the 'analyze' action."
                 ),
             },
@@ -556,265 +669,6 @@ class OrchestratorTests(TestCase):
         self.assertTrue(participant.is_active)
         self.assertEqual(results[0]['status'], 'sent')
         mock_notify_delay.assert_called_once()
-
-
-class DecisionFieldCompatibilityTests(TestCase):
-    """
-    Verify that every field written by create_decision_draft() is compatible
-    with the existing Decision module (models, validation, FSM transitions).
-
-    The workflow must fully pass through decision creation and every field
-    must be checked in detail, with tests to support.
-    """
-
-    def setUp(self):
-        self.org = Organization.objects.create(name='Test Org FieldCompat', slug='test-org-fc')
-        self.user = CustomUser.objects.create_user(
-            email='fc@test.com',
-            username='fcuser',
-            password='testpass123',
-        )
-        self.user.organization = self.org
-        self.user.save()
-        self.project = Project.objects.create(
-            name='Test Project FieldCompat',
-            organization=self.org,
-            owner=self.user,
-        )
-        self.session = AgentSession.objects.create(
-            user=self.user,
-            project=self.project,
-        )
-        self.orchestrator = AgentOrchestrator(self.user, self.project, self.session)
-
-    def _create_decision(self, analysis=None):
-        """Helper: run create_decision_draft and return the created Decision."""
-        from decision.models import Decision
-        data = analysis or _test_analysis_data()
-        list(self.orchestrator.create_decision_draft(data))
-        # ordering is '-created_at', so .first() returns the most recently created
-        return Decision.objects.filter(project=self.project).first()
-
-    # ------------------------------------------------------------------ #
-    # Decision top-level fields                                           #
-    # ------------------------------------------------------------------ #
-
-    def test_decision_title_set(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.title, 'Test Decision')
-
-    def test_decision_context_summary_set(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.context_summary, 'Test context')
-
-    def test_decision_reasoning_set(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.reasoning, 'Test reasoning')
-
-    def test_decision_risk_level_valid_choice(self):
-        from decision.models import Decision
-        decision = self._create_decision()
-        valid_choices = [c[0] for c in Decision.RiskLevel.choices]
-        self.assertIn(decision.risk_level, valid_choices)
-
-    def test_decision_confidence_in_valid_range(self):
-        decision = self._create_decision()
-        self.assertIn(decision.confidence, [1, 2, 3, 4, 5])
-
-    def test_decision_status_is_predraft(self):
-        from decision.models import Decision
-        decision = self._create_decision()
-        self.assertEqual(decision.status, Decision.Status.PREDRAFT)
-
-    def test_decision_project_linked(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.project, self.project)
-
-    def test_decision_author_linked(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.author, self.user)
-
-    def test_decision_created_by_agent_flag(self):
-        decision = self._create_decision()
-        self.assertTrue(decision.created_by_agent)
-
-    def test_decision_agent_session_id_linked(self):
-        decision = self._create_decision()
-        self.assertEqual(decision.agent_session_id, self.session.id)
-
-    def test_decision_project_seq_assigned(self):
-        decision = self._create_decision()
-        self.assertIsNotNone(decision.project_seq)
-        self.assertGreater(decision.project_seq, 0)
-
-    def test_decision_project_seq_increments(self):
-        d1 = self._create_decision()
-        d1_seq = d1.project_seq
-        d2 = self._create_decision()
-        self.assertEqual(d2.project_seq, d1_seq + 1)
-
-    # ------------------------------------------------------------------ #
-    # Option fields                                                       #
-    # ------------------------------------------------------------------ #
-
-    def test_options_count_at_least_two(self):
-        decision = self._create_decision()
-        self.assertGreaterEqual(decision.options.count(), 2)
-
-    def test_options_have_non_empty_text(self):
-        decision = self._create_decision()
-        for opt in decision.options.all():
-            self.assertTrue(opt.text.strip(), f"Option id={opt.id} has empty text")
-
-    def test_exactly_one_option_is_selected(self):
-        decision = self._create_decision()
-        selected_count = decision.options.filter(is_selected=True).count()
-        self.assertEqual(selected_count, 1)
-
-    def test_first_option_is_selected(self):
-        decision = self._create_decision()
-        first_option = decision.options.order_by('order').first()
-        self.assertTrue(first_option.is_selected)
-
-    def test_options_order_is_sequential(self):
-        decision = self._create_decision()
-        orders = list(decision.options.order_by('order').values_list('order', flat=True))
-        self.assertEqual(orders, list(range(len(orders))))
-
-    # ------------------------------------------------------------------ #
-    # Signal fields                                                       #
-    # ------------------------------------------------------------------ #
-
-    def test_signals_count_at_least_one(self):
-        decision = self._create_decision()
-        self.assertGreaterEqual(decision.signals.count(), 1)
-
-    def test_signal_metric_valid_choice(self):
-        from decision.models import Signal
-        decision = self._create_decision()
-        valid_metrics = [c[0] for c in Signal.Metric.choices]
-        for signal in decision.signals.all():
-            self.assertIn(
-                signal.metric, valid_metrics,
-                f"Signal metric '{signal.metric}' is not a valid choice"
-            )
-
-    def test_signal_movement_valid_choice(self):
-        from decision.models import Signal
-        decision = self._create_decision()
-        valid_movements = [c[0] for c in Signal.Movement.choices]
-        for signal in decision.signals.all():
-            self.assertIn(
-                signal.movement, valid_movements,
-                f"Signal movement '{signal.movement}' is not a valid choice"
-            )
-
-    def test_signal_period_valid_choice(self):
-        from decision.models import Signal
-        decision = self._create_decision()
-        valid_periods = [c[0] for c in Signal.Period.choices]
-        for signal in decision.signals.all():
-            self.assertIn(
-                signal.period, valid_periods,
-                f"Signal period '{signal.period}' is not a valid choice"
-            )
-
-    def test_signal_scope_type_valid_choice(self):
-        from decision.models import Signal
-        decision = self._create_decision()
-        valid_scope_types = [c[0] for c in Signal.ScopeType.choices]
-        for signal in decision.signals.all():
-            if signal.scope_type:
-                self.assertIn(
-                    signal.scope_type, valid_scope_types,
-                    f"Signal scope_type '{signal.scope_type}' is not a valid choice"
-                )
-
-    def test_signal_delta_unit_valid_choice(self):
-        from decision.models import Signal
-        decision = self._create_decision()
-        valid_units = [c[0] for c in Signal.DeltaUnit.choices]
-        for signal in decision.signals.all():
-            if signal.delta_unit:
-                self.assertIn(
-                    signal.delta_unit, valid_units,
-                    f"Signal delta_unit '{signal.delta_unit}' is not a valid choice"
-                )
-
-    def test_signal_display_text_set(self):
-        decision = self._create_decision()
-        for signal in decision.signals.all():
-            self.assertTrue(
-                len(signal.display_text) > 0,
-                "Signal display_text should not be empty"
-            )
-
-    def test_signal_author_linked(self):
-        decision = self._create_decision()
-        for signal in decision.signals.all():
-            self.assertEqual(signal.author, self.user)
-
-    # ------------------------------------------------------------------ #
-    # Full commit flow — end-to-end compatibility with Decision module    #
-    # ------------------------------------------------------------------ #
-
-    def test_agent_decision_can_be_committed(self):
-        """
-        The decision created by the agent must pass validate_can_commit()
-        and successfully transition to COMMITTED (or AWAITING_APPROVAL for HIGH risk).
-        This is the definitive compatibility test.
-        """
-        from decision.models import Decision
-        decision = self._create_decision()
-        self.assertEqual(decision.status, Decision.Status.PREDRAFT)
-
-        # Should not raise ValidationError
-        try:
-            decision.validate_can_commit()
-        except Exception as e:
-            self.fail(f"validate_can_commit() raised {e!r} on agent-created decision")
-
-    def test_agent_decision_fsm_commit_transition(self):
-        """Agent-created MEDIUM/LOW risk decision transitions to COMMITTED via FSM."""
-        from decision.models import Decision
-        analysis = _test_analysis_data()
-        analysis['suggested_decision']['risk_level'] = 'MEDIUM'
-        decision = self._create_decision(analysis)
-
-        decision.commit(user=self.user)
-        decision.save()
-        # refresh_from_db() cannot be used on protected FSMField; fetch a new instance
-        committed = Decision.objects.get(pk=decision.pk)
-        self.assertEqual(committed.status, Decision.Status.COMMITTED)
-
-    def test_agent_decision_fsm_high_risk_awaiting_approval(self):
-        """Agent-created HIGH risk decision transitions to AWAITING_APPROVAL via FSM."""
-        from decision.models import Decision
-        analysis = _test_analysis_data()
-        analysis['suggested_decision']['risk_level'] = 'HIGH'
-        decision = self._create_decision(analysis)
-
-        decision.submit_for_approval(user=self.user)
-        decision.save()
-        # refresh_from_db() cannot be used on protected FSMField; fetch a new instance
-        approved = Decision.objects.get(pk=decision.pk)
-        self.assertEqual(approved.status, Decision.Status.AWAITING_APPROVAL)
-
-    def test_agent_decision_appears_in_project_decision_list(self):
-        """Agent-created decision is queryable via the same project FK as manual decisions."""
-        from decision.models import Decision
-        decision = self._create_decision()
-        qs = Decision.objects.filter(project=self.project, created_by_agent=True)
-        self.assertIn(decision, qs)
-
-    def test_sse_response_includes_decision_id(self):
-        """The decision_draft SSE event must include decision_id for frontend navigation."""
-        data = _test_analysis_data()
-        chunks = list(self.orchestrator.create_decision_draft(data))
-        draft_chunk = next((c for c in chunks if c['type'] == 'decision_draft'), None)
-        self.assertIsNotNone(draft_chunk)
-        self.assertIn('decision_id', draft_chunk.get('data', {}))
-        self.assertIsNotNone(draft_chunk['data']['decision_id'])
 
 
 class CalendarAgentTests(TestCase):
@@ -1005,10 +859,10 @@ class CalendarAgentTests(TestCase):
 
 
 def _create_default_workflow():
-    """Helper: create a system default 5-step workflow definition."""
+    """Helper: create a system default 3-step workflow definition."""
     wf = AgentWorkflowDefinition.objects.create(
         name='Default Analysis Workflow',
-        description='Analyze, confirm, decide, confirm, tasks',
+        description='Analyze, confirm, create tasks',
         is_default=True,
         is_system=True,
         status='active',
@@ -1016,11 +870,8 @@ def _create_default_workflow():
     steps = [
         ('Analyze Data', 'analyze_data', 1, {}),
         ('Confirm Analysis', 'await_confirmation', 2,
-         {'message': 'Analysis complete. Create a decision?'}),
-        ('Create Decision', 'create_decision', 3, {}),
-        ('Confirm Decision', 'await_confirmation', 4,
-         {'message': 'Decision created. Create tasks?'}),
-        ('Create Tasks', 'create_tasks', 5, {}),
+         {'message': 'Analysis complete. Create recommended tasks?'}),
+        ('Create Tasks', 'create_tasks', 3, {}),
     ]
     for name, step_type, order, config in steps:
         AgentWorkflowStep.objects.create(
@@ -1062,9 +913,9 @@ class WorkflowEngineTests(TestCase):
 
     def test_workflow_definition_creation(self):
         """Workflow + steps are created with correct ordering."""
-        self.assertEqual(self.workflow.steps.count(), 5)
+        self.assertEqual(self.workflow.steps.count(), 3)
         orders = list(self.workflow.steps.values_list('order', flat=True))
-        self.assertEqual(orders, [1, 2, 3, 4, 5])
+        self.assertEqual(orders, [1, 2, 3])
 
     def test_default_workflow_lookup_system(self):
         """System default is found when no project default exists."""
@@ -1170,14 +1021,78 @@ class WorkflowEngineTests(TestCase):
         run.refresh_from_db()
         self.assertEqual(run.status, 'awaiting_confirmation')
 
-        # Resume — should hit create_decision (step 3) then pause again at step 4
+        # Resume — should run create_tasks (step 3) and complete the workflow
         chunks = list(self.orchestrator._resume_workflow(run))
         run.refresh_from_db()
         types = [c.get('type') for c in chunks]
-        self.assertIn('decision_draft', types)
-        self.assertIn('confirmation_request', types)
-        self.assertEqual(run.status, 'awaiting_confirmation')
-        self.assertEqual(run.current_step_order, 5)
+        self.assertIn('task_created', types)
+        self.assertEqual(run.status, 'completed')
+
+    def test_create_tasks_action_commits_from_analysis_for_workflow_run(self):
+        """create_tasks action should commit tasks from stored analysis, not pause again."""
+        from task.models import Task
+
+        self.session.approval_required = False
+        self.session.save(update_fields=['approval_required'])
+
+        run = AgentWorkflowRun.objects.create(
+            session=self.session,
+            workflow_definition=self.workflow,
+            status='awaiting_confirmation',
+            current_step_order=3,
+            analysis_result=_test_analysis_data(),
+            created_tasks=[],
+        )
+
+        chunks = list(self.orchestrator.handle_message(
+            'create_tasks',
+            action='create_tasks',
+        ))
+        types = [c.get('type') for c in chunks]
+        self.assertIn('task_created', types)
+
+        run.refresh_from_db()
+        self.assertTrue(run.created_tasks)
+        self.assertEqual(run.status, 'completed')
+        self.assertTrue(Task.objects.filter(project=self.project).exists())
+
+    def test_create_tasks_action_uses_completed_step_analysis_when_run_field_empty(self):
+        """create_tasks should fall back to the latest completed step output."""
+        from task.models import Task
+
+        self.session.approval_required = False
+        self.session.save(update_fields=['approval_required'])
+
+        analysis = _test_analysis_data()
+        run = AgentWorkflowRun.objects.create(
+            session=self.session,
+            workflow_definition=self.workflow,
+            status='awaiting_confirmation',
+            current_step_order=3,
+            analysis_result=None,
+            created_tasks=[],
+        )
+        AgentStepExecution.objects.create(
+            workflow_run=run,
+            step=self.workflow.steps.get(order=1),
+            step_order=1,
+            step_name='Analyze Data',
+            status='completed',
+            input_data={},
+            output_data={'analysis_result': analysis},
+        )
+
+        chunks = list(self.orchestrator.handle_message(
+            'create_tasks',
+            action='create_tasks',
+        ))
+        types = [c.get('type') for c in chunks]
+        self.assertIn('task_created', types)
+
+        run.refresh_from_db()
+        self.assertEqual(run.analysis_result, analysis)
+        self.assertTrue(run.created_tasks)
+        self.assertTrue(Task.objects.filter(project=self.project).exists())
 
     @patch('agent.services._run_analysis')
     def test_step_execution_records_created(self, mock_analysis):

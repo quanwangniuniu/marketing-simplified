@@ -879,7 +879,7 @@ export default function SpreadsheetsV2DetailPage() {
   return (
     <ProtectedRoute renderChildrenWhileLoading>
       <DashboardLayout alerts={[]}>
-        <div className="mx-auto flex h-[calc(100vh-6rem)] w-full max-w-[1600px] flex-col gap-4 px-6 py-6">
+        <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-[1600px] flex-col gap-3 px-2 py-2 sm:h-[calc(100vh-6rem)] sm:gap-4 sm:px-6 sm:py-6">
           <SpreadsheetDetailHeader
             projectId={projectId}
             projectName={projectName}
@@ -889,10 +889,10 @@ export default function SpreadsheetsV2DetailPage() {
             loading={loading}
           />
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
             <div className="flex min-h-0 flex-1 overflow-hidden">
               {activeSheet || loading ? (
-                <div className="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
+                <div className="relative flex h-full min-h-0 min-w-0 w-full overflow-hidden">
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <SpreadsheetGrid
                       ref={gridRef}

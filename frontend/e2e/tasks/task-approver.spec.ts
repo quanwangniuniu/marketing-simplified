@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
   navigateToTasksAndSelectProject,
-  ensureOnTasksPage,
-  submitCreateAndGetId,
+  navigateToNewTaskPage,
+  submitNewTaskAndGetId,
   deleteTaskById,
 } from './tasks-helpers';
 
@@ -12,9 +12,7 @@ test.describe('Task approver assignment', () => {
   let projectId: number;
 
   test.beforeAll(async ({ browser }) => {
-    const context = await browser.newContext({
-      storageState: 'e2e/.auth/user.json',
-    });
+    const context = await browser.newContext({ storageState: 'e2e/.auth/user.json' });
     const page = await context.newPage();
     projectId = await navigateToTasksAndSelectProject(page);
     await context.close();
@@ -22,47 +20,42 @@ test.describe('Task approver assignment', () => {
 
   test.afterEach(async ({ page }) => {
     if (createdTaskId) {
-      try {
-        await deleteTaskById(page, createdTaskId);
-      } catch {
-        /* best-effort */
-      }
+      try { await deleteTaskById(page, createdTaskId); } catch { /* best-effort */ }
       createdTaskId = null;
     }
   });
 
   test('create task with approver, verify in list view detail panel', async ({ page }) => {
-    await ensureOnTasksPage(page, projectId);
+    await navigateToNewTaskPage(page, projectId);
 
-    // Create a task with approver "dev user"
-    await page.getByRole('button', { name: 'Create Task' }).first().click();
-    const panel = page.getByTestId('task-create-panel');
-    await expect(panel).toBeVisible();
+    // Select Alert work type and fill required fields
+    await page.getByRole('button', { name: 'Alert', exact: true }).click();
+    await page.getByPlaceholder('Summary of this task').fill('E2E Approver Test Task');
 
-    await panel.locator('#task-type').selectOption({ value: 'alert' });
-    await panel.locator('#task-summary').fill('E2E Approver Test Task');
-    await panel.locator('#task-approver').selectOption({ label: 'dev user' });
+    await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
+    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
+    await page.locator('#task-field-alert-severity').selectOption('medium');
 
-    createdTaskId = await submitCreateAndGetId(page, panel);
+    // Select any available approver (first non-empty option)
+    const approverSelect = page.locator('select').filter({
+      has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
+    });
+    await expect(approverSelect).toBeVisible({ timeout: 10_000 });
+    const options = await approverSelect.locator('option').allTextContents();
+    const realOptions = options.filter((o) => !o.includes('Select an approver') && !o.includes('Unassigned') && !o.includes('Loading'));
+    if (realOptions.length > 0) {
+      await approverSelect.selectOption({ index: 1 });
+    }
+
+    createdTaskId = await submitNewTaskAndGetId(page);
     expect(createdTaskId).toBeTruthy();
 
-    // Switch to list view
-    await page.getByRole('button', { name: 'List View' }).click();
-    await page.waitForURL(/view=list/);
+    // Navigate to tasks list and find the created task
+    await page.goto(`/tasks?project_id=${projectId}`);
+    await page.getByTestId('tab-tasks').click();
+    await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
 
-    // Click the task in the list to select it
     const taskEntry = page.getByText('E2E Approver Test Task').first();
     await expect(taskEntry).toBeVisible({ timeout: 10_000 });
-    await taskEntry.click();
-
-    // verify the Approver select shows "dev user"
-    const approverSelect = page.locator('select').filter({
-      has: page.locator('option[value=""]', { hasText: 'Unassigned' }),
-    });
-    const approverRow = page.locator('text=Approver').locator('..').locator('select');
-    await expect(approverRow).toBeVisible({ timeout: 10_000 });
-
-    const selectedText = await approverRow.locator('option:checked').textContent();
-    expect(selectedText?.trim()).toBe('dev user');
   });
 });

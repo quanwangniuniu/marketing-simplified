@@ -63,6 +63,6 @@ export const AlertingAPI = {
   getAlertTask: (id: number) =>
     api.get<AlertTask>(`/api/alerting/alert-tasks/${id}/`),
 
-  updateAlertTask: (id: number, data: AlertTaskUpdateRequest) =>
+  updateAlertTask: (id: string | number, data: AlertTaskUpdateRequest) =>
     api.patch<AlertTask>(`/api/alerting/alert-tasks/${id}/`, data),
 };

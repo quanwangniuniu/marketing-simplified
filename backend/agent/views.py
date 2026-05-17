@@ -3,7 +3,7 @@ import logging
 import os
 
 from django.conf import settings as django_settings
-from django.db.models import Count, Max, Q
+from django.db.models import Max, Q, OuterRef, Prefetch, Subquery
 from django.http import StreamingHttpResponse
 from django.utils.translation import activate as activate_language
 from rest_framework import viewsets, status
@@ -27,7 +27,6 @@ class EventStreamRenderer(BaseRenderer):
         return json.dumps(data).encode('utf-8')
 
 from core.models import Project, ProjectMember
-from decision.models import Decision
 from spreadsheet.models import Spreadsheet
 from .models import (
     AgentSession, AgentMessage, AgentWorkflowDefinition,
@@ -89,9 +88,25 @@ class AgentSessionViewSet(EnglishResponseMixin, viewsets.ModelViewSet):
         )
         if project:
             qs = qs.filter(project=project)
-        qs = qs.order_by('-created_at')
+        search = (self.request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(title__icontains=search)
+        qs = qs.order_by('-is_pinned', '-created_at')
         if self.action == 'list':
+            last_assistant_sub = AgentMessage.objects.filter(
+                session_id=OuterRef('pk'),
+                role='assistant',
+                is_deleted=False,
+            ).order_by('-created_at').values('created_at')[:1]
+            qs = qs.annotate(_last_assistant_at=Subquery(last_assistant_sub))
             return qs[:50]
+        if self.action == 'retrieve':
+            qs = qs.prefetch_related(
+                Prefetch(
+                    'messages',
+                    queryset=AgentMessage.objects.filter(is_deleted=False).order_by('created_at'),
+                )
+            )
         return qs
 
     def perform_create(self, serializer):
@@ -141,7 +156,7 @@ class ChatView(EnglishResponseMixin, APIView):
 
         should_persist_user_message = action not in {
             'start_follow_up', 'cancel_follow_up',
-            'confirm_decision', 'create_tasks', 'generate_miro',
+            'create_tasks', 'generate_miro',
             'distribute_message', 'confirm_columns',
             'resolve_external_approval',
         }
@@ -454,6 +469,12 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
                 title=f"Analysis: {result['original_filename']}",
             )
 
+        AgentMessage.objects.create(
+            session=session,
+            role='user',
+            content=f'Uploaded "{result["original_filename"]}"',
+        )
+
         orchestrator = AgentOrchestrator(
             user=request.user, project=project, session=session,
         )
@@ -540,85 +561,6 @@ class DataReportSummaryView(EnglishResponseMixin, APIView):
         if summary is None:
             return Response({"detail": "No data available."}, status=status.HTTP_200_OK)
         return Response(summary)
-
-
-class DecisionStatsView(EnglishResponseMixin, APIView):
-    """GET /api/agent/decisions/stats/ — Decision status counts."""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        project = _get_user_project(request)
-        if not project:
-            return Response(
-                {"detail": "No active project."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        qs = Decision.objects.filter(project=project, is_deleted=False, is_pre_draft=False)
-
-        counts = qs.values('status').annotate(count=Count('id'))
-        stats = {}
-        for item in counts:
-            stats[item['status'].lower()] = item['count']
-        return Response(stats)
-
-
-class DecisionRecentView(EnglishResponseMixin, APIView):
-    """GET /api/agent/decisions/recent/ — latest 5 decisions."""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        project = _get_user_project(request)
-        if not project:
-            return Response(
-                {"detail": "No active project."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        qs = Decision.objects.filter(project=project, is_deleted=False)
-
-        decisions = qs.order_by('-created_at')[:5]
-        result = []
-        for d in decisions:
-            result.append({
-                'id': d.id,
-                'title': d.title or f'Decision #{d.project_seq}',
-                'status': d.status.lower(),
-                'risk_level': (d.risk_level or '').lower(),
-                'confidence': d.confidence,
-                'author': d.author.get_full_name() if d.author else 'AI Agent',
-                'created_at': d.created_at.isoformat(),
-                'is_pre_draft': d.is_pre_draft,
-            })
-        return Response(result)
-
-
-class DecisionPromoteView(EnglishResponseMixin, APIView):
-    """POST /api/agent/decisions/<id>/promote/ — promote a pre-draft to a real draft."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, decision_id):
-        try:
-            decision = Decision.objects.get(
-                id=decision_id,
-                is_deleted=False,
-            )
-        except Decision.DoesNotExist:
-            return Response(
-                {"detail": "Decision not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if not ProjectMember.objects.filter(project=decision.project, user=request.user).exists():
-            return Response(
-                {"detail": "Permission denied."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        decision.is_pre_draft = False
-        decision.save(update_fields=['is_pre_draft', 'updated_at'])
-        return Response({
-            'id': decision.id,
-            'title': decision.title,
-            'status': decision.status,
-            'is_pre_draft': False,
-        })
 
 
 class AnomalyLatestView(EnglishResponseMixin, APIView):

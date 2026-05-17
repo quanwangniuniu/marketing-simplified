@@ -35,8 +35,10 @@ function getSSEAuthHeaders(): Record<string, string> {
 export const AgentAPI = {
   // ==================== Session CRUD ====================
 
-  listSessions: async (): Promise<AgentSession[]> => {
-    const response = await api.get('/api/agent/sessions/');
+  listSessions: async (params?: { search?: string }): Promise<AgentSession[]> => {
+    const response = await api.get('/api/agent/sessions/', {
+      params: params?.search?.trim() ? { search: params.search.trim() } : undefined,
+    });
     const data = response.data;
     return Array.isArray(data) ? data : (data.results || []);
   },
@@ -285,21 +287,6 @@ export const AgentAPI = {
 
   deleteReport: async (fileId: string): Promise<void> => {
     await api.delete(`/api/agent/data/reports/${fileId}/`);
-  },
-
-  promoteDecision: async (decisionId: number) => {
-    const response = await api.post(`/api/agent/decisions/${decisionId}/promote/`);
-    return response.data;
-  },
-
-  fetchDecisionStats: async () => {
-    const response = await api.get('/api/agent/decisions/stats/');
-    return response.data;
-  },
-
-  fetchRecentDecisions: async () => {
-    const response = await api.get('/api/agent/decisions/recent/');
-    return response.data;
   },
 
   fetchLatestAnomalies: async () => {

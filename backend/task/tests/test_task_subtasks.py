@@ -166,8 +166,10 @@ class TaskSubtaskAPITest(APITestCase):
         self.assertIn("error", response.data)
 
     def test_delete_subtask_success(self):
-        """Deleting subtask relationship is disabled and returns 403."""
+        """Deleting a subtask relationship unlinks the child and returns 204."""
         # Create subtask relationship
+        self.child_task.is_subtask = True
+        self.child_task.save(update_fields=["is_subtask"])
         TaskHierarchy.objects.create(
             parent_task=self.parent_task,
             child_task=self.child_task
@@ -176,13 +178,10 @@ class TaskSubtaskAPITest(APITestCase):
         url = self._get_subtask_detail_url(self.parent_task.id, self.child_task.id)
         response = self.client.delete(url)
 
-        # Delete functionality is disabled - always returns 403
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("error", response.data)
-        self.assertIn("cannot be removed", response.data["error"].lower())
-        
-        # Verify relationship was NOT deleted (since deletion is disabled)
-        self.assertTrue(
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Verify relationship was removed
+        self.assertFalse(
             TaskHierarchy.objects.filter(
                 parent_task=self.parent_task,
                 child_task=self.child_task
@@ -216,21 +215,16 @@ class TaskSubtaskAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_delete_subtask_nonexistent_relationship(self):
-        """Deleting non-existent subtask relationship returns 403 (deletion is disabled)."""
+        """Deleting non-existent subtask relationship returns 404."""
         url = self._get_subtask_detail_url(self.parent_task.id, self.child_task.id)
         response = self.client.delete(url)
 
-        # Delete functionality is disabled - always returns 403 regardless of relationship existence
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("error", response.data)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_subtask_nonexistent_task(self):
-        """Deleting subtask for non-existent task returns 403 (deletion is disabled before task existence check)."""
+        """Deleting subtask for non-existent parent task returns 404."""
         url = self._get_subtask_detail_url(999999, self.child_task.id)
         response = self.client.delete(url)
 
-        # Delete functionality is disabled and returns 403 immediately
-        # The action method directly returns 403 without checking task existence
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("error", response.data)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 

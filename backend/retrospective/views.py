@@ -64,7 +64,11 @@ class RetrospectiveTaskViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Create retrospective with proper user assignment"""
-        serializer.save(created_by=self.request.user)
+        retro = serializer.save(created_by=self.request.user)
+        task = getattr(retro, 'task', None)
+        if task:
+            task.link_to_object(retro)
+            task.save()
     
     @action(detail=True, methods=['post'])
     def start_analysis(self, request, pk=None):

@@ -85,9 +85,9 @@ export default function DecisionLinkedTasksSection({
   return (
     <section
       id="decision-section-linked-tasks"
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+      className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl sm:p-5"
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
           Linked tasks
           {tasks.length > 0 && (
@@ -100,7 +100,7 @@ export default function DecisionLinkedTasksSection({
           <button
             type="button"
             onClick={onCreateTask}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-white px-3 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" />
             Create task
@@ -123,15 +123,15 @@ export default function DecisionLinkedTasksSection({
             <li key={task.id} className="py-2.5">
               <Link
                 href={linkHref(task.id)}
-                className="group flex items-center justify-between gap-3 rounded-md px-2 py-1 transition hover:bg-gray-50"
+                className="group flex flex-col items-start gap-2 rounded-md px-2 py-1 transition hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-gray-900 group-hover:text-[#3CCED7]">
+                  <div className="break-words text-sm text-gray-900 group-hover:text-[#3CCED7] sm:truncate">
                     {task.summary || `Task #${task.id}`}
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-500">
                     <span>#{task.id}</span>
-                    {task.type && <span>· {task.type}</span>}
+                    {task.type && <span className="break-words">· {task.type}</span>}
                     {task.priority && (
                       <span className="inline-flex items-center gap-1">
                         ·

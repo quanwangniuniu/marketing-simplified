@@ -105,8 +105,8 @@ export default function MeetingColumn({
 
   return (
     <section className="flex min-h-[360px] flex-col rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex items-center gap-2">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
             {title}
           </h2>

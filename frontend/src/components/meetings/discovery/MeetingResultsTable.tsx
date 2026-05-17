@@ -131,116 +131,116 @@ function MeetingResultCard({
         selected ? 'border-[#3CCED7] ring-2 ring-blue-100' : 'border-slate-200',
       )}
     >
-      <div className="flex gap-4 p-4">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-pressed={selected}
-        aria-label={`${m.title}. ${formatScheduleLine(m)}. Open meeting details.`}
-        onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-        className={cn(
-          'min-w-0 flex-1 cursor-pointer space-y-2.5 rounded-lg text-left outline-none',
-          'focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2',
-        )}
-      >
-        <h3 className="line-clamp-2 pr-1 text-base font-semibold leading-snug text-slate-900">
-          {m.title}
-        </h3>
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:gap-4">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-pressed={selected}
+          aria-label={`${m.title}. ${formatScheduleLine(m)}. Open meeting details.`}
+          onClick={onSelect}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelect();
+            }
+          }}
+          className={cn(
+            'min-w-0 flex-1 cursor-pointer space-y-2.5 rounded-lg text-left outline-none',
+            'focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2',
+          )}
+        >
+          <h3 className="line-clamp-2 pr-1 text-base font-semibold leading-snug text-slate-900">
+            {m.title}
+          </h3>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
-          <span className="inline-flex shrink-0 rounded-full bg-[#3CCED7]/10 px-2.5 py-0.5 text-xs font-medium text-[#1a9ba3]">
-            {m.meeting_type}
-          </span>
-          <span className="text-slate-400" aria-hidden>
-            ·
-          </span>
-          <span className="min-w-0 text-slate-700">{formatScheduleLine(m)}</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex max-w-full flex-wrap items-center gap-1">
-            {participants.slice(0, 4).map((p) => {
-              const name = memberLabel(p.user_id);
-              return (
-                <span
-                  key={p.user_id}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
-                  title={name}
-                >
-                  {initials(name)}
-                </span>
-              );
-            })}
-            {participants.length > 4 ? (
-              <span className="text-xs font-medium text-slate-500">
-                +{participants.length - 4}
-              </span>
-            ) : null}
-            {participants.length === 0 ? (
-              <span className="text-xs text-slate-400">No participants</span>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+            <span className="inline-flex shrink-0 rounded-full bg-[#3CCED7]/10 px-2.5 py-0.5 text-xs font-medium text-[#1a9ba3]">
+              {m.meeting_type}
+            </span>
+            <span className="text-slate-400" aria-hidden>
+              ·
+            </span>
+            <span className="min-w-0 text-slate-700">{formatScheduleLine(m)}</span>
           </div>
-          {tags.length > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              {visibleTags.map((t) => (
-                <span
-                  key={t.slug}
-                  className="max-w-[140px] truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
-                  title={t.label}
-                >
-                  {t.label}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-1">
+              {participants.slice(0, 4).map((p) => {
+                const name = memberLabel(p.user_id);
+                return (
+                  <span
+                    key={p.user_id}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
+                    title={name}
+                  >
+                    {initials(name)}
+                  </span>
+                );
+              })}
+              {participants.length > 4 ? (
+                <span className="text-xs font-medium text-slate-500">
+                  +{participants.length - 4}
                 </span>
-              ))}
-              {tagOverflow > 0 ? (
-                <span className="text-xs text-slate-500">+{tagOverflow}</span>
+              ) : null}
+              {participants.length === 0 ? (
+                <span className="text-xs text-slate-400">No participants</span>
               ) : null}
             </div>
-          ) : null}
+            {tags.length > 0 ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                {visibleTags.map((t) => (
+                  <span
+                    key={t.slug}
+                    className="max-w-[140px] truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700"
+                    title={t.label}
+                  >
+                    {t.label}
+                  </span>
+                ))}
+                {tagOverflow > 0 ? (
+                  <span className="text-xs text-slate-500">+{tagOverflow}</span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <p
+            className="text-sm tabular-nums text-slate-600"
+            data-testid="meeting-card-generated-counts"
+          >
+            <span className="font-medium text-slate-800">
+              {countPhrase(nDecisions, 'decision', 'decisions')}
+            </span>
+            <span className="mx-1.5 text-slate-300" aria-hidden>
+              ·
+            </span>
+            <span className="font-medium text-slate-800">
+              {countPhrase(nTasks, 'task', 'tasks')}
+            </span>
+            <span className="sr-only"> generated from this meeting.</span>
+          </p>
         </div>
 
-        <p
-          className="text-sm tabular-nums text-slate-600"
-          data-testid="meeting-card-generated-counts"
-        >
-          <span className="font-medium text-slate-800">
-            {countPhrase(nDecisions, 'decision', 'decisions')}
-          </span>
-          <span className="mx-1.5 text-slate-300" aria-hidden>
-            ·
-          </span>
-          <span className="font-medium text-slate-800">
-            {countPhrase(nTasks, 'task', 'tasks')}
-          </span>
-          <span className="sr-only"> generated from this meeting.</span>
-        </p>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-2 pl-1">
-        {m.status ? (
-          <span
-            className={cn(
-              'rounded-md px-2 py-0.5 text-xs font-medium',
-              STATUS_COLORS[m.status] ?? 'bg-slate-100 text-slate-600',
-            )}
+        <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end sm:justify-start sm:pl-1">
+          {m.status ? (
+            <span
+              className={cn(
+                'rounded-md px-2 py-0.5 text-xs font-medium',
+                STATUS_COLORS[m.status] ?? 'bg-slate-100 text-slate-600',
+              )}
+            >
+              {STATUS_LABELS[m.status] ?? m.status}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="inline-flex items-center gap-0.5 text-sm font-semibold text-[#3CCED7] hover:text-[#1a9ba3]"
+            onClick={onSelect}
           >
-            {STATUS_LABELS[m.status] ?? m.status}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          className="inline-flex items-center gap-0.5 text-sm font-semibold text-[#3CCED7] hover:text-[#1a9ba3]"
-          onClick={onSelect}
-        >
-          Open
-          <ChevronRight className="h-4 w-4" aria-hidden />
-        </button>
-      </div>
+            Open
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
       </div>
 
       {hasContextualNav && meetingPageKnowledgeHref ? (
@@ -376,7 +376,7 @@ export function MeetingResultsTable({
       <>
         {cardStack}
         {!hidePagination && totalPages > 1 ? (
-          <div className="mt-4 flex items-center justify-center gap-2 border-t border-slate-200/90 pt-3">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 border-t border-slate-200/90 pt-3">
             <button
               type="button"
               disabled={page <= 1}
@@ -414,7 +414,7 @@ export function MeetingResultsTable({
       {cardStack}
 
       {!hidePagination && totalPages > 1 ? (
-        <div className="flex items-center justify-center gap-2 border-t border-slate-200 bg-white py-3">
+        <div className="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 bg-white px-3 py-3">
           <button
             type="button"
             disabled={page <= 1}

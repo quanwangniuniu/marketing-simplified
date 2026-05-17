@@ -54,14 +54,18 @@ export default function AddSubtaskDialog({
   useEffect(() => {
     if (mode !== 'choose' || !open) return;
     const handle = setTimeout(() => {
-      TaskAPI.getTasks({ include_subtasks: true, project_id: parentProjectId })
-        .then((resp) => {
-          const rows: TaskData[] = Array.isArray(resp.data)
-            ? resp.data
-            : (resp.data as any)?.results || [];
+      Promise.all([
+        TaskAPI.getTasks({ include_subtasks: true, project_id: parentProjectId }),
+        TaskAPI.getSubtasks(parentTaskId),
+      ])
+        .then(([tasksResp, existingSubtasks]) => {
+          const rows: TaskData[] = Array.isArray(tasksResp.data)
+            ? tasksResp.data
+            : (tasksResp.data as any)?.results || [];
+          const existingIds = new Set(existingSubtasks.map((s) => s.id));
           const q = search.trim().toLowerCase();
           const filtered = rows
-            .filter((t) => t.id !== parentTaskId)
+            .filter((t) => t.id !== parentTaskId && !existingIds.has(t.id))
             .filter((t) =>
               q
                 ? (t.summary || '').toLowerCase().includes(q) ||
@@ -174,7 +178,7 @@ export default function AddSubtaskDialog({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="max-h-60 overflow-y-auto rounded-md border border-gray-100">
+          <div className="max-h-[45dvh] overflow-y-auto rounded-md border border-gray-100 sm:max-h-60">
             {candidates.length === 0 && (
               <p className="px-3 py-6 text-center text-xs text-gray-400">No tasks found.</p>
             )}
@@ -183,26 +187,26 @@ export default function AddSubtaskDialog({
                 key={c.id}
                 type="button"
                 onClick={() => setSelectedId(c.id ?? null)}
-                className={`flex w-full items-center gap-2 border-b border-gray-50 px-3 py-2 text-left text-sm last:border-b-0 transition ${
+                className={`flex w-full min-w-0 items-center gap-2 border-b border-gray-50 px-3 py-2 text-left text-sm last:border-b-0 transition ${
                   selectedId === c.id
                     ? 'bg-[#3CCED7]/10 text-gray-900'
                     : 'hover:bg-gray-50'
                 }`}
               >
-                <span className="font-mono text-[11px] text-gray-400">#{c.id}</span>
+                <span className="shrink-0 font-mono text-[11px] text-gray-400">#{c.id}</span>
                 <span className="flex-1 truncate text-gray-900">{c.summary}</span>
-                <span className="text-[11px] text-gray-400">{c.type}</span>
+                <span className="max-w-[5rem] shrink-0 truncate text-[11px] text-gray-400">{c.type}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
+          className="inline-flex min-h-9 items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-medium leading-none text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
           disabled={submitting}
         >
           Cancel
@@ -214,7 +218,7 @@ export default function AddSubtaskDialog({
             submitting ||
             (mode === 'create' ? !summary.trim() : !selectedId)
           }
-          className="inline-flex h-9 items-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-9 items-center justify-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold leading-none text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? 'Saving…' : mode === 'create' ? 'Create subtask' : 'Link subtask'}
         </button>

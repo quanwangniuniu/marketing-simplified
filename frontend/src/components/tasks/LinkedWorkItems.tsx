@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Link2, Plus } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
-import { TaskRelationsResponse, TaskRelationItem } from '@/types/task';
+import { TaskRelationsResponse, TaskRelationItem, userDisplayName } from '@/types/task';
 import LinkTaskModal from './LinkTaskModal';
 
 interface LinkedWorkItemsProps {
@@ -160,11 +160,11 @@ export default function LinkedWorkItems({ taskId }: LinkedWorkItemsProps) {
                             <div className="mt-1 flex items-center space-x-1">
                               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200">
                                 <span className="text-[10px] text-slate-700">
-                                  {task.owner.username?.[0]?.toUpperCase() || '?'}
+                                  {userDisplayName(task.owner)[0]?.toUpperCase() || '?'}
                                 </span>
                               </div>
                               <span className="text-xs text-slate-500">
-                                {task.owner.username || task.owner.email || `User #${task.owner.id}`}
+                                {userDisplayName(task.owner)}
                               </span>
                             </div>
                           )}

@@ -631,8 +631,8 @@ class TaskComment(models.Model):
                     (timezone.now() - prev.created_at).total_seconds()
                 )
 
-            if not self.is_clarification:
-                self.is_clarification = '?' in self.body
+            # if not self.is_clarification:
+            #     self.is_clarification = '?' in self.body
 
         super().save(*args, **kwargs)
 
@@ -912,3 +912,39 @@ class TaskHierarchy(models.Model):
         """Override save to run validation"""
         self.clean()
         super().save(*args, **kwargs)
+
+
+class TaskFieldHistory(models.Model):
+    """Records every time a tracked field on a Task changes."""
+
+    TRACKED_FIELDS = [
+        'summary', 'status', 'priority', 'type', 'owner',
+        'due_date', 'planned_start_date', 'description',
+    ]
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='field_history',
+    )
+    field_name = models.CharField(max_length=64)
+    old_value = models.TextField(null=True, blank=True)
+    new_value = models.TextField(null=True, blank=True)
+    changed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='task_field_changes',
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_field_history'
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['task', '-changed_at']),
+        ]
+
+    def __str__(self):
+        return f"Task {self.task_id} — {self.field_name} @ {self.changed_at}"

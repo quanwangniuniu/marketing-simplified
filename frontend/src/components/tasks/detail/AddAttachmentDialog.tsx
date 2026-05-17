@@ -71,7 +71,7 @@ export default function AddAttachmentDialog({
           if (f) setFile(f);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 text-center transition ${
+        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition sm:px-6 sm:py-8 ${
           dragOver
             ? 'border-[#3CCED7] bg-[#3CCED7]/5'
             : 'border-gray-200 bg-gray-50 hover:border-gray-300'
@@ -94,7 +94,7 @@ export default function AddAttachmentDialog({
       </div>
 
       {file && (
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
+        <div className="mt-3 flex min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2">
           <FileIcon className="h-4 w-4 shrink-0 text-gray-400" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm text-gray-900">{file.name}</p>
@@ -102,7 +102,7 @@ export default function AddAttachmentDialog({
           </div>
           <button
             type="button"
-            className="text-xs text-gray-500 hover:text-rose-600"
+            className="shrink-0 text-xs text-gray-500 hover:text-rose-600"
             onClick={() => setFile(null)}
           >
             Remove
@@ -110,12 +110,12 @@ export default function AddAttachmentDialog({
         </div>
       )}
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           type="button"
           onClick={() => onOpenChange(false)}
           disabled={submitting}
-          className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
+          className="inline-flex min-h-9 items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-medium leading-none text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
         >
           Cancel
         </button>
@@ -123,7 +123,7 @@ export default function AddAttachmentDialog({
           type="button"
           onClick={upload}
           disabled={submitting || !file}
-          className="inline-flex h-9 items-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-9 items-center justify-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold leading-none text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? 'Uploading…' : 'Upload'}
         </button>

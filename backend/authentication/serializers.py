@@ -33,7 +33,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'is_verified', 'is_staff', 'organization', 'roles', 'first_name', 'last_name', 'avatar']
+        fields = ['id', 'email', 'username', 'is_verified', 'is_staff', 'organization', 'roles', 'first_name', 'last_name', 'avatar', 'job', 'department', 'location']
 
     def get_roles(self, obj):
         """
@@ -85,7 +85,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'avatar']
+        fields = ['username', 'first_name', 'last_name', 'avatar', 'job', 'department', 'location']
     
     def validate_username(self, value):
         """Ensure username is unique across users"""

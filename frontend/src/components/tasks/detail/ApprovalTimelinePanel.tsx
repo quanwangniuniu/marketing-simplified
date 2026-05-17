@@ -75,7 +75,7 @@ export default function ApprovalTimelinePanel({
   }, [loading, taskId, refreshKey]);
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
         Approval Timeline
       </h3>
@@ -111,11 +111,11 @@ export default function ApprovalTimelinePanel({
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-gray-900">{entryLabel(e)}</p>
-                <p className="truncate text-[11px] text-gray-500">
+                <p className="break-words text-[11px] text-gray-500">
                   {entryUser(e)} · {fmtTime(e.created_at || e.decided_time)}
                 </p>
                 {e.comment && (
-                  <p className="mt-1 rounded-md bg-gray-50 px-2 py-1 text-[11px] text-gray-700">
+                  <p className="mt-1 break-words rounded-md bg-gray-50 px-2 py-1 text-[11px] text-gray-700">
                     {e.comment}
                   </p>
                 )}

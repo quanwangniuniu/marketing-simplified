@@ -77,8 +77,6 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     type = "tasks_created"
     navigateTo = "tasks"
     navigateLabel = "Go to Tasks"
-  } else if (m.message_type === "decision_draft" || m.data?.decision_id) {
-    type = "decision_created"
   } else if (m.message_type === "approval_request" && m.data?.approval_id) {
     type = "approval_request"
     approval = {
@@ -95,7 +93,6 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     type,
     isFollowUpPrompt,
     anomalies: m.data?.anomalies,
-    suggestedDecision: m.data?.suggested_decision,
     recommendedTasks: m.data?.recommended_tasks,
     navigateTo,
     navigateLabel,
@@ -103,7 +100,6 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     navigateHref,
     eventType,
     workflowRunId: m.data?.workflow_run_id,
-    decisionId: m.data?.decision_id ? Number(m.data.decision_id) : undefined,
     approval,
   }
 }
@@ -264,7 +260,7 @@ type AgentChatPageProps = {
 
 export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps) {
   const router = useRouter()
-  const { setActiveView, floatingChat, toggleMaximize, setPendingDecisionId, setFloatingSessionId } = useAgentLayout()
+  const { setActiveView, floatingChat, toggleMaximize, setFloatingSessionId } = useAgentLayout()
   const [sessionId, setSessionIdState] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -272,7 +268,6 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   const [stepProgress, setStepProgress] = useState<StepProgressItem[]>([])
   const [stepState, setStepState] = useState<WorkflowStepState>({
     analysisComplete: false,
-    decisionCreated: false,
     tasksCreated: false,
   })
   const [followUpAvailable, setFollowUpAvailable] = useState(false)
@@ -288,7 +283,28 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   const [tasksApprovalGenerating, setTasksApprovalGenerating] = useState(false)
   const [miroApprovalGenerating, setMiroApprovalGenerating] = useState(false)
   const [taskGenerationStatus, setTaskGenerationStatus] = useState<TaskGenerationStatus>("idle")
+  const selectAllRecommendedTasks = useCallback((count: number) => {
+    if (count > 0) {
+      setSelectedTaskIndexes(Array.from({ length: count }, (_, i) => i))
+    }
+  }, [])
+  const applyPendingTaskApproval = useCallback((pending: PendingExternalApproval) => {
+    setPendingTaskApproval(pending)
+    setTasksApprovalGenerating(false)
+    setTaskGenerationStatus("awaiting_approval")
+    setSkippedTaskIndexes([])
+    const tasks = (pending.draft as any)?.recommended_tasks
+    const tasksLen =
+      Array.isArray(tasks) ? tasks.length : (latestRecommendedTasksRef.current?.length ?? 0)
+    if (tasksLen > 0) {
+      setSelectedTaskIndexes((prev) =>
+        prev.length > 0 ? prev : Array.from({ length: tasksLen }, (_, i) => i)
+      )
+    }
+  }, [])
   const abortRef = useRef<AbortController | null>(null)
+  const activeStreamTokenRef = useRef(0)
+  const sessionLoadRequestRef = useRef(0)
   const [pendingCalendarPreload] = useState<CalendarPreload | null>(buildCalendarPreload)
   // Persist calendar context for the lifetime of this session so follow-up messages
   // also go through the calendar workflow, not the generic fallback.
@@ -318,10 +334,32 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   const pendingAutoConfirmRef = useRef<Record<string, string> | null>(null)
   // Always points to the latest handleConfirmColumns so it can be called from handleFileUpload
   const handleConfirmColumnsRef = useRef<((m: Record<string, string>) => void) | null>(null)
-  // Stores recommended tasks from latest analysis so decision_created messages can show TaskListCard
+  // Stores recommended tasks from latest analysis for task cards and approvals
   const latestRecommendedTasksRef = useRef<import("@/types/agent").RecommendedTask[] | null>(null)
   const autoExternalActionsTriggeredRef = useRef(false)
   const autoActionQueueRef = useRef<string[]>([])
+  const approvalRequiredRef = useRef(approvalRequired)
+  const isStreamingRef = useRef(isStreaming)
+  const handleActionRef = useRef<((action: string) => void) | null>(null)
+  approvalRequiredRef.current = approvalRequired
+  isStreamingRef.current = isStreaming
+
+  const tryRunNextAutoAction = useCallback(() => {
+    if (isStreamingRef.current || !sessionIdRef.current) return
+    const next = autoActionQueueRef.current.shift()
+    if (next) {
+      void handleActionRef.current?.(next)
+    }
+  }, [])
+
+  const queueAutoExternalActionsAfterAnalysis = useCallback((options?: { approvalRequired?: boolean }) => {
+    const requiresApproval = options?.approvalRequired ?? approvalRequiredRef.current
+    if (autoExternalActionsTriggeredRef.current) return
+    autoExternalActionsTriggeredRef.current = true
+    autoActionQueueRef.current = requiresApproval ? ["create_tasks"] : ["create_tasks", "generate_miro"]
+    setTaskGenerationStatus("generating")
+    tryRunNextAutoAction()
+  }, [tryRunNextAutoAction])
 
   const setSessionId = useCallback((id: string | null) => {
     sessionIdRef.current = id
@@ -376,18 +414,13 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
 
   const applySessionState = useCallback((session: Awaited<ReturnType<typeof AgentAPI.getSession>>) => {
     setSessionId(String(session.id))
-    setHasStarted(true)
 
-    // Restore messages and back-fill recommendedTasks onto decision_created messages
-    // (the backend does not persist recommended_tasks on decision events, only on analysis events)
+    // Restore messages and back-fill recommendedTasks onto analysis messages when needed.
     const restored = session.messages.map(restoreMessage)
-    let lastTasks: import("@/types/agent").RecommendedTask[] | undefined
+    setHasStarted(restored.length > 0)
     for (let i = 0; i < restored.length; i++) {
       if (restored[i].type === "analysis") {
-        lastTasks = restored[i].recommendedTasks
-        latestRecommendedTasksRef.current = lastTasks || null
-      } else if (restored[i].type === "decision_created" && lastTasks && !restored[i].recommendedTasks) {
-        restored[i] = { ...restored[i], recommendedTasks: lastTasks }
+        latestRecommendedTasksRef.current = restored[i].recommendedTasks || null
       }
     }
     setMessages(dedupeMiroGenerationStartedMessages(restored))
@@ -430,31 +463,61 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     // task/decision data from a *previous* upload cycle does not carry over.
     const restoredStepState: WorkflowStepState = {
       analysisComplete: false,
-      decisionCreated: false,
       tasksCreated: false,
     }
     for (const m of session.messages) {
       if (m.data?.anomalies) {
         restoredStepState.analysisComplete = true
-        restoredStepState.decisionCreated = false
         restoredStepState.tasksCreated = false
       }
-      if (m.message_type === "decision_draft" || m.data?.decision_id) restoredStepState.decisionCreated = true
       if (m.message_type === "task_created" || m.data?.task_ids) restoredStepState.tasksCreated = true
     }
     setStepState(restoredStepState)
-    // Restore task generation status heuristically (keeps right-panel status consistent after refresh).
-    if (restoredStepState.tasksCreated) {
-      setTaskGenerationStatus("completed")
-    } else if (Boolean(session.approval_required) && restoredStepState.decisionCreated) {
-      // With approval required, tasks may be awaiting approval rather than created.
-      // If there is a pending task approval, AgentChatPage will set it from SSE; on restore we can't know,
-      // so treat as idle until user triggers create.
-      setTaskGenerationStatus("idle")
+    const pendingTaskApprovalFromMessages = !restoredStepState.tasksCreated
+      ? [...restored].reverse().find((message) => message.approval?.kind === "task")?.approval ?? null
+      : null
+    if (pendingTaskApprovalFromMessages) {
+      setPendingTaskApproval(pendingTaskApprovalFromMessages)
+      setTaskGenerationStatus("awaiting_approval")
+      const tasks =
+        (pendingTaskApprovalFromMessages.draft as any)?.recommended_tasks ??
+        latestRecommendedTasksRef.current ??
+        []
+      if (Array.isArray(tasks) && tasks.length > 0) {
+        setSelectedTaskIndexes(Array.from({ length: tasks.length }, (_, i) => i))
+      }
     } else {
-      setTaskGenerationStatus("idle")
+      setPendingTaskApproval(null)
+      const recommendedTaskCount = latestRecommendedTasksRef.current?.length ?? 0
+      if (
+        Boolean(session.approval_required) &&
+        restoredStepState.analysisComplete &&
+        !restoredStepState.tasksCreated &&
+        recommendedTaskCount > 0
+      ) {
+        setSelectedTaskIndexes(Array.from({ length: recommendedTaskCount }, (_, i) => i))
+      }
+      setTaskGenerationStatus(restoredStepState.tasksCreated ? "completed" : "idle")
     }
-  }, [setSessionId])
+    const recommendedTaskCount = latestRecommendedTasksRef.current?.length ?? 0
+    if (
+      restoredStepState.analysisComplete &&
+      !restoredStepState.tasksCreated &&
+      recommendedTaskCount > 0 &&
+      !pendingTaskApprovalFromMessages
+    ) {
+      queueAutoExternalActionsAfterAnalysis({ approvalRequired: Boolean(session.approval_required) })
+    }
+    if (embeddedInFloating) {
+      void AgentAPI.updateSession(String(session.id), { last_read_at: new Date().toISOString() })
+        .then(() => {
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+        })
+        .catch(() => {
+          /* ignore */
+        })
+    }
+  }, [setSessionId, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   const refreshFollowUpState = useCallback(async (id: string) => {
     try {
@@ -476,19 +539,34 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     }
   }, [])
 
+  const invalidateActiveStreams = useCallback(() => {
+    activeStreamTokenRef.current += 1
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsStreaming(false)
+  }, [])
+
+  const resetTransientChatUiState = useCallback(() => {
+    setStepProgress([])
+    setPendingTaskApproval(null)
+    setPendingMiroApproval(null)
+    setTasksApprovalGenerating(false)
+    setMiroApprovalGenerating(false)
+    stepProgressMsgIdRef.current = null
+    pendingAutoConfirmRef.current = null
+    autoExternalActionsTriggeredRef.current = false
+    autoActionQueueRef.current = []
+  }, [])
+
   const refreshSession = useCallback(async (id: string) => {
     try {
       const session = await AgentAPI.getSession(id)
+      if (String(sessionIdRef.current) !== String(id)) return
       // Re-apply the same backfill logic as applySessionState so that
-      // decision_created messages don't lose their recommendedTasks after refreshes
-      // (the backend does not persist recommended_tasks on decision events).
       const restored = session.messages.map(restoreMessage)
-      let lastTasks: import("@/types/agent").RecommendedTask[] | undefined
       for (let i = 0; i < restored.length; i++) {
         if (restored[i].type === "analysis") {
-          lastTasks = restored[i].recommendedTasks
-        } else if (restored[i].type === "decision_created" && lastTasks && !restored[i].recommendedTasks) {
-          restored[i] = { ...restored[i], recommendedTasks: lastTasks }
+          latestRecommendedTasksRef.current = restored[i].recommendedTasks || null
         }
       }
       setMessages(dedupeMiroGenerationStartedMessages(restored))
@@ -519,10 +597,31 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           .filter(([idx, tid]) => Number.isFinite(idx) && Number.isFinite(tid))
         setCreatedTaskIdByIndex(Object.fromEntries(pairs))
       }
+      if (lastTaskCreated) {
+        setStepState((prev) => ({ ...prev, tasksCreated: true }))
+        setTaskGenerationStatus("completed")
+      }
     } catch {
       // ignore refresh failures; next restore/poll can retry
     }
   }, [])
+
+  const loadSessionById = useCallback(async (id: string) => {
+    const requestId = ++sessionLoadRequestRef.current
+    invalidateActiveStreams()
+    resetTransientChatUiState()
+    try {
+      const session = await AgentAPI.getSession(id)
+      if (requestId !== sessionLoadRequestRef.current) return
+      applySessionState(session)
+    } catch {
+      if (requestId !== sessionLoadRequestRef.current) return
+      if (String(sessionIdRef.current) === String(id)) {
+        sessionStorage.removeItem("agent-session-id")
+        setSessionId(null)
+      }
+    }
+  }, [applySessionState, invalidateActiveStreams, resetTransientChatUiState, setSessionId])
 
   // Abort SSE on unmount
   useEffect(() => {
@@ -538,16 +637,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       try {
         const session = await AgentAPI.getSession(sessionId)
         // Re-apply the same backfill logic as applySessionState so that
-        // decision_created messages don't lose their recommendedTasks during polling.
         const restored = session.messages.map(restoreMessage)
-        let lastTasks: import("@/types/agent").RecommendedTask[] | undefined
-        for (let i = 0; i < restored.length; i++) {
-          if (restored[i].type === "analysis") {
-            lastTasks = restored[i].recommendedTasks
-          } else if (restored[i].type === "decision_created" && lastTasks && !restored[i].recommendedTasks) {
-            restored[i] = { ...restored[i], recommendedTasks: lastTasks }
-          }
-        }
         setMessages(dedupeMiroGenerationStartedMessages(restored))
         setFollowUpAvailable(Boolean(session.follow_up_available))
         setFollowUpStarted(Boolean(session.follow_up_started))
@@ -566,6 +656,10 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
             .filter(([idx, tid]) => Number.isFinite(idx) && Number.isFinite(tid))
           setCreatedTaskIdByIndex(Object.fromEntries(pairs))
         }
+        if (lastTaskCreated) {
+          setStepState((prev) => ({ ...prev, tasksCreated: true }))
+          setTaskGenerationStatus("completed")
+        }
       } catch {
         // ignore polling failures; next cycle can retry
       }
@@ -578,44 +672,35 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   useEffect(() => {
     const storedId = sessionStorage.getItem("agent-session-id")
     if (storedId) {
-      AgentAPI.getSession(storedId)
-        .then((session) => applySessionState(session))
-        .catch(() => {
-          sessionStorage.removeItem("agent-session-id")
-        })
+      void loadSessionById(storedId)
     } else {
       // If there is no active session, initialize the toggle from the persisted preference.
       setApprovalRequired(getApprovalPref())
     }
-  }, [applySessionState, getApprovalPref])
+  }, [getApprovalPref, loadSessionById])
 
   // Listen for sidebar events
   useEffect(() => {
     const handleNewChat = () => {
+      sessionLoadRequestRef.current += 1
+      invalidateActiveStreams()
+      resetTransientChatUiState()
       setSessionId(null)
       sessionStorage.removeItem("agent-session-calendar-context")
       setMessages([])
       setSessionCalendarContext(null)
       setHasStarted(false)
-      setIsStreaming(false)
       setFollowUpAvailable(false)
       setFollowUpStarted(false)
       setSessionTitle("Chat")
       setApprovalRequired(false)
-      setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
-      abortRef.current?.abort()
+      setStepState({ analysisComplete: false, tasksCreated: false })
     }
 
-    const handleLoadSession = async (e: Event) => {
+    const handleLoadSession = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (!detail?.sessionId) return
-
-      try {
-        const session = await AgentAPI.getSession(detail.sessionId)
-        applySessionState(session)
-      } catch {
-        // Session not found — stay on welcome
-      }
+      void loadSessionById(String(detail.sessionId))
     }
 
     window.addEventListener("agent:new-chat", handleNewChat)
@@ -624,7 +709,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       window.removeEventListener("agent:new-chat", handleNewChat)
       window.removeEventListener("agent:load-session", handleLoadSession)
     }
-  }, [applySessionState, setSessionId])
+  }, [invalidateActiveStreams, loadSessionById, resetTransientChatUiState, setSessionId])
 
   /** Append a new message and return its id */
   const addMessage = useCallback((msg: ChatMessage) => {
@@ -642,8 +727,8 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   /** Handle file upload — calls upload-analyze SSE endpoint */
   const handleFileUpload = useCallback(async (file: File) => {
     setHasStarted(true)
-    // Reset workflow state so a new file always starts from "Create Decision"
-    setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
+    // Reset workflow state so a new upload always starts from analysis
+    setStepState({ analysisComplete: false, tasksCreated: false })
     setGeneratedTaskIndexes([])
     setSkippedTaskIndexes([])
     setCreatedTaskIdByIndex({})
@@ -691,10 +776,16 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       }
     }
 
+    const streamToken = activeStreamTokenRef.current
+    const requestSessionId = String(sid)
+
     abortRef.current = AgentAPI.uploadAndAnalyze(
       file,
       sid,
       (event: SSEEvent) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+
         if (event.type === "file_uploaded") {
           // File confirmed uploaded — update thinking message
           updateMessage(aiMsgId, {
@@ -755,16 +846,10 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
             content: contentParts.join("\n"),
             type: "analysis",
             anomalies: analysisData?.anomalies,
-            suggestedDecision: analysisData?.suggested_decision,
             recommendedTasks: analysisData?.recommended_tasks,
           })
-          if (!approvalRequired && !autoExternalActionsTriggeredRef.current) {
-            // With approval OFF, auto-run the whole chain. Some workflows pause
-            // at an "await_confirmation" step before tasks; enqueue confirm_decision first
-            // so create_tasks doesn't resume into the decision-confirmation pause.
-            autoExternalActionsTriggeredRef.current = true
-            autoActionQueueRef.current = ["confirm_decision", "create_tasks", "generate_miro"]
-          }
+          selectAllRecommendedTasks(analysisData?.recommended_tasks?.length ?? 0)
+          queueAutoExternalActionsAfterAnalysis()
           // Individual anomalies are added to the right panel via the
           // AnomalyCard "+ Add" button — no auto-broadcast on new analysis.
         } else if (event.type === "confirmation_request") {
@@ -787,13 +872,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           }
 
           if (kind === "task") {
-            setPendingTaskApproval(pending)
-            setTasksApprovalGenerating(false)
-            setSkippedTaskIndexes([])
-            const tasks = (pending.draft as any)?.recommended_tasks
-            const tasksLen =
-              Array.isArray(tasks) ? tasks.length : (latestRecommendedTasksRef.current?.length ?? 0)
-            if (tasksLen > 0) setSelectedTaskIndexes(Array.from({ length: tasksLen }, (_, i) => i))
+            applyPendingTaskApproval(pending)
           } else if (kind === "miro_board") {
             setPendingMiroApproval(pending)
             setMiroApprovalGenerating(false)
@@ -840,17 +919,26 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         }
       },
       (error) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         updateMessage(aiMsgId, { content: `Error: ${error.message}`, type: "error" })
         setIsStreaming(false)
       },
       () => {
-        if (sessionId) {
-          void refreshFollowUpState(sessionId)
-        }
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+        void refreshSession(requestSessionId)
+        void refreshFollowUpState(requestSessionId)
         setIsStreaming(false)
+        if (embeddedInFloating) {
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+          void AgentAPI.updateSession(requestSessionId, { last_read_at: new Date().toISOString() }).catch(() => {
+            /* ignore */
+          })
+        }
       }
     )
-  }, [sessionId, addMessage, updateMessage, setSessionId, refreshFollowUpState, getApprovalPref])
+  }, [sessionId, addMessage, updateMessage, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   /** Confirm detected column mapping and resume paused workflow */
   const handleConfirmColumns = useCallback(async (mapping: Record<string, string>) => {
@@ -871,11 +959,15 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       }))
     )
     let contentParts: string[] = []
+    const streamToken = activeStreamTokenRef.current
+    const requestSessionId = String(sid)
 
     abortRef.current = AgentAPI.sendMessage(
       sid,
       { message: "confirm_columns", action: "confirm_columns", column_mapping: mapping },
       (event: SSEEvent) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         if (event.type === "done") return
 
         if (event.type === "step_progress" && event.data) {
@@ -925,28 +1017,35 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           updateMessage(aiMsgId, {
             type: "analysis",
             anomalies: data.anomalies,
-            suggestedDecision: data.suggested_decision,
             recommendedTasks: data.recommended_tasks,
           })
-          if (!approvalRequired && !autoExternalActionsTriggeredRef.current) {
-            autoExternalActionsTriggeredRef.current = true
-            autoActionQueueRef.current = ["confirm_decision", "create_tasks", "generate_miro"]
-          }
+          selectAllRecommendedTasks(data.recommended_tasks?.length ?? 0)
+          queueAutoExternalActionsAfterAnalysis()
         }
-        if (event.type === "decision_draft" && event.data) {
-          const decisionId = event.data?.decision_id
-          setStepState((prev) => ({ ...prev, decisionCreated: true }))
-          updateMessage(aiMsgId, {
-            content: contentParts.join("\n"),
-            type: "decision_created",
-            decisionId: decisionId ? Number(decisionId) : undefined,
-            recommendedTasks: latestRecommendedTasksRef.current || undefined,
-          })
+        if (event.type === "approval_request" && event.data) {
+          const d = event.data as Record<string, unknown>
+          const approvalId = d.approval_id
+          const kind = String(d.kind ?? "")
+          if (typeof approvalId !== "string") return
+
+          const pending: PendingExternalApproval = {
+            id: approvalId,
+            kind,
+            draft: (d.draft as Record<string, unknown>) ?? {},
+          }
+
+          if (kind === "task") {
+            applyPendingTaskApproval(pending)
+          } else if (kind === "miro_board") {
+            setPendingMiroApproval(pending)
+            setMiroApprovalGenerating(false)
+          }
         }
         if (event.type === "task_created" && event.data) {
           setStepState((prev) => ({ ...prev, tasksCreated: true }))
           setPendingTaskApproval(null)
           setTasksApprovalGenerating(false)
+          setTaskGenerationStatus("completed")
           const created = (event.data as any)?.created_tasks
           if (Array.isArray(created)) {
             const idxs = created
@@ -971,11 +1070,16 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         }
       },
       (error) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         updateMessage(aiMsgId, { content: `Error: ${error.message}`, type: "error" })
         setIsStreaming(false)
       },
       () => {
-        void refreshFollowUpState(sid)
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+        void refreshSession(requestSessionId)
+        void refreshFollowUpState(requestSessionId)
         setStepProgress((prev) => {
           if (prev.length > 0) {
             const final = prev.map((s) => ({
@@ -989,9 +1093,15 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           return prev
         })
         setIsStreaming(false)
+        if (embeddedInFloating) {
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+          void AgentAPI.updateSession(requestSessionId, { last_read_at: new Date().toISOString() }).catch(() => {
+            /* ignore */
+          })
+        }
       }
     )
-  }, [addMessage, updateMessage, refreshFollowUpState])
+  }, [addMessage, updateMessage, refreshFollowUpState, refreshSession, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   // Keep ref in sync so handleFileUpload's done handler can call the latest version
   handleConfirmColumnsRef.current = handleConfirmColumns
@@ -1007,7 +1117,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     setFollowUpAvailable(false)
     setFollowUpStarted(false)
     setStepProgress([])
-    setStepState({ analysisComplete: false, decisionCreated: false, tasksCreated: false })
+    setStepState({ analysisComplete: false, tasksCreated: false })
     setGeneratedTaskIndexes([])
     setSkippedTaskIndexes([])
     latestRecommendedTasksRef.current = null
@@ -1055,6 +1165,8 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     setIsStreaming(true)
     setStepProgress([])
     let contentParts: string[] = []
+    const streamToken = activeStreamTokenRef.current
+    const requestSessionId = String(sid)
 
     abortRef.current = AgentAPI.sendMessage(
       sid!,
@@ -1063,6 +1175,8 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         ...(effectiveCalendarContext ? { calendar_context: effectiveCalendarContext as any } : {}),
       },
       (event: SSEEvent) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         if (event.type === "done") return
 
         // Notify the calendar page to refresh when events are created.
@@ -1095,19 +1209,29 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         if (event.type === "approval_request" && event.data) {
           const d = event.data as Record<string, unknown>
           const approvalId = d.approval_id
-          if (typeof approvalId === "string") {
-            addMessage({
-              id: `approval-${approvalId}`,
-              role: "assistant",
-              content: event.content || "Approval required.",
-              type: "approval_request",
-              approval: {
-                id: approvalId,
-                kind: String(d.kind ?? ""),
-                draft: (d.draft as Record<string, unknown>) ?? {},
-              },
-            })
+          const kind = String(d.kind ?? "")
+          if (typeof approvalId !== "string") return
+
+          const pending: PendingExternalApproval = {
+            id: approvalId,
+            kind,
+            draft: (d.draft as Record<string, unknown>) ?? {},
           }
+
+          if (kind === "task") {
+            applyPendingTaskApproval(pending)
+          } else if (kind === "miro_board") {
+            setPendingMiroApproval(pending)
+            setMiroApprovalGenerating(false)
+          }
+
+          addMessage({
+            id: `approval-${approvalId}`,
+            role: "assistant",
+            content: event.content || "Approval required.",
+            type: "approval_request",
+            approval: pending,
+          })
           return
         }
 
@@ -1165,28 +1289,16 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           updateMessage(aiMsgId, {
             type: "analysis",
             anomalies: data.anomalies,
-            suggestedDecision: data.suggested_decision,
             recommendedTasks: data.recommended_tasks,
           })
+          selectAllRecommendedTasks(data.recommended_tasks?.length ?? 0)
           // Individual anomalies are added to the right panel via the
           // AnomalyCard "+ Add" button — no auto-broadcast on new analysis.
-          if (!approvalRequired && !autoExternalActionsTriggeredRef.current) {
-            autoExternalActionsTriggeredRef.current = true
-            autoActionQueueRef.current = ["confirm_decision", "create_tasks", "generate_miro"]
-          }
-        }
-        if (event.type === "decision_draft" && event.data) {
-          const decisionId = event.data?.decision_id
-          setStepState((prev) => ({ ...prev, decisionCreated: true }))
-          updateMessage(aiMsgId, {
-            content: contentParts.join("\n"),
-            type: "decision_created",
-            decisionId: decisionId ? Number(decisionId) : undefined,
-            recommendedTasks: latestRecommendedTasksRef.current || undefined,
-          })
+          queueAutoExternalActionsAfterAnalysis()
         }
         if (event.type === "task_created" && event.data) {
           setStepState((prev) => ({ ...prev, tasksCreated: true }))
+          setTaskGenerationStatus("completed")
           const created = (event.data as any)?.created_tasks
           if (Array.isArray(created)) {
             const idxs = created
@@ -1240,13 +1352,16 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         }
       },
       (error) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         updateMessage(aiMsgId, { content: `Error: ${error.message}`, type: "error" })
         setIsStreaming(false)
       },
       () => {
-        if (sid) {
-          void refreshFollowUpState(String(sid))
-        }
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+        void refreshSession(requestSessionId)
+        void refreshFollowUpState(requestSessionId)
         // Attach final step progress to the message
         setStepProgress((prev) => {
           if (prev.length > 0) {
@@ -1260,23 +1375,25 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           return prev
         })
         setIsStreaming(false)
+        if (embeddedInFloating) {
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+          void AgentAPI.updateSession(requestSessionId, { last_read_at: new Date().toISOString() }).catch(() => {
+            /* ignore */
+          })
+        }
       }
     )
-  }, [sessionId, sessionCalendarContext, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, getApprovalPref])
+  }, [sessionId, sessionCalendarContext, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   // Keep ref always pointing to the latest handleSendMessage
   handleSendMessageRef.current = handleSendMessage
 
-  /** Handle action buttons (Create Decision, Create Tasks) */
+  /** Handle pipeline actions (Create Tasks, Miro, follow-up, etc.) */
   const handleAction = useCallback(async (action: string) => {
-    if (!sessionId) return
-
-    // #region agent log
-    fetch('http://127.0.0.1:7484/ingest/c9ef1ef2-1ac5-477a-9651-16a2d50b98d2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'821864'},body:JSON.stringify({sessionId:'821864',runId:'pre-fix',hypothesisId:'F4',location:'frontend/src/components/agent/chat/AgentChatPage.tsx:handleAction',message:'handleAction invoked',data:{sessionId:String(sessionId),action:String(action),approvalRequired:Boolean(approvalRequired),autoQueueLen:autoActionQueueRef.current.length,isStreaming:Boolean(isStreaming)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    const sid = sessionIdRef.current
+    if (!sid) return
 
     const actionMap: Record<string, AgentAction> = {
-      confirm_decision: "confirm_decision",
       create_tasks: "create_tasks",
       generate_miro: "generate_miro",
       distribute_message: "distribute_message",
@@ -1296,11 +1413,15 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     setIsStreaming(true)
     if (action === "create_tasks") setGeneratedTaskIndexes([])
     let contentParts: string[] = []
+    const streamToken = activeStreamTokenRef.current
+    const requestSessionId = String(sid)
 
     abortRef.current = AgentAPI.sendMessage(
-      sessionId,
+      sid,
       { message: action, action: agentAction },
       (event: SSEEvent) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
         if (event.type === "done") return
 
         if (event.type === "step_progress" && event.data) {
@@ -1339,16 +1460,6 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           updateMessage(aiMsgId, { content: contentParts.join("\n") })
         }
 
-        if (event.type === "decision_draft") {
-          const decisionId = event.data?.decision_id
-          setStepState((prev) => ({ ...prev, decisionCreated: true }))
-          updateMessage(aiMsgId, {
-            content: contentParts.join("\n"),
-            type: "decision_created",
-            decisionId: decisionId ? Number(decisionId) : undefined,
-            recommendedTasks: latestRecommendedTasksRef.current || undefined,
-          })
-        }
         if (event.type === "task_created") {
           setStepState((prev) => ({ ...prev, tasksCreated: true }))
           setPendingTaskApproval(null)
@@ -1419,26 +1530,33 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           }
 
           if (kind === "task") {
-            setPendingTaskApproval(pending)
-            setTasksApprovalGenerating(false)
-            setTaskGenerationStatus("awaiting_approval")
-            const tasks = (pending.draft as any)?.recommended_tasks
-            const tasksLen =
-              Array.isArray(tasks) ? tasks.length : (latestRecommendedTasksRef.current?.length ?? 0)
-            if (tasksLen > 0) setSelectedTaskIndexes(Array.from({ length: tasksLen }, (_, i) => i))
+            applyPendingTaskApproval(pending)
           } else if (kind === "miro_board") {
             setPendingMiroApproval(pending)
             setMiroApprovalGenerating(false)
           }
         }
+        if (event.type === "error" && action === "create_tasks") {
+          setTaskGenerationStatus("error")
+        }
       },
       (error) => {
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+        if (action === "create_tasks") {
+          setTaskGenerationStatus("error")
+        }
         updateMessage(aiMsgId, { content: `Error: ${error.message}`, type: "error" })
-        if (action === "create_tasks") setTaskGenerationStatus("error")
         setIsStreaming(false)
       },
       () => {
-        void refreshFollowUpState(sessionId)
+        if (activeStreamTokenRef.current !== streamToken) return
+        if (String(sessionIdRef.current) !== requestSessionId) return
+        if (action === "create_tasks") {
+          setTaskGenerationStatus((status) => (status === "generating" ? "error" : status))
+        }
+        void refreshSession(requestSessionId)
+        void refreshFollowUpState(requestSessionId)
         setStepProgress((prev) => {
           if (prev.length > 0) {
             const final = prev.map((s) => ({
@@ -1452,9 +1570,37 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           return prev
         })
         setIsStreaming(false)
+        if (embeddedInFloating) {
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+          void AgentAPI.updateSession(requestSessionId, { last_read_at: new Date().toISOString() }).catch(() => {
+            /* ignore */
+          })
+        }
       }
     )
-  }, [sessionId, addMessage, updateMessage, setMessages, refreshFollowUpState])
+  }, [addMessage, updateMessage, setMessages, refreshFollowUpState, refreshSession, embeddedInFloating, applyPendingTaskApproval])
+
+  useEffect(() => {
+    handleActionRef.current = handleAction
+  }, [handleAction])
+
+  useEffect(() => {
+    if (isStreamingRef.current || !sessionIdRef.current) return
+    if (approvalRequiredRef.current) return
+    if (!stepState.analysisComplete || stepState.tasksCreated) return
+    if (pendingTaskApproval) return
+    if ((latestRecommendedTasksRef.current?.length ?? 0) === 0) return
+    if (autoExternalActionsTriggeredRef.current) return
+    queueAutoExternalActionsAfterAnalysis()
+  }, [
+    sessionId,
+    isStreaming,
+    approvalRequired,
+    stepState.analysisComplete,
+    stepState.tasksCreated,
+    pendingTaskApproval,
+    queueAutoExternalActionsAfterAnalysis,
+  ])
 
   const resolveExternalApproval = useCallback(
     (
@@ -1463,6 +1609,8 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       draft?: Record<string, unknown>
     ) => {
       if (!sessionId) return
+      const streamToken = activeStreamTokenRef.current
+      const requestSessionId = String(sessionId)
       AgentAPI.sendMessage(
         sessionId,
         {
@@ -1473,18 +1621,30 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           approval_draft: decision === "approve" ? draft : undefined,
         },
         (_ev: SSEEvent) => {
+          if (activeStreamTokenRef.current !== streamToken) return
+          if (String(sessionIdRef.current) !== requestSessionId) return
           /* streamed chunks ignored; subsequent events update UI */
         },
         () => {
+          if (activeStreamTokenRef.current !== streamToken) return
+          if (String(sessionIdRef.current) !== requestSessionId) return
           if (pending.kind === "task") setTasksApprovalGenerating(false)
           if (pending.kind === "miro_board") setMiroApprovalGenerating(false)
         },
         () => {
-          void refreshSession(String(sessionId))
+          if (activeStreamTokenRef.current !== streamToken) return
+          if (String(sessionIdRef.current) !== requestSessionId) return
+          void refreshSession(requestSessionId)
+          if (embeddedInFloating) {
+            window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+            void AgentAPI.updateSession(requestSessionId, { last_read_at: new Date().toISOString() }).catch(() => {
+              /* ignore */
+            })
+          }
         }
       )
     },
-    [sessionId, refreshSession]
+    [sessionId, refreshSession, embeddedInFloating]
   )
 
   const handleApproveSelectedTasks = useCallback(
@@ -1543,13 +1703,8 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   // Auto-run queued external actions when streaming is idle.
   useEffect(() => {
     if (isStreaming) return
-    if (!sessionId) return
-    if (autoActionQueueRef.current.length === 0) return
-    const next = autoActionQueueRef.current.shift()
-    if (next) {
-      void handleAction(next)
-    }
-  }, [isStreaming, sessionId, handleAction])
+    tryRunNextAutoAction()
+  }, [isStreaming, tryRunNextAutoAction])
 
   // Auto-send calendar context message when arriving from calendar/event page (once only).
   // Uses a module-level flag + ref to handleSendMessage so this effect only fires on mount
@@ -1633,10 +1788,6 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           window.location.href = msg.navigateHref
           return
         }
-        if (view === "decisions" && msg?.decisionId) {
-          router.push(`/decisions/${msg.decisionId}`)
-          return
-        }
         if (view === "tasks") {
           router.push("/tasks")
           return
@@ -1647,7 +1798,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         } as any)}
       />
       )}
-      <ActionBar stepState={stepState} onAction={handleAction} onReupload={handleReupload} disabled={isStreaming} />
+      <ActionBar stepState={stepState} onReupload={handleReupload} disabled={isStreaming} />
       <ChatInput
         onSend={handleSendMessage}
         onFileUpload={handleFileUpload}

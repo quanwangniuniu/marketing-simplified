@@ -104,7 +104,7 @@ export const OptimizationScalingAPI = {
   getScalingPlan: (id: number) =>
     api.get<ScalingPlan>(`/api/optimization/scaling-plans/${id}/`),
 
-  updateScalingPlan: (id: number, data: ScalingPlanUpdateRequest) =>
+  updateScalingPlan: (id: string | number, data: ScalingPlanUpdateRequest) =>
     api.patch<ScalingPlan>(`/api/optimization/scaling-plans/${id}/`, data),
 
   // Scaling step APIs

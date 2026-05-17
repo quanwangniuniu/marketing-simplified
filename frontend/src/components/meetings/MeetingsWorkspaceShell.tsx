@@ -40,13 +40,15 @@ export function MeetingsWorkspaceShell({
         <aside
           className={cn(
             'relative shrink-0 overflow-hidden border-t border-gray-200 bg-white transition-[width,border-color] duration-300 ease-in-out lg:border-l lg:border-t-0',
-            detailOpen ? 'lg:w-[min(100%,420px)] xl:w-[440px]' : 'lg:w-0 lg:border-0',
+            detailOpen
+              ? 'block w-full lg:w-[min(100%,420px)] xl:w-[440px]'
+              : 'hidden lg:block lg:w-0 lg:border-0',
           )}
           aria-hidden={!detailOpen}
         >
           <div
             className={cn(
-              'h-full min-h-[min(100vh,480px)] w-[min(100vw-2rem,420px)] transition-transform duration-300 ease-in-out will-change-transform lg:w-[420px] xl:w-[440px]',
+              'h-full min-h-[min(100vh,480px)] w-full transition-transform duration-300 ease-in-out will-change-transform lg:w-[420px] xl:w-[440px]',
               detailOpen ? 'translate-x-0' : 'translate-x-full',
             )}
           >

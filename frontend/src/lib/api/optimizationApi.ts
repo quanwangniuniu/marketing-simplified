@@ -69,7 +69,7 @@ export const OptimizationAPI = {
   getOptimization: (id: number) =>
     api.get<Optimization>(`/api/optimization/optimizations/${id}/`),
 
-  updateOptimization: (id: number, data: OptimizationUpdateRequest) =>
+  updateOptimization: (id: string | number, data: OptimizationUpdateRequest) =>
     api.patch<Optimization>(`/api/optimization/optimizations/${id}/`, data),
 
   deleteOptimization: (id: number) =>

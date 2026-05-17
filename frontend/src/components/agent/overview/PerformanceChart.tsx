@@ -75,14 +75,14 @@ export function PerformanceChart() {
                 <XAxis
                   dataKey="date"
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
                   yAxisId="left"
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `${v}x`}
@@ -91,13 +91,13 @@ export function PerformanceChart() {
                   yAxisId="right"
                   orientation="right"
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
                 />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
+                <ChartTooltip content={<ChartTooltipContent className="text-[11px]" labelClassName="text-[11px]" />} />
+                <ChartLegend content={<ChartLegendContent className="text-[11px]" />} />
                 <Line
                   yAxisId="left"
                   type="monotone"

@@ -6,6 +6,7 @@ import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskData, UserSummary } from '@/types/task';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
 import InlineSelect, { UserInitialsAvatar, type InlineSelectOption } from './InlineSelect';
+import { getTypeSchema } from '@/lib/tasks/typeFieldSchemas';
 
 type Variant = 'primary' | 'ghost' | 'danger';
 
@@ -16,7 +17,7 @@ interface Props {
 }
 
 const BASE =
-  'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium leading-none transition disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto';
 const VARIANT: Record<Variant, string> = {
   primary:
     'bg-gradient-to-r from-[#3CCED7] to-[#A6E661] text-white shadow-sm hover:opacity-95',
@@ -100,7 +101,46 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
   const buttons: Array<{ label: string; variant: Variant; action: () => void | Promise<void> }> = [];
   switch (status) {
     case 'DRAFT':
-      buttons.push({ label: 'Submit', variant: 'primary', action: () => run(() => TaskAPI.submitTask(id)) });
+      buttons.push({
+        label: 'Submit',
+        variant: 'primary',
+        action: () => {
+          if (!task.current_approver) {
+            toast.error('Assign an approver before submitting.', { id: 'fsm-submit-no-approver' });
+            return;
+          }
+          const schema = getTypeSchema(task.type);
+          if (schema) {
+            // Mirror TaskTypeBlock's displayObj: in DRAFT, draft_payload is the working copy
+            // and overrides the linked object (user may have cleared a field in the form).
+            const linkedObj = (task.linked_object as Record<string, unknown> | null | undefined);
+            const hasLinked = linkedObj && typeof linkedObj === 'object' && Object.keys(linkedObj).length > 0;
+            const draftPayload = (task.draft_payload as Record<string, unknown> | null | undefined);
+            const checkObj: Record<string, unknown> = hasLinked
+              ? (draftPayload ? { ...linkedObj!, ...draftPayload } : linkedObj!)
+              : (draftPayload ?? {});
+
+            const missingFields = (schema.editFields ?? schema.fields)
+              .filter((f) => f.required && (!f.showWhen || f.showWhen(checkObj)))
+              .filter((f) => {
+                // When draft_payload is present it uses form keys; otherwise the API response
+                // shape uses linkedKey (e.g. budget_pool vs budget_pool_composite).
+                const checkKey = (hasLinked && !draftPayload) ? (f.linkedKey ?? f.key) : f.key;
+                const val = checkObj[checkKey];
+                return !val || !String(val).trim();
+              });
+
+            if (missingFields.length > 0) {
+              toast.error(
+                `Fill required fields before submitting: ${missingFields.map((f) => f.label).join(', ')}`,
+                { duration: 3000, id: 'fsm-submit-missing-fields' },
+              );
+              return;
+            }
+          }
+          run(() => TaskAPI.submitTask(id));
+        },
+      });
       break;
     case 'SUBMITTED':
       buttons.push({ label: 'Start Review', variant: 'primary', action: () => run(() => TaskAPI.startReview(id)) });
@@ -133,7 +173,7 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {buttons.map((b) => (
           <ActionBtn
             key={b.label}
@@ -157,7 +197,7 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
             onChange={(e) => setRejectComment(e.target.value)}
             placeholder="Explain why you're rejecting…"
           />
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               className={`${BASE} ${VARIANT.ghost}`}
@@ -201,7 +241,7 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
               };
             })}
           />
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               className={`${BASE} ${VARIANT.ghost}`}

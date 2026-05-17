@@ -39,12 +39,12 @@ function PropertyRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[84px_1fr] items-center gap-2 rounded-md py-1">
+    <div className="grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 rounded-md py-1">
       <div className="flex items-center gap-1.5 text-xs text-gray-500">
         <span className="flex h-4 w-4 items-center justify-center">{icon}</span>
         <span>{label}</span>
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -86,7 +86,7 @@ export function MeetingHeader({
 
   return (
     <section className="py-1">
-      <div className="mb-8 flex items-start justify-between gap-3">
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2.5">
             {editingTitle ? (
@@ -103,11 +103,11 @@ export function MeetingHeader({
                   if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
                 }}
                 placeholder="Please enter the name of the meeting"
-                className="h-8 min-w-[320px] border-none bg-transparent px-0 text-xl leading-tight font-bold text-slate-900 outline-none"
+                className="h-8 w-full min-w-0 border-none bg-transparent px-0 text-xl leading-tight font-bold text-slate-900 outline-none sm:min-w-[320px]"
               />
             ) : (
               <h1
-                className={`cursor-text truncate text-xl leading-tight font-bold ${
+                className={`max-w-full cursor-text truncate text-xl leading-tight font-bold ${
                   title.trim() ? 'text-slate-900' : 'text-slate-400'
                 }`}
                 onClick={() => setEditingTitle(true)}
@@ -163,7 +163,7 @@ export function MeetingHeader({
             />
           ) : (
             <p
-              className={`cursor-text text-xl leading-snug ${
+              className={`cursor-text text-base leading-snug sm:text-xl ${
                 objective.trim() ? 'text-slate-500' : 'text-slate-400'
               }`}
               onClick={() => setEditingObjective(true)}
@@ -215,7 +215,7 @@ export function MeetingHeader({
           </PropertyRow>
 
           <PropertyRow icon={<LinkIcon className="h-4 w-4" />} label="Reference">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               {editingReference ? (
                 <input
                   autoFocus
@@ -227,7 +227,7 @@ export function MeetingHeader({
                   placeholder="Add reference"
                 />
               ) : (
-                <button type="button" onClick={() => setEditingReference(true)} className="text-sm text-[#3CCED7]">
+                <button type="button" onClick={() => setEditingReference(true)} className="min-w-0 truncate text-sm text-[#3CCED7]">
                   {externalReference || 'Add reference'}
                 </button>
               )}

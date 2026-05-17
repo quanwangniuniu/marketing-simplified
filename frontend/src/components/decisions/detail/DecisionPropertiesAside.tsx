@@ -52,9 +52,9 @@ function formatDateInput(value?: string | null): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[88px_1fr] items-center gap-3 py-2">
+    <div className="grid grid-cols-[minmax(72px,88px)_minmax(0,1fr)] items-center gap-3 py-2">
       <span className={LABEL}>{label}</span>
-      <div className={VALUE}>{children}</div>
+      <div className={`${VALUE} min-w-0`}>{children}</div>
     </div>
   );
 }
@@ -115,7 +115,7 @@ export default function DecisionPropertiesAside({
   };
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <section className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
       <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
         Properties
       </h3>

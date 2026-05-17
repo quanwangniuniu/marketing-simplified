@@ -12,7 +12,7 @@ import { MiroGenerateCard } from "./MiroGenerateCard"
 import { DistributeMessageCard } from "./DistributeMessageCard"
 import { TaskListCard } from "./TaskListCard"
 import { RecommendedMiroBoardCard } from "./RecommendedMiroBoardCard"
-import type { AnomalyItem, SuggestedDecision, RecommendedTask, WorkflowStepState, ColumnDetectionData } from "@/types/agent"
+import type { AnomalyItem, RecommendedTask, WorkflowStepState, ColumnDetectionData } from "@/types/agent"
 import { StepProgress, type StepProgressItem } from "./StepProgress"
 import type { PendingExternalApproval } from "./ExternalApprovalModal"
 import type { TaskGenerationStatus } from "./TaskListCard"
@@ -21,7 +21,6 @@ export type ChatMessageType =
   | "text"
   | "analysis"
   | "file_uploaded"
-  | "decision_created"
   | "tasks_created"
   | "miro_status"
   | "step_progress"
@@ -37,7 +36,6 @@ export interface ChatMessage {
   type?: ChatMessageType
   isFollowUpPrompt?: boolean
   anomalies?: AnomalyItem[]
-  suggestedDecision?: SuggestedDecision
   recommendedTasks?: RecommendedTask[]
   columnMappingData?: ColumnDetectionData
   fileName?: string
@@ -47,7 +45,6 @@ export interface ChatMessage {
   navigateHref?: string
   eventType?: string
   workflowRunId?: string
-  decisionId?: number
   stepProgress?: StepProgressItem[]
   approval?: PendingExternalApproval
 }
@@ -115,12 +112,20 @@ export function MessageList({
   const prevScrollTopRef = useRef(0)
   const prevScrollHeightRef = useRef(0)
   const wasAtBottomRef = useRef(true)
-  const hasAnalysisTaskCard = messages.some(
-    (m) => m.type === "analysis" && Array.isArray(m.recommendedTasks) && m.recommendedTasks.length > 0
-  )
   const latestAnalysisWithTasks = [...messages]
     .reverse()
     .find((m) => m.type === "analysis" && Array.isArray(m.recommendedTasks) && m.recommendedTasks.length > 0)
+  const canSelectRecommendedTasks =
+    (taskGenerationStatus === "idle" || taskGenerationStatus === "awaiting_approval") &&
+    !tasksApprovalGenerating &&
+    !generatingTasks &&
+    !stepState?.tasksCreated
+  const taskSelectionMode =
+    canSelectRecommendedTasks &&
+    (Boolean(pendingTaskApproval) ||
+      (Boolean(approvalRequired) &&
+        Boolean(stepState?.analysisComplete) &&
+        !stepState?.tasksCreated))
 
   // Track whether the user is currently at (or near) the bottom.
   useEffect(() => {
@@ -252,7 +257,7 @@ export function MessageList({
             {/* TaskListCard: primary review surface. Prefer rendering on analysis messages. */}
             {message.recommendedTasks &&
               message.recommendedTasks.length > 0 &&
-              (message.type === "analysis" || (!hasAnalysisTaskCard && message.type === "decision_created")) && (
+              message.type === "analysis" && (
                 <TaskListCard
                   tasks={message.recommendedTasks}
                   approvalRequired={approvalRequired}
@@ -262,13 +267,16 @@ export function MessageList({
                   generating={Boolean(tasksApprovalGenerating) || Boolean(generatingTasks)}
                   generationStatus={taskGenerationStatus}
                   approvalMode={Boolean(pendingTaskApproval)}
+                  selectionMode={taskSelectionMode}
                   selectedIndexes={selectedTaskIndexes}
                   onSelectedIndexesChange={onSelectedTaskIndexesChange}
                   onCreateSelected={pendingTaskApproval ? onApproveSelectedTasks : undefined}
-                  onRejectApproval={pendingTaskApproval ? onRejectTasksApproval : undefined}
                   createButtonDisabled={Boolean(approvalDisabled) || Boolean(tasksApprovalGenerating)}
                   onCreateAll={
-                    !pendingTaskApproval && stepState?.decisionCreated && !stepState?.tasksCreated
+                    !approvalRequired &&
+                    !pendingTaskApproval &&
+                    stepState?.analysisComplete &&
+                    !stepState?.tasksCreated
                       ? () => onAction?.("create_tasks")
                       : undefined
                   }

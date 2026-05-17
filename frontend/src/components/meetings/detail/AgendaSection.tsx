@@ -162,7 +162,7 @@ export default function AgendaSection({
       )}
 
       {!readOnly && (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <textarea
             rows={1}
             value={newContent}
@@ -180,7 +180,7 @@ export default function AgendaSection({
             type="button"
             onClick={handleAdd}
             disabled={!newContent.trim() || adding}
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 w-full shrink-0 items-center justify-center gap-1 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Add</span>

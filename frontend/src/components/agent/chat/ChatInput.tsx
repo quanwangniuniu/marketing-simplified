@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Paperclip, Send, X, FileSpreadsheet } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ACCEPTED_TYPES = ".csv,.xlsx,.xls"
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MOBILE_QUERY = "(max-width: 640px)"
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -26,8 +27,17 @@ export function ChatInput({ onSend, onFileUpload, disabled, placeholder, helperT
   const [input, setInput] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY)
+    const updateIsMobile = () => setIsMobile(media.matches)
+    updateIsMobile()
+    media.addEventListener("change", updateIsMobile)
+    return () => media.removeEventListener("change", updateIsMobile)
+  }, [])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -93,9 +103,10 @@ export function ChatInput({ onSend, onFileUpload, disabled, placeholder, helperT
   }
 
   const canSubmit = !disabled && (input.trim() || selectedFile)
+  const inputPlaceholder = isMobile ? "Ask..." : placeholder || "Ask about your data or upload a file..."
 
   return (
-    <div className="border-t border-border bg-card/50 p-4">
+    <div className="border-t border-border bg-card/50 p-3 sm:p-4">
       {helperText && (
         <p className="mb-3 text-xs text-muted-foreground">{helperText}</p>
       )}
@@ -151,11 +162,11 @@ export function ChatInput({ onSend, onFileUpload, disabled, placeholder, helperT
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder || "Ask about your data or upload a file..."}
+          placeholder={inputPlaceholder}
           disabled={disabled}
           rows={1}
           className={cn(
-            "flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm",
+            "min-w-0 flex-1 resize-none rounded-lg border border-border bg-background px-2.5 py-2 text-sm sm:px-3",
             "placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring",
             "disabled:cursor-not-allowed disabled:opacity-50"
           )}

@@ -46,7 +46,7 @@ export function MeetingTypeMultiSelectButton({
           variant="outline"
           disabled={disabled}
           className={cn(
-            'h-9 gap-1.5 border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50',
+            'h-9 w-full justify-between gap-1.5 border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto',
             n > 0 && 'border-[#3CCED7]/30 bg-[#3CCED7]/10/90 text-[#0f757a]',
           )}
           aria-label="Filter by meeting type"

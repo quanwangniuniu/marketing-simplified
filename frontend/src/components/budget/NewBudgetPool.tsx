@@ -1,274 +1,183 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from "react";
-import { useFormValidation } from '@/hooks/useFormValidation';
-import { CreateBudgetPoolData } from "@/lib/api/budgetApi";
-import { useProjects } from "@/hooks/useProjects";
+import { useEffect, useState } from 'react';
+import api from '@/lib/api';
+import { useProjectStore } from '@/lib/projectStore';
 
-interface NewBudgetPoolProps {
-  onBudgetPoolDataChange?: (data: Partial<CreateBudgetPoolData>) => void;
-  budgetPoolData?: Partial<CreateBudgetPoolData>;
-  validation?: ReturnType<typeof useFormValidation<CreateBudgetPoolData>>;
-  loading?: boolean;
-  onSubmit?: (data: Partial<CreateBudgetPoolData>) => void;
+interface AdChannel { id: number; name: string; }
+
+interface Props {
+  onCreated: () => void;
+  onCancel?: () => void;
 }
 
-export default function NewBudgetPool({ 
-  onBudgetPoolDataChange, 
-  budgetPoolData = {}, 
-  validation,
-  loading = false,
-  onSubmit
-}: NewBudgetPoolProps) {
-  // Local state for form data
-  const [formData, setFormData] = useState<Partial<CreateBudgetPoolData>>({
-    project: budgetPoolData.project || undefined,
-    ad_channel: budgetPoolData.ad_channel || undefined,
-    total_amount: budgetPoolData.total_amount || '',
-    currency: budgetPoolData.currency || '',
-  });
+const CURRENCIES = ['USD', 'AUD', 'EUR', 'GBP', 'CAD', 'SGD'];
 
-  // Use ref to track current formData for comparison (avoids stale closure issues)
-  const formDataRef = useRef(formData);
-  formDataRef.current = formData;
+const INPUT = 'w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30';
 
-  // Update form data when budgetPoolData changes from parent
-  // Only update if the incoming prop values are different from current formData
-  // This prevents infinite loops when user input triggers parent update
+export default function NewBudgetPool({ onCreated, onCancel }: Props) {
+  const activeProject = useProjectStore((s) => s.activeProject);
+
+  const [channels, setChannels] = useState<AdChannel[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [creatingChannel, setCreatingChannel] = useState(false);
+
+  const [poolName, setPoolName] = useState('');
+  const [adChannel, setAdChannel] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [error, setError] = useState('');
+
+  const projectId = activeProject?.id;
+
   useEffect(() => {
-     console.log('NewBudgetPool - budgetPoolData changed:', budgetPoolData)
-    const propValues = {
-      project: budgetPoolData.project || undefined,
-      ad_channel: budgetPoolData.ad_channel || undefined,
-      total_amount: budgetPoolData.total_amount || '',
-      currency: budgetPoolData.currency || '',
-    };
+    if (!projectId) return;
+    setLoadingChannels(true);
+    api.get('/api/budgets/ad-channels/', { params: { project_id: projectId } })
+      .then((r) => setChannels(r.data || []))
+      .catch(() => setChannels([]))
+      .finally(() => setLoadingChannels(false));
+  }, [projectId]);
 
-    // Only update if prop values are actually different from current formData
-    // Use formDataRef to get the latest value, avoiding stale closure
-    const currentFormData = formDataRef.current;
-    const shouldUpdate =
-      currentFormData.project !== propValues.project ||
-      currentFormData.ad_channel !== propValues.ad_channel ||
-      currentFormData.total_amount !== propValues.total_amount ||
-      currentFormData.currency !== propValues.currency;
-
-    if (shouldUpdate) {
-      setFormData(propValues);
-    }
-  }, [budgetPoolData.project, budgetPoolData.ad_channel, budgetPoolData.total_amount, budgetPoolData.currency]);
-
-  // Local validation if not provided by parent
-  const localValidation = useFormValidation({
-    project: (value) => !value || value === 0 ? 'Project is required' : '',
-    ad_channel: (value) => !value || value === 0 ? 'Advertising channel is required' : '',
-    total_amount: (value) => {
-      if (!value || value.trim() === '') return 'Total amount is required';
-      const numValue = parseFloat(value);
-      if (isNaN(numValue) || numValue <= 0) return 'Total amount must be a positive number';
-      return '';
-    },
-    currency: (value) => {
-      if (!value || value.trim() === '') return 'Currency is required';
-      if (value.length !== 3) return 'Currency must be 3 characters (e.g., AUD, USD)';
-      return '';
-    },
-  });
-
-  // Use provided validation or local validation
-  const { errors, validateField, clearFieldError, setErrors } = validation || localValidation;
-
-  // Get projects from API
-  const {
-    projects: allProjects,
-    loading: loadingProjects,
-    fetchProjects,
-  } = useProjects();
-
-  // Filter active projects only
-  const activeProjects = useMemo(
-    () =>
-      allProjects.filter(
-        (project) =>
-          project.isActiveResolved ||
-          project.is_active ||
-          project.derivedStatus === "active"
-      ),
-    [allProjects]
-  );
-
-  // Fetch projects on mount
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
-
-  const [loadingAdChannels, setLoadingAdChannels] = useState(false);
-  const [adChannels, setAdChannels] = useState<{ id: number, name: string }[]>([]);
-
-  // Get ad channels list
-  useEffect(() => {
-    // TODO: fetch all ad channels from API
-    // set mock ad channels for now
-    setAdChannels([
-      { id: 1, name: 'TikTok' },
-      { id: 2, name: 'Facebook' },
-    ]);
-  }, []);
-
-  const handleInputChange = (field: keyof CreateBudgetPoolData, value: any) => {
-    // Clear error when user starts typing
-    if (errors[field as string]) {
-      clearFieldError(field);
-    }
-    
-    // Update local form data
-    const newFormData = { ...formData, [field]: value };
-    setFormData(newFormData);
-    
-    // Update parent component if callback provided
-    // Ensure we send the complete form data, not just the changed field
-    onBudgetPoolDataChange?.(newFormData);
-
-    // Real-time validation of the field
-    const error = validateField(field, value);
-    if (error && error !== '') {
-      // Set error for this field
-      setErrors({ ...errors, [field as string]: error });
+  const createChannel = async () => {
+    if (!newChannelName.trim() || !projectId) return;
+    setCreatingChannel(true);
+    try {
+      const r = await api.post('/api/budgets/ad-channels/', { name: newChannelName.trim(), project: projectId });
+      const ch: AdChannel = r.data;
+      setChannels((prev) => [...prev, ch]);
+      setAdChannel(String(ch.id));
+      setNewChannelName('');
+    } catch {
+      setError('Failed to create ad channel');
+    } finally {
+      setCreatingChannel(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Form validation is handled by parent component
-    console.log('Budget pool form submitted');
-    // Call parent's onSubmit with current form data if provided
-    if (onSubmit) {
-      onSubmit(formData);
+    setError('');
+    if (!projectId) { setError('No active project selected'); return; }
+    if (!adChannel) { setError('Select an ad channel'); return; }
+    if (!totalAmount || Number(totalAmount) <= 0) { setError('Enter a valid amount'); return; }
+    setSaving(true);
+    try {
+      await api.post('/api/budgets/pools/', {
+        project: projectId,
+        ad_channel: Number(adChannel),
+        total_amount: totalAmount,
+        currency,
+        name: poolName.trim(),
+      });
+      onCreated();
+    } catch (e: any) {
+      setError(e?.response?.data ? JSON.stringify(e.response.data) : 'Failed to create pool');
+    } finally {
+      setSaving(false);
     }
   };
-
-  // Note: We don't need a useEffect to sync formData to parent
-  // because handleInputChange already calls onBudgetPoolDataChange when user makes changes
-  // This prevents infinite loops while still keeping parent in sync
 
   return (
-    <form onSubmit={handleSubmit} className="w-full space-y-4">
-      {/* Project */}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Name */}
       <div>
-        <label htmlFor="budget-pool-project" className="block text-sm font-medium text-gray-700 mb-1">
-          Project *
-        </label>
-        <select
-          id="budget-pool-project"
-          name="project"
-          value={formData.project || ''}
-          onChange={(e) => handleInputChange('project', Number(e.target.value))}
-          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-            errors.project ? 'border-red-500' : 'border-gray-300'
-          }`}
-          required
-          disabled={loadingProjects || loading}
-        >
-          <option value='' disabled>
-            {loadingProjects ? 'Loading projects...' : 'Select project'}
-          </option>
-          {activeProjects.map((project) => (
-            <option key={project.id} value={project.id}>
-              #{project.id} {project.name}
-            </option>
-          ))}
-        </select>
-        {errors.project && (
-          <p className="text-red-500 text-sm mt-1">{errors.project}</p>
-        )}
-      </div>
-
-      {/* Advertising Channel */}
-      <div>
-        <label htmlFor="budget-pool-ad-channel" className="block text-sm font-medium text-gray-700 mb-1">
-          Advertising Channel *
-        </label>
-        <select
-          id="budget-pool-ad-channel"
-          name="ad_channel"
-          value={formData.ad_channel || ''}
-          onChange={(e) => handleInputChange('ad_channel', Number(e.target.value))}
-          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-            errors.ad_channel ? 'border-red-500' : 'border-gray-300'
-          }`}
-          required
-          disabled={loadingAdChannels || loading}
-        >
-          <option value='' disabled>
-            {loadingAdChannels ? 'Loading advertising channels...' : 'Select an advertising channel'}
-          </option>
-          {adChannels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              #{channel.id} {channel.name}
-            </option>
-          ))}
-        </select>
-        {errors.ad_channel && (
-          <p className="text-red-500 text-sm mt-1">{errors.ad_channel}</p>
-        )}
-      </div>
-
-      {/* Total Amount */}
-      <div>
-        <label htmlFor="budget-pool-total-amount" className="block text-sm font-medium text-gray-700 mb-1">
-          Total Amount *
+        <label className="mb-1.5 block text-[12px] font-medium uppercase tracking-wider text-gray-500">
+          Pool name <span className="text-gray-400 font-normal normal-case">(optional)</span>
         </label>
         <input
-          id="budget-pool-total-amount"
-          name="total_amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={formData.total_amount || ''}
-          onChange={(e) => handleInputChange('total_amount', e.target.value)}
-          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-            errors.total_amount ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter total budget amount (e.g., 10000.00)"
-          required
-          disabled={loading}
+          type="text"
+          value={poolName}
+          onChange={(e) => setPoolName(e.target.value)}
+          placeholder="e.g. Q1 Campaign, Influencer Budget…"
+          className={INPUT}
         />
-        {errors.total_amount && (
-          <p className="text-red-500 text-sm mt-1">{errors.total_amount}</p>
+      </div>
+
+      {/* Ad Channel */}
+      <div>
+        <label className="mb-1.5 block text-[12px] font-medium uppercase tracking-wider text-gray-500">
+          Ad Channel <span className="text-rose-500">*</span>
+        </label>
+        {loadingChannels ? (
+          <div className="text-sm text-gray-400">Loading channels…</div>
+        ) : (
+          <select value={adChannel} onChange={(e) => setAdChannel(e.target.value)} className={INPUT} required>
+            <option value="" disabled>Select a channel…</option>
+            {channels.map((ch) => (
+              <option key={ch.id} value={ch.id}>{ch.name}</option>
+            ))}
+          </select>
         )}
+        {/* Inline new channel creation */}
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            value={newChannelName}
+            onChange={(e) => setNewChannelName(e.target.value)}
+            placeholder="Or create new channel…"
+            className={`${INPUT} flex-1`}
+          />
+          <button
+            type="button"
+            onClick={createChannel}
+            disabled={!newChannelName.trim() || creatingChannel}
+            className="rounded-md bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+          >
+            {creatingChannel ? 'Adding…' : 'Add'}
+          </button>
+        </div>
       </div>
 
       {/* Currency */}
       <div>
-        <label htmlFor="budget-pool-currency" className="block text-sm font-medium text-gray-700 mb-1">
-          Currency *
+        <label className="mb-1.5 block text-[12px] font-medium uppercase tracking-wider text-gray-500">
+          Currency <span className="text-rose-500">*</span>
         </label>
-        <select
-          id="budget-pool-currency"
-          name="currency"
-          value={formData.currency || ''}
-          onChange={(e) => handleInputChange('currency', e.target.value)}
-          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-            errors.currency ? 'border-red-500' : 'border-gray-300'
-          }`}
-          required
-          disabled={loading}
-        >
-          <option value="" disabled>
-            Select currency
-          </option>
-          {/* TODO: display all currencies from the database, hardcoded currencies for now */}
-          <option value="AUD">AUD - Australian Dollar</option>
-          <option value="USD">USD - US Dollar</option>
-          <option value="EUR">EUR - Euro</option>
+        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={INPUT}>
+          {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        {errors.currency && (
-          <p className="text-red-500 text-sm mt-1">{errors.currency}</p>
-        )}
       </div>
 
-      {/* Hidden submit button for form validation and enter key support */}
-      <button type="submit" className="hidden">Submit Budget Pool Form</button>
+      {/* Total Amount */}
+      <div>
+        <label className="mb-1.5 block text-[12px] font-medium uppercase tracking-wider text-gray-500">
+          Total Amount <span className="text-rose-500">*</span>
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={totalAmount}
+          onChange={(e) => setTotalAmount(e.target.value)}
+          placeholder="e.g. 10000"
+          className={INPUT}
+          required
+        />
+      </div>
+
+      {error && <p className="text-sm text-rose-600">{error}</p>}
+
+      <div className="flex justify-end gap-2 pt-2">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-lg bg-[#3CCED7] px-4 py-2 text-sm font-medium text-white hover:bg-[#2fb8c0] disabled:opacity-50"
+        >
+          {saving ? 'Creating…' : 'Create pool'}
+        </button>
+      </div>
     </form>
   );
 }

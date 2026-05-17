@@ -204,7 +204,12 @@ class CustomUser(AbstractUser):
     password_set = models.BooleanField(default=True)
 
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
-    
+
+    # Profile fields
+    job = models.CharField(max_length=150, blank=True, default='')
+    department = models.CharField(max_length=150, blank=True, default='')
+    location = models.CharField(max_length=150, blank=True, default='')
+
     organization = models.ForeignKey(
         Organization,
         on_delete=models.SET_NULL,

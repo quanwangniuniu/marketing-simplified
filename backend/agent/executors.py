@@ -125,81 +125,10 @@ class CallLLMExecutor(BaseStepExecutor):
 
 
 class CreateDecisionExecutor(BaseStepExecutor):
-    """Creates Decision + Signals + Options from analysis_result.
-
-    Mirrors the logic in AgentOrchestrator.create_decision_draft().
-    """
+    """Legacy step type: agent workflows no longer persist Decision records."""
 
     def execute(self, input_data):
-        from django.db.models import Max
-        from decision.models import Decision, Signal, Option
-
-        analysis = input_data.get('analysis_result')
-        if not analysis:
-            return StepResult(success=False, error='No analysis_result in input')
-
-        try:
-            suggested = analysis.get('suggested_decision', {})
-            user = self.orchestrator.user
-            project = self.orchestrator.project
-
-            max_seq = Decision.objects.filter(
-                project=project
-            ).aggregate(max_seq=Max('project_seq'))['max_seq'] or 0
-
-            decision = Decision.objects.create(
-                title=suggested.get('title') or 'AI Agent Analysis',
-                context_summary=suggested.get('context_summary', ''),
-                reasoning=suggested.get('reasoning', ''),
-                risk_level=suggested.get('risk_level', 'MEDIUM'),
-                confidence=suggested.get('confidence', 3),
-                status=Decision.Status.PREDRAFT,
-                project=project,
-                project_seq=max_seq + 1,
-                author=user,
-                created_by_agent=True,
-                agent_session_id=self.orchestrator.session.id,
-                is_pre_draft=True,
-            )
-
-            for anomaly in analysis.get('anomalies', []):
-                Signal.objects.create(
-                    decision=decision,
-                    author=user,
-                    metric=anomaly.get('metric', ''),
-                    movement=anomaly.get('movement', ''),
-                    period=anomaly.get('period', ''),
-                    scope_type=anomaly.get('scope_type', ''),
-                    scope_value=anomaly.get('scope_value', ''),
-                    delta_value=anomaly.get('delta_value'),
-                    delta_unit=anomaly.get('delta_unit', ''),
-                    display_text=anomaly.get('description', ''),
-                )
-
-            options = suggested.get('options', [])
-            for idx, opt in enumerate(options):
-                Option.objects.create(
-                    decision=decision,
-                    text=opt.get('text', ''),
-                    order=opt.get('order', idx),
-                    is_selected=(idx == 0),
-                )
-
-            self.workflow_run.decision = decision
-            self.workflow_run.save(update_fields=['decision'])
-
-            return StepResult(
-                success=True,
-                output_data={**input_data, 'decision_id': decision.id},
-                sse_events=[{
-                    'type': 'decision_draft',
-                    'content': f'Decision draft created: {decision.title}',
-                    'data': {'decision_id': decision.id},
-                }],
-            )
-        except Exception as e:
-            logger.exception("CreateDecisionExecutor failed")
-            return StepResult(success=False, error=str(e))
+        return StepResult(success=True, output_data=input_data, sse_events=[])
 
 
 class CreateTasksExecutor(BaseStepExecutor):

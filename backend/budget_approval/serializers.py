@@ -11,37 +11,67 @@ User = get_user_model()
 class BudgetRequestSerializer(serializers.ModelSerializer):
     """Budget Request Serializer"""
     task = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), required=False, allow_null=True)
-    requested_by = serializers.ReadOnlyField(source='requested_by.id')
+    requested_by = serializers.SerializerMethodField()
     amount = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.01'))
     currency = serializers.CharField(max_length=3, min_length=3)
     status = serializers.ReadOnlyField()
     submitted_at = serializers.ReadOnlyField()
-    is_escalated = serializers.ReadOnlyField()
+    is_escalated = serializers.SerializerMethodField()
     budget_pool_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    budget_pool = serializers.ReadOnlyField(source='budget_pool.id')
-    current_approver = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    budget_pool = serializers.SerializerMethodField()
+    current_approver = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    current_approver_name = serializers.SerializerMethodField()
     ad_channel = serializers.PrimaryKeyRelatedField(queryset=AdChannel.objects.all(), write_only=True)
-    ad_channel_detail = serializers.SerializerMethodField(read_only=True)
+    ad_channel_name = serializers.SerializerMethodField()
 
     class Meta:
         model = BudgetRequest
         fields = [
             'id', 'task', 'requested_by', 'amount', 'currency', 'status',
-            'submitted_at', 'is_escalated', 'budget_pool', 'budget_pool_id', 'notes', 'current_approver', 'ad_channel', 'ad_channel_detail'
+            'submitted_at', 'is_escalated', 'budget_pool', 'budget_pool_id',
+            'notes', 'current_approver', 'current_approver_name', 'ad_channel', 'ad_channel_name',
         ]
         read_only_fields = ['id', 'requested_by', 'status', 'submitted_at', 'is_escalated', 'budget_pool']
-    
-    def get_ad_channel_detail(self, obj):
-        """Return ad channel with name for read operations"""
-        if obj.ad_channel:
-            return {
-                'id': obj.ad_channel.id,
-                'name': obj.ad_channel.name
-            }
-        return None
+
+    def get_requested_by(self, obj):
+        u = obj.requested_by
+        if not u:
+            return None
+        return u.get_full_name().strip() or u.username or u.email
+
+    def get_is_escalated(self, obj):
+        return obj.is_escalated
+
+    def get_budget_pool(self, obj):
+        p = obj.budget_pool
+        if not p:
+            return None
+        return {
+            'id': p.id,
+            'name': p.name or None,
+            'ad_channel': p.ad_channel.name if p.ad_channel else None,
+            'ad_channel_id': p.ad_channel.id if p.ad_channel else None,
+            'currency': p.currency,
+            'total_amount': str(p.total_amount),
+            'available_amount': str(p.available_amount),
+        }
+
+    def get_current_approver_name(self, obj):
+        u = obj.current_approver
+        if not u:
+            return None
+        return u.get_full_name().strip() or u.username or u.email
+
+    def get_ad_channel_name(self, obj):
+        return obj.ad_channel.name if obj.ad_channel else None
     
     def validate(self, attrs):
         """Validate budget request"""
+        # On partial updates (PATCH), skip pool validation if none of the pool-related
+        # fields are being changed.
+        if self.partial and 'budget_pool_id' not in attrs and 'ad_channel' not in attrs and 'currency' not in attrs:
+            return attrs
+
         # Extract budget_pool_id if provided
         budget_pool_id = attrs.get('budget_pool_id')
         task = attrs.get('task')
@@ -143,8 +173,10 @@ class ApprovalDecisionSerializer(serializers.Serializer):
 
 class BudgetPoolSerializer(serializers.ModelSerializer):
     """Budget Pool Serializer"""
+    name = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all())
     ad_channel = serializers.PrimaryKeyRelatedField(queryset=AdChannel.objects.all())
+    ad_channel_name = serializers.SerializerMethodField(read_only=True)
     total_amount = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.01'))
     used_amount = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=Decimal('0.00'), default=Decimal('0.00'))
     currency = serializers.CharField(max_length=3, min_length=3)
@@ -153,10 +185,13 @@ class BudgetPoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = BudgetPool
         fields = [
-            'id', 'project', 'ad_channel', 'total_amount',
-            'used_amount', 'available_amount', 'currency'
+            'id', 'name', 'project', 'ad_channel', 'ad_channel_name', 'total_amount',
+            'used_amount', 'available_amount', 'currency', 'created_at'
         ]
-        read_only_fields = ['id', 'available_amount']
+        read_only_fields = ['id', 'available_amount', 'ad_channel_name', 'created_at']
+
+    def get_ad_channel_name(self, obj):
+        return obj.ad_channel.name if obj.ad_channel else None
 
     def validate(self, attrs):
         """Validate budget pool constraints"""

@@ -63,7 +63,7 @@ export default function DecisionConnectionsAside({ decisionId, projectId, mySeq 
     projectId ? `/decisions/${id}?project_id=${projectId}` : `/decisions/${id}`;
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <section className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
         Connections
       </h3>
@@ -77,7 +77,7 @@ export default function DecisionConnectionsAside({ decisionId, projectId, mySeq 
               <li key={c.id} className="text-sm">
                 <Link
                   href={linkHref(c.id)}
-                  className="text-gray-700 transition hover:text-[#3CCED7]"
+                  className="break-words text-gray-700 transition hover:text-[#3CCED7]"
                 >
                   #{c.project_seq} {c.title || 'Untitled'}
                 </Link>
@@ -96,7 +96,7 @@ export default function DecisionConnectionsAside({ decisionId, projectId, mySeq 
               <li key={c.id} className="text-sm">
                 <Link
                   href={linkHref(c.id)}
-                  className="text-gray-700 transition hover:text-[#3CCED7]"
+                  className="break-words text-gray-700 transition hover:text-[#3CCED7]"
                 >
                   #{c.project_seq} {c.title || 'Untitled'}
                 </Link>

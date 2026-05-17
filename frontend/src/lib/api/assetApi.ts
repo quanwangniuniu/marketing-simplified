@@ -133,6 +133,11 @@ export class AssetAPI {
     }
   }
 
+  static async updateAsset(assetId: number, data: Partial<CreateAssetRequest>): Promise<Asset> {
+    const response = await api.patch(`/api/assets/${assetId}/`, data);
+    return response.data;
+  }
+
   // Delete asset
   static async deleteAsset(assetId: string): Promise<void> {
     try {

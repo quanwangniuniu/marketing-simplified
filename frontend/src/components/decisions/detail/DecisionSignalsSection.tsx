@@ -23,9 +23,9 @@ export default function DecisionSignalsSection({
   return (
     <section
       id="decision-section-signals"
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+      className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl sm:p-5"
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
           Signals
           {signals.length > 0 && (
@@ -39,7 +39,7 @@ export default function DecisionSignalsSection({
             id="decision-field-signals"
             type="button"
             onClick={onAdd}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white px-3 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-white px-3 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" />
             Add signal
@@ -67,10 +67,10 @@ export default function DecisionSignalsSection({
               className="group flex items-start justify-between gap-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-gray-900">
+                <div className="break-words text-sm text-gray-900">
                   {signal.displayTextOverride || signal.displayText || '—'}
                 </div>
-                <div className="mt-0.5 text-[11px] text-gray-500">
+                <div className="mt-0.5 break-words text-[11px] text-gray-500">
                   {signal.metric} · {signal.movement} · {signal.period}
                   {signal.comparison && signal.comparison !== 'NONE' && ` · ${signal.comparison}`}
                   {signal.scopeType && ` · ${signal.scopeType}`}
@@ -78,7 +78,7 @@ export default function DecisionSignalsSection({
                 </div>
               </div>
               {editable && (
-                <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                <div className="flex items-center gap-1 transition sm:opacity-0 sm:group-hover:opacity-100">
                   <button
                     type="button"
                     onClick={() => onEdit(signal)}

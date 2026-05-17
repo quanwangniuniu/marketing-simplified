@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowDownToLine, ArrowUpToLine, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowDownToLine, ArrowUpToLine, Bookmark, ChevronDown, ChevronLeft, ChevronRight, Loader2, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { TaskBulkFailureItem, TaskData } from '@/types/task';
+import type { TaskBulkFailureItem, TaskData, TaskListFilters } from '@/types/task';
+import { userDisplayName } from '@/types/task';
 import {
   PRIORITY_META,
   PRIORITY_OPTIONS,
@@ -22,6 +23,9 @@ import TaskListRowContextMenu, {
   type TaskListRowContextMenuState,
 } from '@/components/tasks/TaskListRowContextMenu';
 import LinearBulkOutputModal from '@/components/linear/LinearBulkOutputModal';
+import { TaskFilterPanel } from './TaskFilterPanel';
+import TaskDrawer from './TaskDrawer';
+import QuickTaskCreate from './QuickTaskCreate';
 
 interface ListViewProps {
   tasks: TaskData[];
@@ -32,6 +36,8 @@ interface ListViewProps {
   onOpenLinearImport?: () => void;
   /** After a successful bulk push to Linear, refresh task list from parent. */
   onLinearBulkSynced?: () => void | Promise<void>;
+  /** Refresh the task list from the parent (e.g. after a drawer mutation). */
+  onRefresh?: () => void;
 }
 
 const TYPE_LABEL = TASK_TYPES.reduce<Record<string, string>>((acc, t) => {
@@ -62,6 +68,60 @@ const STATUS_DOT_CLASS: Record<string, string> = {
 
 const LIST_PAGE_SIZE = 10;
 
+type SortKey = 'id_desc' | 'id_asc' | 'due_asc' | 'due_desc' | 'priority' | 'status' | 'owner_asc' | 'name_asc';
+type GroupBy = 'none' | 'status' | 'priority' | 'type' | 'owner';
+
+type SavedView = {
+  id: string;
+  name: string;
+  filters: TaskListFilters;
+  sortKey: SortKey;
+  groupBy: GroupBy;
+  search: string;
+};
+
+const savedViewsKey = (projectId: number | null) => `tasks-saved-views-${projectId ?? 'all'}`;
+const preViewKey = (projectId: number | null) => `tasks-pre-view-state-${projectId ?? 'all'}`;
+
+const backNavFlag = (projectId: number | null) => `tasks-back-nav-${projectId ?? 'all'}`;
+// Unique ID for this page load — resets on every reload, stays constant within a session.
+// Stored alongside the back-nav flag so we can tell if the flag was written in this
+// page load (client-side nav) or a previous one (stale after reload).
+const PAGE_SESSION_ID = `${Date.now()}-${Math.random()}`;
+
+const PRIORITY_SORT_ORDER: Record<string, number> = {
+  HIGHEST: 0, HIGH: 1, MEDIUM: 2, LOW: 3, LOWEST: 4,
+};
+const STATUS_SORT_ORDER: Record<string, number> = {
+  DRAFT: 0, SUBMITTED: 1, UNDER_REVIEW: 2, APPROVED: 3, REJECTED: 4, LOCKED: 5, CANCELLED: 6,
+};
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'id_desc', label: 'Newest first' },
+  { value: 'id_asc', label: 'Oldest first' },
+  { value: 'due_asc', label: 'Due date ↑' },
+  { value: 'due_desc', label: 'Due date ↓' },
+  { value: 'priority', label: 'Priority' },
+  { value: 'status', label: 'Status' },
+  { value: 'owner_asc', label: 'Owner A→Z' },
+  { value: 'name_asc',  label: 'Task name A→Z' },
+];
+
+function highlight(text: string, query: string): React.ReactNode {
+  const str = text || '';
+  if (!query.trim()) return str;
+  const q = query.trim().toLowerCase();
+  const idx = str.toLowerCase().indexOf(q);
+  if (idx < 0) return str;
+  return (
+    <>
+      {str.slice(0, idx)}
+      <mark className="rounded-[2px] bg-yellow-100 px-0 text-yellow-900">{str.slice(idx, idx + q.length)}</mark>
+      {str.slice(idx + q.length)}
+    </>
+  );
+}
+
 export default function ListView({
   tasks,
   loading,
@@ -69,10 +129,13 @@ export default function ListView({
   projectId,
   onOpenLinearImport,
   onLinearBulkSynced,
+  onRefresh,
 }: ListViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const removeTask = useTaskStore((s) => s.removeTask);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const sessionKey = `tasks-list-state-${projectId ?? 'all'}`;
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [bulkMode, setBulkMode] = useState(false);
@@ -94,6 +157,227 @@ export default function ListView({
   const [truncatedSummaryIds, setTruncatedSummaryIds] = useState<number[]>([]);
   const updateTaskInStore = useTaskStore((s) => s.updateTask);
   const updateTasksBulkInStore = useTaskStore((s) => s.updateTasksBulk);
+
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [subtasksMap, setSubtasksMap] = useState<Map<number, TaskData[]>>(new Map());
+  const [loadingSubtaskIds, setLoadingSubtaskIds] = useState<Set<number>>(new Set());
+
+  const toggleSubtasks = async (e: MouseEvent, taskId: number) => {
+    e.stopPropagation();
+    if (expandedIds.has(taskId)) {
+      setExpandedIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
+      return;
+    }
+    if (!subtasksMap.has(taskId)) {
+      setLoadingSubtaskIds((prev) => new Set(prev).add(taskId));
+      try {
+        const subs = await TaskAPI.getSubtasks(taskId);
+        setSubtasksMap((prev) => new Map(prev).set(taskId, subs));
+      } catch {
+        setSubtasksMap((prev) => new Map(prev).set(taskId, []));
+      } finally {
+        setLoadingSubtaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
+      }
+    }
+    setExpandedIds((prev) => new Set(prev).add(taskId));
+  };
+
+  const [filters, setFilters] = useState<TaskListFilters>({});
+  const [sortKey, setSortKey] = useState<SortKey>('id_desc');
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
+
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [savingViewName, setSavingViewName] = useState('');
+  const [showSaveInput, setShowSaveInput] = useState(false);
+  const viewsRef = useRef<HTMLDivElement>(null);
+
+  // Load per-project saved views when projectId is known.
+  // Note: we do NOT reset activeViewId here. The restore effect sets it from sessionStorage
+  // on back-navigation, and the deactivate-on-drift effect clears it if the view no longer
+  // exists in the newly loaded views (e.g. after switching projects).
+  useEffect(() => {
+    if (projectId === null) return;
+    try {
+      const raw = localStorage.getItem(savedViewsKey(projectId));
+      setSavedViews(raw ? (JSON.parse(raw) as SavedView[]) : []);
+    } catch { /* ignore */ }
+  }, [projectId]);
+
+  // Fix #1 — sync saved views across tabs via storage event.
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === savedViewsKey(projectId)) {
+        try {
+          const views = e.newValue ? (JSON.parse(e.newValue) as SavedView[]) : [];
+          setSavedViews(views);
+        } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [projectId]);
+
+  // Close views dropdown on outside click.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if (viewsRef.current && !viewsRef.current.contains(e.target as Node)) {
+        setViewsOpen(false);
+        setShowSaveInput(false);
+        setSavingViewName('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Fix #2 — deactivate when state drifts; also deactivate if the view was deleted in another tab.
+  useEffect(() => {
+    if (!activeViewId) return;
+    const view = savedViews.find((v) => v.id === activeViewId);
+    if (!view) {
+      // View was deleted (e.g. from another tab) — deactivate silently.
+      setActiveViewId(null);
+      return;
+    }
+    const matches =
+      JSON.stringify(view.filters) === JSON.stringify(filters) &&
+      view.sortKey === sortKey &&
+      view.groupBy === groupBy &&
+      view.search === search;
+    if (!matches) setActiveViewId(null);
+  }, [filters, sortKey, groupBy, search, savedViews]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const persistViews = (views: SavedView[]) => {
+    setSavedViews(views);
+    try { localStorage.setItem(savedViewsKey(projectId), JSON.stringify(views)); } catch { /* ignore */ }
+  };
+
+  const savePreViewState = () => {
+    try {
+      sessionStorage.setItem(
+        preViewKey(projectId),
+        JSON.stringify({ filters, sortKey, groupBy, search }),
+      );
+    } catch { /* ignore */ }
+  };
+
+  const restorePreViewState = () => {
+    try {
+      const raw = sessionStorage.getItem(preViewKey(projectId));
+      if (!raw) return;
+      const s = JSON.parse(raw) as { filters: TaskListFilters; sortKey: SortKey; groupBy: GroupBy; search: string };
+      setFilters(s.filters ?? {});
+      setSortKey(s.sortKey ?? 'id_desc');
+      setGroupBy(s.groupBy ?? 'none');
+      setSearch(s.search ?? '');
+    } catch { /* ignore */ }
+  };
+
+  const confirmSaveView = () => {
+    const name = savingViewName.trim();
+    if (!name) return;
+    const view: SavedView = {
+      id: `${Date.now()}`,
+      name,
+      filters,
+      sortKey,
+      groupBy,
+      search,
+    };
+    persistViews([...savedViews, view]);
+    setActiveViewId(view.id);
+    setSavingViewName('');
+    setShowSaveInput(false);
+    setViewsOpen(false);
+    toast.success(`View "${name}" saved`);
+  };
+
+  const applyView = (view: SavedView) => {
+    if (!activeViewId) savePreViewState();
+    setFilters(view.filters);
+    setSortKey(view.sortKey);
+    setGroupBy(view.groupBy);
+    setSearch(view.search);
+    setActiveViewId(view.id);
+    setViewsOpen(false);
+    setCurrentPage(1);
+  };
+
+  // Fix #4 — update an existing saved view with the current state.
+  const updateView = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedViews.map((v) =>
+      v.id === id ? { ...v, filters, sortKey, groupBy, search } : v,
+    );
+    persistViews(updated);
+    setActiveViewId(id);
+    toast.success('View updated');
+  };
+
+  const deleteView = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    persistViews(savedViews.filter((v) => v.id !== id));
+    if (activeViewId === id) {
+      setActiveViewId(null);
+      restorePreViewState();
+      sessionStorage.removeItem(preViewKey(projectId));
+    }
+  };
+
+  // Restore filter/sort state from sessionStorage once projectId is known.
+  // Using a ref so this only runs once per project (not on every projectId re-render).
+  // On unmount (navigating away), set a back-nav flag so the next mount knows to restore.
+  // This flag lives in sessionStorage so it survives the component re-creating, but is
+  // absent on a true page reload (restore would not happen).
+  useEffect(() => {
+    if (!projectId) return;
+    return () => {
+      try { sessionStorage.setItem(backNavFlag(projectId), PAGE_SESSION_ID); } catch { /* ignore */ }
+    };
+  }, [projectId]);
+
+  const restoredForProject = useRef<number | null | 'all'>(undefined as any);
+  useEffect(() => {
+    const key = projectId ?? 'all';
+    if (restoredForProject.current === key) return;
+    restoredForProject.current = key;
+
+    const flagValue = sessionStorage.getItem(backNavFlag(projectId));
+    // Always clear the flag — whether we restore or not.
+    sessionStorage.removeItem(backNavFlag(projectId));
+
+    // Only restore if the flag was written in THIS page load (same PAGE_SESSION_ID).
+    // A stale flag from a previous session (after a reload) won't match.
+    if (flagValue !== PAGE_SESSION_ID) {
+      // No flag → fresh page load. Clear any stale state and use defaults.
+      sessionStorage.removeItem(`tasks-list-state-${key}`);
+      sessionStorage.removeItem(preViewKey(projectId ?? null));
+      return;
+    }
+
+    try {
+      const saved = sessionStorage.getItem(`tasks-list-state-${key}`);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { filters?: TaskListFilters; sortKey?: SortKey; groupBy?: GroupBy; search?: string; activeViewId?: string };
+      if (parsed.filters) setFilters(parsed.filters);
+      if (parsed.sortKey) setSortKey(parsed.sortKey);
+      if (parsed.groupBy) setGroupBy(parsed.groupBy);
+      if (parsed.search !== undefined) setSearch(parsed.search);
+      if (parsed.activeViewId) {
+        setActiveViewId(parsed.activeViewId);
+        // Do NOT remove preViewKey here — it must survive back-navigation so that
+        // "Clear active view" can restore the state the user had before applying the view.
+      }
+    } catch { /* ignore */ }
+  }, [projectId]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(sessionKey, JSON.stringify({ filters, sortKey, groupBy, search, activeViewId }));
+    } catch { /* ignore quota errors */ }
+  }, [sessionKey, filters, sortKey, groupBy, search, activeViewId]);
 
   const parseApiError = (err: unknown, fallback: string) => {
     const data = (err as any)?.response?.data;
@@ -143,6 +427,22 @@ export default function ListView({
       mounted = false;
     };
   }, [projectId]);
+  const [drawerRefreshKey, setDrawerRefreshKey] = useState(0);
+  const [drawerTaskId, setDrawerTaskId] = useState<number | null>(() => {
+    const param = searchParams?.get('drawerTaskId');
+    const n = param ? Number(param) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
+  const openDrawer = useCallback((id: number | null) => {
+    setDrawerTaskId(id);
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    if (id != null) params.set('drawerTaskId', String(id));
+    else params.delete('drawerTaskId');
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : '?', { scroll: false });
+  }, [router, searchParams]);
+
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [rowMenu, setRowMenu] = useState<TaskListRowContextMenuState>(null);
   const [menuMembers, setMenuMembers] = useState<ProjectMemberData[]>([]);
   const [menuMembersLoading, setMenuMembersLoading] = useState(false);
@@ -235,27 +535,121 @@ export default function ListView({
   );
 
   const visible = useMemo(() => {
+    let result = tasks;
     const q = search.trim().toLowerCase();
-    if (!q) return tasks;
-    return tasks.filter((t) =>
-      `${t.summary ?? ''} ${t.type ?? ''} ${t.owner?.username ?? ''} ${t.current_approver?.username ?? ''}`
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [search, tasks]);
+    if (q) {
+      result = result.filter((t) =>
+        `${t.summary ?? ''} ${t.type ?? ''} ${t.owner?.username ?? ''} ${t.current_approver?.username ?? ''}`
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+    // Panel filters
+    if (filters.status) {
+      const vals = Array.isArray(filters.status) ? filters.status : [filters.status];
+      result = result.filter((t) => t.status && vals.includes(t.status));
+    }
+    if (filters.priority) {
+      const vals = Array.isArray(filters.priority) ? filters.priority : [filters.priority];
+      result = result.filter((t) => t.priority && vals.includes(t.priority));
+    }
+    if (filters.type) {
+      const vals = Array.isArray(filters.type) ? filters.type : [filters.type];
+      result = result.filter((t) => t.type && vals.includes(t.type));
+    }
+    if (filters.owner_id) {
+      const ids = (Array.isArray(filters.owner_id) ? filters.owner_id : [filters.owner_id]) as number[];
+      result = result.filter((t) => t.owner?.id != null && ids.includes(t.owner.id));
+    }
+    if (filters.current_approver_id) {
+      const ids = (Array.isArray(filters.current_approver_id) ? filters.current_approver_id : [filters.current_approver_id]) as number[];
+      result = result.filter((t) => t.current_approver?.id != null && ids.includes(t.current_approver.id));
+    }
+    if (filters.due_date_after) {
+      result = result.filter((t) => t.due_date && t.due_date >= filters.due_date_after!);
+    }
+    if (filters.due_date_before) {
+      result = result.filter((t) => t.due_date && t.due_date <= filters.due_date_before!);
+    }
+    if (filters.has_subtasks === true) {
+      result = result.filter((t) => (t.subtask_count ?? 0) > 0);
+    } else if (filters.has_subtasks === false) {
+      result = result.filter((t) => (t.subtask_count ?? 0) === 0);
+    }
+    return result;
+  }, [search, tasks, filters]);
 
-  const totalPages = Math.max(1, Math.ceil(visible.length / LIST_PAGE_SIZE));
+  const sorted = useMemo(() => {
+    const arr = [...visible];
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case 'id_asc':  return (a.id ?? 0) - (b.id ?? 0);
+        case 'id_desc': return (b.id ?? 0) - (a.id ?? 0);
+        case 'due_asc':  return ((a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1);
+        case 'due_desc': return ((a.due_date ?? '9999') > (b.due_date ?? '9999') ? -1 : 1);
+        case 'priority': return (PRIORITY_SORT_ORDER[a.priority ?? 'MEDIUM'] ?? 2) - (PRIORITY_SORT_ORDER[b.priority ?? 'MEDIUM'] ?? 2);
+        case 'status':   return (STATUS_SORT_ORDER[a.status ?? 'DRAFT'] ?? 0) - (STATUS_SORT_ORDER[b.status ?? 'DRAFT'] ?? 0);
+        case 'owner_asc': return (a.owner?.username ?? '').localeCompare(b.owner?.username ?? '');
+        case 'name_asc':  return (a.summary ?? '').localeCompare(b.summary ?? '');
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [visible, sortKey]);
+
+  const isGrouped = groupBy !== 'none';
+  const totalPages = Math.max(1, Math.ceil(sorted.length / LIST_PAGE_SIZE));
   const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
   const paginatedVisible = useMemo(() => {
     const start = (safeCurrentPage - 1) * LIST_PAGE_SIZE;
-    return visible.slice(start, start + LIST_PAGE_SIZE);
-  }, [safeCurrentPage, visible]);
-  const pageStart = visible.length === 0 ? 0 : (safeCurrentPage - 1) * LIST_PAGE_SIZE + 1;
-  const pageEnd = Math.min(visible.length, safeCurrentPage * LIST_PAGE_SIZE);
+    return sorted.slice(start, start + LIST_PAGE_SIZE);
+  }, [safeCurrentPage, sorted]);
+  const pageStart = sorted.length === 0 ? 0 : (safeCurrentPage - 1) * LIST_PAGE_SIZE + 1;
+  const pageEnd = Math.min(sorted.length, safeCurrentPage * LIST_PAGE_SIZE);
+
+  // Build display rows with optional group headers
+  type DisplayRow =
+    | { kind: 'header'; key: string; label: string }
+    | { kind: 'task'; task: TaskData };
+
+  const displayRows = useMemo((): DisplayRow[] => {
+    if (!isGrouped) return paginatedVisible.map((task) => ({ kind: 'task' as const, task }));
+    const groups = new Map<string, { label: string; tasks: TaskData[] }>();
+    paginatedVisible.forEach((task) => {
+      let key = '';
+      let label = '';
+      if (groupBy === 'status') {
+        key = `status-${task.status ?? 'DRAFT'}`;
+        label = STATUS_META[task.status ?? 'DRAFT']?.label ?? (task.status ?? 'Draft');
+      } else if (groupBy === 'priority') {
+        key = `priority-${task.priority ?? 'MEDIUM'}`;
+        label = PRIORITY_META[task.priority ?? 'MEDIUM']?.label ?? (task.priority ?? 'Medium');
+      } else if (groupBy === 'type') {
+        key = `type-${task.type ?? 'none'}`;
+        label = TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type ?? 'No type';
+      } else if (groupBy === 'owner') {
+        const ownerName = task.owner ? userDisplayName(task.owner) : null;
+        key = `owner-${ownerName ?? 'unassigned'}`;
+        label = ownerName ?? 'Unassigned';
+      }
+      if (!groups.has(key)) groups.set(key, { label, tasks: [] });
+      groups.get(key)!.tasks.push(task);
+    });
+    const rows: DisplayRow[] = [];
+    groups.forEach(({ label, tasks: groupTasks }, key) => {
+      rows.push({ kind: 'header', key, label: `${label} (${groupTasks.length})` });
+      groupTasks.forEach((task) => rows.push({ kind: 'task', task }));
+    });
+    return rows;
+  }, [isGrouped, groupBy, paginatedVisible]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [search]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, sortKey, groupBy]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(Math.max(page, 1), totalPages));
@@ -302,16 +696,16 @@ export default function ListView({
     }
     const unique = new Map<number, string>();
     tasks.forEach((task) => {
-      if (task.owner?.id) unique.set(task.owner.id, task.owner.username || task.owner.email || `User #${task.owner.id}`);
-      if (task.current_approver?.id) {
-        unique.set(
-          task.current_approver.id,
-          task.current_approver.username || task.current_approver.email || `User #${task.current_approver.id}`
-        );
-      }
+      if (task.owner?.id) unique.set(task.owner.id, userDisplayName(task.owner));
+      if (task.current_approver?.id) unique.set(task.current_approver.id, userDisplayName(task.current_approver));
     });
     return Array.from(unique.entries()).map(([id, label]) => ({ id, label }));
   }, [members, tasks]);
+
+  const filterMemberOptions = useMemo(
+    () => memberOptions.map((m) => ({ id: m.id, name: m.label })),
+    [memberOptions]
+  );
 
   const toggleSelection = (taskId: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -378,6 +772,7 @@ export default function ListView({
     try {
       await TaskAPI.updateTask(task.id, requestData as Partial<TaskData>);
       markRecentlyUpdated([task.id]);
+      if (task.id === drawerTaskId) setDrawerRefreshKey((k) => k + 1);
       return true;
     } catch (err) {
       updateTaskInStore(task.id, previous);
@@ -586,15 +981,196 @@ export default function ListView({
         onTaskPatched={handleTaskPatched}
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {/* Search + clear */}
         <div className="relative min-w-[12rem] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search summary, type or owner…"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-8 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
+
+        {/* Filter panel */}
+        <TaskFilterPanel
+          filters={filters}
+          onChange={setFilters}
+          onClearAll={() => setFilters({})}
+          ownerOptions={filterMemberOptions}
+          approverOptions={filterMemberOptions}
+          typeOptions={TASK_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+        />
+
+        {/* Saved Views */}
+        <div className="relative shrink-0" ref={viewsRef}>
+          <button
+            type="button"
+            onClick={() => setViewsOpen((v) => !v)}
+            aria-label="Saved views"
+            data-testid="saved-views-button"
+            className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition ${
+              activeViewId
+                ? 'border-[#3CCED7] bg-[#3CCED7]/10 text-[#2ab5be]'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Bookmark className="h-3.5 w-3.5 shrink-0" />
+            {activeViewId ? (savedViews.find((v) => v.id === activeViewId)?.name ?? 'View') : 'Views'}
+            {savedViews.length > 0 && !activeViewId && (
+              <span className="ml-0.5 rounded-full bg-gray-100 px-1.5 py-px text-[10px] font-semibold text-gray-500">
+                {savedViews.length}
+              </span>
+            )}
+          </button>
+
+          {viewsOpen && (
+            <div
+              className="absolute right-0 top-full z-30 mt-1.5 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+              data-testid="saved-views-dropdown"
+            >
+              {activeViewId && (
+                <div className="border-b border-gray-100 p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveViewId(null);
+                      restorePreViewState();
+                      sessionStorage.removeItem(preViewKey(projectId));
+                      setCurrentPage(1);
+                      setViewsOpen(false);
+                    }}
+                    className="w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-gray-500 transition hover:bg-gray-50"
+                    data-testid="clear-view-button"
+                  >
+                    ✕ Clear active view
+                  </button>
+                </div>
+              )}
+              {savedViews.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-gray-400">No saved views yet.</p>
+              ) : (
+                <ul className="max-h-60 overflow-y-auto py-1">
+                  {savedViews.map((v) => (
+                    <li key={v.id}>
+                      <button
+                        type="button"
+                        onClick={() => applyView(v)}
+                        className={`group flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition hover:bg-gray-50 ${
+                          activeViewId === v.id ? 'font-semibold text-[#2ab5be]' : 'text-gray-700'
+                        }`}
+                        data-testid="saved-view-item"
+                      >
+                        <span className="truncate">{v.name}</span>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <button
+                            type="button"
+                            aria-label={`Update view ${v.name}`}
+                            data-testid="update-view-button"
+                            onClick={(e) => updateView(v.id, e)}
+                            className="rounded p-0.5 text-gray-300 transition hover:text-[#2ab5be] group-hover:text-gray-400"
+                            title="Update view with current filters"
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete view ${v.name}`}
+                            data-testid="delete-view-button"
+                            onClick={(e) => deleteView(v.id, e)}
+                            className="rounded p-0.5 text-gray-300 transition hover:text-rose-500 group-hover:text-gray-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="border-t border-gray-100 p-1.5">
+                {showSaveInput ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={savingViewName}
+                      onChange={(e) => setSavingViewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') confirmSaveView();
+                        if (e.key === 'Escape') { setShowSaveInput(false); setSavingViewName(''); }
+                      }}
+                      placeholder="View name…"
+                      className="h-7 flex-1 rounded border border-gray-200 px-2 text-xs outline-none focus:border-[#3CCED7]"
+                      data-testid="save-view-name-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={confirmSaveView}
+                      disabled={!savingViewName.trim()}
+                      className="h-7 rounded bg-[#3CCED7] px-2 text-xs font-semibold text-white disabled:opacity-40 hover:bg-[#2ab5be]"
+                      data-testid="save-view-confirm-button"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowSaveInput(true)}
+                    className="w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-[#2ab5be] transition hover:bg-[#3CCED7]/10"
+                    data-testid="save-view-button"
+                  >
+                    + Save current view
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sort */}
+        <div className="relative shrink-0">
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="h-9 appearance-none rounded-lg border border-gray-200 bg-white pl-3 pr-8 text-xs font-medium text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+            aria-label="Sort tasks"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Group by */}
+        <div className="relative shrink-0">
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <select
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+            className="h-9 appearance-none rounded-lg border border-gray-200 bg-white pl-3 pr-8 text-xs font-medium text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+            aria-label="Group tasks"
+          >
+            <option value="none">No grouping</option>
+            <option value="status">By status</option>
+            <option value="priority">By priority</option>
+            <option value="type">By type</option>
+            <option value="owner">By owner</option>
+          </select>
+        </div>
+
         <button
           type="button"
           onClick={() => setBulkMode((v) => !v)}
@@ -609,11 +1185,11 @@ export default function ListView({
 
       {bulkMode && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-          <div className="text-xs text-gray-500">
+          <div className="min-w-0 text-xs text-gray-500">
             Bulk edit is active. Select tasks to apply bulk actions or send them to Linear.
           </div>
           <div
-            className="inline-flex items-stretch overflow-hidden rounded-lg border border-gray-200 bg-white"
+            className="grid w-full min-w-0 grid-cols-1 overflow-hidden rounded-lg border border-gray-200 bg-white sm:w-auto sm:grid-cols-2"
             role="group"
             aria-label="Linear bulk actions"
           >
@@ -626,7 +1202,7 @@ export default function ListView({
                   : 'Import Linear issues as tasks in this project'
               }
               onClick={onOpenLinearImport}
-              className="inline-flex h-8 items-center gap-1.5 border-r border-gray-200 px-2.5 text-xs font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap border-b border-gray-200 px-2.5 py-2 text-xs font-semibold leading-none text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:border-b-0 sm:border-r"
             >
               <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2]" aria-hidden />
               Import from Linear
@@ -642,7 +1218,7 @@ export default function ListView({
                     : 'Push selected tasks to Linear'
               }
               onClick={openLinearOutput}
-              className="inline-flex h-8 items-center gap-1.5 bg-[#5E6AD2]/10 px-2.5 text-xs font-semibold text-[#4a55b8] transition hover:bg-[#5E6AD2]/15 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap bg-[#5E6AD2]/10 px-2.5 py-2 text-xs font-semibold leading-none text-[#4a55b8] transition hover:bg-[#5E6AD2]/15 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowUpToLine className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2]" aria-hidden />
               Output to Linear
@@ -690,15 +1266,26 @@ export default function ListView({
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         {error ? (
           <div className="px-6 py-12 text-center text-sm text-rose-600">{error}</div>
-        ) : !loading && visible.length === 0 ? (
+        ) : !loading && sorted.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-sm font-medium text-gray-900">No tasks yet</p>
             <p className="mt-1 text-xs text-gray-500">
-              Click <span className="font-medium text-gray-700">Create task</span> to add the first one.
+              {projectId ? (
+                <button
+                  type="button"
+                  onClick={() => setQuickCreateOpen(true)}
+                  className="font-medium text-[#2ab5be] underline-offset-2 hover:underline"
+                >
+                  Add the first task
+                </button>
+              ) : (
+                <>Click <span className="font-medium text-gray-700">Create task</span> to add the first one.</>
+              )}
             </p>
           </div>
         ) : (
-          <table className="w-full table-fixed text-xs">
+          <div className="overflow-x-auto">
+          <table data-testid="task-list" className="w-full min-w-[980px] table-fixed text-xs">
             <colgroup>
               <col className={TABLE_COLUMN_WIDTHS.icon} />
               {bulkMode ? <col className={TABLE_COLUMN_WIDTHS.select} /> : null}
@@ -731,48 +1318,40 @@ export default function ListView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
-              {(loading ? Array.from({ length: 6 }, () => undefined) : paginatedVisible).map((task, index) => {
-                if (loading) {
+              {loading ? Array.from({ length: 6 }, (_, index) => (
+                <tr key={`tasks-list-skeleton-${index}`}>
+                  <td className={`${TABLE_COLUMN_WIDTHS.icon} px-4 py-3`}>
+                    <Skeleton className="h-2 w-2 rounded-full" />
+                  </td>
+                  {bulkMode ? (
+                    <td className={`${TABLE_COLUMN_WIDTHS.select} px-2 py-3`}>
+                      <Skeleton className="h-4 w-4 rounded-sm" />
+                    </td>
+                  ) : null}
+                  <td className="px-4 py-3">
+                    <div className="min-w-0 max-w-[32rem] space-y-2">
+                      <Skeleton className="h-4 w-full max-w-[22rem]" />
+                      <Skeleton className="h-3 w-full max-w-[32rem]" />
+                    </div>
+                  </td>
+                  <td className={`${TABLE_COLUMN_WIDTHS.type} px-4 py-3`}><Skeleton className="h-3 w-16" /></td>
+                  <td className={`${TABLE_COLUMN_WIDTHS.status} px-4 py-3`}><Skeleton className="h-5 w-16 rounded-full" /></td>
+                  <td className={`${TABLE_COLUMN_WIDTHS.owner} px-4 py-3`}><Skeleton className="h-3 w-16" /></td>
+                  <td className={`${TABLE_COLUMN_WIDTHS.approver} px-4 py-3`}><Skeleton className="h-3 w-16" /></td>
+                  <td className={`${TABLE_COLUMN_WIDTHS.due} px-5 py-3`}><div className="flex justify-start"><Skeleton className="h-3 w-14" /></div></td>
+                </tr>
+              )) : displayRows.map((row, index) => {
+                if (row.kind === 'header') {
+                  const colspan = bulkMode ? 8 : 7;
                   return (
-                    <tr key={`tasks-list-skeleton-${index}`}>
-                      <td className={`${TABLE_COLUMN_WIDTHS.icon} px-4 py-3`}>
-                        <Skeleton className="h-2 w-2 rounded-full" />
-                      </td>
-                      {bulkMode ? (
-                        <td className={`${TABLE_COLUMN_WIDTHS.select} px-2 py-3`}>
-                          <Skeleton className="h-4 w-4 rounded-sm" />
-                        </td>
-                      ) : null}
-                      <td className="px-4 py-3">
-                        <div className="min-w-0 max-w-[32rem] space-y-2">
-                          <Skeleton className="h-4 w-full max-w-[22rem]" />
-                          <Skeleton className="h-3 w-full max-w-[32rem]" />
-                        </div>
-                      </td>
-                      <td className={`${TABLE_COLUMN_WIDTHS.type} px-4 py-3`}>
-                        <Skeleton className="h-3 w-16" />
-                      </td>
-                      <td className={`${TABLE_COLUMN_WIDTHS.status} px-4 py-3`}>
-                        <Skeleton className="h-5 w-16 rounded-full" />
-                      </td>
-                      <td className={`${TABLE_COLUMN_WIDTHS.owner} px-4 py-3`}>
-                        <Skeleton className="h-3 w-16" />
-                      </td>
-                      <td className={`${TABLE_COLUMN_WIDTHS.approver} px-4 py-3`}>
-                        <Skeleton className="h-3 w-16" />
-                      </td>
-                      <td className={`${TABLE_COLUMN_WIDTHS.due} px-5 py-3`}>
-                        <div className="flex justify-start">
-                          <Skeleton className="h-3 w-14" />
-                        </div>
+                    <tr key={row.key} className="bg-gray-50/80">
+                      <td colSpan={colspan} className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                        {row.label}
                       </td>
                     </tr>
                   );
                 }
-
-                if (!task) {
-                  return null;
-                }
+                const { task } = row;
 
                 const priority = task.priority ?? 'MEDIUM';
                 const status = task.status ?? 'DRAFT';
@@ -781,9 +1360,14 @@ export default function ListView({
                 const isSelected = !!task.id && selectedIds.includes(task.id);
                 const openPriorityUpward = index >= Math.max(paginatedVisible.length - 3, 0);
                 const openOverlayUpward = index >= Math.max(paginatedVisible.length - 3, 0);
+                const colSpan = bulkMode ? 8 : 7;
+                const subtasks = task.id ? (subtasksMap.get(task.id) ?? []) : [];
+                const isExpanded = !!task.id && expandedIds.has(task.id);
                 return (
+                  <React.Fragment key={task.id}>
                   <tr
                     key={task.id}
+                    data-testid="task-row"
                     className={`cursor-pointer transition-colors duration-150 hover:bg-gray-50/50 ${task.id && recentlyUpdatedIds.includes(task.id)
                         ? 'bg-emerald-50/45'
                         : bulkMode && isSelected
@@ -796,7 +1380,7 @@ export default function ListView({
                         toggleSelection(task.id, !isSelected);
                         return;
                       }
-                      router.push(`/tasks/${task.id}`);
+                      openDrawer(task.id);
                     }}
                     onContextMenu={(e) => openRowMenu(e, task)}
                   >
@@ -871,13 +1455,38 @@ export default function ListView({
                             className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm font-medium text-gray-900 outline-none focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
                           />
                         ) : (
-                          <div className="group relative flex w-full items-center gap-2 text-left">
+                          <div
+                            data-testid="task-row-open"
+                            data-summary-id={task.id}
+                            className="group relative flex w-full items-center gap-2 text-left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (bulkMode) { task.id && toggleSelection(task.id, !isSelected); return; }
+                              if (task.id) openDrawer(task.id);
+                            }}
+                          >
                             <span
-                              data-summary-id={task.id}
-                              className="block w-full truncate text-sm font-medium leading-5 text-gray-900"
+                              className="block min-w-0 flex-1 truncate text-sm font-medium leading-5 text-gray-900"
                             >
-                              {task.summary || `Task #${task.id}`}
+                              {highlight(task.summary || `Task #${task.id}`, search)}
                             </span>
+                            {(task.subtask_count ?? 0) > 0 && (
+                              <button
+                                data-toggle-subtasks
+                                type="button"
+                                onClick={(e) => task.id && toggleSubtasks(e as unknown as MouseEvent, task.id)}
+                                className="flex-shrink-0 text-gray-300 hover:text-gray-500"
+                                title="Toggle subtasks"
+                              >
+                                {task.id && loadingSubtaskIds.has(task.id) ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : task.id && expandedIds.has(task.id) ? (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )}
                             {task.id && truncatedSummaryIds.includes(task.id) ? (
                               <div className="pointer-events-none absolute bottom-full left-0 z-20 mb-1 hidden w-[24rem] rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-700 shadow-lg group-hover:block">
                                 <div className="mb-1 font-semibold text-gray-900">{task.summary || `Task #${task.id}`}</div>
@@ -955,7 +1564,6 @@ export default function ListView({
                     </td>
                     <td
                       className={`${TABLE_COLUMN_WIDTHS.owner} align-middle px-4 py-1.5 text-xs text-gray-600`}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <div className="relative">
                         <button
@@ -969,7 +1577,7 @@ export default function ListView({
                           }}
                           className="inline-flex h-8 w-full items-center justify-start truncate rounded-md border border-transparent px-1 text-left text-xs text-gray-700 transition hover:border-[#2fc6d6]/70 hover:bg-[#2fc6d6]/5 hover:px-3"
                         >
-                          {task.owner?.username || task.owner?.email || '—'}
+                          {task.owner ? userDisplayName(task.owner) : '—'}
                         </button>
                         {openOwnerTaskId === task.id ? (
                           <div
@@ -1010,7 +1618,6 @@ export default function ListView({
                     </td>
                     <td
                       className={`${TABLE_COLUMN_WIDTHS.approver} align-middle px-4 py-1.5 text-xs text-gray-600`}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       {(() => {
                         const disabledReason = getApproverDisabledReason(task.status);
@@ -1032,7 +1639,7 @@ export default function ListView({
                                   : 'text-gray-700 hover:border-[#2fc6d6]/70 hover:bg-[#2fc6d6]/5 hover:px-3'
                                 }`}
                             >
-                              {task.current_approver?.username || task.current_approver?.email || '—'}
+                              {task.current_approver ? userDisplayName(task.current_approver) : '—'}
                             </button>
                             {!isDisabled && openApproverTaskId === task.id ? (
                               <div
@@ -1099,7 +1706,6 @@ export default function ListView({
                     </td>
                     <td
                       className={`${TABLE_COLUMN_WIDTHS.due} relative align-middle px-3 py-1.5 text-left text-xs tabular-nums text-gray-500`}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <button
                         type="button"
@@ -1162,12 +1768,50 @@ export default function ListView({
                       ) : null}
                     </td>
                   </tr>
+                  {isExpanded && subtasks.length === 0 && (
+                    <tr key={`${task.id}-empty`}>
+                      <td colSpan={colSpan} className="py-1.5 pl-14 text-xs text-gray-400">
+                        No subtasks.
+                      </td>
+                    </tr>
+                  )}
+                  {isExpanded && subtasks.map((sub) => (
+                    <tr
+                      key={`sub-${sub.id}`}
+                      className="cursor-pointer bg-gray-50/60 hover:bg-gray-100/60"
+                      onClick={() => sub.id && openDrawer(sub.id)}
+                    >
+                      <td colSpan={colSpan} className="py-1.5 pl-14 pr-4">
+                        <div className="flex items-center gap-3 text-sm text-gray-700">
+                          <span className="truncate font-medium">{sub.summary || `Task #${sub.id}`}</span>
+                          <span className="flex-shrink-0 text-xs text-gray-400">{sub.type}</span>
+                          <span className="flex-shrink-0 text-xs text-gray-400">{sub.owner ? userDisplayName(sub.owner) : 'Unassigned'}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  </React.Fragment>
                 );
               })}
+              {!loading && !error && projectId && (
+                <tr data-testid="inline-add-task-row">
+                  <td colSpan={bulkMode ? 8 : 7} className="border-t border-dashed border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setQuickCreateOpen(true)}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-xs text-gray-400 transition hover:bg-gray-50/60 hover:text-gray-600"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" />
+                      Add a task
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+          </div>
         )}
-        {!loading && !error && visible.length > LIST_PAGE_SIZE ? (
+        {!loading && !error && sorted.length > LIST_PAGE_SIZE ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-2.5 text-xs text-gray-600">
             <span className="text-gray-400">
               {pageStart}–{pageEnd} of {visible.length}
@@ -1205,6 +1849,40 @@ export default function ListView({
         tasks={tasks}
         onComplete={() => {
           void onLinearBulkSynced?.();
+        }}
+      />
+      {projectId && (
+        <QuickTaskCreate
+          projectId={projectId}
+          open={quickCreateOpen}
+          onClose={() => setQuickCreateOpen(false)}
+          onCreated={(task) => {
+            setCurrentPage(1);
+            const q = search.trim().toLowerCase();
+            const hiddenBySearch = !!q && !`${task.summary ?? ''} ${task.type ?? ''} ${task.owner?.username ?? ''}`.toLowerCase().includes(q);
+            const hiddenByStatus = !!filters.status && !(Array.isArray(filters.status) ? filters.status : [filters.status]).includes(task.status ?? '');
+            const hiddenByPriority = !!filters.priority && !(Array.isArray(filters.priority) ? filters.priority : [filters.priority]).includes(task.priority ?? '');
+            const hiddenByType = !!filters.type && !(Array.isArray(filters.type) ? filters.type : [filters.type]).includes(task.type ?? '');
+            if (hiddenBySearch || hiddenByStatus || hiddenByPriority || hiddenByType) {
+              toast('Task created but hidden by your active filters — clear them to see it.', { icon: '⚠️', duration: 5000 });
+            }
+            if (task.id) openDrawer(task.id);
+          }}
+        />
+      )}
+      <TaskDrawer
+        taskId={drawerTaskId}
+        onClose={() => openDrawer(null)}
+        onTaskUpdate={() => { onRefresh?.(); }}
+        externalRefreshKey={drawerRefreshKey}
+        taskIds={paginatedVisible.map((t) => t.id).filter(Boolean) as number[]}
+        onNavigate={(dir) => {
+          if (!drawerTaskId) return;
+          const ids = paginatedVisible.map((t) => t.id).filter(Boolean) as number[];
+          const idx = ids.indexOf(drawerTaskId);
+          if (idx === -1) return;
+          const next = dir === 'next' ? ids[idx + 1] : ids[idx - 1];
+          if (next != null) openDrawer(next);
         }}
       />
     </div>

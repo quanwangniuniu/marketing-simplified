@@ -253,7 +253,7 @@ export const BudgetAPI = {
     api.post(TASKS, data),
 
   createBudgetRequest: (data: BudgetTaskCreateRequest | BudgetRequestData | Record<string, unknown>) =>
-    api.post(TASKS, data),
+    api.post('/api/budgets/requests/', data),
 
   getBudgetTask: (taskId: number) => api.get(`${TASKS}${taskId}/`),
 
@@ -264,6 +264,9 @@ export const BudgetAPI = {
 
   updateBudgetRequest: (taskId: number, data: BudgetTaskPatchRequest | Partial<BudgetRequestData> | Record<string, unknown>) =>
     api.patch(`${TASKS}${taskId}/`, data),
+
+  patchBudgetRequest: (requestId: number | string, data: Record<string, unknown>) =>
+    api.patch(`/api/budgets/requests/${requestId}/`, data),
 
   deleteBudgetRequest: (taskId: number) => api.delete(`${TASKS}${taskId}/`),
 

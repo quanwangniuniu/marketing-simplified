@@ -53,7 +53,7 @@ export default function CreateTaskCard({
     () => (
       <div
         data-testid="create-task-card"
-        className="relative flex max-h-[calc(100vh-96px)] w-[720px] max-w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-gray-100"
+        className="relative flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-gray-100 sm:max-h-[calc(100vh-96px)] sm:w-[720px] sm:max-w-[95vw]"
       >
         <div
           className="h-[3px] w-full"
@@ -61,7 +61,7 @@ export default function CreateTaskCard({
           aria-hidden
         />
 
-        <div className="flex items-start justify-between px-7 pt-6 pb-4">
+        <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3 sm:px-7 sm:pt-6 sm:pb-4">
           <div>
             <h2 className="text-[15px] font-semibold leading-6 text-gray-900">
               {title}
@@ -80,12 +80,12 @@ export default function CreateTaskCard({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 sm:px-7 sm:pb-6">
           {children}
         </div>
 
         {footer ? (
-          <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-7 py-3">
+          <div className="flex flex-col items-stretch gap-2 border-t border-gray-100 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:px-7 [&_button]:w-full sm:[&_button]:w-auto">
             {footer}
           </div>
         ) : null}
@@ -97,7 +97,7 @@ export default function CreateTaskCard({
   if (!isOpen || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-4 py-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-2 py-2 sm:px-4 sm:py-8">
       <div
         className="fixed inset-0 bg-gray-900/40 backdrop-blur-[2px] transition-opacity"
         onClick={disableBackdropClose ? undefined : onClose}

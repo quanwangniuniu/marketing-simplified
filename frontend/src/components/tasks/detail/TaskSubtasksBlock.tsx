@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Unlink } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskData } from '@/types/task';
 import AddSubtaskDialog from './AddSubtaskDialog';
@@ -14,6 +15,7 @@ interface Props {
   readOnly: boolean;
   refreshKey: number;
   loading?: boolean;
+  onMutated?: () => void;
 }
 
 export default function TaskSubtasksBlock({
@@ -21,10 +23,12 @@ export default function TaskSubtasksBlock({
   readOnly,
   refreshKey,
   loading = false,
+  onMutated,
 }: Props) {
   const [items, setItems] = useState<TaskData[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [localKey, setLocalKey] = useState(0);
+  const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,9 +45,23 @@ export default function TaskSubtasksBlock({
     };
   }, [loading, task.id, refreshKey, localKey]);
 
+  const unlink = async (subtaskId: number) => {
+    if (!task.id) return;
+    setUnlinkingId(subtaskId);
+    try {
+      await TaskAPI.deleteSubtask(task.id, subtaskId);
+      setLocalKey((k) => k + 1);
+      onMutated?.();
+    } catch (e) {
+      toast.error((e as any)?.response?.data?.detail || 'Unlink failed');
+    } finally {
+      setUnlinkingId(null);
+    }
+  };
+
   return (
-    <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
           Subtasks
           {items && items.length > 0 && (
@@ -56,7 +74,7 @@ export default function TaskSubtasksBlock({
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           >
             <Plus className="h-3.5 w-3.5" />
             Add subtask
@@ -82,17 +100,28 @@ export default function TaskSubtasksBlock({
       {items && items.length > 0 && (
         <ul className="divide-y divide-gray-100">
           {items.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 py-2">
+            <li key={s.id} className="flex min-w-0 flex-wrap items-center gap-2 py-2 sm:flex-nowrap sm:gap-3">
               <Link
                 href={`/tasks/${s.id}`}
-                className="flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
+                className="min-w-0 flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
               >
                 {s.summary}
               </Link>
               <StatusPill status={s.status} />
-              <span className="w-24 truncate text-[11px] text-gray-500">
+              <span className="w-24 shrink-0 truncate text-[11px] text-gray-500">
                 {s.owner?.username || s.owner?.email || 'Unassigned'}
               </span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => unlink(s.id ?? 0)}
+                  disabled={unlinkingId === s.id}
+                  title="Unlink subtask"
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -104,7 +133,7 @@ export default function TaskSubtasksBlock({
           onOpenChange={setModalOpen}
           parentTaskId={task.id}
           parentProjectId={task.project?.id ?? task.project_id}
-          onAdded={() => setLocalKey((k) => k + 1)}
+          onAdded={() => { setLocalKey((k) => k + 1); onMutated?.(); }}
         />
       )}
     </section>

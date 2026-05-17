@@ -31,7 +31,9 @@ class ClientCommunicationListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         task_id = serializer.validated_data.get("task")
         task = get_object_or_404(Task, id=task_id)
-        serializer.save(task=task)
+        comm = serializer.save(task=task)
+        task.link_to_object(comm)
+        task.save()
 
 
 class ClientCommunicationDetailView(generics.RetrieveUpdateAPIView):

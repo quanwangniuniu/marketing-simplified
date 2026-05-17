@@ -7,13 +7,16 @@ import { AgentChatPage } from './chat/AgentChatPage';
 import { useAgentSidePanelStore } from '@/lib/agentSidePanelStore';
 import { ApprovalToggle } from './chat/ApprovalToggle';
 import { AgentAPI } from '@/lib/api/agentApi';
+import { AgentMessageBoardRail } from './AgentMessageBoardRail';
+import { AgentPanelToggleIcon } from './AgentPanelToggleIcon';
 
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 420;
+const MIN_WIDTH = 340;
+const MAX_WIDTH = 560;
 
 export default function AgentSidePanel() {
   const { isOpen, close } = useAgentSidePanelStore();
   const [width, setWidth] = useState(MAX_WIDTH);
+  const [messageBoardsOpen, setMessageBoardsOpen] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const isDragging = useRef(false);
@@ -69,6 +72,11 @@ export default function AgentSidePanel() {
       });
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) return;
+    setMessageBoardsOpen(true);
+  }, [isOpen]);
+
   // Sync from AgentChatPage broadcasts.
   useEffect(() => {
     const onSessionId = (e: Event) => {
@@ -95,34 +103,55 @@ export default function AgentSidePanel() {
   }, []);
 
   return (
-    <aside
-      className={`h-screen border-l border-gray-200 bg-white shrink-0 overflow-hidden flex ${
-        isOpen ? '' : 'w-0 pointer-events-none'
-      }`}
-      style={isOpen ? { width } : undefined}
-      aria-hidden={!isOpen}
-    >
-      {/* Drag handle */}
+    <>
       {isOpen && (
-        <div
-          onMouseDown={onMouseDown}
-          className="w-1 h-full cursor-ew-resize hover:bg-[#3CCED7]/40 active:bg-[#3CCED7]/60 shrink-0 transition-colors"
+        <button
+          type="button"
+          aria-label="Close AI Agent overlay"
+          className="fixed bottom-0 left-14 right-0 top-12 z-40 bg-gray-900/20 sm:hidden"
+          onClick={close}
         />
       )}
+      <aside
+        className={`fixed bottom-0 right-0 top-12 z-50 flex w-[min(420px,calc(100vw-3.5rem))] shrink-0 overflow-hidden border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 sm:static sm:z-auto sm:h-screen sm:shadow-none ${
+          isOpen ? 'translate-x-0 sm:translate-x-0' : 'translate-x-full sm:w-0 sm:translate-x-full pointer-events-none'
+        }`}
+        style={isOpen ? { width: `min(${width}px, calc(100vw - 3.5rem))` } : undefined}
+        aria-hidden={!isOpen}
+      >
+        {/* Drag handle */}
+        {isOpen && (
+          <div
+            onMouseDown={onMouseDown}
+            className="hidden w-1 h-full cursor-ew-resize hover:bg-[#3CCED7]/40 active:bg-[#3CCED7]/60 shrink-0 transition-colors sm:block"
+          />
+        )}
 
-      <div className="flex-1 h-full flex flex-col overflow-hidden">
+      <div className="flex flex-1 h-full flex-col overflow-hidden min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-[#3CCED7]" />
-            <span className="text-sm font-semibold text-gray-900">AI Agent</span>
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#3CCED7]/15 text-[#3CCED7]">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-3 py-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bot className="h-4 w-4 shrink-0 text-[#3CCED7]" />
+            <span className="truncate text-sm font-semibold text-gray-900">AI Agent</span>
+            <span className="hidden shrink-0 rounded-full bg-[#3CCED7]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#3CCED7] sm:inline">
               AI
             </span>
+            <button
+              type="button"
+              onClick={() => setMessageBoardsOpen((open) => !open)}
+              aria-expanded={messageBoardsOpen}
+              aria-label={messageBoardsOpen ? 'Hide message boards' : 'Show message boards'}
+              title={messageBoardsOpen ? 'Hide message boards' : 'Show message boards'}
+              className={`rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 ${
+                messageBoardsOpen ? 'bg-gray-100 text-gray-800' : ''
+              }`}
+            >
+              <AgentPanelToggleIcon className="h-4 w-4" />
+            </button>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-gray-500 font-medium">Approval</span>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="hidden text-[11px] font-medium text-gray-500 sm:inline">Approval</span>
               <ApprovalToggle
                 sessionId={sessionId}
                 value={approvalRequired}
@@ -143,22 +172,30 @@ export default function AgentSidePanel() {
               />
             </div>
             <button
+              type="button"
               onClick={close}
-              className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               aria-label="Close AI Agent panel"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Chat content */}
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <AgentLayoutProvider initialView="overview">
-            <AgentChatPage embeddedInFloating />
-          </AgentLayoutProvider>
+        {/* Message boards (left) + chat (right) */}
+        <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+          <AgentMessageBoardRail
+            isVisible={isOpen && messageBoardsOpen}
+            activeSessionId={sessionId}
+          />
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <AgentLayoutProvider initialView="overview">
+              <AgentChatPage embeddedInFloating />
+            </AgentLayoutProvider>
+          </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

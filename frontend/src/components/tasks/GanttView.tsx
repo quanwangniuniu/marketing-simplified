@@ -399,7 +399,7 @@ export default function GanttView({ projectId, projectContextLoading }: GanttVie
     return (
       <div className="space-y-3" data-testid="gantt-loading">
         <Skeleton className="h-10 w-full max-w-2xl" />
-        <Skeleton className="h-[420px] w-full rounded-xl" />
+        <Skeleton className="h-[320px] w-full rounded-xl sm:h-[420px]" />
       </div>
     );
   }

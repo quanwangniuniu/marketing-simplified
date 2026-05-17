@@ -15,6 +15,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import type { TaskData } from '@/types/task';
+import { userDisplayName } from '@/types/task';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
 import { TaskAPI } from '@/lib/api/taskApi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -62,7 +63,7 @@ function taskDetailUrl(taskId: number) {
 }
 
 function memberLabel(m: ProjectMemberData): string {
-  return m.user.username || m.user.email || `User ${m.user.id}`;
+  return userDisplayName(m.user);
 }
 
 type Props = {

@@ -35,12 +35,28 @@ export default function BoardToolbar({
   const { handleDragStart, handleDragEnd } = useToolDnD();
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsCompact(event.matches);
+    };
+
+    handleChange(mediaQuery);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
 
   useEffect(() => {
     if (activeTool !== "emoji" && emojiOpen) {
       setEmojiOpen(false);
     }
   }, [activeTool, emojiOpen]);
+
+  const overlaySide = isCompact ? "bottom" : "right";
 
   const toolGroups: Array<Array<{ type: ToolType; icon: React.ReactNode; label: string }>> = [
     // Select
@@ -67,14 +83,14 @@ export default function BoardToolbar({
   ];
 
   return (
-    <div className="z-20 mx-2 my-3 flex w-14 shrink-0 flex-col items-center gap-1 self-start rounded-xl bg-white p-1.5 shadow-md ring-1 ring-gray-100">
-      <div className="flex flex-col items-center">
+    <div className="z-20 mx-2 my-2 flex max-w-[calc(100vw-1rem)] shrink-0 flex-row items-center gap-1 overflow-x-auto rounded-xl bg-white p-1.5 shadow-md ring-1 ring-gray-100 sm:my-3 sm:w-14 sm:max-w-none sm:flex-col sm:self-start sm:overflow-visible">
+      <div className="flex shrink-0 flex-row items-center sm:flex-col">
         <Popover open={templatesOpen} onOpenChange={setTemplatesOpen}>
-          <Tooltip content="Templates" side="right">
+          <Tooltip content="Templates" side={overlaySide}>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="p-2 rounded text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                className="inline-flex h-10 w-10 items-center justify-center rounded text-gray-500 hover:bg-gray-50 hover:text-gray-900 sm:h-9 sm:w-9"
                 aria-label="Templates"
               >
                 <LayoutTemplate className="w-5 h-5" />
@@ -82,7 +98,7 @@ export default function BoardToolbar({
             </PopoverTrigger>
           </Tooltip>
           <PopoverContent
-            side="right"
+            side={overlaySide}
             align="start"
             className="w-56 p-2"
             onOpenAutoFocus={(e) => e.preventDefault()}
@@ -115,13 +131,13 @@ export default function BoardToolbar({
           </PopoverContent>
         </Popover>
       </div>
-      <div className="my-1 h-px w-10 bg-gray-200" />
+      <div className="mx-1 h-10 w-px shrink-0 bg-gray-200 sm:mx-0 sm:my-1 sm:h-px sm:w-10" />
       {toolGroups.map((group, groupIdx) => (
         <React.Fragment key={`group-${groupIdx}`}>
           {group.map((tool) => {
             if (tool.type === "emoji") {
               return (
-                <div key="emoji" className="flex flex-col items-center">
+                <div key="emoji" className="flex shrink-0 flex-row items-center sm:flex-col">
                   <Popover
                     open={emojiOpen}
                     onOpenChange={(open) => {
@@ -129,14 +145,14 @@ export default function BoardToolbar({
                       if (open) onToolChange("emoji");
                     }}
                   >
-                    <Tooltip content={tool.label} side="right">
+                    <Tooltip content={tool.label} side={overlaySide}>
                       <PopoverTrigger asChild>
                         <button
                           type="button"
                           draggable
                           onDragStart={(e) => handleDragStart(e, "emoji", { emoji: "😀" })}
                           onDragEnd={handleDragEnd}
-                          className={`p-2 rounded cursor-move ${
+                          className={`inline-flex h-10 w-10 cursor-move items-center justify-center rounded sm:h-9 sm:w-9 ${
                             activeTool === "emoji"
                               ? "bg-[#3CCED7]/10 text-[#3CCED7]"
                               : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
@@ -148,7 +164,7 @@ export default function BoardToolbar({
                       </PopoverTrigger>
                     </Tooltip>
                     <PopoverContent
-                      side="right"
+                      side={overlaySide}
                       align="start"
                       className="w-auto max-h-[min(420px,70vh)] overflow-y-auto p-0 border-0 shadow-lg"
                       onOpenAutoFocus={(e) => e.preventDefault()}
@@ -159,7 +175,7 @@ export default function BoardToolbar({
                           setEmojiOpen(false);
                           onToolChange("select");
                         }}
-                        width={320}
+                        width={isCompact ? 300 : 320}
                         height={400}
                       />
                     </PopoverContent>
@@ -179,8 +195,8 @@ export default function BoardToolbar({
             const lineToolIsActive = tool.type === "line" && activeTool === "line";
 
             return (
-              <div key={tool.type} className="flex flex-col items-center">
-                <Tooltip content={tool.label} side="right">
+              <div key={tool.type} className="flex shrink-0 flex-row items-center sm:flex-col">
+                <Tooltip content={tool.label} side={overlaySide}>
                   <button
                     onClick={() => {
                       if (isPrimaryClickCreate) {
@@ -194,7 +210,7 @@ export default function BoardToolbar({
                       handleDragStart(e, tool.type, tool.type === "line" ? { lineVariant } : undefined)
                     }
                     onDragEnd={handleDragEnd}
-                    className={`p-2 rounded ${
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded sm:h-9 sm:w-9 ${
                       activeTool === tool.type
                         ? "bg-[#3CCED7]/10 text-[#3CCED7]"
                         : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
@@ -207,10 +223,11 @@ export default function BoardToolbar({
                 </Tooltip>
 
                 {lineToolIsActive ? (
-                  <div className="mt-2 flex flex-col items-center gap-1 rounded-lg border bg-white p-1 shadow-sm">
+                  <div className="ml-1 flex flex-row items-center gap-1 rounded-lg border bg-white p-1 shadow-sm sm:ml-0 sm:mt-2 sm:flex-col">
                     <LineVariantButton
                       active={lineVariant === "straight_solid"}
                       label="Straight solid"
+                      tooltipSide={overlaySide}
                       onClick={() => {
                         onLineVariantChange("straight_solid");
                         onToolPrimaryAction("line", { lineVariant: "straight_solid" });
@@ -221,6 +238,7 @@ export default function BoardToolbar({
                     <LineVariantButton
                       active={lineVariant === "straight_dashed"}
                       label="Straight dashed"
+                      tooltipSide={overlaySide}
                       onClick={() => {
                         onLineVariantChange("straight_dashed");
                         onToolPrimaryAction("line", { lineVariant: "straight_dashed" });
@@ -231,6 +249,7 @@ export default function BoardToolbar({
                     <LineVariantButton
                       active={lineVariant === "straight_dotted"}
                       label="Straight dotted"
+                      tooltipSide={overlaySide}
                       onClick={() => {
                         onLineVariantChange("straight_dotted");
                         onToolPrimaryAction("line", { lineVariant: "straight_dotted" });
@@ -241,6 +260,7 @@ export default function BoardToolbar({
                     <LineVariantButton
                       active={lineVariant === "arrow_solid"}
                       label="Arrow solid"
+                      tooltipSide={overlaySide}
                       onClick={() => {
                         onLineVariantChange("arrow_solid");
                         onToolPrimaryAction("line", { lineVariant: "arrow_solid" });
@@ -251,6 +271,7 @@ export default function BoardToolbar({
                     <LineVariantButton
                       active={lineVariant === "arrow_dashed"}
                       label="Arrow dashed"
+                      tooltipSide={overlaySide}
                       onClick={() => {
                         onLineVariantChange("arrow_dashed");
                         onToolPrimaryAction("line", { lineVariant: "arrow_dashed" });
@@ -265,7 +286,7 @@ export default function BoardToolbar({
           })}
 
           {groupIdx < toolGroups.length - 1 ? (
-            <div className="my-1 h-px w-10 bg-gray-200" />
+            <div className="mx-1 h-10 w-px shrink-0 bg-gray-200 sm:mx-0 sm:my-1 sm:h-px sm:w-10" />
           ) : null}
         </React.Fragment>
       ))}
@@ -276,16 +297,18 @@ export default function BoardToolbar({
 function LineVariantButton({
   active,
   label,
+  tooltipSide,
   onClick,
   children,
 }: {
   active: boolean;
   label: string;
+  tooltipSide: "bottom" | "right";
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip content={label} side="right">
+    <Tooltip content={label} side={tooltipSide}>
       <button
         type="button"
         onClick={(e) => {
@@ -293,7 +316,7 @@ function LineVariantButton({
           e.stopPropagation();
           onClick();
         }}
-        className={`w-12 rounded px-1 py-1 text-[10px] leading-none transition ${
+        className={`h-8 w-12 rounded px-1 py-1 text-[10px] leading-none transition ${
           active ? "bg-[#3CCED7]/10 text-[#3CCED7]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`}
         aria-pressed={active}

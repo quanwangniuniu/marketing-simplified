@@ -71,8 +71,8 @@ export default function ParticipantsPanel({
 
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex flex-wrap items-center gap-2">
           <Users className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
             Participants
@@ -86,7 +86,7 @@ export default function ParticipantsPanel({
             type="button"
             onClick={() => setDialogOpen(true)}
             aria-label="Add participant"
-            className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300"
+            className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-md bg-white px-2 text-xs font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 sm:h-7 sm:w-auto"
           >
             <Plus className="h-3 w-3" aria-hidden="true" />
             <span>Add</span>

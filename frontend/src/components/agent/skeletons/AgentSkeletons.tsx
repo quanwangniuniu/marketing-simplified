@@ -4,44 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BarChart3 } from "lucide-react"
 
-export function AgentDecisionListSkeleton({
-  rows = 4,
-  compact = false,
-}: {
-  rows?: number
-  compact?: boolean
-}) {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: rows }).map((_, index) => (
-        <div
-          key={`agent-decision-skeleton-${index}`}
-          className={`rounded-lg bg-muted/50 ${compact ? "px-4 py-4" : "px-4 py-3"}`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-3 w-10" />
-                <Skeleton className={`h-4 max-w-full ${compact ? "w-32" : "w-56"}`} />
-              </div>
-              {compact && (
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-3 w-px" />
-                  <Skeleton className="h-3 w-10" />
-                </div>
-              )}
-            </div>
-            <div className={`flex items-center gap-1.5 shrink-0 ${compact ? "pt-0" : "pt-0.5"}`}>
-              <Skeleton className="h-5 w-16 rounded-full" />
-              <Skeleton className={`${compact ? "h-6 w-24" : "h-5 w-14"} rounded-full`} />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function AgentAlertListSkeleton({
   rows = 4,
   compact = false,
@@ -144,37 +106,6 @@ export function AgentChartCardSkeleton({
   )
 }
 
-export function AgentDecisionStatusSkeleton() {
-  return (
-    <Card className="bg-card border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-card-foreground">Decision Status</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center gap-4">
-          <div className="relative flex h-[140px] w-[140px] items-center justify-center">
-            <Skeleton className="h-[140px] w-[140px] rounded-full" />
-            <div className="absolute flex h-[70px] w-[70px] flex-col items-center justify-center rounded-full bg-card">
-              <Skeleton className="h-8 w-8" />
-              <Skeleton className="mt-2 h-3 w-8" />
-            </div>
-          </div>
-          <div className="min-w-[116px] flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-2.5 w-2.5 rounded-full" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-            <Skeleton className="h-px w-full" />
-            <div className="pt-1">
-              <Skeleton className="h-4 w-16" />
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function AgentCampaignPerformanceSkeleton({ rows = 10 }: { rows?: number }) {
   const widths = ["w-[92%]", "w-[92%]", "w-[91%]", "w-[90%]", "w-[89%]", "w-[88%]", "w-[87%]", "w-[86%]", "w-[85%]", "w-[85%]"]
 
@@ -243,118 +174,6 @@ export function AgentSpreadsheetTableSkeleton({ rows = 6 }: { rows?: number }) {
         <Skeleton className="h-4 w-10 justify-self-end" />
         <Skeleton className="h-4 w-12 justify-self-end" />
       </div>
-    </div>
-  )
-}
-
-export function AgentDecisionDetailSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Card className="bg-card border-border">
-        <CardContent className="py-3 px-4">
-          <div className="flex items-center justify-between mb-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-5 w-16 rounded-full" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton
-                key={`agent-validation-skeleton-${index}`}
-                className={`h-6 rounded-full ${index % 3 === 0 ? "w-28" : index % 3 === 1 ? "w-24" : "w-32"}`}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <Skeleton className="h-5 w-32" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <div className="flex gap-2">
-              <Skeleton className="h-9 w-16" />
-              <Skeleton className="h-9 w-20" />
-              <Skeleton className="h-9 w-16" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <Skeleton className="h-5 w-32" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-28 w-full" />
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-28" />
-            <Skeleton className="h-7 w-24" />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {Array.from({ length: 2 }).map((_, index) => (
-            <div key={`agent-signal-row-${index}`} className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
-              <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-6 w-6 rounded-md" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <Skeleton className="h-5 w-24" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-28 w-full" />
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-7 w-24" />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {Array.from({ length: 2 }).map((_, index) => (
-            <div key={`agent-option-row-${index}`} className="rounded-lg border border-border p-4">
-              <div className="flex items-start gap-3">
-                <Skeleton className="mt-0.5 h-4 w-4 rounded-full shrink-0" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-5 w-16 rounded-full" />
-                    <Skeleton className="ml-auto h-5 w-5 rounded-md" />
-                  </div>
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-px w-full" />
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-3 w-3" />
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   )
 }

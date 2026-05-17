@@ -4,7 +4,7 @@ import { test as setup, expect } from '@playwright/test';
 
 const AUTH_DIR = path.join(__dirname, '.auth');
 const AUTH_FILE = path.join(AUTH_DIR, 'user.json');
-const POST_LOGIN_ROUTE_PATTERN = /^\/(tasks|campaigns)(\/|$)/i;
+const POST_LOGIN_ROUTE_PATTERN = /^\/(?!login)(.*)/i;
 
 const TEST_EMAIL = process.env.DEV_USER_EMAIL || 'devuser@example.com';
 const TEST_PASSWORD = process.env.DEV_USER_PASSWORD || 'password123!';
@@ -25,7 +25,7 @@ setup('authenticate', async ({ page }) => {
   await expect(page.getByText('Preparing your workspace')).not.toBeVisible({ timeout: 30_000 });
 
   const currentUrl = new URL(page.url());
-  if (!POST_LOGIN_ROUTE_PATTERN.test(currentUrl.pathname)) {
+  if (currentUrl.pathname.includes('/login')) {
     throw new Error(
       `Authentication setup expected a protected landing route after sign-in, but reached ${page.url()}.`,
     );

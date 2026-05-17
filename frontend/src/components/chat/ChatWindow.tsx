@@ -229,18 +229,19 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
     : (otherParticipant?.user?.username || 'Chat');
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Chat Header */}
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3 flex-shrink-0 bg-white">
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
         <button
           onClick={onBack}
-          className="hover:bg-gray-100 rounded p-1 transition-colors"
+          className="rounded p-1 transition-colors hover:bg-gray-100"
           aria-label="Back to chat list"
+          title="Back to chat list"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
+          <ArrowLeft className="h-5 w-5 text-gray-600" />
         </button>
         
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="font-semibold text-gray-900 truncate">
               {chatName}
@@ -256,28 +257,36 @@ export default function ChatWindow({ chat, onBack, roleByUserId }: ChatWindowPro
           {!isSelectMode ? (
             <button
               onClick={toggleSelectMode}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:px-2.5"
+              aria-label="Select messages"
+              title="Select messages"
             >
               <CheckSquare className="w-3.5 h-3.5" />
-              Select
+              <span className="hidden min-[380px]:inline">Select</span>
             </button>
           ) : (
             <>
-              <span className="text-xs text-gray-600">{selectedMessageIds.length} selected</span>
+              <span className="hidden text-xs text-gray-600 min-[380px]:inline">
+                {selectedMessageIds.length} selected
+              </span>
               <button
                 onClick={handleOpenForwardDialog}
                 disabled={selectedMessageIds.length === 0 || isForwarding}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-[#3CCED7] text-white rounded-md hover:bg-[#2AB5BD] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 rounded-md bg-[#3CCED7] px-2 py-1.5 text-xs font-medium text-white hover:bg-[#2AB5BD] disabled:cursor-not-allowed disabled:opacity-50 sm:px-2.5"
+                aria-label="Forward selected messages"
+                title="Forward selected messages"
               >
                 <Forward className="w-3.5 h-3.5" />
-                Forward
+                <span className="hidden min-[380px]:inline">Forward</span>
               </button>
               <button
                 onClick={toggleSelectMode}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:px-2.5"
+                aria-label="Cancel message selection"
+                title="Cancel message selection"
               >
                 <X className="w-3.5 h-3.5" />
-                Cancel
+                <span className="hidden min-[380px]:inline">Cancel</span>
               </button>
             </>
           )}

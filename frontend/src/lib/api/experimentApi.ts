@@ -103,7 +103,7 @@ export const ExperimentAPI = {
   getExperiment: (id: number) =>
     api.get<Experiment>(`/api/experiment/experiments/${id}/`),
 
-  updateExperiment: (id: number, data: ExperimentUpdateRequest) =>
+  updateExperiment: (id: string | number, data: ExperimentUpdateRequest) =>
     api.patch<Experiment>(`/api/experiment/experiments/${id}/`, data),
 
   // Progress update APIs

@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 from .models import (
     AgentSession, AgentMessage, AgentWorkflowRun, ImportedCSVFile,
@@ -17,14 +18,28 @@ class AgentMessageSerializer(serializers.ModelSerializer):
 
 class AgentSessionListSerializer(serializers.ModelSerializer):
     message_count = serializers.SerializerMethodField()
+    has_unread = serializers.SerializerMethodField()
 
     class Meta:
         model = AgentSession
-        fields = ['id', 'title', 'status', 'approval_required', 'created_at', 'message_count']
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id', 'title', 'status', 'approval_required', 'is_pinned', 'last_read_at',
+            'created_at', 'message_count', 'has_unread',
+        ]
+        read_only_fields = ['id', 'created_at', 'has_unread', 'is_pinned', 'last_read_at']
 
     def get_message_count(self, obj):
-        return obj.messages.count()
+        return obj.messages.filter(is_deleted=False).count()
+
+    def get_has_unread(self, obj):
+        """True when an assistant message exists after last_read_at (or last_read_at unset)."""
+        last_assistant = getattr(obj, '_last_assistant_at', None)
+        if last_assistant is None:
+            return False
+        lr = obj.last_read_at
+        if lr is None:
+            return True
+        return last_assistant > lr
 
 
 class AgentSessionDetailSerializer(serializers.ModelSerializer):
@@ -35,10 +50,21 @@ class AgentSessionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentSession
         fields = [
-            'id', 'title', 'status', 'approval_required',
+            'id', 'title', 'status', 'approval_required', 'is_pinned', 'last_read_at',
             'created_at', 'updated_at', 'messages', 'follow_up_available', 'follow_up_started',
         ]
-        read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_status(self, value):
+        allowed = {c[0] for c in AgentSession.STATUS_CHOICES}
+        if value not in allowed:
+            raise serializers.ValidationError('Invalid status.')
+        return value
+
+    def validate_last_read_at(self, value):
+        if value is not None and value > timezone.now():
+            raise serializers.ValidationError('last_read_at cannot be in the future.')
+        return value
 
     def get_follow_up_available(self, obj):
         return obj.workflow_runs.filter(
@@ -106,7 +132,7 @@ class ChatInputSerializer(serializers.Serializer):
     file_id = serializers.UUIDField(required=False, allow_null=True)
     action = serializers.ChoiceField(
         choices=[
-            'analyze', 'confirm_decision', 'create_tasks', 'generate_miro',
+            'analyze', 'create_tasks', 'generate_miro',
             'distribute_message', 'start_follow_up', 'cancel_follow_up',
             'confirm_columns',
             'resolve_external_approval',

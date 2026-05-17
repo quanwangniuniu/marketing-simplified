@@ -20,7 +20,7 @@ export default function DecisionsCardHeader({
   onCreate,
 }: Props) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+    <div className="flex flex-col items-stretch gap-3 border-b border-gray-100 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
       <div className="min-w-0">
         <h2 className="text-[15px] font-semibold text-gray-900">
           {projectName || 'No project selected'}
@@ -29,7 +29,7 @@ export default function DecisionsCardHeader({
           {decisionCount} decision{decisionCount === 1 ? '' : 's'}
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {role && (
           <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-700">
             {role}
@@ -40,7 +40,7 @@ export default function DecisionsCardHeader({
             type="button"
             onClick={onCreate}
             disabled={creating}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
           >
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePenLine className="h-4 w-4" />}
             {creating ? 'Creating…' : 'Create Decision'}

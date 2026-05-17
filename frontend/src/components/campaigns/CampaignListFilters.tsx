@@ -36,15 +36,15 @@ export default function CampaignListFilters({
   }, [local, onSearchChange]);
 
   return (
-    <div className="mb-3 flex items-center gap-3">
-      <div className="relative flex-1">
+    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="relative w-full sm:flex-1">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
           value={local}
           onChange={(e) => setLocal(e.target.value)}
-          placeholder="Search campaigns by name or hypothesis…"
-          className="w-full rounded-md border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+          placeholder="Search campaigns by name or hypothesis"
+          className="w-full truncate rounded-md border border-gray-200 bg-white py-2 pl-9 pr-2 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
         />
         {local && (
           <button
@@ -61,7 +61,7 @@ export default function CampaignListFilters({
       <select
         value={statusFilter}
         onChange={(e) => onStatusChange(e.target.value)}
-        className="w-44 rounded-md border border-gray-200 bg-white py-2 px-3 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20"
+        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/20 sm:w-44"
       >
         {STATUS_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>

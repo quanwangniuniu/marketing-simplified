@@ -36,7 +36,7 @@ export function AgendaSection({
   void isDragging;
   return (
     <section className="overflow-visible py-1">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xl font-bold text-slate-900">Agenda</h3>
         <Button type="button" size="sm" variant="ghost" onClick={onUseTemplate} className="text-slate-700">
           <Sparkles className="h-3.5 w-3.5" />

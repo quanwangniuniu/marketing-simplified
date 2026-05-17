@@ -28,15 +28,18 @@ class BudgetRequestPermission(permissions.BasePermission):
         
         # Get organization from user
         organization = getattr(request.user, 'organization', None)
-        
+
+        if organization is None:
+            return request.user.is_authenticated
+
         # Check RBAC permissions based on action type or HTTP method
         action = getattr(view, 'action', None)
-        
+
         if action == 'create' or (action is None and request.method == 'POST'):
             return has_rbac_permission(request.user, 'BUDGET_REQUEST', 'EDIT', organization, team_id)
         elif action == 'list' or (action is None and request.method == 'GET'):
             return has_rbac_permission(request.user, 'BUDGET_REQUEST', 'VIEW', organization, team_id)
-        
+
         return True
     
     def has_object_permission(self, request, view, obj):
@@ -166,7 +169,11 @@ class BudgetPoolPermission(permissions.BasePermission):
         
         # Get organization from user
         organization = getattr(request.user, 'organization', None)
-        
+
+        # If no organization is configured, fall back to authenticated-only access
+        if organization is None:
+            return request.user.is_authenticated
+
         # Check RBAC permissions based on action type
         # Handle views that don't have action attribute (like UpdateAPIView)
         if hasattr(view, 'action'):
@@ -182,7 +189,7 @@ class BudgetPoolPermission(permissions.BasePermission):
                 return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
             elif request.method in ['PUT', 'PATCH']:
                 return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
-        
+
         return True
     
     def has_object_permission(self, request, view, obj):
@@ -190,26 +197,30 @@ class BudgetPoolPermission(permissions.BasePermission):
 
         if request is None or view is None or obj is None:
             return False
-        
+
         # Super admin bypass all object permission checks
         if request.user.is_superuser:
             return True
-            
+
         # Get team_id if user has team
         team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
-        
+
         # Get organization from the object
         organization = None
         if hasattr(obj, 'project') and hasattr(obj.project, 'organization'):
             organization = obj.project.organization
-        
+
+        # If no organization configured, fall back to authenticated-only access
+        if organization is None:
+            return request.user.is_authenticated
+
         # Check RBAC permissions based on action type with organization check
         if view.action == 'retrieve':
             return has_rbac_permission(request.user, 'BUDGET_POOL', 'VIEW', organization, team_id)
-        elif view.action in ['update', 'partial_update']:
+        elif view.action in ['update', 'partial_update', 'destroy']:
             return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
-        
-        return False
+
+        return has_rbac_permission(request.user, 'BUDGET_POOL', 'EDIT', organization, team_id)
 
 
 class EscalationPermission(permissions.BasePermission):

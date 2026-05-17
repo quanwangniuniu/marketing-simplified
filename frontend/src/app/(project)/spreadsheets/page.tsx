@@ -23,10 +23,10 @@ function SpreadsheetCardSkeleton() {
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
       <div className="flex items-start gap-3">
-        <Skeleton className="h-10 w-10 rounded-lg" />
+        <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-5 w-2/3 max-w-[10rem]" />
+          <Skeleton className="h-3 w-1/2 max-w-[7rem]" />
         </div>
       </div>
     </div>
@@ -149,7 +149,7 @@ export default function SpreadsheetsV2ListPage() {
   return (
     <ProtectedRoute renderChildrenWhileLoading>
       <DashboardLayout alerts={[]}>
-      <div className="mx-auto w-full max-w-7xl px-6 py-8">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <SpreadsheetsHeader
           projectName={project?.name ?? activeProject?.name}
           onCreate={() => setCreateOpen(true)}

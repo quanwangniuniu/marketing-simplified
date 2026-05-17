@@ -40,8 +40,18 @@ class TestMeetingOriginOnCreate(TestCase):
             password="password",
             username="o_user",
         )
+        self.approver = CustomUser.objects.create_user(
+            email="o_approver@example.com",
+            password="password",
+            username="o_approver",
+        )
         ProjectMember.objects.create(
             user=self.user,
+            project=self.project,
+            is_active=True,
+        )
+        ProjectMember.objects.create(
+            user=self.approver,
             project=self.project,
             is_active=True,
         )
@@ -69,6 +79,7 @@ class TestMeetingOriginOnCreate(TestCase):
                 "type": "asset",
                 "project_id": self.project.id,
                 "origin_meeting_id": self.meeting.id,
+                "current_approver_id": self.approver.id,
             },
             format="json",
         )
@@ -93,6 +104,7 @@ class TestMeetingOriginOnCreate(TestCase):
                 "type": "asset",
                 "project_id": self.project.id,
                 "origin_meeting_id": self.meeting.id,
+                "current_approver_id": self.approver.id,
             },
             format="json",
         )
@@ -179,6 +191,7 @@ class TestMeetingOriginOnCreate(TestCase):
                 "type": "asset",
                 "project_id": self.project.id,
                 "origin_meeting_id": 999_999_991,
+                "current_approver_id": self.approver.id,
             },
             format="json",
         )
@@ -232,6 +245,7 @@ class TestMeetingOriginOnCreate(TestCase):
                 "type": "asset",
                 "project_id": self.project.id,
                 "origin_meeting_id": self.meeting.id,
+                "current_approver_id": self.approver.id,
             },
             format="json",
         )

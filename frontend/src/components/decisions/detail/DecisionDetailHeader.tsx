@@ -54,9 +54,9 @@ export default function DecisionDetailHeader({
   };
 
   return (
-    <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-2">
-        <nav className="flex items-center gap-1.5 text-xs text-gray-500">
+    <section className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 sm:px-6">
+        <nav className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500">
           <Link
             href={backHref}
             aria-label="Back to decisions"
@@ -65,7 +65,7 @@ export default function DecisionDetailHeader({
           >
             <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
           </Link>
-          <span className="uppercase tracking-wider">{projectName || 'Project'}</span>
+          <span className="truncate uppercase tracking-wider">{projectName || 'Project'}</span>
           {projectSeq != null && (
             <>
               <span className="text-gray-300">/</span>
@@ -76,7 +76,7 @@ export default function DecisionDetailHeader({
         {saving && <span className="text-[11px] text-gray-400">Saving…</span>}
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-3 py-4 sm:px-6 sm:py-5">
         {editable ? (
           <input
             type="text"
@@ -85,10 +85,10 @@ export default function DecisionDetailHeader({
             onBlur={handleBlur}
             placeholder="Untitled decision"
             aria-label="Decision title"
-            className="w-full border-0 border-b-2 border-transparent bg-transparent py-1 text-[22px] font-semibold text-gray-900 placeholder:text-gray-300 outline-none transition focus:border-[#3CCED7]"
+            className="w-full border-0 border-b-2 border-transparent bg-transparent py-1 text-xl font-semibold text-gray-900 placeholder:text-gray-300 outline-none transition focus:border-[#3CCED7] sm:text-[22px]"
           />
         ) : (
-          <h1 className="text-[22px] font-semibold text-gray-900">
+          <h1 className="break-words text-xl font-semibold text-gray-900 sm:text-[22px]">
             {title?.trim() || <span className="text-gray-300">Untitled decision</span>}
           </h1>
         )}
@@ -105,7 +105,7 @@ export default function DecisionDetailHeader({
       </div>
 
       {actionBar && (
-        <div className="border-t border-gray-100 bg-gray-50/40 px-6 py-3">{actionBar}</div>
+        <div className="border-t border-gray-100 bg-gray-50/40 px-3 py-3 sm:px-6">{actionBar}</div>
       )}
     </section>
   );

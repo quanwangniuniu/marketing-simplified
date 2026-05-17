@@ -46,9 +46,9 @@ export default function TaskDescriptionBlock({
   };
 
   return (
-    <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+    <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
+        <h2 data-testid="task-description-heading" className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
           Description
         </h2>
         {saving && !loading && <span className="text-[11px] text-gray-400">Saving…</span>}

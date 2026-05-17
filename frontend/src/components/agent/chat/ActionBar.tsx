@@ -1,34 +1,20 @@
 "use client"
 
-import { FileCheck, UploadCloud } from "lucide-react"
+import { UploadCloud } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { WorkflowStepState } from "@/types/agent"
 
 interface ActionBarProps {
   stepState: WorkflowStepState
-  onAction: (action: string) => void
   onReupload?: () => void
   disabled?: boolean
 }
 
-export function ActionBar({ stepState, onAction, onReupload, disabled }: ActionBarProps) {
+export function ActionBar({ stepState, onReupload, disabled }: ActionBarProps) {
   if (!stepState.analysisComplete) return null
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-muted/50">
-      {!stepState.decisionCreated && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5 text-xs"
-          disabled={disabled}
-          onClick={() => onAction("confirm_decision")}
-        >
-          <FileCheck className="h-3.5 w-3.5" />
-          Create Decision
-        </Button>
-      )}
-
       <Button
         size="sm"
         variant="ghost"

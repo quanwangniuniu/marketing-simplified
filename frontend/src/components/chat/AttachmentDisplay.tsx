@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, ExternalLink, X, Play, FileText, Image as ImageIcon, Film } from 'lucide-react';
+import { Download, ExternalLink, X, FileText, Image as ImageIcon, Film } from 'lucide-react';
 import type { MessageAttachment } from '@/types/chat';
 
 interface AttachmentDisplayProps {
@@ -73,7 +73,7 @@ export default function AttachmentDisplay({ attachments, isOwnMessage = false }:
         return (
           <div
             key={attachment.id}
-            className={`flex items-center gap-3 p-3 rounded-lg border ${
+            className={`flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border p-3 sm:gap-3 ${
               isOwnMessage 
                 ? 'bg-[#3CCED7] border-[#3CCED7]' 
                 : 'bg-gray-100 border-gray-200'
@@ -100,7 +100,7 @@ export default function AttachmentDisplay({ attachments, isOwnMessage = false }:
             </div>
             <button
               onClick={() => handleDownload(attachment)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`shrink-0 rounded-lg p-2 transition-colors ${
                 isOwnMessage 
                   ? 'hover:bg-[#3CCED7] text-white' 
                   : 'hover:bg-gray-200 text-gray-600'
@@ -116,7 +116,7 @@ export default function AttachmentDisplay({ attachments, isOwnMessage = false }:
 
   return (
     <>
-      <div className="flex flex-col gap-2 mt-2">
+      <div className="mt-2 flex w-full min-w-0 max-w-full flex-col gap-2">
         {attachments.map(renderAttachment)}
       </div>
 
@@ -174,4 +174,3 @@ export function AttachmentPreview({ attachments }: { attachments?: MessageAttach
     </span>
   );
 }
-

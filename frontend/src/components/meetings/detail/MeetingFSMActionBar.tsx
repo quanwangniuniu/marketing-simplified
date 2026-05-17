@@ -89,8 +89,8 @@ export default function MeetingFSMActionBar({
             title={blockReason || undefined}
             className={
               primary
-                ? 'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50'
+                ? 'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto'
+                : 'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto'
             }
           >
             {isBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}

@@ -116,6 +116,7 @@ async function createAssetTask(baseUrl, token, projectId) {
       description: 'Created by Lighthouse CI (lhci-seed-spreadsheet-task.cjs)',
       type: 'asset',
       project_id: Number(projectId),
+      create_as_draft: true,
     }),
   });
   if (!res.ok) {

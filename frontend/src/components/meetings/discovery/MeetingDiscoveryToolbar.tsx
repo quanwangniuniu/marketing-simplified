@@ -80,7 +80,7 @@ function MeetingToolbarSearch({
   return (
     <div
       className={cn(
-        'relative w-full max-w-md',
+        'relative w-full sm:max-w-md',
         disabled && 'pointer-events-none opacity-60',
       )}
     >
@@ -159,7 +159,7 @@ export function MeetingDiscoveryToolbar({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex w-full flex-wrap items-center gap-3">
       <MeetingToolbarSearch
         value={qValue}
         onDebouncedChange={onQDebouncedChange}
@@ -180,7 +180,7 @@ export function MeetingDiscoveryToolbar({
             data-testid="meetings-filter-trigger"
             disabled={panelProps.disabled}
             className={cn(
-              'inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50',
+              'inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:w-auto',
             )}
             aria-expanded={filterOpen}
             aria-haspopup="true"
@@ -201,7 +201,7 @@ export function MeetingDiscoveryToolbar({
           sideOffset={8}
           collisionPadding={16}
           className={cn(
-            'w-[min(100vw-2rem,720px)] max-h-[min(85vh,680px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl',
+            'max-h-[min(85vh,680px)] w-[min(100vw-2rem,720px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5',
           )}
           onInteractOutside={(e) => {
             const el = e.target as HTMLElement;

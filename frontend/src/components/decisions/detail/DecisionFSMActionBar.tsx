@@ -21,11 +21,11 @@ interface Props {
 }
 
 const primaryCls =
-  'inline-flex h-9 items-center justify-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex h-9 w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto';
 const ghostCls =
-  'inline-flex h-9 items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex h-9 w-full items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto';
 const dangerCls =
-  'inline-flex h-9 items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex h-9 w-full items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto';
 
 export default function DecisionFSMActionBar({
   status,
@@ -61,7 +61,7 @@ export default function DecisionFSMActionBar({
   if (!anyAction) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
       {showDelete && (
         <button
           type="button"

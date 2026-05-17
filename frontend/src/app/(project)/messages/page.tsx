@@ -18,7 +18,7 @@ function MessagesV2Content() {
 
   return (
     <DashboardLayout hideRightPanel>
-      <div className="-m-5 h-[calc(100vh-3rem)] flex flex-col bg-white">
+      <div className="-m-1 flex h-[calc(100vh-3rem)] flex-col bg-white sm:-m-5">
         <MessagePageContent />
       </div>
     </DashboardLayout>

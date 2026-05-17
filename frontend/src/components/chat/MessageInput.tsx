@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
-import { Send, Smile, Paperclip, X, Image, FileText, Film, Loader2 } from 'lucide-react';
+import { Send, Smile, Paperclip, X, Image as ImageIcon, FileText, Film, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import toast from 'react-hot-toast';
 import type { MessageInputProps, MessageAttachment } from '@/types/chat';
@@ -11,6 +11,8 @@ import {
   getFileTypeFromMime,
   formatFileSize,
 } from '@/lib/api/attachmentApi';
+
+const MOBILE_QUERY = '(max-width: 640px)';
 
 // Dynamically import emoji picker to avoid SSR issues
 const EmojiPicker = dynamic(
@@ -48,11 +50,20 @@ export default function MessageInput({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY);
+    const updateIsMobile = () => setIsMobile(media.matches);
+    updateIsMobile();
+    media.addEventListener('change', updateIsMobile);
+    return () => media.removeEventListener('change', updateIsMobile);
+  }, []);
 
   // Close emoji picker when clicking outside
   useEffect(() => {
@@ -250,7 +261,7 @@ export default function MessageInput({
     const type = getFileTypeFromMime(file.type);
     switch (type) {
       case 'image':
-        return <Image className="w-4 h-4" />;
+        return <ImageIcon className="w-4 h-4" />;
       case 'video':
         return <Film className="w-4 h-4" />;
       default:
@@ -262,9 +273,12 @@ export default function MessageInput({
   const hasAttachments = pendingAttachments.length > 0;
   const canSend = (hasContent || pendingAttachments.some(a => a.uploaded)) && 
                   !pendingAttachments.some(a => a.uploading);
+  const inputPlaceholder = hasAttachments
+    ? (isMobile ? 'Add...' : 'Add a message...')
+    : (isMobile ? 'Message...' : 'Type a message...');
 
   return (
-    <div className="px-4 py-3 border-t border-gray-200 bg-white relative">
+    <div className="relative border-t border-gray-200 bg-white px-3 py-2 sm:px-4 sm:py-3">
       {/* Attachment Previews */}
       {hasAttachments && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -329,7 +343,7 @@ export default function MessageInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-1.5 sm:gap-2">
         {/* Attachment Button */}
         <button
           onClick={handleAttachmentClick}
@@ -373,10 +387,10 @@ export default function MessageInput({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={hasAttachments ? "Add a message..." : "Type a message..."}
+          placeholder={inputPlaceholder}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3CCED7] focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed text-sm max-h-24 overflow-y-auto"
+          className="min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#3CCED7] disabled:cursor-not-allowed disabled:bg-gray-100 sm:px-3"
           style={{
             minHeight: '38px',
             maxHeight: '96px',
@@ -413,7 +427,7 @@ export default function MessageInput({
       )}
 
       {/* Helper Text */}
-      <p className="text-xs text-gray-500 mt-2">
+      <p className="mt-2 hidden text-xs text-gray-500 sm:block">
         Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-gray-100 rounded text-gray-700">Shift+Enter</kbd> for new line
       </p>
     </div>

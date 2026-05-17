@@ -155,22 +155,22 @@ function FilterRowChrome({
   removeLabel: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-100 bg-slate-50/70 px-2 py-2">
-      <span className="w-[7.5rem] shrink-0 text-xs font-semibold text-slate-800">
+    <div className="flex flex-col gap-2 rounded-md border border-slate-100 bg-slate-50/70 px-2 py-2 sm:flex-row sm:items-center">
+      <span className="w-full shrink-0 text-xs font-semibold text-slate-800 sm:w-[7.5rem]">
         {label}
       </span>
       {operator != null ? (
         typeof operator === 'string' || typeof operator === 'number' ? (
           <span className="shrink-0 text-xs text-slate-600">{operator}</span>
         ) : (
-          <div className="shrink-0">{operator}</div>
+          <div className="w-full shrink-0 sm:w-auto">{operator}</div>
         )
       ) : null}
       <div className="min-w-0 flex-1">{children}</div>
       <button
         type="button"
         onClick={onRemove}
-        className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+        className="self-end shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 sm:self-auto"
         aria-label={removeLabel}
       >
         <X className="h-4 w-4" aria-hidden />
@@ -182,7 +182,7 @@ function FilterRowChrome({
 const compactControl =
   'h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 shadow-sm focus:border-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50';
 
-const compactDate = `${compactControl} max-w-[11rem]`;
+const compactDate = `${compactControl} max-w-none sm:max-w-[11rem]`;
 
 export function MeetingFiltersPanel({
   tagSlug,
@@ -411,7 +411,7 @@ export function MeetingFiltersPanel({
               label="Participants"
               operator={
                 <select
-                  className={cn(compactControl, 'w-[7.25rem] shrink-0')}
+                  className={cn(compactControl, 'w-full shrink-0 sm:w-[7.25rem]')}
                   value={participantSingleMode}
                   onChange={(e) => {
                     const next = e.target.value as 'include' | 'exclude';
@@ -513,7 +513,7 @@ export function MeetingFiltersPanel({
                 removeKind('date_range');
               }}
             >
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="date"
                   value={draft.dateFrom ?? ''}

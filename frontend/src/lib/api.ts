@@ -154,11 +154,16 @@ export const authAPI = {
   },
 
   // Profile update endpoint (handles both JSON and FormData for avatar uploads)
-  updateProfile: async (profileData: { username?: string; first_name?: string; last_name?: string } | FormData): Promise<User> => {
-    const config = profileData instanceof FormData 
+  updateProfile: async (profileData: { username?: string; first_name?: string; last_name?: string; job?: string; department?: string; location?: string } | FormData): Promise<User> => {
+    const config = profileData instanceof FormData
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : {};
     const response = await api.patch('/auth/me/', profileData, config);
+    return response.data;
+  },
+
+  getMyProjects: async (): Promise<{ project_id: number; project_name: string; role: string }[]> => {
+    const response = await api.get('/auth/me/projects/');
     return response.data;
   },
 

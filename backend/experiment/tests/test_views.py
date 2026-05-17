@@ -77,7 +77,7 @@ class ExperimentListCreateViewTest(TestCase):
         self.assertEqual(response.data['name'], self.experiment_data['name'])
         self.assertEqual(response.data['hypothesis'], self.experiment_data['hypothesis'])
         self.assertEqual(response.data['status'], Experiment.ExperimentStatus.DRAFT)
-        self.assertEqual(response.data['created_by'], self.user.id)
+        self.assertEqual(response.data['created_by'], self.user.get_full_name().strip() or self.user.username or self.user.email)
         
         # Verify experiment was created in database
         experiment = Experiment.objects.get(id=response.data['id'])

@@ -4,13 +4,16 @@
 
 export interface AgentSession {
   id: string;
-  project_id: number;
-  created_by: number;
+  project_id?: number;
+  created_by?: number;
   title?: string | null;
   status?: string;
   approval_required?: boolean;
+  is_pinned?: boolean;
+  last_read_at?: string | null;
+  has_unread?: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
   message_count?: number;
 }
 
@@ -23,6 +26,10 @@ export interface AgentSessionDetail extends AgentSession {
 export interface UpdateSessionRequest {
   title?: string;
   approval_required?: boolean;
+  status?: string;
+  is_pinned?: boolean;
+  /** ISO datetime string or null to clear (mark unread when assistant messages exist). */
+  last_read_at?: string | null;
 }
 
 export interface CreateSessionRequest {
@@ -52,7 +59,6 @@ export interface AgentMessageData {
   board_id?: string;
   event_type?: string;
   status?: string;
-  suggested_decision?: SuggestedDecision;
   recommended_tasks?: RecommendedTask[];
   approval_id?: string;
   kind?: string;
@@ -73,6 +79,7 @@ export interface AgentMessageData {
 
 export type SSEEventType =
   | 'text'
+  | 'text_delta'
   | 'analysis'
   | 'confirmation_request'
   | 'approval_request'
@@ -98,7 +105,6 @@ export interface SSEEvent {
 
 export type AgentAction =
   | 'analyze'
-  | 'confirm_decision'
   | 'create_tasks'
   | 'generate_miro'
   | 'distribute_message'
@@ -193,22 +199,7 @@ export interface ImportedCSVFile {
 
 export interface AnalysisResult {
   anomalies: AnomalyItem[];
-  suggested_decision?: SuggestedDecision;
   recommended_tasks?: RecommendedTask[];
-}
-
-export interface SuggestedDecision {
-  title: string;
-  context_summary: string;
-  reasoning: string;
-  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
-  confidence: number;
-  options: DecisionOption[];
-}
-
-export interface DecisionOption {
-  text: string;
-  order: number;
 }
 
 export interface RecommendedTask {
@@ -222,7 +213,6 @@ export interface RecommendedTask {
 
 export interface WorkflowStepState {
   analysisComplete: boolean;
-  decisionCreated: boolean;
   tasksCreated: boolean;
 }
 
@@ -232,6 +222,7 @@ export type WorkflowStepType =
   | 'analyze_data'
   | 'call_dify'
   | 'call_llm'
+  /** @deprecated No longer created from the UI; legacy workflows may still list this step. */
   | 'create_decision'
   | 'create_tasks'
   | 'custom_api'

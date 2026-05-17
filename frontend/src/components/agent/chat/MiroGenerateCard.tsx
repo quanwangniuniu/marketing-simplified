@@ -26,7 +26,7 @@ export function MiroGenerateCard({ onGenerate, disabled = false, disabledHint }:
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0 space-y-3">
         <p className="text-sm text-foreground">
-          Generate a Miro board from the current analysis, suggested decision, and recommended tasks.
+          Generate a Miro board from the current analysis and recommended tasks.
         </p>
         {disabled && disabledHint ? (
           <p className="text-xs text-muted-foreground">

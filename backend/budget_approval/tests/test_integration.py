@@ -75,12 +75,12 @@ class TestThreeUserApprovalChain:
             comment="Final approval - locking request"
         )
         
-        # Should be locked
-        assert budget_request.status == BudgetRequestStatus.LOCKED
-        
-        # Verify budget pool was updated
+        # Pool deduction is deferred to task lock; final approval leaves status APPROVED
+        assert budget_request.status == BudgetRequestStatus.APPROVED
+
+        # Budget pool is not updated until the task is explicitly locked
         budget_pool.refresh_from_db()
-        assert budget_pool.used_amount == Decimal('5000.00')
+        assert budget_pool.used_amount == Decimal('0.00')
 
 @pytest.mark.django_db
 class TestRejectionResubmissionFlow:
@@ -153,12 +153,12 @@ class TestRejectionResubmissionFlow:
             comment="Revised request approved"
         )
         
-        # Should be approved and locked
-        assert budget_request.status == BudgetRequestStatus.LOCKED
-        
-        # Verify budget pool was updated with revised amount
+        # Pool deduction is deferred to task lock; final approval leaves status APPROVED
+        assert budget_request.status == BudgetRequestStatus.APPROVED
+
+        # Budget pool is not updated until the task is explicitly locked
         budget_pool.refresh_from_db()
-        assert budget_pool.used_amount == Decimal('2500.00')
+        assert budget_pool.used_amount == Decimal('0.00')
 
 
 @pytest.mark.django_db

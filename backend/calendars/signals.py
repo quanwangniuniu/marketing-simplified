@@ -145,16 +145,31 @@ def generate_calendar_events_for_task(sender, instance, created, **kwargs):
         status_suffix = f" ({instance.get_status_display()})" if instance.status else ""
         title = instance.summary or f"Task #{instance.id}"
 
-        CalendarEvent.objects.update_or_create(
+        qs = CalendarEvent.objects.filter(
             event_type=CalendarEvent.EventType.TASK,
             task=instance,
-            defaults={
-                'organization': organization,
-                'title': _calendar_event_title(project_prefix, title, status_suffix),
-                'start_time': start_time,
-                'end_time': end_time,
-            }
         )
+        count = qs.count()
+        if count > 1:
+            # Deduplicate: keep the first row, delete the rest.
+            keep_id = qs.order_by('id').values_list('id', flat=True).first()
+            qs.exclude(id=keep_id).delete()
+            qs = CalendarEvent.objects.filter(id=keep_id)
+
+        new_defaults = {
+            'organization': organization,
+            'title': _calendar_event_title(project_prefix, title, status_suffix),
+            'start_time': start_time,
+            'end_time': end_time,
+        }
+        if count == 0:
+            CalendarEvent.objects.create(
+                event_type=CalendarEvent.EventType.TASK,
+                task=instance,
+                **new_defaults,
+            )
+        else:
+            qs.update(**new_defaults)
 
 
 @receiver(post_delete, sender=Decision)

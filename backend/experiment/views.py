@@ -131,7 +131,10 @@ class ExperimentListCreateView(generics.ListCreateAPIView):
                 {"task": "Experiment already exists for this task."}
             )
         
-        serializer.save(created_by=user)
+        experiment = serializer.save(created_by=user)
+        # Link the task's GenericFK so task.linked_object is populated in the API
+        task.link_to_object(experiment)
+        task.save()
 
 
 class ExperimentRetrieveUpdateView(generics.RetrieveUpdateAPIView):

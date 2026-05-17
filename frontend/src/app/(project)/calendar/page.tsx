@@ -6,8 +6,8 @@ import CalendarPageContent from '@/components/calendar/CalendarPageContent';
 
 function CalendarV2Content() {
   return (
-    <DashboardLayout hideRightPanel>
-      <div className="-m-5 h-[calc(100vh-3rem)] flex flex-col bg-white">
+    <DashboardLayout hideRightPanel mainClassName="!p-0 !space-y-0">
+      <div className="flex h-full min-h-0 flex-col bg-white">
         <CalendarPageContent />
       </div>
     </DashboardLayout>

@@ -23,6 +23,7 @@ const mockUpdateTask = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock('@/lib/taskStore', () => ({

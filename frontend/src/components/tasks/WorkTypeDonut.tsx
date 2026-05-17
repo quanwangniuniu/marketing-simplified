@@ -79,9 +79,12 @@ export default function WorkTypeDonut({
   const rInner = rOuter - thickness;
 
   return (
-    <div className="flex items-center gap-6">
-      <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div className="flex min-w-0 flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-6">
+      <div
+        className="relative aspect-square w-full max-w-[180px] flex-shrink-0"
+        style={{ width: `min(${size}px, 100%)` }}
+      >
+        <svg className="h-full w-full" viewBox={`0 0 ${size} ${size}`}>
           {total === 0 ? (
             <circle
               cx={cx}
@@ -107,14 +110,14 @@ export default function WorkTypeDonut({
         </div>
       </div>
 
-      <div className="flex-1">
+      <div className="min-w-0 w-full flex-1">
         {total === 0 ? (
           <p className="text-sm text-gray-400">No tasks yet.</p>
         ) : (
           <ul className="space-y-1.5 text-xs">
             {segments.slice(0, 6).map((seg) => (
               <li key={seg.meta.value} className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex min-w-0 items-center gap-2">
                   <span
                     className="inline-block h-2 w-2 flex-shrink-0 rounded-sm"
                     style={{ backgroundColor: seg.meta.hex }}

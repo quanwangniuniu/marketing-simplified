@@ -45,8 +45,8 @@ export function MeetingsLane({
       aria-labelledby={headingId}
       className="meeting-column flex min-h-[420px] min-w-0 flex-col rounded-2xl border border-slate-200 bg-slate-50"
     >
-      <div className="meeting-column__header flex shrink-0 items-start justify-between gap-3 border-b border-slate-200/90 px-6 py-5">
-        <div className="min-w-0 flex-1 pr-2">
+      <div className="meeting-column__header flex shrink-0 flex-col gap-3 border-b border-slate-200/90 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
+        <div className="min-w-0 flex-1 sm:pr-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2
               id={headingId}
@@ -75,7 +75,7 @@ export function MeetingsLane({
         />
       </div>
 
-      <div className="meeting-column__list min-h-0 flex-1 px-4 pb-4 pt-3">
+      <div className="meeting-column__list min-h-0 flex-1 px-3 pb-4 pt-3 sm:px-4">
         {children}
       </div>
     </section>

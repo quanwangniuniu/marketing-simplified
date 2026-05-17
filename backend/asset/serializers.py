@@ -11,11 +11,18 @@ class AssetSerializer(serializers.ModelSerializer):
         required=False,
         help_text="List of tags as strings"
     )
-    
+    owner = serializers.SerializerMethodField()
+
+    def get_owner(self, obj):
+        u = obj.owner
+        if not u:
+            return None
+        return u.get_full_name().strip() or u.username or u.email
+
     class Meta:
         model = Asset
         fields = [
-            'id', 'task', 'owner', 'team', 'status', 
+            'id', 'task', 'owner', 'team', 'status',
             'tags', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'owner', 'status', 'created_at', 'updated_at']

@@ -32,7 +32,7 @@ export default function InlineSelect({
     <Select.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <Select.Trigger
         aria-label={ariaLabel}
-        className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 outline-none transition hover:border-gray-300 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+        className="inline-flex min-w-0 w-full items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 outline-none transition hover:border-gray-300 focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate"
       >
         <Select.Value placeholder={placeholder || 'Select…'} />
         <Select.Icon className="shrink-0 text-gray-400">
@@ -43,7 +43,7 @@ export default function InlineSelect({
         <Select.Content
           position="popper"
           sideOffset={4}
-          className="z-50 max-h-[280px] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="z-50 max-h-[min(280px,50dvh)] min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-gray-100 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           <Select.Viewport className="py-1">
             {options.map((opt) => (
@@ -56,7 +56,7 @@ export default function InlineSelect({
                 <div className="min-w-0 flex-1">
                   <Select.ItemText>{opt.label}</Select.ItemText>
                   {opt.sub && (
-                    <span className="ml-2 text-[11px] text-gray-400">{opt.sub}</span>
+                    <span className="ml-2 break-words text-[11px] text-gray-400">{opt.sub}</span>
                   )}
                 </div>
                 <Select.ItemIndicator className="absolute right-2 inline-flex items-center">

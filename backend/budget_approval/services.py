@@ -145,15 +145,13 @@ class BudgetRequestService:
                 locked_request.approve()
                 locked_request.save()
 
-                # status: APPROVED --> UNDER_REVIEW
+                # status: APPROVED --> UNDER_REVIEW (multi-step chain)
                 if next_approver:
                     locked_request.forward_to_next()
                     locked_request.current_approver = next_approver
                     locked_request.save()
-                else:
-                    # status: APPROVED --> LOCKED
-                    locked_request.lock()
-                    locked_request.save()
+                # Pool deduction (APPROVED → LOCKED) is intentionally deferred.
+                # It happens only when the linked task is explicitly locked.
 
             # status: UNDER_REVIEW --> REJECTED
             else:

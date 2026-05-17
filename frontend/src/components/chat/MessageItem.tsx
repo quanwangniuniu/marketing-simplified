@@ -94,7 +94,7 @@ export default function MessageItem({
           />
         )}
         <div className="flex justify-end">
-          <div className="max-w-[75%]">
+          <div className="w-full max-w-[88%] min-w-0 sm:max-w-[75%]">
             <div
               className={[
                 selectionClass,
@@ -111,7 +111,7 @@ export default function MessageItem({
                 )}
                 {/* Message bubble with content */}
                 {hasContent && (
-                  <div className="inline-block w-fit max-w-full bg-[#A6E661] text-gray-900 rounded-lg px-4 py-2 break-words">
+                  <div className="inline-block w-fit max-w-full break-words rounded-lg bg-[#A6E661] px-3 py-2 text-gray-900 [overflow-wrap:anywhere] sm:px-4">
                     <p className="text-sm whitespace-pre-wrap">{messageContent}</p>
                   </div>
                 )}
@@ -165,7 +165,7 @@ export default function MessageItem({
         />
       )}
       <div className="flex justify-start">
-        <div className="max-w-[75%]">
+        <div className="w-full max-w-[88%] min-w-0 sm:max-w-[75%]">
           <div
             className={[
               selectionClass,
@@ -202,7 +202,7 @@ export default function MessageItem({
               
               {/* Message bubble with content */}
               {hasContent && (
-                <div className={`inline-block w-fit max-w-full rounded-lg px-4 py-2 break-words ${
+                <div className={`inline-block w-fit max-w-full break-words rounded-lg px-3 py-2 [overflow-wrap:anywhere] sm:px-4 ${
                   isAgentBot(message.sender)
                     ? 'bg-violet-50 text-gray-900 border border-violet-100'
                     : 'bg-gray-100 text-gray-900'

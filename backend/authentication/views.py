@@ -829,6 +829,29 @@ class MeView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class MeProjectsView(APIView):
+    """GET /api/auth/me/projects/ — list user's project memberships with roles."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from core.models import ProjectMember
+        memberships = (
+            ProjectMember.objects
+            .filter(user=request.user, is_active=True)
+            .select_related('project')
+            .order_by('project__name')
+        )
+        data = [
+            {
+                'project_id': m.project.id,
+                'project_name': m.project.name,
+                'role': m.role,
+            }
+            for m in memberships
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+
 class UserTeamsView(APIView):
     """Get current user's team memberships"""
     permission_classes = [IsAuthenticated]

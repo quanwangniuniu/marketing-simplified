@@ -12,11 +12,14 @@ export interface User {
   username: string;
   first_name?: string;
   last_name?: string;
-  avatar?: string;  // Keep for UI display (placeholder)
+  avatar?: string;
   is_staff?: boolean;
   organization: Organization | null;
   roles: string[];
   team_id?: number;
+  job?: string;
+  department?: string;
+  location?: string;
 }
 
 export interface LoginRequest {

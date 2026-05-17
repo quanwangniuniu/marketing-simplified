@@ -36,9 +36,9 @@ export default function DecisionReviewsSection({ reviews, canAddReview, onAddRev
   return (
     <section
       id="decision-section-reviews"
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+      className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl sm:p-5"
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
           Reviews
           {reviews.length > 0 && (
@@ -51,7 +51,7 @@ export default function DecisionReviewsSection({ reviews, canAddReview, onAddRev
           <button
             type="button"
             onClick={onAddReview}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 text-xs font-medium text-white shadow-sm transition hover:opacity-95"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 text-xs font-medium text-white shadow-sm transition hover:opacity-95 sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" />
             Add review
@@ -68,7 +68,7 @@ export default function DecisionReviewsSection({ reviews, canAddReview, onAddRev
             const style = QUALITY_STYLES[quality];
             return (
               <li key={review.id} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${style.bg} ${style.text}`}
                   >
@@ -83,7 +83,7 @@ export default function DecisionReviewsSection({ reviews, canAddReview, onAddRev
                     <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
                       Outcome
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">
+                    <p className="mt-1 break-words whitespace-pre-wrap text-sm text-gray-700">
                       {review.outcomeText}
                     </p>
                   </div>
@@ -93,7 +93,7 @@ export default function DecisionReviewsSection({ reviews, canAddReview, onAddRev
                     <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
                       Reflection
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">
+                    <p className="mt-1 break-words whitespace-pre-wrap text-sm text-gray-700">
                       {review.reflectionText}
                     </p>
                   </div>

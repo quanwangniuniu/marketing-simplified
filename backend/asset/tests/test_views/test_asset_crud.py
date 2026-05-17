@@ -280,7 +280,7 @@ class AssetDetailViewTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['id'], self.asset.id)
         self.assertEqual(response.data['task'], self.task.id)
-        self.assertEqual(response.data['owner'], self.user.id)
+        self.assertEqual(response.data['owner'], self.user.get_full_name().strip() or self.user.username or self.user.email)
         self.assertEqual(response.data['status'], Asset.NOT_SUBMITTED)
     
     def test_get_asset_detail_unauthenticated(self):

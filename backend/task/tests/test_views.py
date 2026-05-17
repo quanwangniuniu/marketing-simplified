@@ -46,6 +46,12 @@ class TaskAPITest(TestCase):
             role='Team Leader',
             is_active=True
         )
+        ProjectMember.objects.create(
+            user=self.approver,
+            project=self.project,
+            role='member',
+            is_active=True
+        )
         self.user.active_project = self.project
         self.user.save(update_fields=['active_project'])
         
@@ -127,7 +133,8 @@ class TaskAPITest(TestCase):
             'description': 'Test task description',
             'type': 'budget',
             'project_id': self.project.id,
-            'due_date': '2024-12-31'
+            'due_date': '2024-12-31',
+            'current_approver_id': self.approver.id,
         }
         
         response = self.client.post(url, data, format='json')
@@ -182,6 +189,7 @@ class TaskAPITest(TestCase):
             'description': 'desc',
             'type': 'asset',
             'project_id': self.project.id,
+            'current_approver_id': self.approver.id,
             'draft_payload': {'version': 1, 'taskData': {'summary': 'x'}},
         }
 
@@ -200,6 +208,7 @@ class TaskAPITest(TestCase):
                 'summary': 'Submitted Task',
                 'type': 'asset',
                 'project_id': self.project.id,
+                'current_approver_id': self.approver.id,
             },
             format='json',
         )
@@ -221,14 +230,7 @@ class TaskAPITest(TestCase):
 
     def test_create_task_with_project_member_approver_success(self):
         """Task can be created with approver who is a member of the project"""
-        # Make approver a member of the same project
-        ProjectMember.objects.create(
-            user=self.approver,
-            project=self.project,
-            role='member',
-            is_active=True,
-        )
-
+        # self.approver is already a project member (added in setUp)
         url = reverse('task-list')
         data = {
             'summary': 'Task With Approver',
@@ -246,14 +248,18 @@ class TaskAPITest(TestCase):
 
     def test_create_task_with_non_member_approver_fails(self):
         """Task creation should fail if approver is not a member of the project"""
-        # Note: self.approver is NOT added to ProjectMember for this project
+        non_member = User.objects.create_user(
+            email='nonmember@example.com',
+            username='nonmember',
+            password='testpass123',
+        )
         url = reverse('task-list')
         data = {
             'summary': 'Invalid Approver Task',
             'description': 'Approver not in project',
             'type': 'budget',
             'project_id': self.project.id,
-            'current_approver_id': self.approver.id,
+            'current_approver_id': non_member.id,
         }
 
         response = self.client.post(url, data, format='json')
@@ -269,6 +275,7 @@ class TaskAPITest(TestCase):
             'summary': 'Active Project Task',
             'description': 'Auto project selection',
             'type': 'asset',
+            'current_approver_id': self.approver.id,
         }
 
         response = self.client.post(url, data, format='json')
@@ -288,6 +295,7 @@ class TaskAPITest(TestCase):
             'summary': 'Unauthorized Task',
             'type': 'budget',
             'project_id': other_project.id,
+            'create_as_draft': True,
         }
 
         response = self.client.post(url, data, format='json')
@@ -1553,13 +1561,25 @@ class TaskAPITest(TestCase):
             project=self.project,
             current_approver=self.approver
         )
-        
+
+        # Budget tasks require an approved BudgetRequest before locking
+        from budget_approval.models import BudgetRequest, BudgetRequestStatus
+        br = BudgetRequest.objects.create(
+            task=task,
+            requested_by=self.user,
+            amount='100.00',
+            currency='AUD',
+            budget_pool=self.budget_pool,
+            ad_channel=self.ad_channel,
+        )
+        br.submit(); br.send_for_review(); br.approve(); br.save()
+
         url = reverse('task-lock', kwargs={'pk': task.id})
         response = self.client.post(url, {}, format='json')
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['task']['status'], 'LOCKED')
-        
+
         # Verify database was updated
         task = Task.objects.get(pk=task.pk)
         self.assertEqual(task.status, Task.Status.LOCKED)
@@ -2067,6 +2087,18 @@ class TaskAPITest(TestCase):
         )
         # No approval_chain assigned (legacy mode)
         self.assertIsNone(task.approval_chain)
+
+        # Budget tasks require an approved BudgetRequest before locking
+        from budget_approval.models import BudgetRequest
+        br = BudgetRequest.objects.create(
+            task=task,
+            requested_by=self.user,
+            amount='100.00',
+            currency='AUD',
+            budget_pool=self.budget_pool,
+            ad_channel=self.ad_channel,
+        )
+        br.submit(); br.send_for_review(); br.approve(); br.save()
 
         url = reverse('task-lock', kwargs={'pk': task.id})
         response = self.client.post(url, {}, format='json')

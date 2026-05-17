@@ -78,7 +78,7 @@ export const PolicyAPI = {
     api.get(`/api/policy/platform-policy-updates/${id}/`),
 
   // Partially update a platform policy update
-  update: (id: number, data: Partial<PlatformPolicyUpdateData>) =>
+  update: (id: string | number, data: Partial<PlatformPolicyUpdateData>) =>
     api.patch(`/api/policy/platform-policy-updates/${id}/`, data),
 
   // Delete a platform policy update

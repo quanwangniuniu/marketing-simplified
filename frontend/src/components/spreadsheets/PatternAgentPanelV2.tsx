@@ -527,7 +527,9 @@ export default function PatternAgentPanel({
 
   return (
     <div
-      className={`flex h-full flex-col border-l border-gray-200 bg-white transition-all duration-300 ease-in-out ${collapsed ? 'w-14' : 'w-80'}`}
+      className={`fixed bottom-0 right-0 top-12 z-30 flex flex-col border-l border-gray-200 bg-white shadow-2xl transition-all duration-300 ease-in-out sm:static sm:top-auto sm:z-auto sm:h-full sm:shadow-none ${
+        collapsed ? 'w-14' : 'w-[min(360px,calc(100vw-3.5rem))] sm:w-80'
+      }`}
     >
       <div
         className={`flex flex-shrink-0 items-center border-b border-gray-100 transition-all duration-300 ${

@@ -64,7 +64,7 @@ export default function DecisionOptionsSection({
   return (
     <section
       id="decision-section-options"
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100"
+      className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl sm:p-5"
     >
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
@@ -134,7 +134,7 @@ export default function DecisionOptionsSection({
                   className="min-h-[32px] w-full resize-none rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#3CCED7] focus:ring-2 focus:ring-[#3CCED7]/30"
                 />
               ) : (
-                <span className="min-h-[32px] flex-1 whitespace-pre-wrap py-1 text-sm text-gray-900">
+                <span className="min-h-[32px] flex-1 break-words whitespace-pre-wrap py-1 text-sm text-gray-900">
                   {opt.text || <span className="text-gray-400">—</span>}
                 </span>
               )}
@@ -144,7 +144,7 @@ export default function DecisionOptionsSection({
                   onClick={() => deleteOption(i)}
                   aria-label="Delete option"
                   title="Delete"
-                  className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                  className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -158,7 +158,7 @@ export default function DecisionOptionsSection({
         <button
           type="button"
           onClick={addOption}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-dashed border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-[#3CCED7]/60 hover:text-[#3CCED7]"
+          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-[#3CCED7]/60 hover:text-[#3CCED7] sm:w-auto"
         >
           <Plus className="h-3.5 w-3.5" />
           Add option

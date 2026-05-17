@@ -300,7 +300,7 @@ function DecisionDetailContent() {
   if (!decisionId || !Number.isFinite(decisionId)) {
     return (
       <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+        <div className="mx-auto w-full max-w-[1440px] px-3 py-3 text-sm text-gray-500 sm:px-6 sm:py-4">
           Invalid decision id.
         </div>
       </DashboardLayout>
@@ -309,7 +309,7 @@ function DecisionDetailContent() {
   if (detail.loading && !base) {
     return (
       <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+        <div className="mx-auto w-full max-w-[1440px] px-3 py-3 text-sm text-gray-500 sm:px-6 sm:py-4">
           Loading decision…
         </div>
       </DashboardLayout>
@@ -318,7 +318,7 @@ function DecisionDetailContent() {
   if (detail.error || !base) {
     return (
       <DashboardLayout alerts={[]} upcomingMeetings={[]}>
-        <div className="mx-auto w-full max-w-[1440px] px-6 py-4 text-sm text-gray-500">
+        <div className="mx-auto w-full max-w-[1440px] px-3 py-3 text-sm text-gray-500 sm:px-6 sm:py-4">
           {detail.error || 'Decision not found.'}
         </div>
       </DashboardLayout>
@@ -348,7 +348,7 @@ function DecisionDetailContent() {
   return (
     <DashboardLayout alerts={[]} upcomingMeetings={[]}>
       <div className={`bg-gray-50 ${archivedClass}`}>
-        <div className="mx-auto max-w-[1440px] px-6 py-4">
+        <div className="mx-auto max-w-[1440px] px-3 py-3 sm:px-6 sm:py-4">
           <DecisionDetailHeader
             projectId={projectId}
             projectName={activeProject?.name}
@@ -363,13 +363,13 @@ function DecisionDetailContent() {
           />
 
           {status === 'ARCHIVED' && (
-            <div className="mt-4 rounded-md border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600">
+            <div className="mt-3 rounded-md border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600 sm:mt-4">
               This decision has been archived. History, reviews, and snapshot are preserved but no further changes can be made.
             </div>
           )}
 
-          <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_360px]">
-            <main className="space-y-5">
+          <div className="mt-3 grid min-w-0 gap-3 sm:mt-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <main className="min-w-0 space-y-3 sm:space-y-5">
               <DecisionContextSection
                 value={contextSummary ?? ''}
                 editable={editable}
@@ -420,7 +420,7 @@ function DecisionDetailContent() {
               )}
             </main>
 
-            <aside className="space-y-5">
+            <aside className="min-w-0 space-y-3 sm:space-y-5">
               {editable && (
                 <DecisionCommitChecklistAside
                   contextSummary={contextSummary ?? ''}
