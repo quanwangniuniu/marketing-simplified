@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -15,6 +15,7 @@ import {
   ChevronsRight,
   Clock3,
   Facebook,
+  Link2,
   Loader2,
   RefreshCcw,
   TrendingDown,
@@ -33,6 +34,7 @@ import {
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Skeleton } from '@/components/ui/skeleton';
+import ConfirmDialog from '@/components/tasks/detail/ConfirmDialog';
 import AccountPicker from '@/components/meta-ads/AccountPicker';
 import AdsDrilldownPanel from '@/components/meta-ads/AdsDrilldownPanel';
 import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable';
@@ -48,6 +50,7 @@ import {
   type MetaSummary,
   type MetaSyncRun,
 } from '@/lib/api/facebookApi';
+import { useProjectStore } from '@/lib/projectStore';
 
 const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 
@@ -184,6 +187,7 @@ function MetaAdsContent() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [connected, setConnected] = useState(false);
   const [adAccounts, setAdAccounts] = useState<FacebookAdAccount[]>([]);
+  const [accountTotalCount, setAccountTotalCount] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [days, setDays] = useState<number>(28);
   const [summary, setSummary] = useState<MetaSummary | null>(null);
@@ -191,11 +195,18 @@ function MetaAdsContent() {
   const [loadingData, setLoadingData] = useState(false);
   const [metricTab, setMetricTab] = useState<MetricKey>('spend');
   const [syncing, setSyncing] = useState(false);
+  const [bindingProject, setBindingProject] = useState(false);
+  const [pendingMoveAccount, setPendingMoveAccount] =
+    useState<FacebookAdAccount | null>(null);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
   const [viewTab, setViewTab] = useState<ViewKey>(initialTab);
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<number>>(
     new Set()
   );
+  const activeProject = useProjectStore((state) => state.activeProject);
+  const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = activeProject?.id ?? null;
+  const hasProjectStoreHydrated = useProjectStore((state) => state.hasHydrated);
 
   const toggleSelectedCampaign = (id: number) => {
     setSelectedCampaignIds((prev) => {
@@ -216,15 +227,17 @@ function MetaAdsContent() {
   }, [selectedId, days]);
 
   useEffect(() => {
+    if (!hasProjectStoreHydrated) return;
     let active = true;
     setLoadingStatus(true);
     facebookApi
-      .getStatus()
+      .getStatus(activeProjectId)
       .then((status) => {
         if (!active) return;
         setConnected(status.connected);
         const accounts = status.ad_accounts ?? [];
         setAdAccounts(accounts);
+        setAccountTotalCount(null);
         if (accounts.length > 0) {
           const stored =
             typeof window !== 'undefined'
@@ -232,8 +245,10 @@ function MetaAdsContent() {
               : null;
           const storedId = stored ? Number(stored) : NaN;
           const storedMatch = accounts.find((a) => a.id === storedId);
-          const owned = accounts.find((a) => a.is_owned);
-          setSelectedId((storedMatch ?? owned ?? accounts[0]).id);
+          const connectedByMe = accounts.find((a) => a.connected_by_current_user);
+          setSelectedId((storedMatch ?? connectedByMe ?? accounts[0]).id);
+        } else {
+          setSelectedId(null);
         }
       })
       .catch(() => setConnected(false))
@@ -241,17 +256,49 @@ function MetaAdsContent() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeProjectId, hasProjectStoreHydrated]);
 
-  const handleSelectAccount = (id: number) => {
+  const handleSelectAccount = useCallback((id: number, account?: FacebookAdAccount) => {
     setSelectedId(id);
+    if (account) {
+      setAdAccounts((prev) => {
+        const next = new Map(prev.map((item) => [item.id, item]));
+        next.set(account.id, account);
+        return Array.from(next.values());
+      });
+    }
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, String(id));
     }
+  }, []);
+
+  const handleAccountsLoaded = useCallback(
+    (accounts: FacebookAdAccount[], count: number) => {
+      setAccountTotalCount(count);
+      if (accounts.length === 0) return;
+      setAdAccounts((prev) => {
+        const next = new Map(prev.map((item) => [item.id, item]));
+        for (const account of accounts) {
+          next.set(account.id, account);
+        }
+        return Array.from(next.values());
+      });
+    },
+    []
+  );
+
+  const resolveProjectName = (projectId: number | null | undefined) => {
+    if (!projectId) return null;
+    if (activeProject?.id === projectId) return activeProject.name;
+    return projects.find((project) => project.id === projectId)?.name ?? `Project #${projectId}`;
   };
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      setSummary(null);
+      setPerf(null);
+      return;
+    }
     let active = true;
     setLoadingData(true);
     Promise.all([
@@ -274,7 +321,10 @@ function MetaAdsContent() {
   }, [selectedId, days]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      setLatestRun(null);
+      return;
+    }
     let active = true;
     facebookApi
       .getSyncRuns(selectedId)
@@ -408,6 +458,86 @@ function MetaAdsContent() {
     };
   };
 
+  const getAccountLabel = (account: FacebookAdAccount) =>
+    account.name || `act_${account.meta_account_id}`;
+
+  const bindAccountToProject = async (
+    account: FacebookAdAccount
+  ): Promise<boolean> => {
+    if (!activeProject?.id) {
+      toast.error('Select a project before connecting an ad account.');
+      return false;
+    }
+    if (!account.can_manage) {
+      toast.error('You do not have permission to manage this ad account.');
+      return false;
+    }
+
+    const isMove = account.project_id !== null && account.project_id !== activeProject.id;
+
+    setBindingProject(true);
+    try {
+      const updated = await facebookApi.linkAdAccountToProject(
+        account.id,
+        activeProject.id
+      );
+      setAdAccounts((prev) =>
+        prev.map((account) => (account.id === updated.id ? updated : account))
+      );
+      setSelectedId(updated.id);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, String(updated.id));
+      }
+      toast.success(
+        isMove
+          ? `Moved ad account to ${activeProject.name}.`
+          : `Connected ad account to ${activeProject.name}.`
+      );
+      return true;
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.detail || 'Failed to connect ad account to project.'
+      );
+      return false;
+    } finally {
+      setBindingProject(false);
+    }
+  };
+
+  const handleBindSelectedAccountToProject = async () => {
+    if (!selectedAccount) return;
+    if (!activeProject?.id) {
+      toast.error('Select a project before connecting an ad account.');
+      return;
+    }
+    if (!selectedAccount.can_manage) {
+      toast.error('You do not have permission to manage this ad account.');
+      return;
+    }
+
+    const isMove =
+      selectedAccount.project_id !== null && selectedAccount.project_id !== activeProject.id;
+    if (isMove) {
+      setPendingMoveAccount(selectedAccount);
+      return;
+    }
+
+    await bindAccountToProject(selectedAccount);
+  };
+
+  const handleConfirmMoveAccount = async () => {
+    if (!pendingMoveAccount) return;
+    const moved = await bindAccountToProject(pendingMoveAccount);
+    if (moved) {
+      setPendingMoveAccount(null);
+    }
+  };
+
+  const handleMoveDialogOpenChange = (open: boolean) => {
+    if (open || bindingProject) return;
+    setPendingMoveAccount(null);
+  };
+
   const chartData = useMemo(() => {
     if (!summary) return [];
     return summary.timeseries.map((p) => ({
@@ -421,6 +551,18 @@ function MetaAdsContent() {
 
   const currency = summary?.currency || perf?.currency || 'USD';
   const campaigns = perf?.campaigns ?? [];
+  const selectedAccount = adAccounts.find((a) => a.id === selectedId) ?? null;
+  const canSyncSelectedAccount = Boolean(selectedAccount?.can_sync);
+  const showProjectBindingPanel = Boolean(
+    selectedAccount?.can_manage && activeProject?.id
+  );
+  const selectedAccountProjectName = resolveProjectName(selectedAccount?.project_id);
+  const selectedAccountConnectedToActiveProject = Boolean(
+    selectedAccount?.project_id && selectedAccount.project_id === activeProject?.id
+  );
+  const selectedAccountConnectedElsewhere = Boolean(
+    selectedAccount?.project_id && selectedAccount.project_id !== activeProject?.id
+  );
 
   if (loadingStatus) {
     return (
@@ -457,16 +599,6 @@ function MetaAdsContent() {
     );
   }
 
-  if (adAccounts.length === 0) {
-    return (
-      <div className="mx-auto max-w-2xl py-16 text-center">
-        <p className="text-sm text-gray-600">
-          No ad accounts are accessible from this Meta connection yet. Try refreshing the connection on the Integrations page.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -481,26 +613,103 @@ function MetaAdsContent() {
         </div>
         <div className="flex items-center gap-3">
           <AccountPicker
-            accounts={adAccounts}
+            projectId={activeProjectId}
+            knownAccounts={adAccounts}
             selectedId={selectedId}
             onSelect={handleSelectAccount}
+            onAccountsLoaded={handleAccountsLoaded}
           />
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            {syncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCcw className="h-4 w-4" />
-            )}
-            {syncing ? 'Syncing...' : 'Refresh data'}
-          </button>
+          {canSyncSelectedAccount && (
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              {syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+              {syncing ? 'Syncing...' : 'Refresh data'}
+            </button>
+          )}
         </div>
       </header>
 
+      {!selectedId && (
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+          {accountTotalCount === 0
+            ? 'No ad accounts are accessible from this Meta connection yet. Try refreshing the connection on the Integrations page.'
+            : 'Choose a Meta ad account to view performance data.'}
+        </div>
+      )}
+
       {latestRun && <SyncStatusCard run={latestRun} />}
+
+      {showProjectBindingPanel && selectedAccount && activeProject && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                selectedAccountConnectedToActiveProject
+                  ? 'bg-[#A6E661]/20 text-[#3d6b00]'
+                  : 'bg-[#3CCED7]/15 text-[#1a9ba3]'
+              }`}
+            >
+              {selectedAccountConnectedToActiveProject ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-gray-900">
+                {selectedAccountConnectedToActiveProject
+                  ? `Connected to ${activeProject.name}`
+                  : selectedAccountProjectName
+                    ? `Connected to ${selectedAccountProjectName}`
+                    : 'Not connected to a project'}
+              </div>
+              <div className="truncate text-xs text-gray-500">
+                {getAccountLabel(selectedAccount)} is available for this project.
+              </div>
+            </div>
+          </div>
+          {!selectedAccountConnectedToActiveProject && (
+            <button
+              type="button"
+              onClick={handleBindSelectedAccountToProject}
+              disabled={bindingProject}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1a9ba3] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#137f86] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {bindingProject ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}
+              {bindingProject
+                ? selectedAccountConnectedElsewhere
+                  ? 'Moving...'
+                  : 'Connecting...'
+                : selectedAccountConnectedElsewhere
+                  ? 'Move to current project'
+                  : 'Connect to current project'}
+            </button>
+          )}
+        </section>
+      )}
+
+      {pendingMoveAccount && activeProject && (
+        <ConfirmDialog
+          open={Boolean(pendingMoveAccount)}
+          onOpenChange={handleMoveDialogOpenChange}
+          title="Move Meta ad account"
+          description={`Move ${getAccountLabel(pendingMoveAccount)} from ${resolveProjectName(pendingMoveAccount.project_id)} to ${activeProject.name}? Members of the previous project may lose access.`}
+          confirmLabel="Move account"
+          busy={bindingProject}
+          onConfirm={handleConfirmMoveAccount}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {DAY_OPTIONS.map((d) => (
