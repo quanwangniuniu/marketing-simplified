@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '../components/providers/AuthProvider';
 import { OnboardingProvider } from '../contexts/OnboardingContext';
 import OnboardingGate from '../components/onboarding/OnboardingGate';
+import { TrackingProvider } from '../lib/tracking/TrackingProvider';
 
 export const metadata = {
   title: "Marketing Simplified - Campaign Management",
@@ -20,11 +21,13 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AuthProvider>
-          <OnboardingProvider>
-            <OnboardingGate>
-              {children}
-            </OnboardingGate>
-          </OnboardingProvider>
+          <TrackingProvider>
+            <OnboardingProvider>
+              <OnboardingGate>
+                {children}
+              </OnboardingGate>
+            </OnboardingProvider>
+          </TrackingProvider>
         </AuthProvider>
         <Toaster 
           position="top-right"

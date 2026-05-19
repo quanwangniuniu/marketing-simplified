@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { FC, ComponentType } from "react";
 import { useChatStore } from "@/lib/chatStore";
 import { useAgentSidePanelStore } from "@/lib/agentSidePanelStore";
+import { useProjectStore } from "@/lib/projectStore";
 // TODO: In actual projects, uncomment the imports below
 // import Link from 'next/link';
 // For Next.js 13+ App Router, also import:
@@ -28,6 +29,7 @@ import {
   Notebook,
   Presentation,
   PiggyBank,
+  Layers,
 } from "lucide-react";
 import { AgentPanelToggleIcon } from "@/components/agent/AgentPanelToggleIcon";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -175,6 +177,13 @@ const getNavigationItems = (
   }
 
   baseItems.push({
+    name: "Experience Groups",
+    href: "/admin/experience-groups",
+    icon: Layers,
+    description: "Manage support experience configurations",
+  });
+
+  baseItems.push({
     name: "Integrations",
     href: "/integrations",
     icon: Settings,
@@ -196,6 +205,7 @@ const Sidebar: FC<SidebarProps> = ({
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const { t } = useLanguage();
   const { toggle: toggleAgentPanel, isOpen: isAgentPanelOpen } = useAgentSidePanelStore();
+  const activeProject = useProjectStore((s) => s.activeProject);
 
   // Get current pathname using Next.js 13+ App Router hook
   const pathname = usePathname();
@@ -214,14 +224,19 @@ const Sidebar: FC<SidebarProps> = ({
 
   const navigationItems = useMemo(() => {
     const items = getNavigationItems(userRole, userRoleLevel, t);
-    // Update Messages badge with global unread count (across ALL projects)
     return items.map(item => {
       if (item.name === (t ? t("sidebar.messages") : "Messages") || item.href === "/messages") {
         return { ...item, badge: globalUnreadCount > 0 ? globalUnreadCount : undefined };
       }
+      if (item.href === "/admin/experience-groups") {
+        const href = activeProject
+          ? `/admin/experience-groups?project=${activeProject.id}`
+          : "/select-project";
+        return { ...item, href };
+      }
       return item;
     });
-  }, [userRole, userRoleLevel, t, globalUnreadCount]);
+  }, [userRole, userRoleLevel, t, globalUnreadCount, activeProject]);
 
   // Handle collapse state changes
   const handleCollapseToggle = () => {
