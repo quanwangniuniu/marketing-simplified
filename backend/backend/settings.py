@@ -97,6 +97,9 @@ INSTALLED_APPS = [
     'facebook_integration.apps.FacebookIntegrationConfig',
     'meta_ads.apps.MetaAdsConfig',
     'support_channels.apps.SupportChannelsConfig',
+    'experience_group',
+    'customer',
+    'tracking',
 ]
 
 MIDDLEWARE = [
@@ -119,6 +122,7 @@ MIDDLEWARE = [
     'access_control.middleware.authorization.AuthorizationMiddleware', 
     'user_preferences.middleware.user_locale.UserLocaleMiddleware',
     'django.middleware.locale.LocaleMiddleware',
+    'tracking.middleware.ServerSideTrackingMiddleware',
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
@@ -398,6 +402,16 @@ CELERY_BEAT_SCHEDULE = {
     'meta-ads-daily-fan-out': {
         'task': 'meta_ads.tasks.sync_all_active_ad_accounts',
         'schedule': crontab(hour=6, minute=0),  # daily at 06:00 UTC
+        'options': {'timezone': 'UTC'},
+    },
+    'expire-stale-tracking-sessions': {
+        'task': 'tracking.tasks.expire_stale_sessions',
+        'schedule': crontab(minute='*/5'),
+        'options': {'timezone': 'UTC'},
+    },
+    'purge-old-tracking-data': {
+        'task': 'tracking.tasks.purge_old_data',
+        'schedule': crontab(hour=3, minute=0),
         'options': {'timezone': 'UTC'},
     },
 }
@@ -687,3 +701,11 @@ ZOOM_WEBHOOK_SECRET_TOKEN = os.environ.get("ZOOM_WEBHOOK_SECRET_TOKEN", "")
 LINEAR_CLIENT_ID = (os.environ.get("LINEAR_CLIENT_ID") or "").strip()
 LINEAR_CLIENT_SECRET = (os.environ.get("LINEAR_CLIENT_SECRET") or "").strip()
 LINEAR_REDIRECT_URI = (os.environ.get("LINEAR_REDIRECT_URI") or "").strip()
+
+# Tracking module config (SMP-546)
+TRACKING_IDLE_SECONDS = config('TRACKING_IDLE_SECONDS', default=120, cast=int)
+TRACKING_HEARTBEAT_SECONDS = config('TRACKING_HEARTBEAT_SECONDS', default=30, cast=int)
+TRACKING_SESSION_TIMEOUT_SECONDS = config('TRACKING_SESSION_TIMEOUT_SECONDS', default=900, cast=int)
+TRACKING_EVENT_FLUSH_SECONDS = config('TRACKING_EVENT_FLUSH_SECONDS', default=10, cast=int)
+TRACKING_EVENT_RETENTION_DAYS = config('TRACKING_EVENT_RETENTION_DAYS', default=90, cast=int)
+TRACKING_SESSION_RETENTION_DAYS = config('TRACKING_SESSION_RETENTION_DAYS', default=180, cast=int)

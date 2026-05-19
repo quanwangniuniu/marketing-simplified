@@ -36,11 +36,13 @@ export default function TaskActivityBlock({
   readOnly,
   refreshKey,
   loading = false,
+  onFirstInteraction,
 }: {
   taskId: number;
   readOnly: boolean;
   refreshKey: number;
   loading?: boolean;
+  onFirstInteraction?: () => void;
 }) {
   const [items, setItems] = useState<TaskComment[] | null>(null);
   const [body, setBody] = useState('');
@@ -135,6 +137,7 @@ export default function TaskActivityBlock({
             rows={1}
             placeholder="Add a comment…"
             value={body}
+            onClick={onFirstInteraction}
             onChange={(e) => {
               setBody(e.target.value);
               resizeTextarea();

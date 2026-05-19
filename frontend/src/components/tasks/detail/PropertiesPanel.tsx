@@ -48,6 +48,7 @@ interface Props {
   readOnly: boolean;
   onUpdated: () => void | Promise<void>;
   loading?: boolean;
+  onFirstInteraction?: () => void;
 }
 
 const LABEL = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
@@ -61,6 +62,7 @@ export default function PropertiesPanel({
   readOnly,
   onUpdated,
   loading = false,
+  onFirstInteraction,
 }: Props) {
   const id = task.id!;
   const [saving, setSaving] = useState(false);
@@ -135,7 +137,7 @@ export default function PropertiesPanel({
         <InlineSelect
           ariaLabel="Priority"
           value={priority}
-          onValueChange={(v) => patch({ priority: v } as any)}
+          onValueChange={(v) => { onFirstInteraction?.(); patch({ priority: v } as any); }}
           options={priorityOpts}
           disabled={saving || readOnly}
         />

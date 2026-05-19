@@ -1,10 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, Clock, Activity, Trash2, Loader2 } from 'lucide-react';
+import { Users, Clock, Activity, Trash2, Loader2, Settings2 } from 'lucide-react';
 import type { ProjectData } from '@/lib/api/projectApi';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface ProjectCardProps {
   project: ProjectData;
@@ -103,7 +110,10 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
   if (project.primary_audience_type)
     metaRows.push({ label: 'Audience', value: humanize(project.primary_audience_type) });
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const handleSelect = async () => {
+    if (menuOpen) return;
     const didUpdate = await onSelect(project.id);
     if (didUpdate !== false) {
       router.push('/overview');
@@ -203,7 +213,28 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
               {formatRelativeTime(project.updated_at || project.created_at)}
             </span>
           </div>
-
+          <DropdownMenu onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+         <button className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          onClick={(e) => e.stopPropagation()}>
+          <Settings2 className="w-3.5 h-3.5" />
+         </button>
+         </DropdownMenuTrigger>
+         <DropdownMenuContent side="bottom" align="start" sideOffset={4} className="w-48 p-1">
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => setTimeout(() => router.push(`/admin/experience-groups?project=${project.id}`), 0)}
+          >
+            <span>Experience Groups</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => setTimeout(() => router.push(`/admin/customers?project=${project.id}`), 0)}
+          >
+            <span>Customers</span>
+          </DropdownMenuItem>
+         </DropdownMenuContent>
+          </DropdownMenu>
           <label
             className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-[#3CCED7] cursor-pointer"
             onClick={(e) => e.stopPropagation()}

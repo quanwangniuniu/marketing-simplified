@@ -82,6 +82,9 @@ urlpatterns = [
     path('api/', include('meetings.urls')),
     path("", include("django_prometheus.urls")),
     path("api/v1/zoom/", include("zoom_integration.urls")),
+    path('api/', include('experience_group.urls')),
+    path('api/', include('customer.urls')),
+    path('api/tracking/', include('tracking.urls')),
 ]
 
 if settings.DEBUG:
