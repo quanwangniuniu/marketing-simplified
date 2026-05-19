@@ -229,6 +229,12 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
+            onSelect={() => setTimeout(() => router.push(`/admin/channels?project=${project.id}`), 0)}
+          >
+            <span>Support Channels</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
             onSelect={() => setTimeout(() => router.push(`/admin/customers?project=${project.id}`), 0)}
           >
             <span>Customers</span>

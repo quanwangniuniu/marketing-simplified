@@ -5,28 +5,14 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from core.models import ProjectMember
-from .models import ExperienceGroup, SupportChannel
-from .serializers import ExperienceGroupSerializer, SupportChannelSerializer
+from .models import SupportChannel
+from .serializers import SupportChannelSerializer
 
 
 def _get_user_project_ids(user):
     return ProjectMember.objects.filter(
         user=user, is_active=True
     ).values_list('project_id', flat=True)
-
-
-class ExperienceGroupViewSet(ModelViewSet):
-    serializer_class = ExperienceGroupSerializer
-    permission_classes = [IsAuthenticated]
-    pagination_class = None
-
-    def get_queryset(self):
-        project_ids = _get_user_project_ids(self.request.user)
-        qs = ExperienceGroup.objects.filter(project_id__in=project_ids)
-        project_id = self.request.query_params.get('project_id')
-        if project_id:
-            qs = qs.filter(project_id=project_id)
-        return qs
 
 
 class SupportChannelViewSet(ModelViewSet):

@@ -3,7 +3,8 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import Organization, Project, ProjectMember
-from .models import ExperienceGroup, SupportChannel
+from experience_group.models import ExperienceGroup
+from .models import SupportChannel
 
 User = get_user_model()
 
@@ -167,60 +168,21 @@ class SupportChannelCRUDTest(APITestCase):
         res = other_client.get(f"{self.list_url}{ch_id}/")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
-
-class ExperienceGroupTest(APITestCase):
-    """CRUD for /api/support/experience-groups/"""
-
-    def setUp(self):
-        self.org = Organization.objects.create(name="TestOrg2")
-        self.user = _make_user("dave", "dave@test.com")
-        self.project = _make_project(self.org, self.user, "EG Project")
-        _add_member(self.project, self.user)
-
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.user)
-        self.url = "/api/support/experience-groups/"
-
-    def test_create_experience_group(self):
-        res = self.client.post(self.url, {
-            "name": "VIP Customers",
-            "description": "High-value customers",
-            "project": self.project.id,
-        }, format="json")
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res.data["name"], "VIP Customers")
-
-    def test_list_experience_groups_scoped_to_user(self):
-        self.client.post(self.url, {
-            "name": "Group A", "project": self.project.id
-        }, format="json")
-
-        other_user = _make_user("eve", "eve@test.com")
-        other_project = _make_project(self.org, other_user, "Eve Project")
-        _add_member(other_project, other_user)
-        other_client = APIClient()
-        other_client.force_authenticate(user=other_user)
-        other_client.post(self.url, {
-            "name": "Group B", "project": other_project.id
-        }, format="json")
-
-        res = self.client.get(self.url, {"project_id": self.project.id})
-        names = [g["name"] for g in res.data]
-        self.assertIn("Group A", names)
-        self.assertNotIn("Group B", names)
+    # ── Experience Group linkage ──────────────────────────────────────────────
 
     def test_channel_with_experience_groups(self):
-        eg_res = self.client.post(self.url, {
-            "name": "Premium", "project": self.project.id
-        }, format="json")
-        eg_id = eg_res.data["id"]
+        eg = ExperienceGroup.objects.create(
+            name="Premium",
+            project=self.project,
+            created_by=self.user,
+        )
 
-        ch_res = self.client.post("/api/support/channels/", {
+        ch_res = self.client.post(self.list_url, {
             "name": "VIP Chat",
             "channel_type": "live_chat_widget",
             "project": self.project.id,
-            "experience_group_ids": [eg_id],
+            "experience_group_ids": [eg.id],
         }, format="json")
         self.assertEqual(ch_res.status_code, status.HTTP_201_CREATED)
         group_ids = [g["id"] for g in ch_res.data["experience_groups"]]
-        self.assertIn(eg_id, group_ids)
+        self.assertIn(eg.id, group_ids)

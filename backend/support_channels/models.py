@@ -2,24 +2,6 @@ from django.db import models
 from core.models import TimeStampedModel
 
 
-class ExperienceGroup(TimeStampedModel):
-    """Represents a customer segment or group that channels can be assigned to."""
-    project = models.ForeignKey(
-        'core.Project',
-        on_delete=models.CASCADE,
-        related_name='experience_groups',
-    )
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True, default='')
-
-    class Meta:
-        unique_together = ('project', 'name')
-        ordering = ['name']
-
-    def __str__(self):
-        return f"{self.project.name} / {self.name}"
-
-
 class SupportChannel(TimeStampedModel):
     """A configurable support channel instance."""
 
@@ -68,7 +50,7 @@ class SupportChannel(TimeStampedModel):
         help_text="Inactive channels are hidden from customers but visible in admin",
     )
     experience_groups = models.ManyToManyField(
-        ExperienceGroup,
+        'experience_group.ExperienceGroup',
         blank=True,
         related_name='channels',
         help_text="Experience Groups this channel is assigned to",

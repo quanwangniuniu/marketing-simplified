@@ -1,8 +1,5 @@
 from django.urls import path
-from .views import ExperienceGroupViewSet, SupportChannelViewSet
-
-experience_group_list = ExperienceGroupViewSet.as_view({'get': 'list', 'post': 'create'})
-experience_group_detail = ExperienceGroupViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'})
+from .views import SupportChannelViewSet
 
 channel_list = SupportChannelViewSet.as_view({'get': 'list', 'post': 'create'})
 channel_detail = SupportChannelViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'})
@@ -11,8 +8,6 @@ channel_deactivate = SupportChannelViewSet.as_view({'post': 'deactivate'})
 channel_activate = SupportChannelViewSet.as_view({'post': 'activate'})
 
 urlpatterns = [
-    path('experience-groups/', experience_group_list, name='experience-group-list'),
-    path('experience-groups/<int:pk>/', experience_group_detail, name='experience-group-detail'),
     path('channels/', channel_list, name='channel-list'),
     path('channels/choices/', channel_choices, name='channel-choices'),
     path('channels/<int:pk>/', channel_detail, name='channel-detail'),

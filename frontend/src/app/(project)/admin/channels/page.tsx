@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Plus, MessageSquare, Mail, FileText, Power, PowerOff, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import Layout from '@/components/layout/Layout';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { useProjectStore } from '@/lib/projectStore';
-import toast from 'react-hot-toast';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import Modal from '@/components/ui/Modal';
 import {
   supportChannelApi,
   SupportChannel,
@@ -13,8 +12,16 @@ import {
   ExperienceGroup,
   DEFAULT_OPERATING_HOURS,
 } from '@/lib/api/supportChannelApi';
+import { Plus, Pencil, Trash2, Power, PowerOff, MessageSquare, Mail, FileText, AlertCircle, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const CHANNEL_TYPE_LABELS: Record<string, string> = {
+  live_chat_widget: 'Live Chat',
+  contact_form: 'Contact Form',
+  email: 'Email',
+};
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   live_chat_widget: MessageSquare,
@@ -22,13 +29,7 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   email: Mail,
 };
 
-const CHANNEL_COLORS: Record<string, string> = {
-  live_chat_widget: 'bg-[#3CCED7]/10 text-[#3CCED7] border-[#3CCED7]/20',
-  contact_form: 'bg-purple-50 text-purple-600 border-purple-200',
-  email: 'bg-amber-50 text-amber-600 border-amber-200',
-};
-
-// ── Operating Hours Editor ─────────────────────────────────────────────────
+// ── Operating Hours Editor ────────────────────────────────────────────────────
 
 function OperatingHoursEditor({
   value,
@@ -49,7 +50,7 @@ function OperatingHoursEditor({
                 type="checkbox"
                 checked={dayVal.open}
                 onChange={(e) => onChange({ ...value, [day]: { ...dayVal, open: e.target.checked } })}
-                className="accent-[#3CCED7]"
+                className="accent-indigo-600"
               />
               <span className="text-xs text-gray-500">Open</span>
             </label>
@@ -59,14 +60,14 @@ function OperatingHoursEditor({
                   type="time"
                   value={dayVal.start}
                   onChange={(e) => onChange({ ...value, [day]: { ...dayVal, start: e.target.value } })}
-                  className="text-xs border border-gray-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#3CCED7]/50"
+                  className="text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <span className="text-xs text-gray-400">to</span>
                 <input
                   type="time"
                   value={dayVal.end}
                   onChange={(e) => onChange({ ...value, [day]: { ...dayVal, end: e.target.value } })}
-                  className="text-xs border border-gray-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#3CCED7]/50"
+                  className="text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </>
             )}
@@ -78,7 +79,7 @@ function OperatingHoursEditor({
   );
 }
 
-// ── Channel Form Modal ─────────────────────────────────────────────────────
+// ── Channel Form ──────────────────────────────────────────────────────────────
 
 interface ChannelFormProps {
   projectId: number;
@@ -89,7 +90,9 @@ interface ChannelFormProps {
   onSaved: (channel: SupportChannel) => void;
 }
 
-function ChannelForm({ projectId, experienceGroups, channelTypes, initial, onClose, onSaved }: ChannelFormProps) {
+const ChannelForm: React.FC<ChannelFormProps> = ({
+  projectId, experienceGroups, channelTypes, initial, onClose, onSaved,
+}) => {
   const [name, setName] = useState(initial?.name ?? '');
   const [channelType, setChannelType] = useState(initial?.channel_type ?? channelTypes[0]?.value ?? '');
   const [welcomeMessage, setWelcomeMessage] = useState(initial?.welcome_message ?? '');
@@ -105,7 +108,7 @@ function ChannelForm({ projectId, experienceGroups, channelTypes, initial, onClo
   );
   const [showHours, setShowHours] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const toggleGroup = (id: number) => {
     setSelectedGroupIds((prev) =>
@@ -115,9 +118,9 @@ function ChannelForm({ projectId, experienceGroups, channelTypes, initial, onClo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) { setError('Display name is required.'); return; }
-    if (!channelType) { setError('Channel type is required.'); return; }
-    setError('');
+    if (!name.trim()) { setServerError('Display name is required.'); return; }
+    if (!channelType) { setServerError('Channel type is required.'); return; }
+    setServerError(null);
     setSaving(true);
     try {
       const payload: SupportChannelPayload = {
@@ -134,418 +137,466 @@ function ChannelForm({ projectId, experienceGroups, channelTypes, initial, onClo
         ? await supportChannelApi.updateChannel(initial.id, payload)
         : await supportChannelApi.createChannel(payload);
       onSaved(saved);
-      toast.success(initial ? 'Channel updated.' : 'Channel created.');
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to save channel.');
+    } catch (err: any) {
+      setServerError(err?.response?.data?.detail || 'Failed to save channel. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {initial ? 'Edit Channel' : 'New Support Channel'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-6">
+      {serverError && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {serverError}
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
-          )}
+      )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Display Name *</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Main Live Chat"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Channel Type *</label>
-              <select
-                value={channelType}
-                onChange={(e) => setChannelType(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-              >
-                {channelTypes.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Welcome Message</label>
-            <textarea
-              value={welcomeMessage}
-              onChange={(e) => setWelcomeMessage(e.target.value)}
-              rows={2}
-              placeholder="Message shown to customers when they open this channel"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40 resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Offline Fallback Message</label>
-            <textarea
-              value={offlineMessage}
-              onChange={(e) => setOfflineMessage(e.target.value)}
-              rows={2}
-              placeholder="Message shown when channel is outside operating hours"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40 resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Routing Destination</label>
-            <input
-              value={routingDestination}
-              onChange={(e) => setRoutingDestination(e.target.value)}
-              placeholder="e.g. Support Team, Tier 1 Queue"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-            />
-          </div>
-
-          {/* Operating Hours */}
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowHours((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              <span>Operating Hours Schedule</span>
-              {showHours ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {showHours && (
-              <div className="px-4 py-3">
-                <OperatingHoursEditor value={operatingHours} onChange={setOperatingHours} />
-              </div>
-            )}
-          </div>
-
-          {/* Experience Groups */}
-          {experienceGroups.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                Assign to Experience Groups
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {experienceGroups.map((g) => (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => toggleGroup(g.id)}
-                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                      selectedGroupIds.includes(g.id)
-                        ? 'bg-[#3CCED7] text-white border-[#3CCED7]'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#3CCED7]/50'
-                    }`}
-                  >
-                    {g.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-lg hover:bg-[#3CCED7]/80 transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : initial ? 'Save Changes' : 'Create Channel'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Channel Card ───────────────────────────────────────────────────────────
-
-function ChannelCard({
-  channel,
-  onEdit,
-  onToggleActive,
-  onDelete,
-}: {
-  channel: SupportChannel;
-  onEdit: () => void;
-  onToggleActive: () => void;
-  onDelete: () => void;
-}) {
-  const Icon = CHANNEL_ICONS[channel.channel_type] ?? MessageSquare;
-  const badgeClass = CHANNEL_COLORS[channel.channel_type] ?? 'bg-gray-100 text-gray-600 border-gray-200';
-
-  return (
-    <div className={`rounded-xl border bg-white p-4 flex flex-col gap-3 transition-all ${
-      channel.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'
-    }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${badgeClass}`}>
-            <Icon className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 truncate">{channel.name}</div>
-            <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border mt-0.5 ${badgeClass}`}>
-              {channel.channel_type_display}
-            </span>
-          </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            Display Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Main Live Chat"
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={saving}
+          />
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
-            channel.is_active
-              ? 'bg-green-50 text-green-600 border-green-200'
-              : 'bg-gray-100 text-gray-500 border-gray-200'
-          }`}>
-            {channel.is_active ? 'Active' : 'Inactive'}
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            Channel Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={channelType}
+            onChange={(e) => setChannelType(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={saving}
+          >
+            {channelTypes.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {channel.welcome_message && (
-        <p className="text-xs text-gray-500 line-clamp-2">{channel.welcome_message}</p>
-      )}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">Welcome Message</label>
+        <textarea
+          value={welcomeMessage}
+          onChange={(e) => setWelcomeMessage(e.target.value)}
+          rows={2}
+          placeholder="Message shown to customers when they open this channel"
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          disabled={saving}
+        />
+      </div>
 
-      {channel.routing_destination && (
-        <div className="text-xs text-gray-400">
-          <span className="font-medium text-gray-500">Routes to:</span> {channel.routing_destination}
-        </div>
-      )}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">Offline Fallback Message</label>
+        <textarea
+          value={offlineMessage}
+          onChange={(e) => setOfflineMessage(e.target.value)}
+          rows={2}
+          placeholder="Message shown when channel is outside operating hours"
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          disabled={saving}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700">Routing Destination</label>
+        <input
+          type="text"
+          value={routingDestination}
+          onChange={(e) => setRoutingDestination(e.target.value)}
+          placeholder="e.g. Support Team, Tier 1 Queue"
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          disabled={saving}
+        />
+      </div>
+
+      {/* Operating Hours */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowHours((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <span>Operating Hours Schedule</span>
+          {showHours ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        {showHours && (
+          <div className="px-4 py-3">
+            <OperatingHoursEditor value={operatingHours} onChange={setOperatingHours} />
+          </div>
+        )}
+      </div>
 
       {/* Experience Groups */}
-      {channel.experience_groups.length > 0 && (
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5">Experience Groups</div>
-          <div className="flex flex-wrap gap-1.5">
-            {channel.experience_groups.map((g) => (
-              <span key={g.id} className="text-[11px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+      {experienceGroups.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">Assign to Experience Groups</label>
+          <div className="flex flex-wrap gap-2">
+            {experienceGroups.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => toggleGroup(g.id)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  selectedGroupIds.includes(g.id)
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                }`}
+              >
                 {g.name}
-              </span>
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-auto">
+      <div className="flex justify-end gap-3 pt-2 border-t border-gray-200">
         <button
-          onClick={onEdit}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#3CCED7] transition-colors"
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >
-          <Pencil className="w-3 h-3" /> Edit
+          Cancel
         </button>
         <button
-          onClick={onToggleActive}
-          className={`flex items-center gap-1 text-xs transition-colors ${
-            channel.is_active
-              ? 'text-gray-500 hover:text-amber-600'
-              : 'text-gray-400 hover:text-green-600'
-          }`}
+          type="submit"
+          disabled={saving}
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
-          {channel.is_active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
-          {channel.is_active ? 'Deactivate' : 'Activate'}
-        </button>
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors ml-auto"
-        >
-          <Trash2 className="w-3 h-3" /> Delete
+          {saving ? 'Saving...' : initial ? 'Save Changes' : 'Create Channel'}
         </button>
       </div>
-    </div>
+    </form>
   );
-}
+};
 
-// ── Main Page ──────────────────────────────────────────────────────────────
+// ── Active Badge ──────────────────────────────────────────────────────────────
 
-function ChannelsContent() {
-  const { activeProject } = useProjectStore();
-  const projectId = activeProject?.id;
+const ActiveBadge: React.FC<{ isActive: boolean }> = ({ isActive }) => {
+  const styles = isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500';
+  return (
+    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${styles}`}>
+      {isActive ? 'Active' : 'Inactive'}
+    </span>
+  );
+};
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
+const ChannelsPage: React.FC = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = Number(searchParams.get('project'));
+  const projectValid = Number.isFinite(projectId) && projectId > 0;
 
   const [channels, setChannels] = useState<SupportChannel[]>([]);
   const [experienceGroups, setExperienceGroups] = useState<ExperienceGroup[]>([]);
   const [channelTypes, setChannelTypes] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterActive, setFilterActive] = useState<string>('all');
-  const [modalOpen, setModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<SupportChannel | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    if (!projectId) return;
+  const fetchData = useCallback(async () => {
+    if (!projectValid) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setError(null);
     try {
       const [ch, groups, choices] = await Promise.all([
         supportChannelApi.listChannels({ project_id: projectId }),
-        supportChannelApi.listExperienceGroups({ project_id: projectId }),
+        supportChannelApi.listExperienceGroups({ project: projectId }),
         supportChannelApi.getChoices(),
       ]);
       setChannels(ch);
-      setExperienceGroups(groups);
+      setExperienceGroups(groups.filter((g) => g.status === 'PUBLISHED'));
       setChannelTypes(choices.channel_types);
     } catch {
-      toast.error('Failed to load channels.');
+      setError('Failed to load support channels. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, projectValid]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleSaved = (channel: SupportChannel) => {
     setChannels((prev) => {
       const idx = prev.findIndex((c) => c.id === channel.id);
-      return idx >= 0 ? prev.map((c) => (c.id === channel.id ? channel : c)) : [...prev, channel];
+      return idx >= 0 ? prev.map((c) => (c.id === channel.id ? channel : c)) : [channel, ...prev];
     });
-    setModalOpen(false);
+    setIsCreateModalOpen(false);
     setEditingChannel(null);
   };
 
   const handleToggleActive = async (channel: SupportChannel) => {
+    setTogglingId(channel.id);
+    setActionError(null);
     try {
       const updated = channel.is_active
         ? await supportChannelApi.deactivateChannel(channel.id)
         : await supportChannelApi.activateChannel(channel.id);
       setChannels((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      toast.success(updated.is_active ? 'Channel activated.' : 'Channel deactivated.');
-    } catch {
-      toast.error('Failed to update channel status.');
+    } catch (err: any) {
+      setActionError(err?.response?.data?.detail || 'Failed to update channel status.');
+    } finally {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async (channel: SupportChannel) => {
-    if (!confirm(`Delete "${channel.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete "${channel.name}"? This action cannot be undone.`)) return;
+    setDeletingId(channel.id);
+    setActionError(null);
     try {
       await supportChannelApi.deleteChannel(channel.id);
       setChannels((prev) => prev.filter((c) => c.id !== channel.id));
-      toast.success('Channel deleted.');
-    } catch {
-      toast.error('Failed to delete channel.');
+    } catch (err: any) {
+      setActionError(err?.response?.data?.detail || 'Could not delete this channel.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const filtered = channels.filter((c) => {
-    if (filterType !== 'all' && c.channel_type !== filterType) return false;
-    if (filterActive === 'active' && !c.is_active) return false;
-    if (filterActive === 'inactive' && c.is_active) return false;
-    return true;
-  });
-
   return (
-    <Layout>
-      <div className="p-6">
-        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Support Channels</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Configure and manage support channels for customers</p>
-          </div>
-          <button
-            onClick={() => { setEditingChannel(null); setModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#3CCED7] rounded-lg hover:bg-[#3CCED7]/80 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Channel
-          </button>
-        </div>
+    <ProtectedRoute requiredAuth={true} fallback="/unauthorized">
+      <DashboardLayout alerts={[]} upcomingMeetings={[]}>
+        <div className="p-8 flex flex-col gap-6">
 
-        {/* Filters */}
-        <div className="flex gap-3 mb-5 flex-wrap">
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-          >
-            <option value="all">All Types</option>
-            {channelTypes.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-          <select
-            value={filterActive}
-            onChange={(e) => setFilterActive(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/40"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
-          <span className="text-sm text-gray-400 self-center">{filtered.length} channel{filtered.length !== 1 ? 's' : ''}</span>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 h-40 animate-pulse">
-                <div className="flex gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-gray-100" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-100 rounded w-3/4" />
-                    <div className="h-3 bg-gray-100 rounded w-1/2" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 py-16 flex flex-col items-center text-center">
-            <MessageSquare className="w-10 h-10 text-gray-300 mb-3" />
-            <p className="text-sm font-medium text-gray-500">No channels found</p>
-            <p className="text-xs text-gray-400 mt-1">Create your first support channel to get started</p>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Support Channels</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Configure and manage support channels for different customer segments.
+              </p>
+            </div>
             <button
-              onClick={() => { setEditingChannel(null); setModalOpen(true); }}
-              className="mt-4 flex items-center gap-1.5 text-sm font-medium text-[#3CCED7] hover:underline"
+              onClick={() => { setEditingChannel(null); setIsCreateModalOpen(true); }}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
             >
-              <Plus className="w-4 h-4" /> New Channel
+              <Plus className="h-4 w-4" />
+              New Channel
             </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((channel) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                onEdit={() => { setEditingChannel(channel); setModalOpen(true); }}
-                onToggleActive={() => handleToggleActive(channel)}
-                onDelete={() => handleDelete(channel)}
+
+          {/* Action-level error */}
+          {actionError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {actionError}
+              <button
+                onClick={() => setActionError(null)}
+                className="ml-auto text-red-500 hover:text-red-700 text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Content */}
+          {!projectValid ? (
+            <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
+              <p className="text-sm text-gray-600">
+                Open this page from a project card to manage support channels for that project.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push('/select-project')}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+              >
+                Go to projects
+              </button>
+            </div>
+          ) : loading ? (
+            <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
+              <LoadingSpinner />
+              <p className="text-sm text-gray-500">Loading support channels...</p>
+            </div>
+          ) : error ? (
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">Error</p>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <button
+                onClick={fetchData}
+                className="px-3 py-1.5 text-sm text-red-700 border border-red-300 rounded-lg hover:bg-red-100"
+              >
+                Retry
+              </button>
+            </div>
+          ) : channels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 border-2 border-dashed border-gray-200 rounded-xl">
+              <p className="text-gray-400 text-sm">No support channels yet.</p>
+              <button
+                onClick={() => { setEditingChannel(null); setIsCreateModalOpen(true); }}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-300 rounded-lg hover:bg-indigo-50"
+              >
+                <Plus className="h-4 w-4" />
+                Create your first channel
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Name</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Type</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Groups</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {channels.map((channel) => {
+                    const Icon = CHANNEL_ICONS[channel.channel_type] ?? MessageSquare;
+                    return (
+                      <tr key={channel.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-4 font-medium text-gray-900">{channel.name}</td>
+                        <td className="px-5 py-4 text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                            {CHANNEL_TYPE_LABELS[channel.channel_type] ?? channel.channel_type_display}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <ActiveBadge isActive={channel.is_active} />
+                        </td>
+                        <td className="px-5 py-4">
+                          {channel.experience_groups.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {channel.experience_groups.map((g) => (
+                                <span key={g.id} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+                                  {g.name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="italic text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setEditingChannel(channel)}
+                              title="Edit"
+                              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleToggleActive(channel)}
+                              disabled={togglingId === channel.id}
+                              title={channel.is_active ? 'Deactivate' : 'Activate'}
+                              className={`p-1.5 rounded-md transition-colors disabled:opacity-40 ${
+                                channel.is_active
+                                  ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
+                                  : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                              }`}
+                            >
+                              {channel.is_active
+                                ? <PowerOff className="h-4 w-4" />
+                                : <Power className="h-4 w-4" />
+                              }
+                            </button>
+                            <button
+                              onClick={() => handleDelete(channel)}
+                              disabled={deletingId === channel.id}
+                              title="Delete"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-40"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Create Modal */}
+        <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">New Support Channel</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Configure a new channel for customer support delivery.
+              </p>
+            </div>
+            {projectValid && (
+              <ChannelForm
+                projectId={projectId}
+                experienceGroups={experienceGroups}
+                channelTypes={channelTypes}
+                initial={null}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSaved={handleSaved}
               />
-            ))}
+            )}
           </div>
-        )}
-      </div>
+        </Modal>
 
-      {modalOpen && projectId && (
-        <ChannelForm
-          projectId={projectId}
-          experienceGroups={experienceGroups}
-          channelTypes={channelTypes}
-          initial={editingChannel}
-          onClose={() => { setModalOpen(false); setEditingChannel(null); }}
-          onSaved={handleSaved}
-        />
-      )}
-    </Layout>
-  );
-}
-
-export default function ChannelsPage() {
-  return (
-    <ProtectedRoute>
-      <ChannelsContent />
+        {/* Edit Modal */}
+        <Modal
+          isOpen={editingChannel !== null}
+          onClose={() => setEditingChannel(null)}
+          disableBackdropClose={true}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Edit Support Channel</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Update channel configuration and experience group assignments.
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingChannel(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {editingChannel !== null && projectValid && (
+              <ChannelForm
+                projectId={projectId}
+                experienceGroups={experienceGroups}
+                channelTypes={channelTypes}
+                initial={editingChannel}
+                onClose={() => setEditingChannel(null)}
+                onSaved={handleSaved}
+              />
+            )}
+          </div>
+        </Modal>
+      </DashboardLayout>
     </ProtectedRoute>
   );
-}
+};
+
+export default ChannelsPage;

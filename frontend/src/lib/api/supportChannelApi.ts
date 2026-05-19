@@ -4,7 +4,7 @@ export interface ExperienceGroup {
   id: number;
   name: string;
   description: string;
-  project: number;
+  status: string;
 }
 
 export interface SupportChannel {
@@ -83,13 +83,9 @@ export const supportChannelApi = {
     return response.data;
   },
 
-  listExperienceGroups: async (params?: { project_id?: number }) => {
-    const response = await api.get<ExperienceGroup[]>('/api/support/experience-groups/', { params });
-    return response.data;
-  },
-
-  createExperienceGroup: async (payload: { name: string; description?: string; project: number }) => {
-    const response = await api.post<ExperienceGroup>('/api/support/experience-groups/', payload);
-    return response.data;
+  listExperienceGroups: async (params?: { project?: number }) => {
+    const response = await api.get<ExperienceGroup[] | { results: ExperienceGroup[] }>('/api/experience-groups/', { params });
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.results ?? []);
   },
 };

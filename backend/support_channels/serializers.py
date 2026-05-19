@@ -1,16 +1,17 @@
 from rest_framework import serializers
-from .models import ExperienceGroup, SupportChannel
+from experience_group.models import ExperienceGroup
+from .models import SupportChannel
 
 
-class ExperienceGroupSerializer(serializers.ModelSerializer):
+class NestedExperienceGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExperienceGroup
-        fields = ['id', 'name', 'description', 'project']
-        read_only_fields = ['id']
+        fields = ['id', 'name', 'description', 'status']
+        read_only_fields = ['id', 'status']
 
 
 class SupportChannelSerializer(serializers.ModelSerializer):
-    experience_groups = ExperienceGroupSerializer(many=True, read_only=True)
+    experience_groups = NestedExperienceGroupSerializer(many=True, read_only=True)
     experience_group_ids = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=ExperienceGroup.objects.all(),
