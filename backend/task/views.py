@@ -1,4 +1,5 @@
 import logging
+import hashlib
 from rest_framework import viewsets, status, generics, permissions
 
 logger = logging.getLogger(__name__)
@@ -537,15 +538,8 @@ class TaskViewSet(viewsets.ModelViewSet):
         return task
 
     def retrieve(self, request, *args, **kwargs):
-        """Retrieve a task and persist shared access history."""
+        """Retrieve a task."""        
         task = self.get_object()
-
-        _create_shared_task_access_event(
-            task=task,
-            actor=request.user,
-            source="task_retrieve",
-        )
-
         serializer = self.get_serializer(task)
         return Response(serializer.data)
 
@@ -1724,6 +1718,37 @@ class TaskViewSet(viewsets.ModelViewSet):
                 }
             )
 
+        dedupe_parts = [
+            str(task.id),
+            str(request.user.id),
+            str(event_type),
+            str(source or ""),
+        ]
+
+        if event_type == "internal_search":
+            dedupe_parts.append(str(meta.get("query", "")).lower())
+        elif event_type == "ai_help_request":
+            dedupe_parts.append(str(meta.get("trigger", "")))
+            dedupe_parts.append(str(meta.get("context", "")))
+        elif event_type == "snippet_interaction":
+            dedupe_parts.append(str(meta.get("snippet_id", "")))
+            dedupe_parts.append(str(meta.get("interaction", "")))
+            dedupe_parts.append(str(meta.get("context", "")))
+
+        dedupe_hash = hashlib.sha256(
+            "|".join(dedupe_parts).encode("utf-8")
+        ).hexdigest()
+        dedupe_key = f"task_interaction:{dedupe_hash}"
+
+        if not cache.add(dedupe_key, "1", timeout=60):
+            return Response(
+                {
+                    "status": "deduped",
+                    "event_type": event_type,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         CollaborationEvent.objects.create(
             task=task,
             user=request.user,
@@ -1744,17 +1769,30 @@ class TaskViewSet(viewsets.ModelViewSet):
         """Get collaboration event history for a task."""
         task = self.get_object()
         events = task.collaboration_events.order_by("-created_at")
-
         event_type = request.query_params.get("event_type")
 
         if event_type:
             events = events.filter(event_type=event_type)
 
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+
+        limit = max(1, min(limit, 200))
+
+        total_count = events.count()
+        limited_events = events[:limit]
+
         return Response(
             {
                 "count": events.count(),
-                "results": CollaborationEventSerializer(events, many=True).data,
-            },
+                "returned": len(limited_events),
+                "limit": limit,
+                "results": CollaborationEventSerializer(
+                    limited_events,
+                    many=True,
+                ).data,            },
             status=status.HTTP_200_OK,
         )
 
@@ -1808,6 +1846,21 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         if average_response_time_secs is not None:
             average_response_time_secs = int(round(average_response_time_secs))
+
+        clarification_events = task.collaboration_events.filter(
+            event_type="clarification",
+        )
+        clarification_count = clarification_events.count()
+
+        reviewer_ping_events = task.collaboration_events.filter(
+            event_type="reviewer_ping",
+        )
+        reviewer_ping_count = reviewer_ping_events.count()
+
+        cross_team_mention_events = task.collaboration_events.filter(
+            event_type="cross_team_mention",
+        )
+        cross_team_mention_count = cross_team_mention_events.count()
 
         approval_delay_events = task.collaboration_events.filter(
             event_type="approval_delay",
@@ -1906,6 +1959,13 @@ class TaskViewSet(viewsets.ModelViewSet):
                     "max_thread_size": max_thread_size,
                     "average_thread_size": average_thread_size,
                 },
+                "clarifications": {
+                    "request_count": clarification_count,
+                },
+                "mentions": {
+                    "reviewer_ping_count": reviewer_ping_count,
+                    "cross_team_mention_count": cross_team_mention_count,
+                },
                 "approval_delays": {
                     "completed_approval_count": approval_delay_count,
                     "average_delay_secs": average_approval_delay_secs,
@@ -1935,47 +1995,19 @@ class TaskViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-
-def _create_shared_task_access_event(task, actor, source):
-    if not actor or not actor.is_authenticated:
-        return
-
-    if task.owner_id == actor.id:
-        return
-
-    cache_key = f"shared_task_access:{task.id}:{actor.id}:{source}"
-
-    if not cache.add(cache_key, "1", timeout=300):
-        return
-
-    project_role = (
-        ProjectMember.objects.filter(
-            project=task.project,
-            user=actor,
-            is_active=True,
-        )
-        .values_list("role", flat=True)
-        .first()
-    )
-
-    CollaborationEvent.objects.create(
-        task=task,
-        user=actor,
-        event_type="shared_task_access",
-        meta={
-            "task_id": task.id,
-            "owner_id": task.owner_id,
-            "accessed_by_id": actor.id,
-            "project_id": task.project_id,
-            "project_role": project_role,
-            "is_current_approver": task.current_approver_id == actor.id,
-            "source": source,
-            "accessed_at": timezone.now().isoformat(),
-        },
-    )
-
 def _create_documentation_revisit_event(task, attachment, actor, source):
     if not actor or not actor.is_authenticated:
+        return
+    
+    cache_key = (
+        f"documentation_revisit:"
+        f"{task.id}:"
+        f"{actor.id}:"
+        f"{attachment.id}:"
+        f"{source}"
+    )
+
+    if not cache.add(cache_key, "1", timeout=300):
         return
 
     CollaborationEvent.objects.create(

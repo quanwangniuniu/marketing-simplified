@@ -35,8 +35,13 @@ export default function TaskV2DetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [engagementRefreshKey, setEngagementRefreshKey] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+
+  const refreshEngagementMetrics = useCallback(() => {
+    setEngagementRefreshKey((key) => key + 1);
+  }, []);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -73,6 +78,7 @@ export default function TaskV2DetailPage() {
 
   const onMutated = useCallback(async () => {
     setRefreshKey((k) => k + 1);
+    setEngagementRefreshKey((k) => k + 1);
     await load();
   }, [load]);
 
@@ -161,6 +167,8 @@ export default function TaskV2DetailPage() {
                     taskId={task?.id ?? 0}
                     readOnly={Boolean(readOnly)}
                     loading={loading}
+                    onAttachmentDownloaded={refreshEngagementMetrics}
+
                   />
                 )}
                 {(task?.id || loading) && (
@@ -202,6 +210,7 @@ export default function TaskV2DetailPage() {
                   <EngagementPanel
                     taskId={task?.id ?? 0}
                     loading={loading}
+                    refreshKey={engagementRefreshKey}
                   />
                 )}
               </aside>

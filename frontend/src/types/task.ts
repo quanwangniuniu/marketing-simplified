@@ -270,3 +270,54 @@ export interface TaskFieldHistoryEntry {
   changed_by_avatar: string | null;
   changed_at: string;
 }
+
+export type TaskCollaborationMetrics = {
+  comment_response: {
+    reply_count: number;
+    responses_with_timing: number;
+    average_response_time_secs: number | null;
+    max_response_time_secs: number | null;
+  };
+  discussion_threads: {
+    total_comments: number;
+    root_comment_count: number;
+    reply_count: number;
+    threads_with_replies: number;
+    max_thread_depth: number;
+    average_thread_depth: number;
+    max_thread_size: number;
+    average_thread_size: number;
+  };
+  clarifications: {
+    request_count: number;
+  };
+  mentions: {
+    reviewer_ping_count: number;
+    cross_team_mention_count: number;
+  };
+  approval_delays: {
+    completed_approval_count: number;
+    average_delay_secs: number | null;
+    max_delay_secs: number | null;
+  };
+  shared_access: {
+    access_count: number;
+    unique_accessor_count: number;
+  };
+  documentation_revisits: {
+    revisit_count: number;
+    unique_document_count: number;
+  };
+  internal_searches: {
+    search_count: number;
+    unique_query_count: number;
+  };
+  ai_help_requests: {
+    request_count: number;
+    unique_trigger_count: number;
+  };
+  snippet_interactions: {
+    interaction_count: number;
+    unique_snippet_count: number;
+  };
+};

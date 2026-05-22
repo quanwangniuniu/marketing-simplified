@@ -10,6 +10,8 @@ from django.core.cache import cache
 from django.db.models import F
 from django.utils import timezone
 
+from task.models import Task, CollaborationEvent
+from core.models import ProjectMember
 from tracking.enums import EndReason, EventType
 from tracking.models import TrackingEvent, TrackingSession
 from tracking.services import SessionLookup
@@ -20,6 +22,56 @@ _BATCH_SIZE = 5000
 _TASK_PATH_RE = re.compile(r'^/api/tasks/(\d+)/')
 _TASK_OPEN_TTL = 30          # seconds — 30s dedup window
 _FIRST_INTERACTION_TTL = 2_592_000  # 30 days — once per user per task
+_SHARED_TASK_ACCESS_TTL = 300  # seconds — preserve SMP-549 dedupe behavior
+
+
+def _emit_shared_task_access_event(task_id, user_id, source="task_retrieve"):
+    try:
+        task = (
+            Task.objects
+            .select_related("project", "owner", "current_approver")
+            .get(pk=task_id)
+        )
+    except Task.DoesNotExist:
+        logger.info(
+            "emit_tracking_event: task %s not found for shared access tracking",
+            task_id,
+        )
+        return
+
+    if task.owner_id == user_id:
+        return
+
+    cache_key = f"shared_task_access:{task.id}:{user_id}:{source}"
+
+    if not cache.add(cache_key, "1", timeout=_SHARED_TASK_ACCESS_TTL):
+        return
+
+    project_role = (
+        ProjectMember.objects.filter(
+            project=task.project,
+            user_id=user_id,
+            is_active=True,
+        )
+        .values_list("role", flat=True)
+        .first()
+    )
+
+    CollaborationEvent.objects.create(
+        task=task,
+        user_id=user_id,
+        event_type="shared_task_access",
+        meta={
+            "task_id": task.id,
+            "owner_id": task.owner_id,
+            "accessed_by_id": user_id,
+            "project_id": task.project_id,
+            "project_role": project_role,
+            "is_current_approver": task.current_approver_id == user_id,
+            "source": source,
+            "accessed_at": timezone.now().isoformat(),
+        },
+    )
 
 
 @shared_task
@@ -70,6 +122,12 @@ def emit_tracking_event(user_id, request_path, request_method, request_meta=None
         client_event_id=uuid.uuid4(),
     )
 
+    if event_type == EventType.TASK_OPEN:
+        _emit_shared_task_access_event(
+            task_id=task_id,
+            user_id=user_id,
+            source="task_retrieve",
+        )
 
 @shared_task
 def expire_stale_sessions():

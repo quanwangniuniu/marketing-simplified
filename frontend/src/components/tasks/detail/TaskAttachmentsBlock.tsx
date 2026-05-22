@@ -45,12 +45,14 @@ export default function TaskAttachmentsBlock({
   loading = false,
   onPreviewChange,
   onMutated,
+  onAttachmentDownloaded,
 }: {
   taskId: number;
   readOnly: boolean;
   loading?: boolean;
   onPreviewChange?: (open: boolean) => void;
   onMutated?: () => void;
+  onAttachmentDownloaded?: () => void;
 }) {
   const [items, setItems] = useState<TaskAttachment[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -149,7 +151,10 @@ export default function TaskAttachmentsBlock({
     try {
       const data: any = await TaskAPI.downloadAttachment(taskId, att.id);
       const url = data?.download_url || data?.url || att.file;
-      if (url) window.open(url, '_blank');
+      if (url) {
+        window.open(url, '_blank');
+        onAttachmentDownloaded?.();
+      }
       else toast.error('No download URL returned');
     } catch (e) {
       toast.error((e as any)?.response?.data?.detail || 'Download failed');

@@ -13,6 +13,7 @@ import {
   TaskBulkUpdateRequest,
   TaskBulkActionResponse,
   GanttChartPayload,
+  TaskCollaborationMetrics,
 } from "@/types/task";
 
 export type MentionUser = {
@@ -63,6 +64,14 @@ export const TaskAPI = {
   // Get a specific task by ID
   getTask: (taskId: number) => api.get(`/api/tasks/${taskId}/`),
 
+    // Get collaboration and knowledge metrics for a task
+  getCollaborationMetrics: async (
+    taskId: number
+  ): Promise<TaskCollaborationMetrics> => {
+    const response = await api.get(`/api/tasks/${taskId}/collaboration-metrics/`);
+    return response.data as TaskCollaborationMetrics;
+  },
+  
   // Update a task
   updateTask: (taskId: number, data: Partial<TaskData>) =>
     api.patch(`/api/tasks/${taskId}/`, data),
