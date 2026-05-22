@@ -133,7 +133,7 @@ def emit_tracking_event(user_id, request_path, request_method, request_meta=None
 
     _create_tracking_events(user_id, task_id, event_types, request_meta)
 
-    if event_type == EventType.TASK_OPEN:
+    if EventType.TASK_OPEN in event_types:
         _emit_shared_task_access_event(
             task_id=task_id,
             user_id=user_id,
