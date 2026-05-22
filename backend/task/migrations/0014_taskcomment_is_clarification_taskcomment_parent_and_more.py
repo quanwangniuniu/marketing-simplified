@@ -8,8 +8,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('task', '0010_taskfieldhistory'),
+        ("task", "0013_taskpin"),
     ]
 
     operations = [
