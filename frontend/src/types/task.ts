@@ -327,7 +327,9 @@ export type TaskCollaborationMetrics = {
     interaction_count: number;
     unique_snippet_count: number;
   };
-};\n\n// ── Task Intelligence ────────────────────────────────────────────────────────
+};
+
+// ── Task Intelligence ────────────────────────────────────────────────────────
 
 export interface IntelligenceTaskStub {
   id: number;
