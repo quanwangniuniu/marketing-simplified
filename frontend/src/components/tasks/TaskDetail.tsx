@@ -157,7 +157,6 @@ export default function TaskDetail({
   const { startReview: startBudgetReview, makeDecision: makeBudgetDecision } =
     useBudgetData();
   const projectId = task.project?.id ?? task.project_id;
-  const currentUserId = currentUser?.id !== undefined ? Number(currentUser.id) : null;
   const { chats } = useChatData({ projectId, autoFetch: Boolean(projectId) });
 
   const [summaryDraft, setSummaryDraft] = useState(task.summary || "");

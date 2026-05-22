@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TimelineView from '@/components/tasks/timeline/TimelineView';
+import TimelineHeader from '@/components/tasks/timeline/TimelineHeader';
 import type { TaskData } from '@/types/task';
 
 // Mock TaskAPI
@@ -47,49 +48,71 @@ describe('TimelineView', () => {
     render(<TimelineView tasks={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Months' }));
-    expect(screen.getByRole('button', { name: 'Months' })).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button', { name: 'Months' })).toHaveClass('bg-[#3CCED7]');
 
     fireEvent.click(screen.getByRole('button', { name: 'Weeks' }));
-    expect(screen.getByRole('button', { name: 'Weeks' })).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button', { name: 'Weeks' })).toHaveClass('bg-[#3CCED7]');
 
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    expect(screen.getByRole('button', { name: 'Today' })).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button', { name: 'Today' })).toHaveClass('bg-[#3CCED7]');
   });
 
   it('filters tasks by timeline search', () => {
-    const tasks = [
-      makeTask({ id: 101, summary: 'Budget Review' }),
-      makeTask({ id: 202, summary: 'Asset Draft' }),
-    ];
-
-    render(<TimelineView tasks={tasks} />);
+    // TimelineHeader is now a standalone component; test its search input directly
+    const onSearchChange = jest.fn();
+    render(
+      <TimelineHeader
+        searchValue=""
+        onSearchChange={onSearchChange}
+        workTypeOptions={[{ value: 'all', label: 'All work types' }]}
+        selectedWorkType="all"
+        onWorkTypeChange={jest.fn()}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Search timeline'), {
       target: { value: 'Asset' },
     });
 
-    expect(screen.getByText('Asset Draft')).toBeInTheDocument();
-    expect(screen.queryByText('Budget Review')).not.toBeInTheDocument();
+    expect(onSearchChange).toHaveBeenCalledWith('Asset');
   });
 
   it('filters tasks by work type', () => {
-    const tasks = [
-      makeTask({ id: 101, summary: 'Draft Task', status: 'DRAFT' }),
-      makeTask({ id: 202, summary: 'Approved Task', type: 'asset', status: 'APPROVED' }),
-    ];
-
-    render(<TimelineView tasks={tasks} />);
+    // TimelineHeader is now a standalone component; test its work type select directly
+    const onWorkTypeChange = jest.fn();
+    render(
+      <TimelineHeader
+        searchValue=""
+        onSearchChange={jest.fn()}
+        workTypeOptions={[
+          { value: 'all', label: 'All work types' },
+          { value: 'asset', label: 'Asset' },
+          { value: 'budget', label: 'Budget' },
+        ]}
+        selectedWorkType="all"
+        onWorkTypeChange={onWorkTypeChange}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText('Work type filter'), {
       target: { value: 'asset' },
     });
 
-    expect(screen.getByText('Approved Task')).toBeInTheDocument();
-    expect(screen.queryByText('Draft Task')).not.toBeInTheDocument();
+    expect(onWorkTypeChange).toHaveBeenCalledWith('asset');
   });
 
   it('shows current user initials in the timeline header avatar', () => {
-    render(<TimelineView tasks={[]} currentUser={{ username: 'bob.smith' }} />);
+    // TimelineHeader renders the avatar; test it directly
+    render(
+      <TimelineHeader
+        searchValue=""
+        onSearchChange={jest.fn()}
+        workTypeOptions={[{ value: 'all', label: 'All work types' }]}
+        selectedWorkType="all"
+        onWorkTypeChange={jest.fn()}
+        currentUser={{ username: 'bob.smith' }}
+      />
+    );
     expect(screen.getByText('BS')).toBeInTheDocument();
   });
 

@@ -46,6 +46,14 @@ class Task(models.Model):
       null=True,
       help_text="The user who is currently reviewing the task"
     )
+    created_by = models.ForeignKey(
+      User,
+      related_name='created_tasks',
+      on_delete=models.SET_NULL,
+      null=True,
+      blank=True,
+      help_text="The user who originally created the task"
+    )
     approval_chain = models.ForeignKey(
       'ApprovalChain',
       on_delete=models.SET_NULL,
@@ -416,6 +424,38 @@ class Task(models.Model):
             parent_task=self,
             child_task=child_task
         ).delete()
+
+
+class TaskPin(models.Model):
+    """Personal pinned-task marker."""
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='pins',
+        help_text="Task pinned by the user",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='task_pins',
+        help_text="User who pinned the task",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['task', 'user'],
+                name='taskpin_unique_task_user',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'task'], name='taskpin_user_task_idx'),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"TaskPin task={self.task_id} user={self.user_id}"
 
 
 
@@ -943,7 +983,7 @@ class TaskFieldHistory(models.Model):
         db_table = 'task_field_history'
         ordering = ['-changed_at']
         indexes = [
-            models.Index(fields=['task', '-changed_at']),
+            models.Index(fields=['task', '-changed_at'], name='task_field_history_task_idx'),
         ]
 
     def __str__(self):

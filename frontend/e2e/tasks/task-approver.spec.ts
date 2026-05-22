@@ -4,6 +4,7 @@ import {
   navigateToNewTaskPage,
   submitNewTaskAndGetId,
   deleteTaskById,
+  selectFirstAvailableApprover,
 } from './tasks-helpers';
 
 test.describe('Task approver assignment', () => {
@@ -30,22 +31,16 @@ test.describe('Task approver assignment', () => {
 
     // Select Alert work type and fill required fields
     await page.getByRole('button', { name: 'Alert', exact: true }).click();
-    await page.getByPlaceholder('Summary of this task').fill('E2E Approver Test Task');
 
     await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
+    await page.getByPlaceholder('Summary of this task').fill('E2E Approver Test Task');
     await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
     await page.locator('#task-field-alert-severity').selectOption('medium');
 
-    // Select any available approver (first non-empty option)
-    const approverSelect = page.locator('select').filter({
-      has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
-    });
-    await expect(approverSelect).toBeVisible({ timeout: 10_000 });
-    const options = await approverSelect.locator('option').allTextContents();
-    const realOptions = options.filter((o) => !o.includes('Select an approver') && !o.includes('Unassigned') && !o.includes('Loading'));
-    if (realOptions.length > 0) {
-      await approverSelect.selectOption({ index: 1 });
-    }
+    await selectFirstAvailableApprover(page);
+    await page.getByPlaceholder('Summary of this task').fill('E2E Approver Test Task');
+    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
+    await page.locator('#task-field-alert-severity').selectOption('medium');
 
     createdTaskId = await submitNewTaskAndGetId(page);
     expect(createdTaskId).toBeTruthy();

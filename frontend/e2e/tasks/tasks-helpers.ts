@@ -121,7 +121,9 @@ export async function submitNewTaskAndGetId(page: Page): Promise<number | null> 
     timeout: 30_000,
   }).catch(() => {});
 
-  await page.getByRole('button', { name: 'Create task', exact: true }).click();
+  const submitButton = page.getByRole('button', { name: 'Create task', exact: true });
+  await expect(submitButton).toBeEnabled({ timeout: 10_000 });
+  await submitButton.click();
 
   const response = await responsePromise;
   if (!response.ok()) return null;
@@ -140,15 +142,7 @@ export async function submitNewTaskAndGetId(page: Page): Promise<number | null> 
  * Fetches up to 100 tasks per page and deletes any E2E ones.
  */
 export async function deleteAllE2ETasks(page: Page): Promise<void> {
-  const token: string | null = await page.evaluate(() => {
-    try {
-      const raw = localStorage.getItem('auth-storage');
-      if (!raw) return null;
-      return (JSON.parse(raw) as any)?.state?.token ?? null;
-    } catch {
-      return null;
-    }
-  });
+  const token = await getAuthToken(page);
   if (!token) return;
 
   const origin = new URL(page.url()).origin;
@@ -174,13 +168,12 @@ export async function deleteAllE2ETasks(page: Page): Promise<void> {
 /**
  * Select the first real approver option in the approver dropdown on the new-task page.
  * Must be called after a task type is selected (the select is only visible then).
- * Waits for members to load before selecting. Skips silently if no members available.
+ * Waits for members to load before selecting. Throws if no project members are available.
  */
 export async function selectFirstAvailableApprover(page: Page): Promise<void> {
-  const approverSelect = page.locator('select').filter({
-    has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
-  });
+  const approverSelect = page.locator('#task-common-approver select');
   await expect(approverSelect).toBeVisible({ timeout: 10_000 });
+  await expect(approverSelect).not.toBeDisabled({ timeout: 10_000 });
 
   // Wait until the first option's text changes from "Loading…" (members have loaded)
   await expect(approverSelect.locator('option').first()).not.toHaveText(/Loading/i, { timeout: 10_000 });
@@ -190,7 +183,16 @@ export async function selectFirstAvailableApprover(page: Page): Promise<void> {
     (o) => !o.includes('Select an approver') && !o.includes('Unassigned') && !o.includes('Loading'),
   );
   if (realOptions.length > 0) {
-    await approverSelect.selectOption({ index: 1 });
+    const optionValue = await approverSelect.locator('option').nth(1).getAttribute('value');
+    if (!optionValue) throw new Error('First project member option did not include a value');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await approverSelect.selectOption(optionValue);
+      await page.waitForTimeout(200);
+      if ((await approverSelect.inputValue()) === optionValue) return;
+    }
+    throw new Error('Approver selection was reset before it could be submitted');
+  } else {
+    throw new Error('No project members are available to select as task approver');
   }
 }
 
@@ -198,7 +200,17 @@ export async function selectFirstAvailableApprover(page: Page): Promise<void> {
  * Delete a task by ID via the REST API using the auth token from localStorage.
  */
 export async function deleteTaskById(page: Page, taskId: number) {
-  const token: string | null = await page.evaluate(() => {
+  const token = await getAuthToken(page);
+  if (!token) return;
+
+  const origin = new URL(page.url()).origin;
+  await page.request.delete(`${origin}/api/tasks/${taskId}/`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getAuthToken(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
     try {
       const raw = localStorage.getItem('auth-storage');
       if (!raw) return null;
@@ -208,11 +220,71 @@ export async function deleteTaskById(page: Page, taskId: number) {
       return null;
     }
   });
+}
 
-  if (!token) return;
+export async function createDraftTaskViaApi(
+  page: Page,
+  projectId: number,
+  summary: string,
+  overrides: Record<string, unknown> = {},
+): Promise<number> {
+  const token = await getAuthToken(page);
+  if (!token) throw new Error('No auth token found for task fixture creation');
 
   const origin = new URL(page.url()).origin;
-  await page.request.delete(`${origin}/api/tasks/${taskId}/`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const response = await page.request.post(`${origin}/api/tasks/`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: {
+      project_id: projectId,
+      type: 'execution',
+      summary,
+      priority: 'MEDIUM',
+      create_as_draft: true,
+      ...overrides,
+    },
   });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to create task fixture (${response.status()}): ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  if (!body?.id) throw new Error('Task fixture response did not include an id');
+  return body.id;
+}
+
+export async function ensureTaskListReadyWithRows(
+  page: Page,
+  projectId: number,
+  minRows = 1,
+): Promise<number[]> {
+  const createdIds: number[] = [];
+  const currentRows = await page.getByTestId('task-row-open').count();
+  const listVisible = await page.getByTestId('task-list').isVisible({ timeout: 5_000 }).catch(() => false);
+
+  if (listVisible && currentRows >= minRows) return createdIds;
+
+  for (let i = currentRows; i < minRows; i += 1) {
+    createdIds.push(
+      await createDraftTaskViaApi(page, projectId, `Task list fixture ${Date.now()} ${i}`),
+    );
+  }
+
+  await page.goto(`/tasks?project_id=${projectId}`);
+  await waitForTasksPageReady(page);
+  await page.getByTestId('tab-tasks').click();
+  await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('task-row-open').nth(minRows - 1)).toBeVisible({ timeout: 10_000 });
+
+  return createdIds;
+}
+
+export async function openQuickTaskCreate(page: Page): Promise<void> {
+  const inlineAdd = page.getByTestId('inline-add-task-row');
+  if (await inlineAdd.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await inlineAdd.click();
+    return;
+  }
+
+  await page.getByRole('button', { name: 'Add the first task' }).click();
 }

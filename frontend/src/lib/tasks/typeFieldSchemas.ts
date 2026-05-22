@@ -1040,18 +1040,6 @@ const COMMUNICATION: TypeSchema = {
       placeholder: 'Names or roles to notify',
     },
     {
-      key: 'impacted_areas',
-      label: 'Impacted areas',
-      kind: 'select',
-      required: true,
-      options: [
-        { value: 'budget',    label: 'Budget' },
-        { value: 'creative',  label: 'Creative' },
-        { value: 'kpi',       label: 'KPI' },
-        { value: 'targeting', label: 'Targeting' },
-      ],
-    },
-    {
       key: 'required_actions',
       label: 'Required actions',
       kind: 'textarea',

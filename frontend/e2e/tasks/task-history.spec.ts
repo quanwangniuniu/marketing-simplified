@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test';
 import {
   navigateToTasksAndSelectProject,
-  navigateToNewTaskPage,
-  submitNewTaskAndGetId,
   deleteTaskById,
   waitForTasksPageReady,
+  createDraftTaskViaApi,
 } from './tasks-helpers';
 
 test.describe('Task field history', () => {
@@ -27,36 +26,15 @@ test.describe('Task field history', () => {
   });
 
   test('task creation entry appears in History tab', async ({ page }) => {
-    await navigateToNewTaskPage(page, projectId);
-
-    await page.getByRole('button', { name: 'Alert', exact: true }).click();
-    await page.getByPlaceholder('Summary of this task').fill('E2E History Created Test');
-
-    await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
-    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
-    await page.locator('#task-field-alert-severity').selectOption('medium');
-
-    // Assign an approver (required)
-    const approverSelect = page.locator('select').filter({
-      has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
-    });
-    await expect(approverSelect).toBeVisible({ timeout: 10_000 });
-    const optionCount = await approverSelect.locator('option').count();
-    if (optionCount > 1) {
-      await approverSelect.selectOption({ index: 1 });
-    }
-
-    createdTaskId = await submitNewTaskAndGetId(page);
+    await page.goto(`/tasks?project_id=${projectId}`);
+    await waitForTasksPageReady(page);
+    createdTaskId = await createDraftTaskViaApi(page, projectId, 'History fixture Created Test');
     expect(createdTaskId).toBeTruthy();
 
-    // Navigate to task list and open the task drawer
-    await page.goto(`/tasks?project_id=${projectId}`);
-    await page.getByTestId('tab-tasks').click();
-    await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
-
-    const taskRow = page.getByTestId('task-row').filter({ hasText: 'E2E History Created Test' }).first();
-    await expect(taskRow).toBeVisible({ timeout: 10_000 });
-    await taskRow.getByTestId('task-row-open').click();
+    // Navigate straight to the drawer for the created task instead of relying on list position.
+    await page.goto(`/tasks?project_id=${projectId}&drawerTaskId=${createdTaskId}`);
+    await waitForTasksPageReady(page);
+    await expect(page.getByTestId('task-drawer')).toBeVisible({ timeout: 10_000 });
 
     // Switch to History tab
     await expect(page.getByTestId('drawer-tab-history')).toBeVisible({ timeout: 10_000 });
@@ -85,7 +63,7 @@ test.describe('Task field history', () => {
     const noApproverRes = await page.request.post(`${origin}/api/tasks/`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
-        summary: 'E2E No Approver Validation Test',
+        summary: 'History fixture No Approver Validation Test',
         project_id: projectId,
         type: 'alert',
       },
@@ -98,7 +76,7 @@ test.describe('Task field history', () => {
     const draftRes = await page.request.post(`${origin}/api/tasks/`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
-        summary: 'E2E Draft No Approver Test',
+        summary: 'History fixture Draft No Approver Test',
         project_id: projectId,
         type: 'alert',
         create_as_draft: true,
@@ -111,35 +89,15 @@ test.describe('Task field history', () => {
   });
 
   test('attachment upload and delete appear in History tab', async ({ page }) => {
-    await navigateToNewTaskPage(page, projectId);
-
-    await page.getByRole('button', { name: 'Alert', exact: true }).click();
-    await page.getByPlaceholder('Summary of this task').fill('E2E History Attachment Test');
-
-    await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
-    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
-    await page.locator('#task-field-alert-severity').selectOption('medium');
-
-    const approverSelect = page.locator('select').filter({
-      has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
-    });
-    await expect(approverSelect).toBeVisible({ timeout: 10_000 });
-    const optionCount = await approverSelect.locator('option').count();
-    if (optionCount > 1) {
-      await approverSelect.selectOption({ index: 1 });
-    }
-
-    createdTaskId = await submitNewTaskAndGetId(page);
+    await page.goto(`/tasks?project_id=${projectId}`);
+    await waitForTasksPageReady(page);
+    createdTaskId = await createDraftTaskViaApi(page, projectId, 'History fixture Attachment Test');
     expect(createdTaskId).toBeTruthy();
 
-    // Open the task drawer
-    await page.goto(`/tasks?project_id=${projectId}`);
-    await page.getByTestId('tab-tasks').click();
-    await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
-
-    const taskRow = page.getByTestId('task-row').filter({ hasText: 'E2E History Attachment Test' }).first();
-    await expect(taskRow).toBeVisible({ timeout: 10_000 });
-    await taskRow.getByTestId('task-row-open').click();
+    // Open the task drawer directly.
+    await page.goto(`/tasks?project_id=${projectId}&drawerTaskId=${createdTaskId}`);
+    await waitForTasksPageReady(page);
+    await expect(page.getByTestId('task-drawer')).toBeVisible({ timeout: 10_000 });
 
     // Upload an attachment via API (simpler and more reliable than file dialog)
     const token: string | null = await page.evaluate(() => {
@@ -152,11 +110,6 @@ test.describe('Task field history', () => {
     expect(token).toBeTruthy();
 
     const origin = new URL(page.url()).origin;
-    const fileContent = Buffer.from('E2E test attachment content');
-    const formData = new FormData();
-    const blob = new Blob([fileContent], { type: 'text/plain' });
-    formData.append('file', blob, 'e2e-test-file.txt');
-
     const uploadRes = await page.request.post(`${origin}/api/tasks/${createdTaskId}/attachments/`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
@@ -190,25 +143,9 @@ test.describe('Task field history', () => {
   });
 
   test('field change recorded with correct before/after values', async ({ page }) => {
-    await navigateToNewTaskPage(page, projectId);
-
-    await page.getByRole('button', { name: 'Alert', exact: true }).click();
-    await page.getByPlaceholder('Summary of this task').fill('E2E History Field Change Test');
-
-    await expect(page.locator('#task-field-alert-alert_type')).toBeVisible({ timeout: 10_000 });
-    await page.locator('#task-field-alert-alert_type').selectOption('performance_drop');
-    await page.locator('#task-field-alert-severity').selectOption('medium');
-
-    const approverSelect = page.locator('select').filter({
-      has: page.locator('option', { hasText: /Select an approver|Unassigned/ }),
-    });
-    await expect(approverSelect).toBeVisible({ timeout: 10_000 });
-    const optionCount = await approverSelect.locator('option').count();
-    if (optionCount > 1) {
-      await approverSelect.selectOption({ index: 1 });
-    }
-
-    createdTaskId = await submitNewTaskAndGetId(page);
+    await page.goto(`/tasks?project_id=${projectId}`);
+    await waitForTasksPageReady(page);
+    createdTaskId = await createDraftTaskViaApi(page, projectId, 'History fixture Field Change Test');
     expect(createdTaskId).toBeTruthy();
 
     // Update the task priority via API
@@ -225,15 +162,10 @@ test.describe('Task field history', () => {
       data: { priority: 'HIGH' },
     });
 
-    // Open the task drawer
-    await page.goto(`/tasks?project_id=${projectId}`);
+    // Open the task drawer directly.
+    await page.goto(`/tasks?project_id=${projectId}&drawerTaskId=${createdTaskId}`);
     await waitForTasksPageReady(page);
-    await page.getByTestId('tab-tasks').click();
-    await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
-
-    const taskRow = page.getByTestId('task-row').filter({ hasText: 'E2E History Field Change Test' }).first();
-    await expect(taskRow).toBeVisible({ timeout: 10_000 });
-    await taskRow.getByTestId('task-row-open').click();
+    await expect(page.getByTestId('task-drawer')).toBeVisible({ timeout: 10_000 });
 
     await expect(page.getByTestId('drawer-tab-history')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('drawer-tab-history').click();

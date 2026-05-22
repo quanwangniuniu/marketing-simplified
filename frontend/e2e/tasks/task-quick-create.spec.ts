@@ -1,11 +1,18 @@
 import { test, expect } from '@playwright/test';
-import { navigateToTasksAndSelectProject, waitForTasksPageReady, deleteTaskById } from './tasks-helpers';
+import {
+  deleteTaskById,
+  ensureTaskListReadyWithRows,
+  navigateToTasksAndSelectProject,
+  openQuickTaskCreate,
+  waitForTasksPageReady,
+} from './tasks-helpers';
 
 test.describe('Quick task create', () => {
   test.describe.configure({ mode: 'serial' });
 
   let projectId: number;
   let createdTaskId: number | null = null;
+  let fixtureTaskIds: number[] = [];
 
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ storageState: 'e2e/.auth/user.json' });
@@ -16,10 +23,11 @@ test.describe('Quick task create', () => {
 
   test.beforeEach(async ({ page }) => {
     createdTaskId = null;
+    fixtureTaskIds = [];
     await page.goto(`/tasks?project_id=${projectId}`);
     await waitForTasksPageReady(page);
     await page.getByTestId('tab-tasks').click();
-    await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
+    fixtureTaskIds = await ensureTaskListReadyWithRows(page, projectId, 1);
   });
 
   test.afterEach(async ({ page }) => {
@@ -27,6 +35,10 @@ test.describe('Quick task create', () => {
       await deleteTaskById(page, createdTaskId).catch(() => {});
       createdTaskId = null;
     }
+    for (const taskId of fixtureTaskIds) {
+      await deleteTaskById(page, taskId).catch(() => {});
+    }
+    fixtureTaskIds = [];
   });
 
   test('"Add a task" row is visible at the bottom of the list', async ({ page }) => {
@@ -156,15 +168,15 @@ test.describe('Quick task create', () => {
     await page.getByTestId('filter-panel-trigger').click();
 
     // Navigate to the Status filter tab inside the panel
-    await page.getByRole('button', { name: 'Status' }).click();
+    await page.getByTestId('task-filter-tab-status').click();
 
     // Check the Approved checkbox
-    await page.getByText('Approved').click();
+    await page.getByTestId('task-filter-option-status-APPROVED').click();
 
     // Close the filter panel by clicking outside
     await page.mouse.click(10, 10);
 
-    await page.getByTestId('inline-add-task-row').click();
+    await openQuickTaskCreate(page);
     await expect(page.getByTestId('quick-task-create-modal')).toBeVisible({ timeout: 5_000 });
 
     const responsePromise = page.waitForResponse((resp) => {

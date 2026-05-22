@@ -41,7 +41,7 @@ const urls = [
   `${base}/projects`,
   `${base}/decisions`,
   `${base}/campaigns`,
-  `${base}/variations`,
+  `${base}/variations-studio`,
   `${base}/mailchimp`,
   `${base}/notion`,
   `${base}/tiktok`,

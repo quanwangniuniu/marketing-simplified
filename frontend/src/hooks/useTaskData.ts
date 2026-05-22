@@ -16,6 +16,15 @@ type TaskFetchParams = TaskListFilters & {
 // detail pages due to repeated re-renders).
 const ENABLE_INGEST = false;
 
+const taskErrorMessage = (err: unknown, fallback: string) => {
+  const apiData = (err as any)?.response?.data;
+  if (typeof apiData === "string") return apiData;
+  if (apiData?.detail) return String(apiData.detail);
+  if (apiData?.error) return String(apiData.error);
+  if ((err as any)?.message) return String((err as any).message);
+  return fallback;
+};
+
 export const useTaskData = () => {
   const {
     tasks,
@@ -26,7 +35,7 @@ export const useTaskData = () => {
     addTask,
   } = useTaskStore();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [lastParams, setLastParams] = useState<TaskFetchParams | undefined>(
     undefined,
@@ -75,40 +84,49 @@ export const useTaskData = () => {
         do {
           let response: any;
 
-          if (nextUrl) {
-            // Extract relative path+query to avoid mixed-content errors when
-            // the backend returns an absolute HTTP URL on an HTTPS page.
-            const parsed = new URL(nextUrl, window.location.origin);
-            response = await api.get(parsed.pathname + parsed.search);
-          } else {
-            // Otherwise, use TaskAPI with params and page number
-            const requestParams = { ...params, page };
-            // #region agent log
-            if (ENABLE_INGEST) {
-              fetch(
-                "http://127.0.0.1:7242/ingest/d1c5a812-8fba-4f4b-91ec-d69ecfc99679",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    runId: "usetaskdata-project-debug-v1",
-                    hypothesisId: "H2",
-                    location: "useTaskData.ts:fetchTasks:firstPageRequest",
-                    message: "Requesting tasks with TaskAPI.getTasks",
-                    data: {
-                      page,
-                      project_id: requestParams.project_id ?? null,
-                      include_subtasks:
-                        requestParams.include_subtasks ?? null,
-                      all_projects: requestParams.all_projects ?? null,
-                    },
-                    timestamp: Date.now(),
-                  }),
-                },
-              ).catch(() => {});
+          try {
+            if (nextUrl) {
+              // Extract relative path+query to avoid mixed-content errors when
+              // the backend returns an absolute HTTP URL on an HTTPS page.
+              const parsed = new URL(nextUrl, window.location.origin);
+              response = await api.get(parsed.pathname + parsed.search);
+            } else {
+              // Otherwise, use TaskAPI with params and page number
+              const requestParams = { ...params, page };
+              // #region agent log
+              if (ENABLE_INGEST) {
+                fetch(
+                  "http://127.0.0.1:7242/ingest/d1c5a812-8fba-4f4b-91ec-d69ecfc99679",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      runId: "usetaskdata-project-debug-v1",
+                      hypothesisId: "H2",
+                      location: "useTaskData.ts:fetchTasks:firstPageRequest",
+                      message: "Requesting tasks with TaskAPI.getTasks",
+                      data: {
+                        page,
+                        project_id: requestParams.project_id ?? null,
+                        include_subtasks:
+                          requestParams.include_subtasks ?? null,
+                        all_projects: requestParams.all_projects ?? null,
+                      },
+                      timestamp: Date.now(),
+                    }),
+                  },
+                ).catch(() => {});
+              }
+              // #endregion
+              response = await TaskAPI.getTasks(requestParams);
             }
-            // #endregion
-            response = await TaskAPI.getTasks(requestParams);
+          } catch (err) {
+            // The task list can change while we are walking paginated results.
+            // If a later page disappears, keep the pages already fetched.
+            if (allTasks.length > 0 && /invalid page/i.test(taskErrorMessage(err, ""))) {
+              break;
+            }
+            throw err;
           }
 
           const responseData: any = response.data;
@@ -152,7 +170,7 @@ export const useTaskData = () => {
         setTasks(allTasks);
         return allTasks;
       } catch (err) {
-        setError(err);
+        setError(taskErrorMessage(err, "Failed to load tasks"));
         throw err;
       } finally {
         setLoading(false);
@@ -172,7 +190,7 @@ export const useTaskData = () => {
         setCurrentTask(task);
         return task;
       } catch (err) {
-        setError(err);
+        setError(taskErrorMessage(err, "Failed to load task"));
         throw err;
       } finally {
         setLoading(false);
@@ -202,7 +220,7 @@ export const useTaskData = () => {
           addTask(newTask);
           return newTask;
         } catch (forceErr) {
-          setError(forceErr);
+          setError(taskErrorMessage(forceErr, "Failed to create task"));
           throw forceErr;
         }
       } finally {

@@ -42,6 +42,7 @@ urlpatterns = [
     path('budgets/', include('budget_approval.urls')),
     path('api/budgets/', include('budget_approval.urls')),  # Add API prefix for frontend compatibility
     path('api/retrospective/', include('retrospective.urls')),
+    path('api/behavioral-tracking/', include('behavioral_tracking.urls')),
     path('api/core/', include('core.urls')),
     path('api/alerting/', include('alerting.urls')),
     path('api/report/', include('report.urls')),
@@ -73,7 +74,6 @@ urlpatterns = [
     path('api/chat/', include('chat.urls')),
     path('api/experiment/', include('experiment.urls')),
     path('api/', include('calendars.urls')),
-    path('api/', include('ad_variations.urls')),
     path('api/ad_copy_variation/', include('ad_copy_variation.urls')),
     path('api/', include('campaign.urls')),
     path('api/slack/', include('slack_integration.urls')),

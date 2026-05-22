@@ -61,13 +61,13 @@ describe('DashboardLayout upcoming meetings panel preference', () => {
     );
 
     const panel = container.querySelector('[data-upcoming-meetings-panel]');
-    await waitFor(() => expect(panel).toHaveClass('w-0'));
+    await waitFor(() => expect(panel).toHaveClass('sm:w-0'));
     expect(screen.getByRole('button', { name: /show panel/i })).toBeInTheDocument();
     expect(screen.queryByText('Upcoming Meetings')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /show panel/i }));
 
-    expect(panel).toHaveClass('w-[320px]');
+    expect(panel).toHaveClass('sm:w-[320px]');
     expect(localStorage.getItem('dashboard-upcoming-meetings-panel-open')).toBe('true');
     expect(screen.getByRole('button', { name: /hide panel/i })).toBeInTheDocument();
     expect(screen.getByText('Upcoming Meetings')).toBeInTheDocument();
@@ -78,9 +78,11 @@ describe('DashboardLayout upcoming meetings panel preference', () => {
     localStorage.setItem('dashboard-upcoming-meetings-panel-open', 'true');
 
     const { container } = render(
-      <DashboardLayout>
-        <div>Page content</div>
-      </DashboardLayout>
+      <DashboardPanelPreferenceProvider initialUpcomingMeetingsPanelOpen>
+        <DashboardLayout>
+          <div>Page content</div>
+        </DashboardLayout>
+      </DashboardPanelPreferenceProvider>
     );
 
     const panel = container.querySelector('[data-upcoming-meetings-panel]');

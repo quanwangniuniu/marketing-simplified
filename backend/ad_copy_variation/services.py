@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 
 MAX_BATCH = 50
 BATCH_CONCURRENCY = 5
+AI_QUOTA_MESSAGE = (
+    "AI generation is temporarily rate-limited or quota-limited. Please wait "
+    "a minute before generating more variations, or reduce the number of "
+    "variations and try again."
+)
 
 
 CTA_ENUM_ALLOWLIST = (
@@ -75,6 +80,12 @@ SYSTEM_PROMPT = (
     "Preserve the source's offer, target audience, and tone. Do not invent "
     "product features, prices, or claims that are not implied by the source."
 )
+
+
+def is_ai_quota_error(exc: Exception) -> bool:
+    response = getattr(exc, 'response', None)
+    status_code = getattr(response, 'status_code', None)
+    return status_code == 429
 
 
 def _build_user_prompt(template: dict, instruction: str) -> str:
@@ -173,6 +184,7 @@ def generate_batch(
     batch_id = str(uuid.uuid4())
     results: list = [None] * count
     failed_indices: list = []
+    failed_errors: list[Exception] = []
 
     def _task(index: int):
         try:
@@ -187,6 +199,7 @@ def generate_batch(
             idx, outcome = fut.result()
             if isinstance(outcome, Exception):
                 failed_indices.append(idx)
+                failed_errors.append(outcome)
             else:
                 results[idx] = outcome
 
@@ -198,7 +211,7 @@ def generate_batch(
         batch_id, count, len(successful), len(failed_indices),
     )
 
-    return {
+    batch = {
         'batch_id': batch_id,
         'count_requested': count,
         'count_succeeded': len(successful),
@@ -206,3 +219,6 @@ def generate_batch(
         'results': successful,
         'failed_indices': failed_indices,
     }
+    if not successful and any(is_ai_quota_error(exc) for exc in failed_errors):
+        batch['error'] = AI_QUOTA_MESSAGE
+    return batch

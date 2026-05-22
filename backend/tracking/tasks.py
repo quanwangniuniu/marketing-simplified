@@ -23,6 +23,7 @@ _TASK_PATH_RE = re.compile(r'^/api/tasks/(\d+)/')
 _TASK_OPEN_TTL = 30          # seconds — 30s dedup window
 _FIRST_INTERACTION_TTL = 2_592_000  # 30 days — once per user per task
 _SHARED_TASK_ACCESS_TTL = 300  # seconds — preserve SMP-549 dedupe behavior
+_WRITE_METHODS = frozenset({"POST", "PATCH", "PUT", "DELETE"})
 
 
 def _emit_shared_task_access_event(task_id, user_id, source="task_retrieve"):
@@ -74,6 +75,34 @@ def _emit_shared_task_access_event(task_id, user_id, source="task_retrieve"):
     )
 
 
+def _create_tracking_events(user_id, task_id, event_types, request_meta):
+    if not event_types:
+        return
+
+    user_agent = request_meta.get("user_agent", "")
+    session_id = SessionLookup().get_or_create_session(user_id, user_agent)
+
+    try:
+        ct = ContentType.objects.get(app_label="task", model="task")
+    except ContentType.DoesNotExist:
+        logger.error("emit_tracking_event: ContentType for task.Task not found")
+        return
+
+    now = timezone.now()
+    for event_type in event_types:
+        TrackingEvent.objects.create(
+            session_id=session_id,
+            user_id=user_id,
+            content_type=ct,
+            object_id=task_id,
+            event_type=event_type,
+            occurred_at=now,
+            metadata=request_meta,
+            project_id=request_meta.get("project_id"),
+            client_event_id=uuid.uuid4(),
+        )
+
+
 @shared_task
 def emit_tracking_event(user_id, request_path, request_method, request_meta=None):
     if request_meta is None:
@@ -85,42 +114,24 @@ def emit_tracking_event(user_id, request_path, request_method, request_meta=None
 
     task_id = int(match.group(1))
     method = request_method.upper()
+    event_types = []
 
     if method == 'GET' and request_path == f'/api/tasks/{task_id}/':
-        event_type = EventType.TASK_OPEN
+        if request_meta.get('internal_refetch'):
+            return
         dedup_key = f"tracking:last_open:{user_id}:{task_id}"
-        ttl = _TASK_OPEN_TTL
-    elif method == 'POST':
-        event_type = EventType.FIRST_INTERACTION
-        dedup_key = f"tracking:first_interaction:{user_id}:{task_id}"
-        ttl = _FIRST_INTERACTION_TTL
+        if cache.add(dedup_key, '1', timeout=_TASK_OPEN_TTL):
+            event_types.append(EventType.TASK_OPEN)
+    elif method in _WRITE_METHODS:
+        if method == 'POST':
+            dedup_key = f"tracking:first_interaction:{user_id}:{task_id}"
+            if cache.add(dedup_key, '1', timeout=_FIRST_INTERACTION_TTL):
+                event_types.append(EventType.FIRST_INTERACTION)
+        event_types.append(EventType.TASK_WRITE)
     else:
         return
 
-    # cache.add is atomic: returns False if key already exists (not expired)
-    if not cache.add(dedup_key, '1', timeout=ttl):
-        return
-
-    user_agent = request_meta.get('user_agent', '')
-    session_id = SessionLookup().get_or_create_session(user_id, user_agent)
-
-    try:
-        ct = ContentType.objects.get(app_label='task', model='task')
-    except ContentType.DoesNotExist:
-        logger.error("emit_tracking_event: ContentType for task.Task not found")
-        return
-
-    TrackingEvent.objects.create(
-        session_id=session_id,
-        user_id=user_id,
-        content_type=ct,
-        object_id=task_id,
-        event_type=event_type,
-        occurred_at=timezone.now(),
-        metadata=request_meta,
-        project_id=request_meta.get('project_id'),
-        client_event_id=uuid.uuid4(),
-    )
+    _create_tracking_events(user_id, task_id, event_types, request_meta)
 
     if event_type == EventType.TASK_OPEN:
         _emit_shared_task_access_event(

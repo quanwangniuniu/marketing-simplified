@@ -39,13 +39,14 @@ export interface TaskData {
   id?: number;
   owner?: UserSummary;
   owner_id?: number | null; // Write-only for updates
+  created_by?: UserSummary | null;
   project_id: number; // Required for creation
   /** Task type; valid values come from GET /api/task-types/ */
   type: string;
   summary: string;
   description?: string;
   current_approver?: UserSummary; // For display (from API response)
-  current_approver_id?: number;
+  current_approver_id?: number | null;
   start_date?: string | null; // Date field
   due_date?: string; // Date field
   content_type?: string;
@@ -73,6 +74,8 @@ export interface TaskData {
     required_count: number;
     display: string;
   } | null;
+  /** True when the current user has pinned this task. */
+  is_pinned?: boolean;
   /** Draft-only: persisted create-panel state (backend stores JSON) */
   draft_payload?: unknown | null;
   /** Provenance: meeting this task is anchored to, if any (task detail only). */
@@ -81,6 +84,10 @@ export interface TaskData {
   origin_action_item?: OriginActionItemPayload | null;
   /** Set when this task was imported from Linear. */
   linear_issue_id?: string | null;
+  /** ISO datetime of creation (auto-set by server). */
+  created_at?: string;
+  /** ISO datetime of the last modification (auto-set by server). */
+  updated_at?: string;
 }
 
 // Type for creating a new task (current_approver_id is user ID)
@@ -320,4 +327,125 @@ export type TaskCollaborationMetrics = {
     interaction_count: number;
     unique_snippet_count: number;
   };
-};
+};\n\n// ── Task Intelligence ────────────────────────────────────────────────────────
+
+export interface IntelligenceTaskStub {
+  id: number;
+  summary: string;
+  status: string;
+  priority: string | null;
+  type: string;
+  due_date: string | null;
+  project_id: number;
+  owner: { id: number; username: string } | null;
+  current_approver: { id: number; username: string } | null;
+  updated_at: string | null;
+}
+
+export interface IntelligenceSignal {
+  count: number;
+  tasks: IntelligenceTaskStub[];
+}
+
+export interface IntelligenceActivityEntry {
+  task_id: number;
+  task_summary: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string | null;
+  changed_at: string;
+}
+
+export interface IntelligenceVelocityPoint {
+  week: string;
+  count: number;
+}
+
+export interface IntelligenceRisk {
+  score: number;
+  level: 'low' | 'medium' | 'high';
+  signals: { type: string; count: number }[];
+}
+
+export interface IntelligenceProgress {
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  by_status: Record<string, number>;
+  completion_pct: number;
+}
+
+export interface TaskIntelligencePayload {
+  overdue: IntelligenceSignal & { };
+  due_soon: IntelligenceSignal & { days_window: number };
+  blocked: IntelligenceSignal;
+  high_priority: IntelligenceSignal;
+  awaiting_approval: IntelligenceSignal;
+  stalled: IntelligenceSignal & { stall_days: number };
+  progress: IntelligenceProgress;
+  recent_activity: IntelligenceActivityEntry[];
+  velocity: IntelligenceVelocityPoint[];
+  risk: IntelligenceRisk;
+}
+
+// ── Work Cycle History ───────────────────────────────────────────────────────
+
+export interface WorkCycleTaskStub {
+  id: number;
+  summary: string;
+  status: string;
+  priority: string | null;
+  type: string;
+  due_date: string | null;
+  project_id: number;
+}
+
+export interface WorkCycleFieldEntry {
+  task_id: number;
+  task_summary: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string | null;
+  changed_at: string;
+}
+
+export interface WorkCycleHistoryPayload {
+  date_from: string;
+  date_to: string;
+  added: WorkCycleTaskStub[];
+  completed: WorkCycleTaskStub[];
+  field_changes: {
+    status: WorkCycleFieldEntry[];
+    owner: WorkCycleFieldEntry[];
+    priority: WorkCycleFieldEntry[];
+    due_date: WorkCycleFieldEntry[];
+  };
+}
+
+// ── My Actions ───────────────────────────────────────────────────────────────
+
+export interface MyActionsTaskStub {
+  id: number;
+  summary: string;
+  status: string;
+  priority: string | null;
+  type: string;
+  due_date: string | null;
+  project_id: number;
+  owner: { id: number; username: string } | null;
+  current_approver: { id: number; username: string } | null;
+  updated_at: string | null;
+}
+
+export interface MyActionsPayload {
+  assigned_to_me: MyActionsTaskStub[];
+  awaiting_my_approval: MyActionsTaskStub[];
+  approved_pending_lock: MyActionsTaskStub[];
+  overdue_i_own: MyActionsTaskStub[];
+  due_soon_i_own: MyActionsTaskStub[];
+  blocked_i_own: MyActionsTaskStub[];
+  high_priority_i_own: MyActionsTaskStub[];
+  comment_followups: MyActionsTaskStub[];
+}

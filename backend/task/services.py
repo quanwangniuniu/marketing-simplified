@@ -8,6 +8,37 @@ from task.models import Task
 User = get_user_model()
 
 
+def user_can_edit_task(user, task):
+    """Return True if user has task edit permission."""
+    if task.status == Task.Status.LOCKED:
+        return False
+    is_owner = task.owner_id is not None and task.owner_id == user.id
+    is_approver = (
+        task.current_approver_id is not None and
+        task.current_approver_id == user.id
+    )
+    is_unassigned_draft = (
+        task.status == Task.Status.DRAFT and
+        task.owner_id is None and
+        task.current_approver_id is None
+    )
+    if not is_unassigned_draft:
+        return is_owner or is_approver
+
+    creator_id = task.created_by_id
+    if creator_id is None:
+        creator_id = (
+            task.field_history.filter(
+                field_name="task_created",
+                changed_by__isnull=False,
+            )
+            .order_by("changed_at")
+            .values_list("changed_by_id", flat=True)
+            .first()
+        )
+    return is_owner or is_approver or creator_id == user.id
+
+
 def _resolve_status_transition(task, target_status):
     """Return bound transition method to move task to target status."""
     if task.status == target_status:
@@ -75,6 +106,15 @@ def bulk_update_tasks(*, user, task_ids, updates):
         ).exists()
         if not has_membership:
             failed.append({"task_id": task_id, "reason": "Permission denied for this project."})
+            continue
+
+        if not user_can_edit_task(user, task):
+            failed.append(
+                {
+                    "task_id": task_id,
+                    "reason": "Only the task owner, current approver, or unassigned draft creator can edit this task.",
+                }
+            )
             continue
 
         if owner is not None:

@@ -35,7 +35,14 @@ class ServerSideTrackingMiddleware:
                 request.resolver_match.view_name if request.resolver_match else None
             ),
             'project_id': self._extract_project_id(request),
+            'internal_refetch': self._is_internal_refetch(request),
         }
+
+    @staticmethod
+    def _is_internal_refetch(request) -> bool:
+        """In-page reload after save; must not count as a task page open."""
+        value = request.META.get('HTTP_X_INTERNAL_REFETCH', '')
+        return str(value).strip().lower() in ('1', 'true', 'yes')
 
     def _extract_project_id(self, request):
         if request.resolver_match:

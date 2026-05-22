@@ -142,3 +142,75 @@ class TaskCommentAPITest(APITestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class MyActionsCommentFollowupsTest(APITestCase):
+    """Tests for comment_followups logic in intelligence.my_actions()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="alice@example.com", username="alice", password="pass"
+        )
+        self.other = User.objects.create_user(
+            email="bob@example.com", username="bob", password="pass"
+        )
+        self.org = Organization.objects.create(name="Followup Org")
+        self.project = Project.objects.create(name="Followup Project", organization=self.org)
+        ProjectMember.objects.create(user=self.user, project=self.project, role="Member", is_active=True)
+        ProjectMember.objects.create(user=self.other, project=self.project, role="Member", is_active=True)
+        self.task = Task.objects.create(
+            summary="Followed task", type="asset", project=self.project, owner=self.user,
+        )
+
+    def _actions(self):
+        from task.intelligence import my_actions
+        return my_actions(self.user, [self.project.id])
+
+    def test_no_followup_when_user_just_commented(self):
+        """Task does not appear in followups when user is the most recent actor."""
+        TaskComment.objects.create(task=self.task, user=self.user, body="My comment")
+        result = self._actions()
+        self.assertEqual(result['comment_followups'], [])
+
+    def test_followup_when_other_user_comments_after(self):
+        """Task appears in followups when another user comments after the user."""
+        TaskComment.objects.create(task=self.task, user=self.user, body="My comment")
+        TaskComment.objects.create(task=self.task, user=self.other, body="Reply")
+        result = self._actions()
+        ids = [t['id'] for t in result['comment_followups']]
+        self.assertIn(self.task.id, ids)
+
+    def test_no_followup_when_user_own_field_change_after_comment(self):
+        """User's own field changes do not trigger a follow-up."""
+        from task.models import TaskFieldHistory
+        import django.utils.timezone as tz
+        from datetime import timedelta
+        comment = TaskComment.objects.create(task=self.task, user=self.user, body="My comment")
+        TaskFieldHistory.objects.create(
+            task=self.task,
+            field_name='status',
+            old_value='DRAFT',
+            new_value='SUBMITTED',
+            changed_by=self.user,
+            changed_at=comment.created_at + timedelta(seconds=1),
+        )
+        result = self._actions()
+        self.assertEqual(result['comment_followups'], [])
+
+    def test_followup_when_other_user_changes_field_after_comment(self):
+        """Another user's field change after user's comment triggers a follow-up."""
+        from task.models import TaskFieldHistory
+        import django.utils.timezone as tz
+        from datetime import timedelta
+        comment = TaskComment.objects.create(task=self.task, user=self.user, body="My comment")
+        TaskFieldHistory.objects.create(
+            task=self.task,
+            field_name='status',
+            old_value='DRAFT',
+            new_value='SUBMITTED',
+            changed_by=self.other,
+            changed_at=comment.created_at + timedelta(seconds=1),
+        )
+        result = self._actions()
+        ids = [t['id'] for t in result['comment_followups']]
+        self.assertIn(self.task.id, ids)

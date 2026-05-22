@@ -332,6 +332,7 @@ class CampaignTaskIntegrationService:
                     summary=summary,
                     type=task_type,
                     project=campaign.project,
+                    created_by=campaign.creator or campaign.owner,
                     owner=campaign.owner,
                 )
                 # Auto-submit to SUBMITTED (per your requirement)
@@ -360,5 +361,3 @@ class CampaignTaskIntegrationService:
                     error=str(e),
                     context={'event': 'CAMPAIGN_CREATED', 'task_type': task_type},
                 )
-
-

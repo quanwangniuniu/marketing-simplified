@@ -10,6 +10,10 @@ urlpatterns = [
     
     # Task CRUD endpoints (static paths like gantt before generic tasks/ if ever ambiguous)
     path('tasks/gantt/', TaskViewSet.as_view({'get': 'gantt'}), name='task-gantt'),
+    path('tasks/intelligence/', TaskViewSet.as_view({'get': 'intelligence'}), name='task-intelligence'),
+    path('tasks/work-cycle/', TaskViewSet.as_view({'get': 'work_cycle'}), name='task-work-cycle'),
+    path('tasks/my-actions/', TaskViewSet.as_view({'get': 'my_actions'}), name='task-my-actions'),
+    path('tasks/status-report/', TaskViewSet.as_view({'get': 'status_report'}), name='task-status-report'),
     path('tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'}), name='task-list'),
     path('tasks/bulk_action/', TaskViewSet.as_view({'post': 'bulk_action'}), name='task-bulk-action'),
     path('tasks/force-create/', TaskViewSet.as_view({'post': 'force_create'}), name='task-force-create'),
@@ -31,6 +35,7 @@ urlpatterns = [
     path('tasks/<int:pk>/start-review/', TaskViewSet.as_view({'post': 'start_review'}), name='task-start-review'),
     path('tasks/<int:pk>/lock/', TaskViewSet.as_view({'post': 'lock'}), name='task-lock'),
     path('tasks/<int:pk>/unlock/', TaskViewSet.as_view({'post': 'unlock'}), name='task-unlock'),
+    path('tasks/<int:pk>/pin/', TaskViewSet.as_view({'post': 'pin', 'delete': 'unpin'}), name='task-pin'),
     
     # Task subtasks endpoints
     path('tasks/<int:pk>/subtasks/', TaskViewSet.as_view({'get': 'subtasks', 'post': 'subtasks'}), name='task-subtasks'),

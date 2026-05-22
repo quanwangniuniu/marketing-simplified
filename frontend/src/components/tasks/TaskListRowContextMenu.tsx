@@ -9,6 +9,7 @@ import {
   ExternalLink,
   GitBranch,
   Link2,
+  Pin,
   Tag,
   Trash2,
   User,
@@ -124,9 +125,11 @@ export default function TaskListRowContextMenu({
   }, [state, closeMenu]);
 
   const taskIsReadOnly = state?.task.status === 'LOCKED';
+  const isSubmitted = state?.task.status !== 'DRAFT';
   const disabledPatch = patchBusy || taskIsReadOnly;
   const projectId = state?.task.project_id ?? state?.task.project?.id ?? null;
   const memberPickDisabled = disabledPatch || projectId == null;
+  const ownerApproverDisabled = patchBusy || taskIsReadOnly || isSubmitted || projectId == null;
   const activeMembers = menuMembers.filter((m) => m.is_active);
 
   const workflowItems = useMemo(
@@ -187,6 +190,30 @@ export default function TaskListRowContextMenu({
     [state?.task.id, patchBusy, taskIsReadOnly, onTaskPatched, closeMenu]
   );
 
+  const runPinToggle = useCallback(async () => {
+    const task = state?.task;
+    const id = task?.id;
+    if (!task || id == null || patchBusy) return;
+    const nextPinned = !task.is_pinned;
+    setPatchBusy(true);
+    try {
+      const res = nextPinned
+        ? await TaskAPI.pinTask(id)
+        : await TaskAPI.unpinTask(id);
+      const data = res.data as TaskData;
+      onTaskPatched(id, { is_pinned: data.is_pinned ?? nextPinned });
+      toast.success(nextPinned ? 'Task pinned' : 'Task unpinned');
+      closeMenu();
+    } catch (e) {
+      toast.error(
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+          (nextPinned ? 'Failed to pin task' : 'Failed to unpin task')
+      );
+    } finally {
+      setPatchBusy(false);
+    }
+  }, [state?.task, patchBusy, onTaskPatched, closeMenu]);
+
   const handleOpen = () => {
     const id = state?.task.id;
     if (id == null) return;
@@ -240,7 +267,9 @@ export default function TaskListRowContextMenu({
     : '';
 
   const ownerApproverTitle =
-    projectId == null ? 'Task has no project' : taskIsReadOnly ? 'Task is locked' : undefined;
+    projectId == null ? 'Task has no project' :
+    isSubmitted ? 'Owner and approver cannot be changed after the task is submitted' :
+    taskIsReadOnly ? 'Task is locked' : undefined;
 
   return (
     <>
@@ -261,6 +290,19 @@ export default function TaskListRowContextMenu({
             <button type="button" role="menuitem" className={itemClass} onClick={() => void handleCopyLink()}>
               <Link2 className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
               Copy task link
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={patchBusy}
+              className={`${itemClass} disabled:cursor-not-allowed disabled:opacity-50`}
+              onClick={() => void runPinToggle()}
+            >
+              <Pin
+                className={`h-4 w-4 shrink-0 text-gray-500 ${state.task.is_pinned ? 'fill-current' : ''}`}
+                aria-hidden
+              />
+              {state.task.is_pinned ? 'Unpin task' : 'Pin task'}
             </button>
 
             {workflowItems.length > 0 ? (
@@ -301,7 +343,7 @@ export default function TaskListRowContextMenu({
             <button
               type="button"
               role="menuitem"
-              disabled={disabledPatch || memberPickDisabled}
+              disabled={ownerApproverDisabled}
               title={ownerApproverTitle}
               className={`${itemClass} disabled:cursor-not-allowed disabled:opacity-50`}
               onClick={() => setExpanded((e) => (e === 'owner' ? null : 'owner'))}
@@ -352,7 +394,7 @@ export default function TaskListRowContextMenu({
             <button
               type="button"
               role="menuitem"
-              disabled={disabledPatch || memberPickDisabled}
+              disabled={ownerApproverDisabled}
               title={ownerApproverTitle}
               className={`${itemClass} disabled:cursor-not-allowed disabled:opacity-50`}
               onClick={() => setExpanded((e) => (e === 'approver' ? null : 'approver'))}

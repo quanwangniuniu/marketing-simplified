@@ -164,6 +164,7 @@ def _commit_task(orchestrator, draft: dict, destination: dict | None, commit_con
             type=task_data.get('type', 'optimization'),
             priority=task_data.get('priority', 'MEDIUM'),
             project=project,
+            created_by=orchestrator.user,
             owner=orchestrator.user,
             **link_kwargs,
         )

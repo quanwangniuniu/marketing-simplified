@@ -15,7 +15,6 @@ export type RenameColumnRecordInput = {
 };
 
 const normalizeHeader = (value: string) => value.trim().replace(/\s+/g, ' ');
-const normalizeHeaderKey = (value: string) => normalizeHeader(value).toLowerCase();
 
 export const recordRenameColumnStep = (
   steps: PatternStep[],
@@ -48,7 +47,7 @@ export const recordRenameColumnStep = (
     },
   };
 
-  const dedupKey = trimmedOld ? normalizeHeaderKey(trimmedOld) : `idx:${columnIndex}`;
+  const dedupKey = `idx:${columnIndex}`;
   const existing = state[dedupKey];
   if (existing && now - existing.timestamp <= windowMs) {
     const index = steps.findIndex(

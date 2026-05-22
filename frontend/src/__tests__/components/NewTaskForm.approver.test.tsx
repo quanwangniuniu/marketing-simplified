@@ -29,7 +29,15 @@ const setupProjectsMock = (projects: any[] = []) => {
     projects,
     loading: false,
     error: null,
+    updatingProjectId: null,
+    activeProjectIds: [],
+    inactiveProjectIds: [],
     fetchProjects: jest.fn(),
+    setActiveProject: jest.fn().mockResolvedValue(true),
+    deletingProjectId: null,
+    deleteProject: jest.fn().mockResolvedValue(undefined),
+    toggleCompletedProjectId: jest.fn(),
+    completedProjectIds: [],
   });
 };
 

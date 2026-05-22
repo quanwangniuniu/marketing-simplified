@@ -145,13 +145,14 @@ export default function CreateTaskPage() {
       if (newType === type) return;
       await saveNow();
       suspend();
-      setType(newType);
+      let draft: Record<string, unknown> | null = null;
       try {
-        const draft = await TaskAPI.getAutosave(newType);
-        hydrateForm(draft);
+        draft = await TaskAPI.getAutosave(newType);
       } catch {
-        hydrateForm(null);
+        draft = null;
       }
+      hydrateForm(draft);
+      setType(newType);
       // Give the setType-induced re-render time to complete before re-enabling
       // the autosave debounce, so we don't immediately persist stale state.
       setTimeout(() => resume(), 100);

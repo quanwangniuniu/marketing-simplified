@@ -36,16 +36,17 @@ test.describe('Task creation flow', () => {
     // Select work type
     await page.getByRole('button', { name: 'Asset', exact: true }).click();
 
-    // Fill summary
-    await page.getByPlaceholder('Summary of this task').fill('E2E Asset Task – create flow');
-
-    // Required type field: tags (text input)
+    // Wait for required type fields before filling common fields so draft hydration cannot clear them.
     const tagsInput = page.locator('#task-field-asset-tags');
-    if (await tagsInput.isVisible().catch(() => false)) {
-      await tagsInput.fill('e2e,test');
-    }
+    await expect(tagsInput).toBeVisible({ timeout: 10_000 });
+
+    await page.getByPlaceholder('Summary of this task').fill('E2E Asset Task - create flow');
+    await tagsInput.fill('e2e,test');
 
     await selectFirstAvailableApprover(page);
+    await page.getByPlaceholder('Summary of this task').fill('E2E Asset Task - create flow');
+    await tagsInput.fill('e2e,test');
+
     createdTaskId = await submitNewTaskAndGetId(page);
 
     expect(createdTaskId).toBeTruthy();

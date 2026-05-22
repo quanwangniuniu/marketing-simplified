@@ -37,12 +37,14 @@ export default function TaskActivityBlock({
   refreshKey,
   loading = false,
   onFirstInteraction,
+  onMutated,
 }: {
   taskId: number;
   readOnly: boolean;
   refreshKey: number;
   loading?: boolean;
   onFirstInteraction?: () => void;
+  onMutated?: () => void;
 }) {
   const [items, setItems] = useState<TaskComment[] | null>(null);
   const [body, setBody] = useState('');
@@ -75,6 +77,7 @@ export default function TaskActivityBlock({
       await TaskAPI.createComment(taskId, { body: text });
       setBody('');
       setLocalKey((k) => k + 1);
+      onMutated?.();
     } catch (e) {
       toast.error((e as any)?.response?.data?.detail || 'Comment failed');
     } finally {

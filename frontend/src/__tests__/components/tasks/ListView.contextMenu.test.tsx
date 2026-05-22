@@ -74,12 +74,9 @@ const LABELS_TOOLTIP = 'Task labels are not supported yet';
 
 /** Flush ListView member-fetch effect after opening the row menu (tasks use project_id from makeTask). */
 async function settleListViewMenuFetch(opts?: { advanceTimers?: boolean }) {
-  await waitFor(
-    () => {
-      expect(getProjectMembersMock).toHaveBeenCalled();
-    },
-    opts?.advanceTimers ? { advanceTimers: true } : undefined
-  );
+  await waitFor(() => {
+    expect(getProjectMembersMock).toHaveBeenCalled();
+  });
   const ix = getProjectMembersMock.mock.calls.length - 1;
   const pending = getProjectMembersMock.mock.results[ix]?.value as Promise<unknown> | undefined;
   await act(async () => {
@@ -99,6 +96,7 @@ const makeTask = (overrides: Partial<TaskData> = {}): TaskData => ({
   project_id: 1,
   type: 'task',
   summary: 'Hello task',
+  status: 'DRAFT',
   ...overrides,
 });
 
@@ -276,13 +274,10 @@ describe('ListView row context menu (Step 2 PATCH)', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: /^due date$/i }));
     fireEvent.click(within(menu).getByRole('menuitem', { name: /^today$/i }));
 
-    await waitFor(
-      () => {
-        expect(updateTaskApiMock).toHaveBeenCalledWith(7, { due_date: '2026-06-15' });
-        expect(mockUpdateTask).toHaveBeenCalledWith(7, { due_date: '2026-06-15' });
-      },
-      { advanceTimers: true }
-    );
+    await waitFor(() => {
+      expect(updateTaskApiMock).toHaveBeenCalledWith(7, { due_date: '2026-06-15' });
+      expect(mockUpdateTask).toHaveBeenCalledWith(7, { due_date: '2026-06-15' });
+    });
     jest.useRealTimers();
   });
 

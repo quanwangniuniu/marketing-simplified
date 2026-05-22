@@ -280,14 +280,17 @@ export default function TaskTypeBlock({
     };
   }
 
-  // When the task has its own current_approver set, override current_approver_name in
-  // displayObj so the details section stays in sync with the properties panel after
-  // any inline list edit (which patches task.current_approver_id, not the linked object).
+  // Always derive current_approver_name from task.current_approver so the details section
+  // stays in sync with the properties panel. If no approver is set on the task, remove any
+  // stale value that may be present on the linked object.
   const taskApproverName = task.current_approver
     ? (task.current_approver.name || task.current_approver.username || task.current_approver.email || null)
     : null;
   if (taskApproverName !== null) {
     displayObj = { ...displayObj, current_approver_name: taskApproverName };
+  } else {
+    const { current_approver_name: _removed, ...rest } = displayObj as Record<string, unknown>;
+    displayObj = rest;
   }
 
   const rawEntries = flattenEntries(displayObj, task.type ?? undefined);

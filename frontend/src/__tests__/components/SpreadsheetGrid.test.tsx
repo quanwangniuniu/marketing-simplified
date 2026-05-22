@@ -33,6 +33,22 @@ jest.mock('react-hot-toast', () => ({
   },
 }));
 
+// Helper: dispatch a pointer-style event that JSDOM cannot create natively.
+// React registers onPointerDown/Move/Up via 'pointerdown'/'pointermove'/'pointerup'.
+// We dispatch a MouseEvent with the right type and override pointerId/clientX/clientY
+// via Object.defineProperty so React's synthetic event passes them through.
+function dispatchPointerEvent(
+  element: Element,
+  type: string,
+  init: { pointerId?: number; clientX?: number; clientY?: number } = {},
+) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'pointerId', { value: init.pointerId ?? 0, configurable: true });
+  Object.defineProperty(event, 'clientX', { value: init.clientX ?? 0, configurable: true });
+  Object.defineProperty(event, 'clientY', { value: init.clientY ?? 0, configurable: true });
+  element.dispatchEvent(event);
+}
+
 describe('SpreadsheetGrid resizing', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -68,9 +84,11 @@ describe('SpreadsheetGrid resizing', () => {
     handle.setPointerCapture = jest.fn();
     handle.releasePointerCapture = jest.fn();
 
-    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 100 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 130 });
-    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 130 });
+    act(() => {
+      dispatchPointerEvent(handle, 'pointerdown', { pointerId: 1, clientX: 100 });
+      dispatchPointerEvent(handle, 'pointermove', { pointerId: 1, clientX: 130 });
+      dispatchPointerEvent(handle, 'pointerup', { pointerId: 1, clientX: 130 });
+    });
 
     const col = screen.getByTestId('col-width-0');
     expect(col).toHaveStyle({ width: '150px' });
@@ -86,9 +104,11 @@ describe('SpreadsheetGrid resizing', () => {
     handle.setPointerCapture = jest.fn();
     handle.releasePointerCapture = jest.fn();
 
-    fireEvent.pointerDown(handle, { pointerId: 2, clientY: 100 });
-    fireEvent.pointerMove(handle, { pointerId: 2, clientY: 130 });
-    fireEvent.pointerUp(handle, { pointerId: 2, clientY: 130 });
+    act(() => {
+      dispatchPointerEvent(handle, 'pointerdown', { pointerId: 2, clientY: 100 });
+      dispatchPointerEvent(handle, 'pointermove', { pointerId: 2, clientY: 130 });
+      dispatchPointerEvent(handle, 'pointerup', { pointerId: 2, clientY: 130 });
+    });
 
     const rowHeader = screen.getByTestId('row-header-0');
     expect(rowHeader).toHaveStyle({ height: '54px' });
@@ -120,7 +140,8 @@ describe('SpreadsheetGrid numeric display', () => {
   });
 
   it('truncates display to 10 decimal places but keeps full raw input on edit', async () => {
-    render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} />);
+    // Use a unique sheetId to avoid module-level cell cache from prior test suites
+    render(<SpreadsheetGrid spreadsheetId={1} sheetId={10} />);
     await act(async () => {
       jest.runOnlyPendingTimers();
     });
@@ -130,8 +151,9 @@ describe('SpreadsheetGrid numeric display', () => {
     const cell = screen.getByText('9.7654322457');
     fireEvent.doubleClick(cell);
 
-    const input = screen.getByDisplayValue('9.7654322457898765') as HTMLInputElement;
-    expect(input).toBeInTheDocument();
+    // The raw value appears in both the inline cell editor and the formula bar
+    const inputs = screen.getAllByDisplayValue('9.7654322457898765') as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThan(0);
   });
 });
 
@@ -236,7 +258,8 @@ describe('SpreadsheetGrid highlight toolbar', () => {
       ],
     });
     const onHighlightCommit = jest.fn();
-    render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} onHighlightCommit={onHighlightCommit} />);
+    // Use a unique sheetId to avoid module-level cell cache from prior test suites
+    render(<SpreadsheetGrid spreadsheetId={1} sheetId={20} onHighlightCommit={onHighlightCommit} />);
     await act(async () => {
       jest.runOnlyPendingTimers();
     });
@@ -261,19 +284,22 @@ describe('SpreadsheetGrid highlight toolbar', () => {
       ],
     });
     const ref = React.createRef<SpreadsheetGridHandle>();
-    const { container } = render(<SpreadsheetGrid ref={ref} spreadsheetId={1} sheetId={1} />);
+    // Use a unique sheetId to avoid module-level cell cache from prior test suites
+    const { container } = render(<SpreadsheetGrid ref={ref} spreadsheetId={1} sheetId={21} />);
     await act(async () => {
       jest.runOnlyPendingTimers();
     });
 
-    ref.current?.applyHighlightOperation({
-      color: '#BFDBFE',
-      scope: 'COLUMN',
-      header_row_index: 1,
-      target: {
-        by_header: 'Spend',
-        fallback: { col_index: 1 },
-      },
+    act(() => {
+      ref.current?.applyHighlightOperation({
+        color: '#BFDBFE',
+        scope: 'COLUMN',
+        header_row_index: 1,
+        target: {
+          by_header: 'Spend',
+          fallback: { col_index: 1 },
+        },
+      });
     });
 
     const cell = container.querySelector('td[data-row="1"][data-col="2"]') as HTMLTableCellElement;
@@ -305,13 +331,14 @@ describe('SpreadsheetGrid highlight toolbar', () => {
 
   it('records clear highlight action', async () => {
     const onHighlightCommit = jest.fn();
-    render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} onHighlightCommit={onHighlightCommit} />);
+    const { container } = render(<SpreadsheetGrid spreadsheetId={1} sheetId={1} onHighlightCommit={onHighlightCommit} />);
     await act(async () => {
       jest.runOnlyPendingTimers();
     });
 
-    const cell = screen.getByTestId('cell-0-0');
-    fireEvent.click(cell);
+    // Cells use data-row/data-col attributes; there is no data-testid on individual cells
+    const cell = container.querySelector('td[data-row="0"][data-col="0"]') as HTMLElement;
+    fireEvent.mouseDown(cell);
 
     fireEvent.click(screen.getByTestId('highlight-button'));
     fireEvent.click(screen.getByTestId('highlight-clear'));

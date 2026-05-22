@@ -102,6 +102,15 @@ export default function PropertiesPanel({
     unassignedOption,
     ...activeMembers.map((m) => memberOption(m, { includeRole: true })),
   ];
+  // If the current approver isn't a project member (e.g. an AI agent), add them so
+  // Radix Select can display the name instead of falling back to blank/placeholder.
+  if (
+    task.current_approver?.id &&
+    !activeMembers.find((m) => m.user.id === task.current_approver!.id)
+  ) {
+    const name = userDisplayName(task.current_approver);
+    approverOpts.push({ value: String(task.current_approver.id), label: name, leading: <UserInitialsAvatar name={name} /> });
+  }
 
   if (loading) {
     return (
@@ -160,14 +169,10 @@ export default function PropertiesPanel({
         <InlineSelect
           ariaLabel="Approver"
           value={approverId}
-          onValueChange={(v) => {
-            if (v === UNASSIGNED) {
-              toast.error('Approver is required.');
-              return;
-            }
-            patch({ current_approver_id: Number(v) });
-          }}
-          options={approverOpts.filter((o) => o.value !== UNASSIGNED)}
+          onValueChange={(v) =>
+            patch({ current_approver_id: v === UNASSIGNED ? null : Number(v) })
+          }
+          options={approverOpts}
           disabled={saving || readOnly || isSubmitted}
           placeholder="Select an approver…"
         />

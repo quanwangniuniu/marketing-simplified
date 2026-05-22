@@ -79,11 +79,26 @@ function TreeNode({
     return () => { mountedRef.current = false; };
   }, []);
 
-  const blockerChildren: TaskRelationItem[] = childRel
-    ? [...(childRel.blocks ?? []), ...(childRel.is_blocked_by ?? [])]
+  // Auto-fetch on mount so we know upfront whether this node has children
+  useEffect(() => {
+    if (!task.id || childRel !== null) return;
+    let cancelled = false;
+    TaskAPI.getRelations(task.id)
+      .then((r) => { if (!cancelled && mountedRef.current) setChildRel(r); })
+      .catch(() => {
+        if (!cancelled && mountedRef.current)
+          setChildRel({ blocks: [], is_blocked_by: [], causes: [], is_caused_by: [], clones: [], is_cloned_by: [], relates_to: [] });
+      });
+    return () => { cancelled = true; };
+  }, [task.id]);
+
+  const nextVisited = new Set(visited).add(task.id ?? -1);
+
+  const allChildren: TaskRelationItem[] = childRel
+    ? GROUPS.flatMap((g) => (childRel[g.key] ?? []).filter((item) => !nextVisited.has(item.task.id ?? -1)))
     : [];
 
-  const hasChildren = childRel ? blockerChildren.length > 0 : true; // optimistic until loaded
+  const hasChildren = childRel ? allChildren.length > 0 : true; // optimistic until loaded
 
   const toggle = async () => {
     if (!task.id) return;
@@ -101,13 +116,11 @@ function TreeNode({
     if (mountedRef.current) setExpanded((v) => !v);
   };
 
-  const nextVisited = new Set(visited).add(task.id ?? -1);
-
   return (
     <div className={depth > 0 ? 'ml-4 border-l border-gray-100 pl-3' : ''}>
       <div className="flex items-center gap-1.5 py-1">
-        {/* expand toggle — only show if not a leaf or not yet loaded */}
-        {depth < 3 ? (
+        {/* expand toggle — hide on circular nodes to prevent infinite loops */}
+        {depth < 3 && !isCircular && (childRel === null || hasChildren) ? (
           <button
             type="button"
             onClick={toggle}
@@ -136,48 +149,30 @@ function TreeNode({
 
         <MiniStatus status={task.status} />
 
-        {isCircular && (
-          <span title="Circular dependency" className="text-amber-500">
-            <AlertTriangle className="h-3 w-3" />
-          </span>
-        )}
       </div>
 
       {expanded && childRel && (
         <>
-          {childRel.blocks.length > 0 && (
-            <div>
-              <p className="ml-4 mt-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">Blocks</p>
-              {childRel.blocks.map((item) => (
-                <TreeNode
-                  key={item.relation_id}
-                  task={item.task}
-                  depth={depth + 1}
-                  isCircular={nextVisited.has(item.task.id ?? -1)}
-                  chainCache={chainCache}
-                  visited={nextVisited}
-                />
-              ))}
-            </div>
-          )}
-          {childRel.is_blocked_by.length > 0 && (
-            <div>
-              <p className="ml-4 mt-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">Blocked by</p>
-              {childRel.is_blocked_by.map((item) => (
-                <TreeNode
-                  key={item.relation_id}
-                  task={item.task}
-                  depth={depth + 1}
-                  isCircular={nextVisited.has(item.task.id ?? -1)}
-                  chainCache={chainCache}
-                  visited={nextVisited}
-                />
-              ))}
-            </div>
-          )}
-          {blockerChildren.length === 0 && (
-            <p className="ml-7 text-[11px] text-gray-400">No further blockers</p>
-          )}
+          {GROUPS.map((g) => {
+            const items = (childRel[g.key] as TaskRelationItem[])
+              ?.filter((item) => !nextVisited.has(item.task.id ?? -1));
+            if (!items || items.length === 0) return null;
+            return (
+              <div key={g.key}>
+                <p className="ml-4 mt-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">{g.label}</p>
+                {items.map((item) => (
+                  <TreeNode
+                    key={item.relation_id}
+                    task={item.task}
+                    depth={depth + 1}
+                    isCircular={false}
+                    chainCache={chainCache}
+                    visited={nextVisited}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </>
       )}
     </div>
@@ -218,13 +213,11 @@ export default function TaskRelationsBlock({
     return () => { cancelled = true; };
   }, [loading, task.id, localKey]);
 
-  // Batch-fetch relations for direct blockers/blocked-by to show chain depth badges
+  // Batch-fetch relations for all linked tasks to populate the chain cache
   useEffect(() => {
     if (!rel) return;
-    const ids = [
-      ...rel.blocks.map((i) => i.task.id),
-      ...rel.is_blocked_by.map((i) => i.task.id),
-    ].filter((id): id is number => id != null);
+    const ids = GROUPS.flatMap((g) => (rel[g.key] as TaskRelationItem[]).map((i) => i.task.id))
+      .filter((id): id is number => id != null);
     if (ids.length === 0) return;
 
     let cancelled = false;
@@ -282,7 +275,7 @@ export default function TaskRelationsBlock({
     ? GROUPS.reduce((sum, g) => sum + (rel[g.key] as TaskRelationItem[]).length, 0)
     : 0;
 
-  const hasBlockerRelations = rel && (rel.blocks.length > 0 || rel.is_blocked_by.length > 0);
+  const hasBlockerRelations = rel && totalCount > 0;
 
   return (
     <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
@@ -439,37 +432,25 @@ export default function TaskRelationsBlock({
             Dependency tree
           </p>
 
-          {rel.blocks.length > 0 && (
-            <div className="mb-2">
-              <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-rose-500">Blocks</p>
-              {rel.blocks.map((item) => (
-                <TreeNode
-                  key={item.relation_id}
-                  task={item.task}
-                  depth={0}
-                  isCircular={circularIds.has(item.task.id ?? -1)}
-                  chainCache={chainCache}
-                  visited={new Set([task.id ?? -1])}
-                />
-              ))}
-            </div>
-          )}
-
-          {rel.is_blocked_by.length > 0 && (
-            <div>
-              <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-500">Blocked by</p>
-              {rel.is_blocked_by.map((item) => (
-                <TreeNode
-                  key={item.relation_id}
-                  task={item.task}
-                  depth={0}
-                  isCircular={circularIds.has(item.task.id ?? -1)}
-                  chainCache={chainCache}
-                  visited={new Set([task.id ?? -1])}
-                />
-              ))}
-            </div>
-          )}
+          {GROUPS.map((g) => {
+            const items = rel[g.key] as TaskRelationItem[];
+            if (!items || items.length === 0) return null;
+            return (
+              <div key={g.key} className="mb-2">
+                <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">{g.label}</p>
+                {items.map((item) => (
+                  <TreeNode
+                    key={item.relation_id}
+                    task={item.task}
+                    depth={0}
+                    isCircular={circularIds.has(item.task.id ?? -1)}
+                    chainCache={chainCache}
+                    visited={new Set([task.id ?? -1])}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -36,7 +36,9 @@ export async function openFirstTask(page: Page): Promise<string> {
   await expect(taskList).toBeVisible({ timeout: 10_000 });
 
   const firstOpen = page.getByTestId('task-row-open').first();
-  await expect(firstOpen).toBeVisible({ timeout: 5_000 });
+  // The task-list container becomes visible before the API response arrives,
+  // so allow extra time for the first row to render.
+  await expect(firstOpen).toBeVisible({ timeout: 15_000 });
 
   const summary = ((await firstOpen.innerText()) || '').split('\n')[0].trim();
   await firstOpen.click();

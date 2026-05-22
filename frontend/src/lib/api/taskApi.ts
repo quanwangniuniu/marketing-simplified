@@ -14,6 +14,9 @@ import {
   TaskBulkActionResponse,
   GanttChartPayload,
   TaskCollaborationMetrics,
+  TaskIntelligencePayload,
+  WorkCycleHistoryPayload,
+  MyActionsPayload,
 } from "@/types/task";
 
 export type MentionUser = {
@@ -61,8 +64,19 @@ export const TaskAPI = {
     return response.data as GanttChartPayload;
   },
 
-  // Get a specific task by ID
-  getTask: (taskId: number) => api.get(`/api/tasks/${taskId}/`),
+  /**
+   * Get a specific task by ID.
+   * Pass internalRefetch after in-page saves so server-side TASK_OPEN is not counted again.
+   */
+  getTask: (
+    taskId: number,
+    options?: { internalRefetch?: boolean },
+  ) =>
+    api.get(`/api/tasks/${taskId}/`, {
+      headers: options?.internalRefetch
+        ? { 'X-Internal-Refetch': '1' }
+        : undefined,
+    }),
 
     // Get collaboration and knowledge metrics for a task
   getCollaborationMetrics: async (
@@ -75,6 +89,10 @@ export const TaskAPI = {
   // Update a task
   updateTask: (taskId: number, data: Partial<TaskData>) =>
     api.patch(`/api/tasks/${taskId}/`, data),
+
+  pinTask: (taskId: number) => api.post(`/api/tasks/${taskId}/pin/`),
+
+  unpinTask: (taskId: number) => api.delete(`/api/tasks/${taskId}/pin/`),
 
   bulkAction: async (
     payload: TaskBulkUpdateRequest
@@ -276,4 +294,39 @@ export const TaskAPI = {
   deleteAutosave: async (type: string): Promise<void> => {
     await api.delete('/api/task-form-autosave/', { params: { type } });
   },
+
+  getIntelligence: async (params: {
+    project_id?: number;
+    stall_days?: number;
+    due_soon_days?: number;
+    activity_limit?: number;
+    velocity_weeks?: number;
+  }): Promise<TaskIntelligencePayload> => {
+    const response = await api.get('/api/tasks/intelligence/', { params });
+    return response.data as TaskIntelligencePayload;
+  },
+
+  getWorkCycle: async (params: {
+    project_id?: number;
+    from?: string;
+    to?: string;
+  }): Promise<WorkCycleHistoryPayload> => {
+    const response = await api.get('/api/tasks/work-cycle/', { params });
+    return response.data as WorkCycleHistoryPayload;
+  },
+
+  getMyActions: async (params: {
+    project_id?: number;
+    due_soon_days?: number;
+  }): Promise<MyActionsPayload> => {
+    const response = await api.get('/api/tasks/my-actions/', { params });
+    return response.data as MyActionsPayload;
+  },
+
+  getStatusReport: (params: {
+    project_id: number;
+    period: 'week' | 'month' | 'custom';
+    date_from?: string;
+    date_to?: string;
+  }) => api.get('/api/tasks/status-report/', { params }),
 };

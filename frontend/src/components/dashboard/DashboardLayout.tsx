@@ -42,7 +42,7 @@ const BREADCRUMB_ROOT: Record<string, string> = {
   calendar: 'Collaborate',
   messages: 'Collaborate',
   miro: 'Collaborate',
-  variations: 'Content',
+  'variations-studio': 'Content',
   facebook_meta: 'Content',
   tiktok: 'Content',
   google_ads: 'Content',

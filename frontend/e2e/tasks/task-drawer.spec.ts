@@ -1,10 +1,16 @@
 import { test, expect } from '@playwright/test';
-import { navigateToTasksAndSelectProject, waitForTasksPageReady } from './tasks-helpers';
+import {
+  createDraftTaskViaApi,
+  deleteTaskById,
+  navigateToTasksAndSelectProject,
+  waitForTasksPageReady,
+} from './tasks-helpers';
 
 test.describe('Quick task drawer', () => {
   test.describe.configure({ mode: 'serial' });
 
   let projectId: number;
+  let fixtureTaskIds: number[] = [];
 
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ storageState: 'e2e/.auth/user.json' });
@@ -14,10 +20,25 @@ test.describe('Quick task drawer', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    fixtureTaskIds = [];
     await page.goto(`/tasks?project_id=${projectId}`);
+    await waitForTasksPageReady(page);
+    fixtureTaskIds.push(
+      await createDraftTaskViaApi(page, projectId, `Drawer fixture ${Date.now()} A`),
+      await createDraftTaskViaApi(page, projectId, `Drawer fixture ${Date.now()} B`),
+    );
+    await page.reload();
     await waitForTasksPageReady(page);
     await page.getByTestId('tab-tasks').click();
     await expect(page.getByTestId('task-list')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('task-row-open').nth(1)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test.afterEach(async ({ page }) => {
+    for (const taskId of fixtureTaskIds) {
+      await deleteTaskById(page, taskId).catch(() => {});
+    }
+    fixtureTaskIds = [];
   });
 
   test('clicking a task row opens the drawer without navigating', async ({ page }) => {

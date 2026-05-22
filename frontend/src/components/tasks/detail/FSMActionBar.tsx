@@ -7,6 +7,7 @@ import type { TaskData, UserSummary } from '@/types/task';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
 import InlineSelect, { UserInitialsAvatar, type InlineSelectOption } from './InlineSelect';
 import { getTypeSchema } from '@/lib/tasks/typeFieldSchemas';
+import { useAuthStore } from '@/lib/authStore';
 
 type Variant = 'primary' | 'ghost' | 'danger';
 
@@ -58,6 +59,17 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
   const [forwardOpen, setForwardOpen] = useState(false);
   const [forwardApprover, setForwardApprover] = useState<number | null>(null);
 
+  const currentUser = useAuthStore((s) => s.user);
+  const isApprover =
+    currentUser?.id != null &&
+    task.current_approver?.id != null &&
+    Number(currentUser.id) === Number(task.current_approver.id);
+
+  const isOwner =
+    currentUser?.id != null &&
+    task.owner?.id != null &&
+    Number(currentUser.id) === Number(task.owner.id);
+
   const status = task.status ?? 'DRAFT';
   const id = task.id;
   if (!id) return null;
@@ -98,15 +110,25 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
 
   const activeMembers = members.filter((m) => m.is_active);
 
-  const buttons: Array<{ label: string; variant: Variant; action: () => void | Promise<void> }> = [];
+  const buttons: Array<{ label: string; variant: Variant; action: () => void | Promise<void>; extraDisabled?: boolean; title?: string }> = [];
   switch (status) {
     case 'DRAFT':
-      buttons.push({
+      if (isOwner) buttons.push({
         label: 'Submit',
         variant: 'primary',
+        extraDisabled: !task.current_approver || !task.owner,
+        title: !task.current_approver
+          ? 'Assign an approver before submitting'
+          : !task.owner
+          ? 'Assign an owner before submitting'
+          : undefined,
         action: () => {
           if (!task.current_approver) {
             toast.error('Assign an approver before submitting.', { id: 'fsm-submit-no-approver' });
+            return;
+          }
+          if (!task.owner) {
+            toast.error('Assign an owner before submitting.', { id: 'fsm-submit-no-owner' });
             return;
           }
           const schema = getTypeSchema(task.type);
@@ -143,33 +165,49 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
       });
       break;
     case 'SUBMITTED':
-      buttons.push({ label: 'Start Review', variant: 'primary', action: () => run(() => TaskAPI.startReview(id)) });
-      buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      if (isApprover) {
+        buttons.push({ label: 'Start Review', variant: 'primary', action: () => run(() => TaskAPI.startReview(id)) });
+      }
+      if (isApprover || isOwner) {
+        buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      }
       break;
     case 'UNDER_REVIEW':
-      buttons.push({
-        label: 'Approve',
-        variant: 'primary',
-        action: () => run(() => TaskAPI.makeApproval(id, { action: 'approve' })),
-      });
-      buttons.push({ label: 'Reject', variant: 'danger', action: () => setRejectOpen(true) });
-      buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      if (isApprover) {
+        buttons.push({
+          label: 'Approve',
+          variant: 'primary',
+          action: () => run(() => TaskAPI.makeApproval(id, { action: 'approve' })),
+        });
+        buttons.push({ label: 'Reject', variant: 'danger', action: () => setRejectOpen(true) });
+        buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      }
       break;
     case 'APPROVED':
-      buttons.push({ label: 'Lock', variant: 'primary', action: () => run(() => TaskAPI.lock(id)) });
-      buttons.push({ label: 'Forward', variant: 'ghost', action: () => setForwardOpen(true) });
-      buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      if (isApprover) {
+        buttons.push({ label: 'Lock', variant: 'primary', action: () => run(() => TaskAPI.lock(id)) });
+        buttons.push({ label: 'Forward', variant: 'ghost', action: () => setForwardOpen(true) });
+        buttons.push({ label: 'Cancel', variant: 'danger', action: () => run(() => TaskAPI.cancelTask(id)) });
+      }
       break;
     case 'REJECTED':
     case 'CANCELLED':
       buttons.push({ label: 'Revise', variant: 'primary', action: () => run(() => TaskAPI.revise(id)) });
       break;
     case 'LOCKED':
-      buttons.push({ label: 'Unlock', variant: 'ghost', action: () => run(() => TaskAPI.unlock(id)) });
+      if (isApprover) {
+        buttons.push({ label: 'Unlock', variant: 'ghost', action: () => run(() => TaskAPI.unlock(id)) });
+      }
       break;
   }
 
   if (buttons.length === 0 && !rejectOpen && !forwardOpen) return null;
+
+  const submitBlockReasons: string[] = [];
+  if (status === 'DRAFT') {
+    if (!task.owner) submitBlockReasons.push('an owner must be assigned');
+    if (!task.current_approver) submitBlockReasons.push('an approver must be assigned');
+  }
 
   return (
     <div>
@@ -180,10 +218,17 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
             label={b.label}
             variant={b.variant}
             onClick={b.action}
-            disabled={busy}
+            disabled={busy || !!b.extraDisabled}
+            title={b.title}
           />
         ))}
       </div>
+
+      {submitBlockReasons.length > 0 && (
+        <p className="mt-2 text-xs text-amber-600">
+          Cannot submit: {submitBlockReasons.join(' and ')}.
+        </p>
+      )}
 
       {rejectOpen && (
         <div className="mt-3 rounded-lg bg-rose-50 p-3 ring-1 ring-rose-200">

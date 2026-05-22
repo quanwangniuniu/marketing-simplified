@@ -156,7 +156,7 @@ export default function TaskDetailHeader({
   const overdue = isDueOverdue(task.due_date);
 
   return (
-    <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+    <section className="rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
       {/* Top bar */}
       <div className={`flex items-center gap-2 border-b border-gray-100 px-4 py-2 sm:px-6 ${isDrawer ? 'justify-end' : 'justify-between'}`}>
         {!isDrawer && (
@@ -337,7 +337,7 @@ export default function TaskDetailHeader({
                 {ownerName}
               </button>
               {openField === 'owner' && (
-                <div className="absolute left-0 top-full z-20 mt-1 w-48 overflow-y-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-gray-100" style={{ maxHeight: '40vh' }}>
+                <div className="absolute left-0 top-full z-20 mt-1 w-48 max-h-56 overflow-y-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-gray-100">
                   <button
                     type="button"
                     onClick={() => { setOpenField(null); patchField({ owner_id: null }); }}

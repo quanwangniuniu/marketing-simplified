@@ -26,6 +26,15 @@ class EmitTrackingEventTests(TestCase):
         emit_tracking_event(self.user.pk, '/api/tasks/9/', 'GET', {})
         self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_OPEN').count(), 1)
 
+    def test_get_task_detail_internal_refetch_skips_task_open(self):
+        emit_tracking_event(
+            self.user.pk,
+            '/api/tasks/9/',
+            'GET',
+            {'internal_refetch': True},
+        )
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_OPEN').count(), 0)
+
     def test_task_open_deduped_within_30s(self):
         emit_tracking_event(self.user.pk, '/api/tasks/9/', 'GET', {})
         emit_tracking_event(self.user.pk, '/api/tasks/9/', 'GET', {})
@@ -38,14 +47,30 @@ class EmitTrackingEventTests(TestCase):
             emit_tracking_event(self.user.pk, '/api/tasks/9/', 'GET', {})
         self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_OPEN').count(), 2)
 
-    def test_post_to_task_subpath_emits_first_interaction(self):
+    def test_post_to_task_subpath_emits_first_interaction_and_task_write(self):
         emit_tracking_event(self.user.pk, '/api/tasks/9/comments/', 'POST', {})
         self.assertEqual(TrackingEvent.objects.filter(event_type='FIRST_INTERACTION').count(), 1)
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_WRITE').count(), 1)
 
-    def test_second_post_to_same_task_not_emitted(self):
+    def test_second_post_emits_task_write_only(self):
         emit_tracking_event(self.user.pk, '/api/tasks/9/comments/', 'POST', {})
         emit_tracking_event(self.user.pk, '/api/tasks/9/make-approval/', 'POST', {})
         self.assertEqual(TrackingEvent.objects.filter(event_type='FIRST_INTERACTION').count(), 1)
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_WRITE').count(), 2)
+
+    def test_patch_task_emits_task_write(self):
+        emit_tracking_event(self.user.pk, '/api/tasks/9/', 'PATCH', {})
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_WRITE').count(), 1)
+        self.assertEqual(TrackingEvent.objects.filter(event_type='FIRST_INTERACTION').count(), 0)
+
+    def test_two_patches_emit_two_task_writes(self):
+        emit_tracking_event(self.user.pk, '/api/tasks/9/', 'PATCH', {})
+        emit_tracking_event(self.user.pk, '/api/tasks/9/', 'PATCH', {})
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_WRITE').count(), 2)
+
+    def test_delete_task_subpath_emits_task_write(self):
+        emit_tracking_event(self.user.pk, '/api/tasks/9/relations/3/', 'DELETE', {})
+        self.assertEqual(TrackingEvent.objects.filter(event_type='TASK_WRITE').count(), 1)
 
     def test_post_to_different_task_emits_independently(self):
         emit_tracking_event(self.user.pk, '/api/tasks/9/comments/', 'POST', {})

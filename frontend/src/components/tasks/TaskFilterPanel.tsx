@@ -260,6 +260,7 @@ export function TaskFilterPanel({
                 return (
                   <label
                     key={value}
+                    data-testid={`task-filter-option-type-${value}`}
                     className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
                   >
                     <input
@@ -300,6 +301,7 @@ export function TaskFilterPanel({
                 return (
                   <label
                     key={value}
+                    data-testid={`task-filter-option-status-${value}`}
                     className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
                   >
                     <input
@@ -527,6 +529,7 @@ export function TaskFilterPanel({
                 <button
                   key={item.key}
                   type="button"
+                  data-testid={`task-filter-tab-${item.key}`}
                   className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm ${
                     activeKey === item.key
                       ? "bg-background font-medium text-foreground"
@@ -578,4 +581,3 @@ export function TaskFilterPanel({
     </div>
   );
 }
-

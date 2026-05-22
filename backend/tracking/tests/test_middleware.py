@@ -77,5 +77,18 @@ class ServerSideTrackingMiddlewareTests(TestCase):
                 'referer': '',
                 'view_name': None,
                 'project_id': None,
+                'internal_refetch': False,
             },
         )
+
+    @patch('tracking.middleware.emit_tracking_event')
+    def test_internal_refetch_header_passed_in_meta(self, mock_task):
+        mw = self._middleware(status=200)
+        request = self.factory.get(
+            '/api/tasks/9/',
+            HTTP_X_INTERNAL_REFETCH='1',
+        )
+        request.user = self.user
+        mw(request)
+        mock_task.delay.assert_called_once()
+        assert mock_task.delay.call_args.kwargs['request_meta']['internal_refetch'] is True

@@ -1,7 +1,10 @@
+import axios from 'axios';
 import api from '@/lib/api';
 import type {
   AdCopyVariation,
   AdCopyVariationCopy,
+  AdCopyVariationSourceMode,
+  AdCopyVariationStatus,
   BatchGenerateResponse,
   GenerateVariationRequest,
   SaveVariationRequest,
@@ -9,25 +12,53 @@ import type {
 
 const BASE = '/api/ad_copy_variation/variations';
 
+function parseBatchGenerateResponse(data: unknown): BatchGenerateResponse | null {
+  if (!data || typeof data !== 'object') return null;
+  const candidate = data as {
+    batch_id?: unknown;
+    count_requested?: unknown;
+    count_succeeded?: unknown;
+    count_failed?: unknown;
+    results?: unknown;
+    failed_indices?: unknown;
+    error?: unknown;
+  };
+  if (typeof candidate.batch_id !== 'string') return null;
+  if (typeof candidate.count_requested !== 'number') return null;
+  if (typeof candidate.count_succeeded !== 'number') return null;
+  if (typeof candidate.count_failed !== 'number') return null;
+  if (!Array.isArray(candidate.results)) return null;
+  if (!Array.isArray(candidate.failed_indices)) return null;
+  if (
+    !candidate.results.every((row) => {
+      if (typeof row !== 'object' || row === null) return false;
+      const draft = row as { id?: unknown; status?: unknown };
+      return typeof draft.id === 'number' && typeof draft.status === 'string';
+    })
+  ) {
+    return null;
+  }
+  return data as BatchGenerateResponse;
+}
+
 export async function generateVariation(
   req: GenerateVariationRequest
 ): Promise<BatchGenerateResponse> {
   const body = { ...req, count: req.count ?? 1 };
-  const { data } = await api.post(`${BASE}/generate/`, body);
-  if (data && Array.isArray((data as { results?: unknown }).results)) {
-    return data as BatchGenerateResponse;
+  try {
+    const { data } = await api.post(`${BASE}/generate/`, body);
+    const parsed = parseBatchGenerateResponse(data);
+    if (parsed) return parsed;
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const parsed = parseBatchGenerateResponse(err.response?.data);
+      if (parsed) return parsed;
+    }
+    throw err;
   }
-  // Backend backward-compat path: count=1 returns flat {hook, headline, description, cta}.
-  // Wrap into BatchGenerateResponse so callers always handle one shape.
-  const flat = data as AdCopyVariationCopy;
-  return {
-    batch_id: '',
-    count_requested: 1,
-    count_succeeded: 1,
-    count_failed: 0,
-    results: [flat],
-    failed_indices: [],
-  };
+  throw new Error(
+    'Generate response did not include persisted draft IDs. Please restart the backend and ensure migrations are applied.'
+  );
 }
 
 export async function saveVariation(
@@ -60,31 +91,100 @@ export async function bulkSaveVariations(
 export interface ListVariationsResult {
   results: AdCopyVariation[];
   total: number;
+  page?: number;
+  pageSize?: number;
 }
 
-export async function listVariations(
-  creativeId: number,
-  opts?: { limit?: number }
+export interface ListAiVariationsParams {
+  project_id?: number;
+  creative?: number;
+  status?: AdCopyVariationStatus | AdCopyVariationStatus[] | string;
+  source_mode?: AdCopyVariationSourceMode | '';
+  batch_id?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export async function listAiVariations(
+  params: ListAiVariationsParams
 ): Promise<ListVariationsResult> {
-  const params: Record<string, string | number> = { creative: creativeId };
-  if (opts?.limit) params.page_size = opts.limit;
-  const { data } = await api.get(`${BASE}/`, { params });
+  const normalized: Record<string, string | number> = {};
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    normalized[key] = Array.isArray(value) ? value.join(',') : value;
+  });
+  const { data } = await api.get(`${BASE}/`, { params: normalized });
   if (Array.isArray(data)) {
     return { results: data as AdCopyVariation[], total: data.length };
   }
   if (data && Array.isArray((data as { results?: unknown }).results)) {
-    const paged = data as { results: AdCopyVariation[]; count?: number };
+    const paged = data as {
+      results: AdCopyVariation[];
+      count?: number;
+      page?: number;
+      page_size?: number;
+    };
     return {
       results: paged.results,
       total: typeof paged.count === 'number' ? paged.count : paged.results.length,
+      page: paged.page,
+      pageSize: paged.page_size,
     };
   }
   return { results: [], total: 0 };
 }
 
+export async function getLatestVariationBatch(projectId: number): Promise<{
+  batch_id: string | null;
+  count: number;
+  results: AdCopyVariation[];
+}> {
+  const { data } = await api.get(`${BASE}/latest_batch/`, {
+    params: { project_id: projectId },
+  });
+  return data;
+}
+
+export async function reviewVariationBatch(req: {
+  project_id: number;
+  batch_id: string;
+  selected_ids: number[];
+}): Promise<{
+  batch_id: string;
+  reviewed_count: number;
+  deleted_count: number;
+  results: AdCopyVariation[];
+}> {
+  const { data } = await api.post(`${BASE}/review_batch/`, req);
+  return data;
+}
+
+export async function bulkReviewVariations(req: {
+  project_id: number;
+  selected_ids: number[];
+}): Promise<{
+  reviewed_count: number;
+  results: AdCopyVariation[];
+}> {
+  const { data } = await api.post(`${BASE}/bulk_review/`, req);
+  return data;
+}
+
+export async function bulkDeleteVariations(req: {
+  project_id: number;
+  selected_ids: number[];
+  status: AdCopyVariationStatus;
+}): Promise<{
+  deleted_count: number;
+  deleted_ids: number[];
+}> {
+  const { data } = await api.post(`${BASE}/bulk_delete/`, req);
+  return data;
+}
+
 export async function updateVariation(
   id: number,
-  fields: Partial<AdCopyVariationCopy>
+  fields: Partial<AdCopyVariationCopy & Pick<AdCopyVariation, 'status'>>
 ): Promise<AdCopyVariation> {
   const { data } = await api.patch<AdCopyVariation>(`${BASE}/${id}/`, fields);
   return data;

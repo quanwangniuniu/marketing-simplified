@@ -87,6 +87,7 @@ const defaultProps = {
   onSelectChat: jest.fn(),
   onCreateChat: jest.fn(),
   onCreateChannel: jest.fn(),
+  onChangeView: jest.fn(),
   isLoading: false,
   emptyState: <div>Empty</div>,
   roleByUserId: {},

@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from task.models import Task, ApprovalRecord
+from task.models import Task, ApprovalRecord, TaskFieldHistory, TaskPin, TaskRelation
 from core.models import Project, Organization, Team, AdChannel, ProjectMember
 from budget_approval.models import BudgetPool, BudgetRequest
 from asset.models import Asset
@@ -146,6 +146,8 @@ class TaskAPITest(TestCase):
         self.assertEqual(task.summary, 'Test Task')
         self.assertEqual(task.type, 'budget')
         self.assertEqual(task.owner, self.user)
+        self.assertEqual(task.created_by, self.user)
+        self.assertEqual(response.data['created_by']['id'], self.user.id)
         self.assertEqual(task.project, self.project)
         self.assertFalse(task.is_linked)  # Newly created task should not be linked to any object
 
@@ -342,6 +344,115 @@ class TaskAPITest(TestCase):
         self.assertIn('object_id', response.data)
         self.assertEqual(response.data['content_type'], 'budgetrequest')
         self.assertEqual(response.data['object_id'], str(budget_request.id))
+
+    def test_pin_task_is_personal_and_does_not_require_edit_permission(self):
+        """A project member can pin a visible task without changing the task itself."""
+        task = Task.objects.create(
+            summary='Pinnable Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        url = reverse('task-pin', kwargs={'pk': task.id})
+
+        response = self.approver_client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_pinned'])
+        self.assertTrue(TaskPin.objects.filter(task=task, user=self.approver).exists())
+        self.assertFalse(TaskPin.objects.filter(task=task, user=self.user).exists())
+
+    def test_unpin_task_removes_only_current_users_pin(self):
+        task = Task.objects.create(
+            summary='Pinned Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        TaskPin.objects.create(task=task, user=self.user)
+        TaskPin.objects.create(task=task, user=self.approver)
+        url = reverse('task-pin', kwargs={'pk': task.id})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_pinned'])
+        self.assertFalse(TaskPin.objects.filter(task=task, user=self.user).exists())
+        self.assertTrue(TaskPin.objects.filter(task=task, user=self.approver).exists())
+
+    def test_list_returns_current_user_pins_first(self):
+        unpinned = Task.objects.create(
+            summary='Unpinned Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        pinned = Task.objects.create(
+            summary='Pinned Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        TaskPin.objects.create(task=pinned, user=self.user)
+        TaskPin.objects.create(task=unpinned, user=self.approver)
+
+        response = self.client.get(reverse('task-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get('results', response.data)
+        self.assertEqual(results[0]['id'], pinned.id)
+        self.assertTrue(results[0]['is_pinned'])
+        unpinned_row = next(item for item in results if item['id'] == unpinned.id)
+        self.assertFalse(unpinned_row['is_pinned'])
+
+    def test_delete_task_with_relations_does_not_write_history_for_deleted_task(self):
+        """Deleting a task with relations should not fail from cascade history rows."""
+        source = Task.objects.create(
+            summary='Source Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        doomed = Task.objects.create(
+            summary='Doomed Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        target = Task.objects.create(
+            summary='Target Task',
+            type='budget',
+            owner=self.user,
+            current_approver=self.user,
+            project=self.project,
+        )
+        TaskRelation.objects.create(source_task=source, target_task=doomed, relationship_type='blocks')
+        TaskRelation.objects.create(source_task=doomed, target_task=target, relationship_type='blocks')
+
+        response = self.client.delete(reverse('task-detail', kwargs={'pk': doomed.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Task.objects.filter(pk=doomed.id).exists())
+        self.assertEqual(TaskRelation.objects.filter(source_task_id=doomed.id).count(), 0)
+        self.assertEqual(TaskRelation.objects.filter(target_task_id=doomed.id).count(), 0)
+        self.assertTrue(
+            TaskFieldHistory.objects.filter(
+                task=source,
+                field_name='relation_blocks_removed',
+            ).exists()
+        )
+        self.assertTrue(
+            TaskFieldHistory.objects.filter(
+                task=target,
+                field_name='relation_blocks_removed',
+            ).exists()
+        )
     
     def test_create_task_missing_required_fields(self):
         """Test task creation with missing required fields"""
@@ -913,6 +1024,149 @@ class TaskAPITest(TestCase):
         # Verify database was updated (avoid FSM field refresh)
         task = Task.objects.get(pk=task.id)
         self.assertEqual(task.summary, 'Updated Summary')
+
+    def test_creator_can_update_unassigned_draft_until_owner_is_assigned(self):
+        """Creator can edit only while a draft has no owner or approver."""
+        task = Task.objects.create(
+            summary='Unassigned Draft',
+            type='budget',
+            owner=None,
+            current_approver=None,
+            created_by=self.user,
+            project=self.project
+        )
+
+        url = reverse('task-detail', kwargs={'pk': task.id})
+        response = self.client.patch(
+            url,
+            {'summary': 'Creator Update'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['summary'], 'Creator Update')
+
+        response = self.client.patch(
+            url,
+            {'owner_id': self.approver.id},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.patch(
+            url,
+            {'summary': 'Creator After Owner Assigned'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db(fields=['summary', 'owner'])
+        self.assertEqual(task.summary, 'Creator Update')
+        self.assertEqual(task.owner_id, self.approver.id)
+
+    def test_task_created_history_creator_can_update_legacy_unassigned_draft(self):
+        """Creator fallback works for rows created before created_by was populated."""
+        from task.signals import set_current_user
+
+        set_current_user(None)
+        task = Task.objects.create(
+            summary='Legacy Unassigned Draft',
+            type='budget',
+            owner=None,
+            current_approver=None,
+            created_by=None,
+            project=self.project
+        )
+        self.assertIsNone(task.created_by_id)
+        TaskFieldHistory.objects.create(
+            task=task,
+            field_name='task_created',
+            changed_by=self.user,
+        )
+
+        url = reverse('task-detail', kwargs={'pk': task.id})
+        detail_response = self.client.get(url)
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data['created_by']['id'], self.user.id)
+
+        response = self.client.patch(
+            url,
+            {'summary': 'Fallback Creator Update'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        task.refresh_from_db(fields=['summary'])
+        self.assertEqual(task.summary, 'Fallback Creator Update')
+
+    def test_update_task_forbidden_for_project_member_who_is_not_owner_or_approver(self):
+        """Project access alone is not enough to edit a task."""
+        viewer = User.objects.create_user(
+            email='viewer@example.com',
+            username='viewer',
+            password='testpass123'
+        )
+        ProjectMember.objects.create(
+            user=viewer,
+            project=self.project,
+            role='member',
+            is_active=True
+        )
+        viewer_client = APIClient()
+        viewer_client.force_authenticate(user=viewer)
+        task = Task.objects.create(
+            summary='Original Summary',
+            type='budget',
+            owner=self.user,
+            current_approver=self.approver,
+            project=self.project
+        )
+
+        url = reverse('task-detail', kwargs={'pk': task.id})
+        response = viewer_client.patch(
+            url,
+            {'summary': 'Unauthorized Update'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db(fields=['summary'])
+        self.assertEqual(task.summary, 'Original Summary')
+
+    def test_update_unassigned_draft_forbidden_for_non_creator_project_member(self):
+        """Unassigned draft fallback edit access belongs only to the creator."""
+        viewer = User.objects.create_user(
+            email='viewer2@example.com',
+            username='viewer2',
+            password='testpass123'
+        )
+        ProjectMember.objects.create(
+            user=viewer,
+            project=self.project,
+            role='member',
+            is_active=True
+        )
+        viewer_client = APIClient()
+        viewer_client.force_authenticate(user=viewer)
+        task = Task.objects.create(
+            summary='Unassigned Draft',
+            type='budget',
+            owner=None,
+            current_approver=None,
+            created_by=self.user,
+            project=self.project
+        )
+
+        url = reverse('task-detail', kwargs={'pk': task.id})
+        response = viewer_client.patch(
+            url,
+            {'summary': 'Unauthorized Update'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db(fields=['summary'])
+        self.assertEqual(task.summary, 'Unassigned Draft')
     
     def test_update_task_project_id_null_keeps_existing(self):
         """Explicit null project_id should leave project unchanged"""
@@ -1525,11 +1779,11 @@ class TaskAPITest(TestCase):
         )
         
         url = reverse('task-start-review', kwargs={'pk': task.id})
-        response = self.client.post(url, {}, format='json')
-        
+        response = self.approver_client.post(url, {}, format='json')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['task']['status'], 'UNDER_REVIEW')
-        
+
         # Verify database was updated
         task = Task.objects.get(pk=task.pk)
         self.assertEqual(task.status, Task.Status.UNDER_REVIEW)
@@ -1575,7 +1829,7 @@ class TaskAPITest(TestCase):
         br.submit(); br.send_for_review(); br.approve(); br.save()
 
         url = reverse('task-lock', kwargs={'pk': task.id})
-        response = self.client.post(url, {}, format='json')
+        response = self.approver_client.post(url, {}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['task']['status'], 'LOCKED')
@@ -1830,7 +2084,7 @@ class TaskAPITest(TestCase):
         )
 
         url = reverse('task-start-review', kwargs={'pk': task.id})
-        response = self.client.post(url, {}, format='json')
+        response = self.approver_client.post(url, {}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         task_data = response.data['task']
@@ -2101,7 +2355,7 @@ class TaskAPITest(TestCase):
         br.submit(); br.send_for_review(); br.approve(); br.save()
 
         url = reverse('task-lock', kwargs={'pk': task.id})
-        response = self.client.post(url, {}, format='json')
+        response = self.approver_client.post(url, {}, format='json')
 
         # Must succeed: legacy mode has no minimum requirement
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -2328,6 +2582,7 @@ class TaskBulkActionAPITest(TestCase):
             summary=summary,
             type='budget',
             owner=self.user,
+            created_by=self.user,
             project=project or self.project,
         )
 
@@ -2455,6 +2710,50 @@ class TaskBulkActionAPITest(TestCase):
         t2 = Task.objects.get(pk=t2.pk)
         self.assertEqual(t1.status, Task.Status.SUBMITTED)
         self.assertEqual(t2.status, Task.Status.SUBMITTED)
+
+    def test_bulk_update_allows_unassigned_draft_creator(self):
+        task = Task.objects.create(
+            summary='Unassigned Draft',
+            type='budget',
+            owner=None,
+            current_approver=None,
+            created_by=self.user,
+            project=self.project,
+        )
+
+        response = self.client.post(
+            self.url,
+            {'task_ids': [task.id], 'priority': Task.Priority.HIGHEST},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['result']['updated_count'], 1)
+        task.refresh_from_db(fields=['priority'])
+        self.assertEqual(task.priority, Task.Priority.HIGHEST)
+
+    def test_bulk_update_forbids_non_creator_project_member_on_unassigned_draft(self):
+        task = Task.objects.create(
+            summary='Unassigned Draft',
+            type='budget',
+            owner=None,
+            current_approver=None,
+            created_by=self.user,
+            project=self.project,
+        )
+        other_client = APIClient()
+        other_client.force_authenticate(user=self.other_user)
+
+        response = other_client.post(
+            self.url,
+            {'task_ids': [task.id], 'priority': Task.Priority.HIGHEST},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['result']['updated_count'], 0)
+        task.refresh_from_db(fields=['priority'])
+        self.assertEqual(task.priority, Task.Priority.MEDIUM)
 
     def test_bulk_owner_fails_atomically_when_owner_not_project_member(self):
         t1 = self._make_task('Task 1')

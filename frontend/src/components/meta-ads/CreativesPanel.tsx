@@ -113,6 +113,8 @@ export default function CreativesPanel({
     () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
     [filtered, safePage, pageSize]
   );
+  const selectedCreativeCount = selectedIds.size;
+  const disableGenerateVariations = selectedCreativeCount > 1;
 
   if (loading) {
     return (
@@ -163,15 +165,22 @@ export default function CreativesPanel({
           </select>
           <button
             type="button"
+            disabled={disableGenerateVariations}
+            title={
+              disableGenerateVariations
+                ? 'Generate variations supports one selected creative at a time.'
+                : undefined
+            }
             onClick={() => {
-              if (selectedIds.size === 1) {
+              if (disableGenerateVariations) return;
+              if (selectedCreativeCount === 1) {
                 const onlyId = Array.from(selectedIds)[0];
                 router.push(`/variations-studio?creative=${onlyId}`);
               } else {
                 router.push('/variations-studio');
               }
             }}
-            className="inline-flex h-9 items-center gap-1 rounded-lg bg-white px-3 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:text-[#1a9ba3] hover:ring-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30"
+            className="inline-flex h-9 items-center gap-1 rounded-lg bg-white px-3 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:text-[#1a9ba3] hover:ring-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 disabled:cursor-not-allowed disabled:text-gray-400 disabled:ring-gray-200 disabled:hover:text-gray-400 disabled:hover:ring-gray-200"
           >
             Generate variations
           </button>

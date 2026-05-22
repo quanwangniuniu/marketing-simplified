@@ -4,7 +4,7 @@ import axios from "axios";
  * Mirrors paramsSerializer in frontend/src/lib/api.ts — array params must use
  * repeated keys for Django QueryDict.getlist(), not status[]=...
  */
-const PARAMS_SERIALIZER = { indexes: null as const };
+const PARAMS_SERIALIZER = { indexes: null } as const;
 
 describe("axios paramsSerializer (Django-compatible arrays)", () => {
   it("serializes array params as repeated keys without brackets", () => {

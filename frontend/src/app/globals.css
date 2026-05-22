@@ -552,6 +552,39 @@ hr {
   background: #64748b;
 }
 
+/* Slim, subtle scrollbar for task intelligence tab panels. */
+.task-tab-scrollbar {
+  --task-scrollbar-thumb: #cbd5e1;
+  --task-scrollbar-thumb-hover: #94a3b8;
+}
+
+.task-tab-scrollbar::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+  background: transparent;
+}
+
+.task-tab-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-tab-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--task-scrollbar-thumb);
+  border: 0;
+  border-radius: 999px;
+}
+
+.task-tab-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--task-scrollbar-thumb-hover);
+}
+
+@-moz-document url-prefix() {
+  .task-tab-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--task-scrollbar-thumb) transparent;
+  }
+}
+
 /* Visible scrollbar for spreadsheet grid; only this container scrolls (page/body do not). */
 .spreadsheet-scroll-container {
   /* Firefox */

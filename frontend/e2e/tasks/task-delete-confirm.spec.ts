@@ -63,6 +63,7 @@ test.describe('Task delete confirmation', () => {
   test('clicking delete button in drawer shows confirmation dialog', async ({ page }) => {
     await openDrawerForTask(page, taskId!);
 
+    await expect(page.getByTestId('delete-task-button')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('delete-task-button').click();
 
     await expect(page.getByRole('heading', { name: 'Delete task' })).toBeVisible({ timeout: 5_000 });
@@ -72,6 +73,8 @@ test.describe('Task delete confirmation', () => {
   test('cancelling the dialog leaves the task intact and closes the dialog', async ({ page }) => {
     await openDrawerForTask(page, taskId!);
 
+    // The button is disabled while the drawer is loading (readOnly=true until task data arrives).
+    await expect(page.getByTestId('delete-task-button')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('delete-task-button').click();
     await expect(page.getByRole('heading', { name: 'Delete task' })).toBeVisible({ timeout: 5_000 });
 
@@ -85,6 +88,7 @@ test.describe('Task delete confirmation', () => {
   test('confirming deletion deletes the task and closes the drawer', async ({ page }) => {
     await openDrawerForTask(page, taskId!);
 
+    await expect(page.getByTestId('delete-task-button')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('delete-task-button').click();
     await expect(page.getByRole('heading', { name: 'Delete task' })).toBeVisible({ timeout: 5_000 });
 
@@ -106,6 +110,7 @@ test.describe('Task delete confirmation', () => {
   test('confirm button is disabled while deletion is in progress', async ({ page }) => {
     await openDrawerForTask(page, taskId!);
 
+    await expect(page.getByTestId('delete-task-button')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('delete-task-button').click();
     await expect(page.getByRole('heading', { name: 'Delete task' })).toBeVisible({ timeout: 5_000 });
 
@@ -139,6 +144,7 @@ test.describe('Task delete confirmation', () => {
     await rows.first().click();
     await expect(page.getByTestId('task-drawer')).toBeVisible({ timeout: 10_000 });
 
+    await expect(page.getByTestId('delete-task-button')).toBeEnabled({ timeout: 10_000 });
     await page.getByTestId('delete-task-button').click();
     await expect(page.getByRole('heading', { name: 'Delete task' })).toBeVisible({ timeout: 5_000 });
 

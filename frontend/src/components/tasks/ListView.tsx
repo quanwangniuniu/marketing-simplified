@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDownToLine, ArrowUpToLine, Bookmark, ChevronDown, ChevronLeft, ChevronRight, Loader2, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, Bookmark, ChevronDown, ChevronLeft, ChevronRight, Loader2, Pin, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TaskBulkFailureItem, TaskData, TaskListFilters } from '@/types/task';
 import { userDisplayName } from '@/types/task';
@@ -31,7 +31,7 @@ interface ListViewProps {
   tasks: TaskData[];
   loading: boolean;
   error: string | null;
-  projectId: number | null;
+  projectId?: number | null;
   /** Opens the shared Linear import modal owned by the tasks page. */
   onOpenLinearImport?: () => void;
   /** After a successful bulk push to Linear, refresh task list from parent. */
@@ -126,7 +126,7 @@ export default function ListView({
   tasks,
   loading,
   error,
-  projectId,
+  projectId = null,
   onOpenLinearImport,
   onLinearBulkSynced,
   onRefresh,
@@ -152,6 +152,7 @@ export default function ListView({
   const [openOwnerTaskId, setOpenOwnerTaskId] = useState<number | null>(null);
   const [openApproverTaskId, setOpenApproverTaskId] = useState<number | null>(null);
   const [savingIds, setSavingIds] = useState<number[]>([]);
+  const [pinBusyIds, setPinBusyIds] = useState<number[]>([]);
   const [bulkFailures, setBulkFailures] = useState<TaskBulkFailureItem[]>([]);
   const [recentlyUpdatedIds, setRecentlyUpdatedIds] = useState<number[]>([]);
   const [truncatedSummaryIds, setTruncatedSummaryIds] = useState<number[]>([]);
@@ -582,6 +583,8 @@ export default function ListView({
   const sorted = useMemo(() => {
     const arr = [...visible];
     arr.sort((a, b) => {
+      const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+      if (pinDelta !== 0) return pinDelta;
       switch (sortKey) {
         case 'id_asc':  return (a.id ?? 0) - (b.id ?? 0);
         case 'id_desc': return (b.id ?? 0) - (a.id ?? 0);
@@ -757,6 +760,36 @@ export default function ListView({
     window.setTimeout(() => {
       setRecentlyUpdatedIds((prev) => prev.filter((id) => !taskIds.includes(id)));
     }, 900);
+  };
+
+  const setTaskPinBusy = (taskId: number, busy: boolean) => {
+    setPinBusyIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(taskId);
+      else next.delete(taskId);
+      return Array.from(next);
+    });
+  };
+
+  const toggleTaskPin = async (task: TaskData) => {
+    if (!task.id || pinBusyIds.includes(task.id)) return;
+    const nextPinned = !task.is_pinned;
+    const previous = task.is_pinned;
+    updateTaskInStore(task.id, { is_pinned: nextPinned });
+    setTaskPinBusy(task.id, true);
+    try {
+      const res = nextPinned
+        ? await TaskAPI.pinTask(task.id)
+        : await TaskAPI.unpinTask(task.id);
+      const data = res.data as TaskData;
+      updateTaskInStore(task.id, { is_pinned: data.is_pinned ?? nextPinned });
+      toast.success(nextPinned ? 'Task pinned' : 'Task unpinned');
+    } catch (err) {
+      updateTaskInStore(task.id, { is_pinned: previous });
+      toast.error(parseApiError(err, nextPinned ? 'Failed to pin task' : 'Failed to unpin task'));
+    } finally {
+      setTaskPinBusy(task.id, false);
+    }
   };
 
   const updateSingleTask = async (
@@ -1470,6 +1503,26 @@ export default function ListView({
                             >
                               {highlight(task.summary || `Task #${task.id}`, search)}
                             </span>
+                            <button
+                              type="button"
+                              disabled={!task.id || pinBusyIds.includes(task.id)}
+                              aria-label={task.is_pinned ? 'Unpin task' : 'Pin task'}
+                              title={task.is_pinned ? 'Unpin task' : 'Pin task'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void toggleTaskPin(task);
+                              }}
+                              className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition ${
+                                task.is_pinned
+                                  ? 'text-[#2ab5be] hover:bg-[#2fc6d6]/10'
+                                  : 'text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-500 group-hover:opacity-100'
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              <Pin
+                                className={`h-3 w-3 ${task.is_pinned ? 'fill-current' : ''}`}
+                                aria-hidden
+                              />
+                            </button>
                             {(task.subtask_count ?? 0) > 0 && (
                               <button
                                 data-toggle-subtasks
@@ -1581,7 +1634,7 @@ export default function ListView({
                         </button>
                         {openOwnerTaskId === task.id ? (
                           <div
-                            className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
+                            className={`absolute left-0 z-20 min-w-[168px] max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
                               }`}
                           >
                             {memberOptions.map((member) => (
@@ -1643,7 +1696,7 @@ export default function ListView({
                             </button>
                             {!isDisabled && openApproverTaskId === task.id ? (
                               <div
-                                className={`absolute left-0 z-20 min-w-[168px] rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
+                                className={`absolute left-0 z-20 min-w-[168px] max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg ${openOverlayUpward ? 'bottom-10' : 'top-10'
                                   }`}
                               >
                                 <button

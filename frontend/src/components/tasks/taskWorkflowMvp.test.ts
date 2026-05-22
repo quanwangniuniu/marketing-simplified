@@ -27,6 +27,8 @@ const base = (): TaskData => ({
   summary: 'Test',
 });
 
+const axiosResponse = <T,>(data: T) => ({ data }) as any;
+
 describe('getMvpWorkflowMenuItems', () => {
   it('DRAFT → Submit', () => {
     expect(getMvpWorkflowMenuItems({ ...base(), status: 'DRAFT' })).toEqual([
@@ -107,7 +109,7 @@ describe('runWorkflowMvpAction', () => {
 
   it('returns task from response and does not call getTask', async () => {
     const task = { id: 7, status: 'SUBMITTED', type: 'task' } as TaskData;
-    jest.mocked(TaskAPI.submitTask).mockResolvedValue({ data: { task } });
+    jest.mocked(TaskAPI.submitTask).mockResolvedValue(axiosResponse({ task }));
 
     const out = await runWorkflowMvpAction(7, 'submit');
 
@@ -118,8 +120,8 @@ describe('runWorkflowMvpAction', () => {
 
   it('falls back to getTask when response has no task', async () => {
     const loaded = { id: 9, status: 'APPROVED', type: 'task' } as TaskData;
-    jest.mocked(TaskAPI.unlock).mockResolvedValue({ data: {} });
-    jest.mocked(TaskAPI.getTask).mockResolvedValue({ data: loaded });
+    jest.mocked(TaskAPI.unlock).mockResolvedValue(axiosResponse({}));
+    jest.mocked(TaskAPI.getTask).mockResolvedValue(axiosResponse(loaded));
 
     const out = await runWorkflowMvpAction(9, 'unlock');
 
@@ -129,8 +131,8 @@ describe('runWorkflowMvpAction', () => {
   });
 
   it('throws when task is missing from response and getTask', async () => {
-    jest.mocked(TaskAPI.lock).mockResolvedValue({ data: {} });
-    jest.mocked(TaskAPI.getTask).mockResolvedValue({ data: {} as TaskData });
+    jest.mocked(TaskAPI.lock).mockResolvedValue(axiosResponse({}));
+    jest.mocked(TaskAPI.getTask).mockResolvedValue(axiosResponse({} as TaskData));
 
     await expect(runWorkflowMvpAction(1, 'lock')).rejects.toThrow('Task update response missing task');
   });

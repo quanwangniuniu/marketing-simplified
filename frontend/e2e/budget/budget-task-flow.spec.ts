@@ -138,7 +138,11 @@ test.describe('Budget task lifecycle', () => {
     // Set type to Budget
     const typeSelect = page.getByTestId('quick-task-create-modal').getByRole('combobox');
     if (await typeSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await typeSelect.selectOption({ label: /budget/i });
+      const budgetOption = typeSelect.locator('option').filter({ hasText: /budget/i }).first();
+      const budgetValue = await budgetOption.getAttribute('value');
+      if (budgetValue) {
+        await typeSelect.selectOption(budgetValue);
+      }
     }
 
     // Make sure "Open in drawer after creating" is checked

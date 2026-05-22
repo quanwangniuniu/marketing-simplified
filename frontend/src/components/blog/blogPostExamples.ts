@@ -164,7 +164,7 @@ export const blogPostExamples: BlogPostExample[] = [
     type: 'Product development life cycle',
     title: 'From hypothesis to ad variations in one experiment record',
     excerpt:
-      'Linking experiment hypotheses to ad_variations assets so creative iterations stay traceable when optimization picks winners.',
+      'Linking experiment hypotheses to creative variation assets so creative iterations stay traceable when optimization picks winners.',
     author: 'Marketing Simplified',
     time: 'Apr 20, 2026',
     href: '/docs#campaign-setup',

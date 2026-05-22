@@ -17,6 +17,15 @@ const EXCEL_TYPES = new Set([
   'application/csv',
 ]);
 
+const TEXT_MAX_BYTES = 1 * 1024 * 1024; // 1 MB cap for text preview
+
+function isTextPreviewable(ct: string): boolean {
+  if (EXCEL_TYPES.has(ct)) return false; // CSV handled by Excel preview
+  if (ct === 'application/json') return true;
+  if (ct.startsWith('text/')) return true;
+  return false;
+}
+
 const SCAN_TOKEN: Record<TaskAttachment['scan_status'], { label: string; cls: string }> = {
   pending: { label: 'Scanning…', cls: 'bg-amber-50 text-amber-700' },
   scanning: { label: 'Scanning…', cls: 'bg-amber-50 text-amber-700' },
@@ -62,11 +71,13 @@ export default function TaskAttachmentsBlock({
   const [excelData, setExcelData] = useState<{ sheets: { name: string; rows: string[][] }[]; activeIndex: number } | null>(null);
   const [excelLoading, setExcelLoading] = useState(false);
   const [visibleRows, setVisibleRows] = useState(100);
+  const [textData, setTextData] = useState<{ filename: string; content: string; truncated: boolean } | null>(null);
+  const [textLoading, setTextLoading] = useState(false);
 
   const onPreviewChangeRef = useRef(onPreviewChange);
   onPreviewChangeRef.current = onPreviewChange;
   useEffect(() => {
-    onPreviewChangeRef.current?.(preview !== null || excelData !== null);
+    onPreviewChangeRef.current?.(preview !== null || excelData !== null || textData !== null);
   }, [preview, excelData]);
 
   const closePreview = () => {
@@ -113,6 +124,30 @@ export default function TaskAttachmentsBlock({
       toast.error('Failed to load spreadsheet preview');
     } finally {
       setExcelLoading(false);
+    }
+  };
+
+  const openTextPreview = async (fileUrl: string, filename: string) => {
+    setTextLoading(true);
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('auth-storage') : null;
+      const token = raw ? (JSON.parse(raw)?.state?.token ?? null) : null;
+      const res = await fetch(fileUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('Failed to fetch file');
+      const contentLength = Number(res.headers.get('content-length') ?? 0);
+      if (contentLength > TEXT_MAX_BYTES) {
+        toast.error('File too large to preview (max 1 MB)');
+        return;
+      }
+      const text = await res.text();
+      const truncated = text.length >= TEXT_MAX_BYTES;
+      setTextData({ filename, content: truncated ? text.slice(0, TEXT_MAX_BYTES) : text, truncated });
+    } catch {
+      toast.error('Failed to load text preview');
+    } finally {
+      setTextLoading(false);
     }
   };
 
@@ -228,6 +263,7 @@ export default function TaskAttachmentsBlock({
             const isVideo = ct.startsWith('video/') && a.scan_status === 'clean';
             const isPdf = ct === 'application/pdf' && a.scan_status === 'clean';
             const isExcel = EXCEL_TYPES.has(ct) && a.scan_status === 'clean';
+            const isText = isTextPreviewable(ct) && a.scan_status === 'clean';
             return (
               <li key={a.id} className="flex min-w-0 flex-wrap items-center gap-2 py-2 sm:flex-nowrap sm:gap-3">
                 {isImage ? (
@@ -299,6 +335,29 @@ export default function TaskAttachmentsBlock({
                         </span>
                         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                           <ZoomIn className="h-4 w-4 text-green-700" />
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ) : isText ? (
+                  <button
+                    type="button"
+                    onClick={() => openTextPreview(a.file, a.original_filename)}
+                    disabled={textLoading}
+                    className="group relative h-10 w-12 flex-shrink-0 overflow-hidden rounded border border-gray-200 bg-gray-50 disabled:cursor-wait"
+                    title="Preview text file"
+                  >
+                    {textLoading ? (
+                      <span className="flex h-full w-full items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                      </span>
+                    ) : (
+                      <>
+                        <span className="flex h-full w-full items-center justify-center">
+                          <FileText className="h-4 w-4 text-slate-500 transition-opacity group-hover:opacity-0" />
+                        </span>
+                        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                          <ZoomIn className="h-4 w-4 text-slate-600" />
                         </span>
                       </>
                     )}
@@ -499,6 +558,37 @@ export default function TaskAttachmentsBlock({
           </div>
         </div>
       )}
+      {textData && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setTextData(null)}
+        >
+          <div
+            className="flex h-[85vh] w-[min(95vw,900px)] flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <span className="truncate text-sm font-medium text-gray-700">{textData.filename}</span>
+              <button
+                type="button"
+                onClick={() => setTextData(null)}
+                className="ml-3 shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-50 p-4">
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs text-gray-800">{textData.content}</pre>
+            </div>
+            {textData.truncated && (
+              <div className="border-t border-gray-100 px-4 py-2 text-xs text-amber-600">
+                Preview truncated at 1 MB — download the file to view the full content.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }

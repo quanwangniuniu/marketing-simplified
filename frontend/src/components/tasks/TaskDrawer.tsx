@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import type { TaskData } from '@/types/task';
+import { useTaskStore } from '@/lib/taskStore';
+import { useAuthStore } from '@/lib/authStore';
 
 import TaskDetailHeader from '@/components/tasks/detail/TaskDetailHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -30,6 +32,7 @@ interface TaskDrawerProps {
 
 export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = [], onNavigate, externalRefreshKey }: TaskDrawerProps) {
   const router = useRouter();
+  const updateTaskInStore = useTaskStore((s) => s.updateTask);
 
   const [task, setTask] = useState<TaskData | null>(null);
   const [members, setMembers] = useState<ProjectMemberData[]>([]);
@@ -62,19 +65,21 @@ export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = []
     setActiveTab('details');
   }, [taskId]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!taskId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const resp = await TaskAPI.getTask(taskId);
-      setTask(resp.data as TaskData);
+      const fresh = resp.data as TaskData;
+      setTask(fresh);
+      if (fresh.id) updateTaskInStore(fresh.id, fresh);
     } catch (e) {
       setError((e as any)?.response?.data?.detail || 'Failed to load task');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, updateTaskInStore]);
 
   useEffect(() => {
     if (taskId === null) {
@@ -109,7 +114,7 @@ export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = []
 
   const onMutated = useCallback(async () => {
     setRefreshKey((k) => k + 1);
-    await load();
+    await load(true);
     onTaskUpdate?.();
   }, [load, onTaskUpdate]);
 
@@ -141,13 +146,24 @@ export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = []
     };
   }, [taskId]);
 
+  const currentUser = useAuthStore((s) => s.user);
+
   if (taskId === null) return null;
 
   const currentIndex = taskIds.indexOf(taskId);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex !== -1 && currentIndex < taskIds.length - 1;
 
-  const readOnly = task?.status === 'LOCKED';
+  const isOwner = currentUser?.id != null && task?.owner?.id != null &&
+    Number(currentUser.id) === Number(task.owner.id);
+  const isApprover = currentUser?.id != null && task?.current_approver?.id != null &&
+    Number(currentUser.id) === Number(task.current_approver.id);
+  const isCreator = currentUser?.id != null && task?.created_by?.id != null &&
+    Number(currentUser.id) === Number(task.created_by.id);
+  const creatorCanEditUnassignedDraft = Boolean(
+    task?.status === 'DRAFT' && !task.owner && !task.current_approver && isCreator
+  );
+  const readOnly = task?.status === 'LOCKED' || (!isOwner && !isApprover && !creatorCanEditUnassignedDraft);
   const taskShell = (task ?? {
     id: taskId ?? undefined,
     summary: '',
@@ -323,7 +339,7 @@ export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = []
                   {(task?.id || loading) && (
                     <TaskActivityBlock
                       taskId={task?.id ?? 0}
-                      readOnly={Boolean(readOnly)}
+                      readOnly={task?.status === 'LOCKED'}
                       refreshKey={refreshKey}
                       loading={loading}
                     />
@@ -338,6 +354,7 @@ export default function TaskDrawer({ taskId, onClose, onTaskUpdate, taskIds = []
                   loading={loading}
                 />
               )}
+
             </>
           )}
         </div>

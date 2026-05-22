@@ -1,6 +1,6 @@
 import logging
 import threading
-from django.db.models.signals import pre_save, post_save, post_delete
+from django.db.models.signals import pre_delete, pre_save, post_save, post_delete
 from django.dispatch import receiver
 from .models import Task, TaskAttachment, TaskFieldHistory, TaskHierarchy, TaskRelation
 from .tasks import scan_task_attachment
@@ -8,6 +8,7 @@ from .tasks import scan_task_attachment
 logger = logging.getLogger(__name__)
 
 _current_user = threading.local()
+_deleting_task_ids = threading.local()
 
 
 def set_current_user(user):
@@ -16,6 +17,18 @@ def set_current_user(user):
 
 def get_current_user():
     return getattr(_current_user, 'value', None)
+
+
+def _get_deleting_task_ids():
+    ids = getattr(_deleting_task_ids, 'value', None)
+    if ids is None:
+        ids = set()
+        _deleting_task_ids.value = ids
+    return ids
+
+
+def _task_is_being_deleted(task_id):
+    return task_id is not None and task_id in _get_deleting_task_ids()
 
 
 def _get_current_user_safe():
@@ -71,11 +84,24 @@ def _field_value(old_instance, new_instance, field):
     return old_val, new_val
 
 
+@receiver(pre_delete, sender=Task)
+def mark_task_deleting(sender, instance, **kwargs):
+    _get_deleting_task_ids().add(instance.pk)
+
+
+@receiver(post_delete, sender=Task)
+def unmark_task_deleting(sender, instance, **kwargs):
+    _get_deleting_task_ids().discard(instance.pk)
+
+
 @receiver(post_save, sender=Task)
 def record_task_created(sender, instance, created, **kwargs):
     if not created:
         return
     user = _get_current_user_safe()
+    if user is not None and instance.created_by_id is None:
+        Task.objects.filter(pk=instance.pk, created_by__isnull=True).update(created_by=user)
+        instance.created_by = user
     try:
         TaskFieldHistory.objects.create(
             task=instance,
@@ -150,6 +176,8 @@ def record_attachment_removed(sender, instance, **kwargs):
     filename = instance.original_filename or (instance.file.name if instance.file else None)
     if not filename:
         return
+    if _task_is_being_deleted(instance.task_id) or not Task.objects.filter(pk=instance.task_id).exists():
+        return
     user = _get_current_user_safe()
     try:
         TaskFieldHistory.objects.create(
@@ -201,7 +229,10 @@ def handle_subtask_orphan_check(sender, instance, **kwargs):
     remaining_parents = TaskHierarchy.objects.filter(child_task=child_task)
 
     # Record history on parent task only if it still exists (explicit unlink, not cascade)
-    if Task.objects.filter(pk=instance.parent_task_id).exists():
+    if (
+        not _task_is_being_deleted(instance.parent_task_id) and
+        Task.objects.filter(pk=instance.parent_task_id).exists()
+    ):
         user = _get_current_user_safe()
         try:
             TaskFieldHistory.objects.create(
@@ -258,10 +289,20 @@ def record_relation_removed(sender, instance, **kwargs):
     user = _get_current_user_safe()
     rel_type = instance.relationship_type
     try:
+        source_exists = (
+            instance.source_task_id is not None and
+            not _task_is_being_deleted(instance.source_task_id) and
+            Task.objects.filter(pk=instance.source_task_id).exists()
+        )
+        target_exists = (
+            instance.target_task_id is not None and
+            not _task_is_being_deleted(instance.target_task_id) and
+            Task.objects.filter(pk=instance.target_task_id).exists()
+        )
         source_summary = Task.objects.filter(pk=instance.source_task_id).values_list('summary', flat=True).first()
         target_summary = Task.objects.filter(pk=instance.target_task_id).values_list('summary', flat=True).first()
         records = []
-        if instance.source_task_id:
+        if source_exists:
             records.append(TaskFieldHistory(
                 task_id=instance.source_task_id,
                 field_name=f'relation_{rel_type}_removed',
@@ -269,7 +310,7 @@ def record_relation_removed(sender, instance, **kwargs):
                 new_value=None,
                 changed_by=user,
             ))
-        if instance.target_task_id:
+        if target_exists:
             records.append(TaskFieldHistory(
                 task_id=instance.target_task_id,
                 field_name=f'relation_{rel_type}_removed',
@@ -281,4 +322,3 @@ def record_relation_removed(sender, instance, **kwargs):
             TaskFieldHistory.objects.bulk_create(records)
     except Exception:
         logger.exception('TaskFieldHistory: failed to record relation_removed for TaskRelation %s', instance.pk)
-

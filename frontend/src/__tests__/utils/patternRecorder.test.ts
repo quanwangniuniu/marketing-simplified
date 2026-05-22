@@ -42,6 +42,10 @@ describe('pattern rename recorder', () => {
       1500
     );
     expect(second.steps).toHaveLength(1);
-    expect(second.steps[0].params.to_header).toBe('Final');
+    const step = second.steps[0];
+    if (step.type !== 'SET_COLUMN_NAME') {
+      throw new Error(`Expected SET_COLUMN_NAME, received ${step.type}`);
+    }
+    expect(step.params.to_header).toBe('Final');
   });
 });

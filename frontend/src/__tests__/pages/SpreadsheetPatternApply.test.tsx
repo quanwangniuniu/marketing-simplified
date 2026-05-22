@@ -10,28 +10,52 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-jest.mock('@/components/layout/Layout', () => ({ children }: { children: React.ReactNode }) => <>{children}</>);
-jest.mock('@/components/auth/ProtectedRoute', () => ({ children }: { children: React.ReactNode }) => <>{children}</>);
+jest.mock('@/components/layout/Layout', () => {
+  const MockLayout = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  MockLayout.displayName = 'MockLayout';
+  return MockLayout;
+});
+
+jest.mock('@/components/auth/ProtectedRoute', () => {
+  const MockProtectedRoute = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  MockProtectedRoute.displayName = 'MockProtectedRoute';
+  return { ProtectedRoute: MockProtectedRoute };
+});
 
 jest.mock('@/components/spreadsheets/SpreadsheetGrid', () => {
   const React = require('react');
-  return React.forwardRef((props: any, ref) => {
+  const MockSpreadsheetGrid = React.forwardRef((props: any, ref: React.Ref<{ refresh: jest.Mock }>) => {
     React.useImperativeHandle(ref, () => ({
       refresh: jest.fn(),
     }));
     return <div data-testid="spreadsheet-grid" />;
   });
+  MockSpreadsheetGrid.displayName = 'MockSpreadsheetGrid';
+  return MockSpreadsheetGrid;
 });
 
 jest.mock('@/components/spreadsheets/PatternAgentPanel', () => {
   const React = require('react');
-  return (props: any) => {
+  const MockPatternAgentPanel = (props: any) => {
+    const { selectedPatternId, onApplyPattern, onSelectPattern } = props;
+    const selectedOnce = React.useRef(false);
+    const appliedOnce = React.useRef(false);
+
     React.useEffect(() => {
-      props.onSelectPattern('pattern-1');
-      props.onApplyPattern();
-    }, [props]);
+      if (!selectedPatternId && !selectedOnce.current) {
+        selectedOnce.current = true;
+        onSelectPattern('pattern-1');
+        return;
+      }
+      if (selectedPatternId === 'pattern-1' && !appliedOnce.current) {
+        appliedOnce.current = true;
+        onApplyPattern();
+      }
+    }, [selectedPatternId, onApplyPattern, onSelectPattern]);
     return <div data-testid="pattern-panel" />;
   };
+  MockPatternAgentPanel.displayName = 'MockPatternAgentPanel';
+  return MockPatternAgentPanel;
 });
 
 jest.mock('@/lib/api/patternApi', () => ({
@@ -120,4 +144,3 @@ describe('SpreadsheetDetailPage pattern apply flow', () => {
     expect((PatternAPI.getPatternJob as jest.Mock).mock.calls.length).toBe(getPatternJobCalls);
   });
 });
-
