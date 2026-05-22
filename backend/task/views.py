@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from django.core.cache import cache
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError
 from django.db.models import Q, Case, When, Value, IntegerField, Avg, Max, Count, Exists, OuterRef
@@ -2036,7 +2036,16 @@ class TaskViewSet(viewsets.ModelViewSet):
         ).hexdigest()
         dedupe_key = f"task_interaction:{dedupe_hash}"
 
-        if not cache.add(dedupe_key, "1", timeout=60):
+        dedupe_cutoff = timezone.now() - timedelta(seconds=60)
+        dedupe_exists = CollaborationEvent.objects.filter(
+            task=task,
+            user=request.user,
+            event_type=event_type,
+            meta__dedupe_hash=dedupe_hash,
+            created_at__gte=dedupe_cutoff,
+        ).exists()
+
+        if dedupe_exists or not cache.add(dedupe_key, "1", timeout=60):
             return Response(
                 {
                     "status": "deduped",
@@ -2044,6 +2053,8 @@ class TaskViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK,
             )
+
+        meta["dedupe_hash"] = dedupe_hash
 
         CollaborationEvent.objects.create(
             task=task,
@@ -2304,6 +2315,17 @@ def _create_documentation_revisit_event(task, attachment, actor, source):
     )
 
     if not cache.add(cache_key, "1", timeout=300):
+        return
+
+    cutoff = timezone.now() - timedelta(seconds=300)
+    if CollaborationEvent.objects.filter(
+        task=task,
+        user=actor,
+        event_type="documentation_revisit",
+        meta__attachment_id=attachment.id,
+        meta__source=source,
+        created_at__gte=cutoff,
+    ).exists():
         return
 
     CollaborationEvent.objects.create(

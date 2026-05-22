@@ -48,6 +48,16 @@ def _emit_shared_task_access_event(task_id, user_id, source="task_retrieve"):
     if not cache.add(cache_key, "1", timeout=_SHARED_TASK_ACCESS_TTL):
         return
 
+    cutoff = timezone.now() - timedelta(seconds=_SHARED_TASK_ACCESS_TTL)
+    if CollaborationEvent.objects.filter(
+        task=task,
+        user_id=user_id,
+        event_type="shared_task_access",
+        meta__source=source,
+        created_at__gte=cutoff,
+    ).exists():
+        return
+
     project_role = (
         ProjectMember.objects.filter(
             project=task.project,
@@ -103,6 +113,24 @@ def _create_tracking_events(user_id, task_id, event_types, request_meta):
         )
 
 
+
+def _recent_tracking_event_exists(user_id, task_id, event_type, ttl_seconds):
+    try:
+        ct = ContentType.objects.get(app_label="task", model="task")
+    except ContentType.DoesNotExist:
+        logger.error("emit_tracking_event: ContentType for task.Task not found")
+        return False
+
+    cutoff = timezone.now() - timedelta(seconds=ttl_seconds)
+    return TrackingEvent.objects.filter(
+        user_id=user_id,
+        content_type=ct,
+        object_id=task_id,
+        event_type=event_type,
+        occurred_at__gte=cutoff,
+    ).exists()
+
+
 @shared_task
 def emit_tracking_event(user_id, request_path, request_method, request_meta=None):
     if request_meta is None:
@@ -120,7 +148,13 @@ def emit_tracking_event(user_id, request_path, request_method, request_meta=None
         if request_meta.get('internal_refetch'):
             return
         dedup_key = f"tracking:last_open:{user_id}:{task_id}"
-        if cache.add(dedup_key, '1', timeout=_TASK_OPEN_TTL):
+        recent_open_exists = _recent_tracking_event_exists(
+            user_id=user_id,
+            task_id=task_id,
+            event_type=EventType.TASK_OPEN,
+            ttl_seconds=_TASK_OPEN_TTL,
+        )
+        if cache.add(dedup_key, '1', timeout=_TASK_OPEN_TTL) and not recent_open_exists:
             event_types.append(EventType.TASK_OPEN)
     elif method in _WRITE_METHODS:
         if method == 'POST':
