@@ -1,7 +1,7 @@
-# MediaJira
+# Zmarkio
 
 > **The best media buyer Jira platform in the world**  
-> MediaJira is a campaign management platform tailored for media buying teams. It streamlines the process of creating, tracking, and optimizing advertising campaigns, while providing collaboration tools, performance analytics, budget control, and professional API access.
+> Zmarkio is a campaign management platform tailored for media buying teams. It streamlines the process of creating, tracking, and optimizing advertising campaigns, while providing collaboration tools, performance analytics, budget control, and professional API access.
 
 ---
 
@@ -152,7 +152,7 @@ This section follows the official steps from [DOCKER_README.md](DOCKER_README.md
 ### 1. Clone and Setup
 ```bash
 git clone <your-repo-url>
-cd mediaJira
+cd Zmarkio
 
 # Copy environment file
 cp env.example .env
@@ -167,13 +167,13 @@ Username [postgres]:postgres
 User postgres password:your_postgres_password
 
 Execute PSQL commands:
-create database mediajira_db;
-CREATE USER mediajira_user WITH PASSWORD 'mediajira_password';
-GRANT ALL PRIVILEGES ON DATABASE mediajira_db TO mediajira_user; 
-\c mediajira_db;
-GRANT CREATE ON SCHEMA public TO mediajira_user;
-GRANT USAGE ON SCHEMA public TO mediajira_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO mediajira_user;
+create database Zmarkio_db;
+CREATE USER Zmarkio_user WITH PASSWORD 'Zmarkio_password';
+GRANT ALL PRIVILEGES ON DATABASE Zmarkio_db TO Zmarkio_user; 
+\c Zmarkio_db;
+GRANT CREATE ON SCHEMA public TO Zmarkio_user;
+GRANT USAGE ON SCHEMA public TO Zmarkio_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO Zmarkio_user;
 exit
 
 Then update your .env file, especially DB relevant variables.
@@ -221,7 +221,7 @@ docker compose -f docker-compose.dev.yml --env-file .env up --build -d
 
 ## 📊 Monitoring & Observability
 
-MediaJira includes comprehensive monitoring and observability tools for production-ready operations:
+Zmarkio includes comprehensive monitoring and observability tools for production-ready operations:
 
 ### Metrics Collection
 - **Prometheus**: Collects metrics from backend and frontend services
