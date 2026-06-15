@@ -5,7 +5,7 @@ import { FileSpreadsheet, ArrowRight, CalendarPlus, UploadCloud } from "lucide-r
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { AGENT_MESSAGES } from "@/lib/agentMessages"
-import { AnomalyCard } from "./AnomalyCard"
+import { SpreadsheetInsightAnomalyCard } from "./SpreadsheetInsightAnomalyCard"
 import { ColumnMappingCard } from "./ColumnMappingCard"
 import { FollowUpCard } from "./FollowUpCard"
 import { MiroGenerateCard } from "./MiroGenerateCard"
@@ -15,7 +15,6 @@ import type {
   AnomalyItem,
   RecommendedTask,
   RecommendedDecisionTreeNode,
-  ReviewedAnomaly,
   WorkflowStepState,
   ColumnDetectionData,
   GenerationOutputKey,
@@ -44,6 +43,8 @@ import { WorkflowStepConfirmCard } from "./WorkflowStepConfirmCard"
 export type ChatMessageType =
   | "text"
   | "analysis"
+  | "spreadsheet_summary"
+  | "spreadsheet_anomalies"
   | "file_uploaded"
   | "tasks_created"
   | "decisions_created"
@@ -76,6 +77,8 @@ export interface ChatMessage {
   stepProgress?: StepProgressItem[]
   approval?: PendingExternalApproval
   calendarEvents?: SuggestedCalendarEvent[]
+  spreadsheetId?: number
+  sheetId?: number
 }
 
 export interface MessageListProps {
@@ -83,7 +86,6 @@ export interface MessageListProps {
   onAction?: (action: string) => void
   onNavigate?: (view: string, message?: ChatMessage) => void
   onConfirmColumns?: (mapping: Record<string, string>) => void
-  onConfirmAnomalies?: (messageId: string, reviewed: ReviewedAnomaly[]) => void
   onReupload?: () => void
   sessionId?: string | null
   projectId?: string
@@ -112,6 +114,8 @@ export interface MessageListProps {
   followUpActive?: boolean
   stepState?: WorkflowStepState
   taskGenerationStatus?: TaskGenerationStatus
+  /** When set, only this message renders the recommended-tasks card (approval flow). */
+  tasksCardMessageId?: string | null
   decisionGenerationStatus?: DecisionGenerationStatus
   generatingDecisions?: boolean
   createdDecisionByRef?: Record<string, number>
@@ -127,7 +131,6 @@ export function MessageList({
   onAction,
   onNavigate,
   onConfirmColumns,
-  onConfirmAnomalies,
   onReupload,
   sessionId,
   projectId,
@@ -156,6 +159,7 @@ export function MessageList({
   followUpActive,
   stepState,
   taskGenerationStatus,
+  tasksCardMessageId: tasksCardMessageIdOverride,
   decisionGenerationStatus,
   generatingDecisions,
   createdDecisionByRef,
@@ -183,6 +187,7 @@ export function MessageList({
   const wasAtBottomRef = useRef(true)
   const isAnalysisLikeMessage = (m: ChatMessage) =>
     m.type === "analysis" ||
+    m.type === "spreadsheet_anomalies" ||
     m.type === "tasks_created" ||
     m.type === "decisions_created" ||
     (Array.isArray(m.recommendedTasks) && m.recommendedTasks.length > 0) ||
@@ -196,30 +201,36 @@ export function MessageList({
         Array.isArray(m.recommendedTasks) &&
         m.recommendedTasks.length > 0
     )
+  const latestMessageWithTasks = [...messages]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "assistant" &&
+        Array.isArray(m.recommendedTasks) &&
+        m.recommendedTasks.length > 0
+    )
   const latestAnalysisLikeMessage = [...messages].reverse().find(isAnalysisLikeMessage)
-  const bottomCardsMessageId =
-    latestAnalysisWithTasks?.id ??
-    latestAnalysisMessageId ??
-    latestAnalysisLikeMessage?.id ??
-    "board-bottom"
   const useSingleTasksCard =
     Boolean(approvalRequired) ||
     Boolean(pendingTaskApproval) ||
     taskGenerationStatus === "awaiting_approval"
-  const tasksCardMessageId = useSingleTasksCard
-    ? (latestAnalysisWithTasks?.id ?? null)
-    : null
+  const tasksCardMessageId =
+    tasksCardMessageIdOverride ??
+    (useSingleTasksCard
+      ? (latestMessageWithTasks?.id ?? latestAnalysisWithTasks?.id ?? null)
+      : (latestAnalysisWithTasks?.id ?? null))
+  const bottomCardsMessageId =
+    tasksCardMessageId ??
+    latestAnalysisMessageId ??
+    latestAnalysisLikeMessage?.id ??
+    "board-bottom"
   const canSelectRecommendedTasks =
     (taskGenerationStatus === "idle" || taskGenerationStatus === "awaiting_approval") &&
     !tasksApprovalGenerating &&
     !generatingTasks &&
     !stepState?.tasksCreated
   const taskSelectionMode =
-    canSelectRecommendedTasks &&
-    (Boolean(pendingTaskApproval) ||
-      (Boolean(approvalRequired) &&
-        Boolean(stepState?.analysisComplete) &&
-        !stepState?.tasksCreated))
+    canSelectRecommendedTasks && Boolean(pendingTaskApproval)
   const canSelectRecommendedDecisions =
     (decisionGenerationStatus === "idle" || decisionGenerationStatus === "awaiting_approval") &&
     !decisionsApprovalGenerating &&
@@ -450,7 +461,9 @@ export function MessageList({
               )}
 
               {/* Text bubble — hidden for calendar_invite which renders its own card */}
-              {message.content && message.type !== "calendar_invite" && (
+              {message.content &&
+                message.type !== "calendar_invite" &&
+                message.type !== "file_uploaded" && (
                 message.role === "assistant" ? (
                   <AgentMessageBoardBlock blockId={`${message.id}-bubble`}>
                     <div
@@ -537,34 +550,31 @@ export function MessageList({
 
               {/* Column mapping is handled silently — stored in DB, not shown to user */}
 
-              {/* Analysis result cards — progressive gating */}
+              {/* Anomaly card (read-only, collapsed) — block id must match agentMessageBoardBlockIds */}
               {message.role === "assistant" &&
-                wantsTasks &&
                 message.anomalies &&
-                message.anomalies.length > 0 && (
+                message.anomalies.length > 0 &&
+                (message.type === "spreadsheet_anomalies" || message.type === "analysis") && (
                 <AgentMessageBoardBlock blockId={`${message.id}-anomalies`}>
-                  <AnomalyCard
+                  <SpreadsheetInsightAnomalyCard
                     anomalies={message.anomalies}
-                    messageId={message.id}
-                    blockId={`${message.id}-anomalies`}
-                    confirmed={Boolean(message.anomaliesConfirmed)}
-                    disabled={isStreaming}
-                    onConfirm={
-                      onConfirmAnomalies
-                        ? (reviewed) => onConfirmAnomalies(message.id, reviewed)
-                        : undefined
-                    }
+                    spreadsheetId={message.spreadsheetId}
+                    sheetId={message.sheetId}
                   />
                 </AgentMessageBoardBlock>
               )}
+
 
               {/* TaskListCard: primary review surface. Renders before decision tree card. */}
               {message.role === "assistant" &&
                 wantsTasks &&
                 message.recommendedTasks &&
                 message.recommendedTasks.length > 0 &&
-                (message.type === "analysis" || message.type === "tasks_created") &&
-                (!tasksCardMessageId || message.id === tasksCardMessageId) && (
+                (message.type === "analysis" ||
+                  message.type === "spreadsheet_anomalies" ||
+                  message.type === "tasks_created") &&
+                tasksCardMessageId != null &&
+                message.id === tasksCardMessageId && (
                 <AgentMessageBoardBlock blockId={`${message.id}-tasks`}>
                   <TaskListCard
                     tasks={message.recommendedTasks}
@@ -583,7 +593,6 @@ export function MessageList({
                     onCreateSelected={pendingTaskApproval ? onApproveSelectedTasks : undefined}
                     createButtonDisabled={Boolean(approvalDisabled) || Boolean(tasksApprovalGenerating)}
                     onCreateAll={
-                      !approvalRequired &&
                       !pendingTaskApproval &&
                       stepState?.analysisComplete &&
                       !stepState?.tasksCreated

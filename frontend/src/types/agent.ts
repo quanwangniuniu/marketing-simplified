@@ -83,6 +83,10 @@ export interface AgentMessageData {
   original_filename?: string;
   row_count?: number;
   column_count?: number;
+  spreadsheet_id?: number;
+  sheet_id?: number;
+  project_id?: number;
+  url?: string;
   generation_outputs?: GenerationOutputKey[];
   calendar_events?: SuggestedCalendarEvent[];
   step_order?: number;
@@ -109,6 +113,8 @@ export type SSEEventType =
   | 'text'
   | 'text_delta'
   | 'analysis'
+  | 'spreadsheet_summary'
+  | 'spreadsheet_anomalies'
   | 'confirmation_request'
   | 'approval_request'
   | 'follow_up_prompt'
@@ -135,6 +141,7 @@ export interface SSEEvent {
 
 export type AgentAction =
   | 'analyze'
+  | 'analyze_spreadsheet_insights'
   | 'create_decisions'
   | 'create_tasks'
   | 'generate_miro'
@@ -162,6 +169,7 @@ export interface CalendarContextPayload {
 export interface AgentChatRequest {
   message: string;
   spreadsheet_id?: number;
+  sheet_id?: number;
   csv_filename?: string;
   action?: AgentAction;
   calendar_context?: CalendarContextPayload;
@@ -180,6 +188,13 @@ export interface AgentChatRequest {
 
 export type AnomalySeverity = 'critical' | 'warning' | 'info';
 
+export interface AnomalyLocation {
+  row: number;
+  col: number;
+  a1?: string;
+  sheet_id?: number;
+}
+
 export interface AnomalyItem {
   id: string;
   metric: string;
@@ -191,6 +206,10 @@ export interface AnomalyItem {
   campaign?: string | null;
   ad_set?: string | null;
   description: string;
+  /** Spreadsheet insights: short label for the anomaly. */
+  title?: string;
+  /** Spreadsheet insights: cell references for highlighting. */
+  locations?: AnomalyLocation[];
   /** Present on reviewed anomalies after confirmation. */
   included?: boolean;
 }

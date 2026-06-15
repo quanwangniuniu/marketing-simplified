@@ -15,6 +15,12 @@ import { ProjectAPI } from '@/lib/api/projectApi';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { PatternAPI } from '@/lib/api/patternApi';
 import {
+  stageSpreadsheetInsightsPreload,
+  SPREADSHEET_HIGHLIGHT_LOCATIONS_EVENT,
+  type SpreadsheetHighlightDetail,
+} from '@/lib/agentLaunchContext';
+import { openAgentSidePanel } from '@/lib/agentSidePanelStore';
+import {
   SpreadsheetData,
   SheetData,
   UpdateSheetRequest,
@@ -156,6 +162,7 @@ export default function SpreadsheetsV2DetailPage() {
   const [projectName, setProjectName] = useState<string | null>(null);
 
   const [highlightCell, setHighlightCell] = useState<{ row: number; col: number } | null>(null);
+  const [highlightLocations, setHighlightLocations] = useState<{ row: number; col: number }[] | null>(null);
   const [patterns, setPatterns] = useState<WorkflowPatternSummary[]>([]);
   const [patternsLoading, setPatternsLoading] = useState(true);
   const [exportingPattern, setExportingPattern] = useState(false);
@@ -242,6 +249,57 @@ export default function SpreadsheetsV2DetailPage() {
     const active = sheets.find((s) => s.id === activeSheetId);
     setShowPivotEditor(!!active && active.kind === 'pivot');
   }, [activeSheetId, sheets]);
+
+  const handleAnalyzeWithAgent = useCallback(() => {
+    if (!spreadsheetId || activeSheetId == null || !spreadsheet || projectId == null) return;
+    const active = sheets.find((s) => s.id === activeSheetId);
+    if (!active) return;
+    stageSpreadsheetInsightsPreload({
+      projectId,
+      spreadsheetId: Number(spreadsheetId),
+      sheetId: activeSheetId,
+      sheetName: active.name,
+      spreadsheetName: spreadsheet.name,
+    });
+    window.dispatchEvent(new CustomEvent('agent:new-chat'));
+    openAgentSidePanel();
+  }, [spreadsheetId, activeSheetId, spreadsheet, sheets, projectId]);
+
+  useEffect(() => {
+    let clearTimer: number | null = null;
+
+    const onHighlightLocations = (event: Event) => {
+      const detail = (event as CustomEvent<SpreadsheetHighlightDetail>).detail;
+      if (!detail || Number(detail.spreadsheetId) !== Number(spreadsheetId)) return;
+      if (detail.sheetId !== activeSheetId) {
+        setActiveSheetId(detail.sheetId);
+      }
+      const locations = detail.locations?.map((loc) => ({
+        row: loc.row,
+        col: loc.col,
+      })) ?? [];
+      setHighlightLocations(locations.length ? locations : null);
+      setHighlightCell(null);
+      if (locations.length > 0) {
+        gridRef.current?.navigateToCell(locations[0].row, locations[0].col);
+      }
+      if (clearTimer) {
+        window.clearTimeout(clearTimer);
+      }
+      clearTimer = window.setTimeout(() => {
+        setHighlightLocations(null);
+        clearTimer = null;
+      }, 8000);
+    };
+
+    window.addEventListener(SPREADSHEET_HIGHLIGHT_LOCATIONS_EVENT, onHighlightLocations);
+    return () => {
+      window.removeEventListener(SPREADSHEET_HIGHLIGHT_LOCATIONS_EVENT, onHighlightLocations);
+      if (clearTimer) {
+        window.clearTimeout(clearTimer);
+      }
+    };
+  }, [spreadsheetId, activeSheetId]);
 
   useEffect(() => {
     const hydratePivotSource = async () => {
@@ -939,6 +997,8 @@ export default function SpreadsheetsV2DetailPage() {
             onRename={handleRenameSpreadsheet}
             loading={loading}
             presenceSlot={<PresenceAvatars users={remoteUsers} />}
+            onAnalyzeWithAgent={handleAnalyzeWithAgent}
+            analyzeDisabled={loading || activeSheetId == null || !spreadsheet}
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
@@ -1016,6 +1076,8 @@ export default function SpreadsheetsV2DetailPage() {
                         ]);
                       }}
                       highlightCell={highlightCell}
+                      highlightLocations={highlightLocations}
+                      onAnalyzeWithAgent={handleAnalyzeWithAgent}
                       onHydrationStatusChange={(status) => setSheetHydrationReady(status === 'ready')}
                       onOpenPivotBuilder={handleCreatePivotSheet}
                     />

@@ -295,33 +295,12 @@ class CreateTasksExecutor(BaseStepExecutor):
             return StepResult(success=False, error='No analysis_result in input')
 
         try:
-            # Gate only applies when anomalies were detected: they must be
-            # reviewed + confirmed first. Zero-anomaly analyses proceed unchanged.
-            had_anomalies = bool(analysis.get('anomalies'))
-            if had_anomalies and not analysis.get('anomalies_confirmed'):
-                return StepResult(
-                    success=False,
-                    error='Anomalies must be confirmed before creating tasks.',
-                )
-
-            # All-excluded: anomalies existed but none were included -> no-op
-            # success so the workflow completes cleanly. Zero-detected-anomaly
-            # runs are NOT skipped (existing behaviour preserved).
-            reviewed = analysis.get('reviewed_anomalies') or []
-            included_anomalies = [a for a in reviewed if a.get('included', True)]
-            if had_anomalies and not included_anomalies:
-                return StepResult(
-                    success=True,
-                    output_data=input_data,
-                    sse_events=[{
-                        'type': 'text',
-                        'content': 'All anomalies were excluded; no tasks were created.',
-                    }],
-                )
-
             tasks_data = analysis.get('recommended_tasks', [])
             if not tasks_data:
                 return StepResult(success=False, error='No recommended_tasks in analysis.')
+
+            reviewed = analysis.get('reviewed_anomalies') or []
+            included_anomalies = [a for a in reviewed if a.get('included', True)]
 
             decision = self.workflow_run.decision
             draft = {'recommended_tasks': tasks_data}

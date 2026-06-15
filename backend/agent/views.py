@@ -67,6 +67,19 @@ class EnglishResponseMixin:
         super().initial(request, *args, **kwargs)
 
 
+def _get_project_for_user(user, project_id):
+    """Resolve a project by id if the user is a member."""
+    if project_id is None:
+        return None
+    try:
+        project = Project.objects.get(id=project_id, is_deleted=False)
+    except (Project.DoesNotExist, TypeError, ValueError):
+        return None
+    if not ProjectMember.objects.filter(project=project, user=user).exists():
+        return None
+    return project
+
+
 def _get_user_project(request):
     """Get the active project for the current user, with membership check."""
     raw_project_id = request.headers.get('X-Project-Id') or request.query_params.get('project_id')
@@ -127,11 +140,12 @@ class AgentSessionViewSet(EnglishResponseMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        project = _get_user_project(self.request)
+        project = None
+        body_project_id = self.request.data.get('project_id')
+        if body_project_id is not None:
+            project = _get_project_for_user(self.request.user, body_project_id)
         if not project:
-            project_id = self.request.data.get('project_id')
-            if project_id:
-                project = Project.objects.get(id=project_id, is_deleted=False)
+            project = _get_user_project(self.request)
         serializer.save(user=self.request.user, project=project)
 
     def perform_destroy(self, instance):
@@ -161,6 +175,7 @@ class ChatView(EnglishResponseMixin, APIView):
 
         message_text = serializer.validated_data['message']
         spreadsheet_id = serializer.validated_data.get('spreadsheet_id')
+        sheet_id = serializer.validated_data.get('sheet_id')
         csv_filename = serializer.validated_data.get('csv_filename')
         file_id = serializer.validated_data.get('file_id')
         action = serializer.validated_data.get('action')
@@ -249,6 +264,7 @@ class ChatView(EnglishResponseMixin, APIView):
                 for chunk in orchestrator.handle_message(
                     message_text,
                     spreadsheet_id=spreadsheet_id,
+                    sheet_id=sheet_id,
                     csv_filename=csv_filename,
                     action=action,
                     file_id=file_id,
@@ -319,6 +335,34 @@ class ChatView(EnglishResponseMixin, APIView):
                                 role='assistant',
                                 content=content or 'Decision drafts created.',
                                 message_type='decision_draft',
+                                metadata=data or {},
+                            )
+                        continue
+
+                    if chunk_type == 'spreadsheet_summary':
+                        _flush_message()
+                        sse_data = json.dumps(chunk, default=str)
+                        yield f"data: {sse_data}\n\n"
+                        if content:
+                            AgentMessage.objects.create(
+                                session=session,
+                                role='assistant',
+                                content=content,
+                                message_type='text',
+                                metadata={'kind': 'spreadsheet_summary', **(data or {})},
+                            )
+                        continue
+
+                    if chunk_type == 'spreadsheet_anomalies':
+                        _flush_message()
+                        sse_data = json.dumps(chunk, default=str)
+                        yield f"data: {sse_data}\n\n"
+                        if content or data:
+                            AgentMessage.objects.create(
+                                session=session,
+                                role='assistant',
+                                content=content or 'Anomaly analysis complete.',
+                                message_type='analysis',
                                 metadata=data or {},
                             )
                         continue
@@ -532,6 +576,28 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        spreadsheet_import = None
+        csv_dir = data_service._get_csv_dir()
+        filepath = os.path.join(csv_dir, os.path.basename(result['filename']))
+        try:
+            from spreadsheet.import_service import create_spreadsheet_from_upload
+
+            spreadsheet_import = create_spreadsheet_from_upload(
+                project=project,
+                filepath=filepath,
+                original_filename=result['original_filename'],
+            )
+            from .models import ImportedCSVFile
+
+            ImportedCSVFile.objects.filter(id=result['id']).update(
+                spreadsheet_id=spreadsheet_import['spreadsheet_id'],
+            )
+        except Exception:
+            logger.exception(
+                "FileUploadAnalyzeView spreadsheet import failed for file_id=%s",
+                result['id'],
+            )
+
         upload_fields = UploadAnalyzeInputSerializer(data=request.data)
         upload_fields.is_valid(raise_exception=True)
         try:
@@ -563,29 +629,54 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
                 title=f"Analysis: {result['original_filename']}",
             )
 
+        user_message_metadata = {
+            'original_filename': result['original_filename'],
+            'file_id': result['id'],
+        }
+        if spreadsheet_import:
+            user_message_metadata.update({
+                'spreadsheet_id': spreadsheet_import['spreadsheet_id'],
+                'sheet_id': spreadsheet_import['sheet_id'],
+                'project_id': spreadsheet_import['project_id'],
+                'url': spreadsheet_import['url'],
+            })
+
         AgentMessage.objects.create(
             session=session,
             role='user',
             content=f'Uploaded "{result["original_filename"]}"',
+            metadata=user_message_metadata,
         )
 
         orchestrator = AgentOrchestrator(
             user=request.user, project=project, session=session,
         )
 
+        imported_spreadsheet_id = (
+            spreadsheet_import['spreadsheet_id'] if spreadsheet_import else None
+        )
+
         def event_stream():
             # Immediately emit file_uploaded event
+            file_event_data = {
+                "file_id": result['id'],
+                "filename": result['filename'],
+                "original_filename": result['original_filename'],
+                "row_count": result['row_count'],
+                "column_count": result['column_count'],
+                "generation_outputs": generation_outputs,
+            }
+            if spreadsheet_import:
+                file_event_data.update({
+                    "spreadsheet_id": spreadsheet_import['spreadsheet_id'],
+                    "sheet_id": spreadsheet_import['sheet_id'],
+                    "project_id": spreadsheet_import['project_id'],
+                    "url": spreadsheet_import['url'],
+                })
             file_event = {
                 "type": "file_uploaded",
                 "content": f"Uploaded \"{result['original_filename']}\" ({result['row_count']} rows, {result['column_count']} columns).",
-                "data": {
-                    "file_id": result['id'],
-                    "filename": result['filename'],
-                    "original_filename": result['original_filename'],
-                    "row_count": result['row_count'],
-                    "column_count": result['column_count'],
-                    "generation_outputs": generation_outputs,
-                },
+                "data": file_event_data,
             }
             yield f"data: {json.dumps(file_event)}\n\n"
 
@@ -595,12 +686,20 @@ class FileUploadAnalyzeView(EnglishResponseMixin, APIView):
                 "file_id": result['id'],
                 "generation_outputs": generation_outputs,
             }
+            if spreadsheet_import:
+                assistant_metadata.update({
+                    "spreadsheet_id": spreadsheet_import['spreadsheet_id'],
+                    "sheet_id": spreadsheet_import['sheet_id'],
+                    "project_id": spreadsheet_import['project_id'],
+                    "url": spreadsheet_import['url'],
+                })
             last_message_type = 'text'
 
             try:
                 for chunk in orchestrator.handle_message(
                     "",
                     file_id=result['id'],
+                    spreadsheet_id=imported_spreadsheet_id,
                     generation_outputs=generation_outputs,
                     user_context=user_context):
                     chunk_type = chunk.get('type', 'text')

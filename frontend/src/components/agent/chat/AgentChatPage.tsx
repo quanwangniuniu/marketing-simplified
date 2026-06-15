@@ -39,9 +39,11 @@ import {
   AGENT_PANEL_OPENED_EVENT,
   consumeCalendarPreload,
   consumeDraftPreload,
+  consumeSpreadsheetPreload,
   shouldAutoSendDraftPreload,
   type CalendarPreload,
   type DraftPreload,
+  type SpreadsheetPreload,
 } from "@/lib/agentLaunchContext"
 import { getPendingMiroWorkflowRunIds } from "@/lib/agentMiroBoardStatus"
 import { agentMiroBoardHref } from "@/lib/agentMiroBoardHref"
@@ -106,6 +108,60 @@ function broadcastRestoredAnomalies(messages: AgentMessage[]) {
   }
 }
 
+/** Build a spreadsheet detail URL from persisted message metadata. */
+function buildSpreadsheetNavigateHref(
+  data?: AgentMessage["data"]
+): string | undefined {
+  if (!data) return undefined
+  if (data.url) return data.url
+  if (data.spreadsheet_id != null && data.project_id != null) {
+    return `/spreadsheets/${data.spreadsheet_id}?project_id=${data.project_id}`
+  }
+  return undefined
+}
+
+function parseUploadedFileName(content: string): string | undefined {
+  const match = content.match(/^Uploaded "(.+)"$/)
+  return match?.[1]
+}
+
+function spreadsheetUploadNavigateLabel(fileName: string): string {
+  return `Uploaded "${fileName}"`
+}
+
+/** Move spreadsheet link from user upload rows onto the next assistant bubble. */
+function attachSpreadsheetNavFromUploads(messages: ChatMessage[]): ChatMessage[] {
+  const result = messages.map((m) => ({ ...m }))
+  for (let i = 0; i < result.length; i++) {
+    const upload = result[i]
+    if (upload.role !== "user" || upload.type !== "file_uploaded") continue
+
+    const navigateHref = upload.navigateHref
+    const fileName = upload.fileName ?? parseUploadedFileName(upload.content)
+    if (!navigateHref || !fileName) continue
+
+    for (let j = i + 1; j < result.length; j++) {
+      if (result[j].role !== "assistant") continue
+      if (!result[j].navigateLabel) {
+        result[j] = {
+          ...result[j],
+          navigateTo: "spreadsheet",
+          navigateLabel: spreadsheetUploadNavigateLabel(fileName),
+          navigateHref,
+        }
+      }
+      break
+    }
+
+    result[i] = { ...upload, navigateHref: undefined }
+  }
+  return result
+}
+
+function prepareRestoredMessages(messages: ChatMessage[]): ChatMessage[] {
+  return attachSpreadsheetNavFromUploads(dedupeMiroGenerationStartedMessages(messages))
+}
+
 /** Restore a persisted AgentMessage into a ChatMessage with correct type & navigation. */
 function restoreMessage(m: AgentMessage): ChatMessage {
   let type: ChatMessage["type"] = "text"
@@ -113,13 +169,21 @@ function restoreMessage(m: AgentMessage): ChatMessage {
   let navigateLabel: string | undefined
   let navigateDisabled = false
   let navigateHref: string | undefined
+  let fileName: string | undefined
   let approval: PendingExternalApproval | undefined
   const isFollowUpPrompt = m.message_type === "follow_up_prompt"
 
 
   const eventType = m.data?.event_type
 
-  if (m.message_type === "calendar_invite") {
+  if (
+    m.role === "user" &&
+    (m.data?.original_filename || /^Uploaded "/.test(m.content))
+  ) {
+    type = "file_uploaded"
+    fileName = m.data?.original_filename ?? parseUploadedFileName(m.content)
+    navigateHref = buildSpreadsheetNavigateHref(m.data)
+  } else if (m.message_type === "calendar_invite") {
     type = "calendar_invite"
   } else if (eventType === "miro_generation_started") {
     type = "miro_status"
@@ -133,6 +197,14 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     navigateHref = agentMiroBoardHref(m.data)
   } else if (eventType === "miro_generation_failed") {
     type = "error"
+  } else if ((m.data as { kind?: string } | null | undefined)?.kind === "spreadsheet_summary") {
+    type = "spreadsheet_summary"
+  } else if (
+    m.message_type === "analysis" &&
+    (m.data as { spreadsheet_id?: number } | null | undefined)?.spreadsheet_id != null &&
+    Array.isArray(m.data?.anomalies)
+  ) {
+    type = "spreadsheet_anomalies"
   } else if (m.message_type === "analysis" || hasPersistedAnalysisPayload(m.data)) {
     type = "analysis"
   } else if (m.message_type === "task_created" || m.data?.task_ids) {
@@ -196,6 +268,9 @@ function restoreMessage(m: AgentMessage): ChatMessage {
     eventType,
     workflowRunId: m.data?.workflow_run_id,
     approval,
+    fileName,
+    spreadsheetId: m.data?.spreadsheet_id,
+    sheetId: m.data?.sheet_id,
   }
 }
 
@@ -321,6 +396,7 @@ function appendMiroResultMessage(prev: ChatMessage[], event: SSEEvent): ChatMess
 let _calendarAutoSendFired = false
 // Same one-shot guard for a staged draft context (Draft → Agent).
 let _draftAutoSendFired = false
+let _spreadsheetAutoSendFired = false
 
 type AgentChatPageProps = {
   /** Hide title + approval row; used when the floating window title bar shows them. */
@@ -434,6 +510,13 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
     }
     return preload
   })
+  const [pendingSpreadsheetPreload, setPendingSpreadsheetPreload] = useState<SpreadsheetPreload | null>(() => {
+    const preload = consumeSpreadsheetPreload()
+    if (preload) {
+      _spreadsheetAutoSendFired = false
+    }
+    return preload
+  })
   // Persist calendar context for the lifetime of this session so follow-up messages
   // also go through the calendar workflow, not the generic fallback.
   const [sessionCalendarContext, setSessionCalendarContext] = useState<Record<string, unknown> | null>(
@@ -478,6 +561,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       .find(
         (message) =>
           message.type === "analysis" ||
+          message.type === "spreadsheet_anomalies" ||
           (Array.isArray(message.recommendedTasks) && message.recommendedTasks.length > 0)
       )?.id ?? null
   const [renderFinishSignal, setRenderFinishSignal] = useState(0)
@@ -547,10 +631,10 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         return
       }
       autoActionQueueRef.current = queue
-      if (queue.includes("create_tasks")) {
+      if (queue.includes("create_tasks") && !requiresApproval) {
         setTaskGenerationStatus("generating")
       }
-      if (queue.includes("create_decisions")) {
+      if (queue.includes("create_decisions") && !requiresApproval) {
         setDecisionGenerationStatus("generating")
       }
       tryRunNextAutoAction()
@@ -656,7 +740,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
         latestRecommendedTasksRef.current = restored[i].recommendedTasks || null
       }
     }
-    setMessages(dedupeMiroGenerationStartedMessages(restored))
+    setMessages(prepareRestoredMessages(restored))
     setFollowUpAvailable(Boolean(session.follow_up_available))
     setFollowUpStarted(Boolean(session.follow_up_started))
     setSessionTitle((session.title && session.title.trim()) || "Chat")
@@ -890,7 +974,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
           latestRecommendedTasksRef.current = restored[i].recommendedTasks || null
         }
       }
-      setMessages(dedupeMiroGenerationStartedMessages(restored))
+      setMessages(prepareRestoredMessages(restored))
       const hasAnalysis = session.messages.some(
         (message) =>
           message.message_type === "analysis" || hasPersistedAnalysisPayload(message.data)
@@ -1007,11 +1091,7 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
 
   // Calendar context staged while the panel was closed (Calendar → Ask Agent).
   useEffect(() => {
-    const onPanelOpened = () => {
-      const preload = consumeCalendarPreload()
-      if (!preload) {
-        return
-      }
+    const resetForPreload = () => {
       sessionLoadRequestRef.current += 1
       invalidateActiveStreams()
       resetTransientChatUiState()
@@ -1023,19 +1103,38 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       setFollowUpStarted(false)
       setSessionTitle("Chat")
       setApprovalRequired(getApprovalPref())
-setStepState({
-      analysisComplete: false,
-      anomaliesConfirmed: false,
-      tasksCreated: false,
-      decisionsCreated: false,
-    })
+      setStepState({
+        analysisComplete: false,
+        anomaliesConfirmed: false,
+        tasksCreated: false,
+        decisionsCreated: false,
+      })
       setGeneratedTaskIndexes([])
       setSkippedTaskIndexes([])
       setCreatedTaskIdByIndex({})
       setTaskGenerationStatus("idle")
-      setSessionCalendarContext(preload.context)
-      setPendingCalendarPreload(preload)
-      _calendarAutoSendFired = false
+    }
+
+    const onPanelOpened = () => {
+      const calendarPreload = consumeCalendarPreload()
+      if (calendarPreload) {
+        resetForPreload()
+        setSessionCalendarContext(calendarPreload.context)
+        setPendingCalendarPreload(calendarPreload)
+        setPendingSpreadsheetPreload(null)
+        _calendarAutoSendFired = false
+        return
+      }
+
+      const spreadsheetPreload = consumeSpreadsheetPreload()
+      if (!spreadsheetPreload) {
+        return
+      }
+      resetForPreload()
+      setSessionCalendarContext(null)
+      setPendingCalendarPreload(null)
+      setPendingSpreadsheetPreload(spreadsheetPreload)
+      _spreadsheetAutoSendFired = false
     }
 
     // Draft → Agent (Open in Agent / Ask Agent from a draft).
@@ -1154,7 +1253,7 @@ setStepState({
     addMessage({
       id: userMsgId,
       role: "user",
-      content: `Uploaded ${file.name}`,
+      content: spreadsheetUploadNavigateLabel(file.name),
       type: "file_uploaded",
       fileName: file.name,
     })
@@ -1210,9 +1309,24 @@ setStepState({
             requestedGenerationOutputsRef.current = fromServer as GenerationOutputKey[]
             setRequestedGenerationOutputs(fromServer as GenerationOutputKey[])
           }
+          const spreadsheetId = event.data?.spreadsheet_id
+          const navigateHref =
+            event.data?.url ??
+            (spreadsheetId != null && event.data?.project_id != null
+              ? `/spreadsheets/${spreadsheetId}?project_id=${event.data.project_id}`
+              : undefined)
+          updateMessage(userMsgId, {
+            spreadsheetId,
+            sheetId: event.data?.sheet_id,
+          })
           // File confirmed uploaded — update thinking message
           updateMessage(aiMsgId, {
             content: event.content || "File uploaded. Analyzing...",
+            navigateTo: navigateHref ? "spreadsheet" : undefined,
+            navigateLabel: navigateHref
+              ? spreadsheetUploadNavigateLabel(file.name)
+              : undefined,
+            navigateHref,
           })
         } else if (event.type === "step_progress" && event.data) {
           const { step_order, step_name, total_steps, status } = event.data
@@ -1704,7 +1818,26 @@ setStepState({
     workflowId?: string,
     action?: AgentAction,
     reuseAiMsgId?: string,
+    spreadsheetPreload?: SpreadsheetPreload,
   ) => {
+    if (spreadsheetPreload) {
+      if (generationOutputsSelected.length === 0) return
+      const outputsForSpreadsheet = [...generationOutputsSelected]
+      requestedGenerationOutputsRef.current = outputsForSpreadsheet
+      setRequestedGenerationOutputs(outputsForSpreadsheet)
+      setStepState({
+        analysisComplete: false,
+        anomaliesConfirmed: false,
+        tasksCreated: false,
+        decisionsCreated: false,
+      })
+      setGeneratedTaskIndexes([])
+      setSkippedTaskIndexes([])
+      setCreatedTaskIdByIndex({})
+      autoExternalActionsTriggeredRef.current = false
+      autoActionQueueRef.current = []
+    }
+
     setHasStarted(true)
     // Use provided context or fall back to the session-level calendar context
     const effectiveCalendarContext = calendarContext ?? sessionCalendarContext ?? undefined
@@ -1763,6 +1896,13 @@ setStepState({
         ...(action ? { action } : {}),
         ...(effectiveCalendarContext ? { calendar_context: effectiveCalendarContext as any } : {}),
         ...(sessionDraftContext ? { draft_context: sessionDraftContext as any } : {}),
+        ...(spreadsheetPreload
+          ? {
+              action: "analyze_spreadsheet_insights" as const,
+              spreadsheet_id: spreadsheetPreload.spreadsheetId,
+              sheet_id: spreadsheetPreload.sheetId,
+            }
+          : {}),
         user_context: userContext || undefined,
       },
       (event: SSEEvent) => {
@@ -1793,6 +1933,56 @@ setStepState({
             userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             currentView: "week",
             currentDate: new Date().toISOString().split("T")[0],
+          })
+          return
+        }
+
+        if (event.type === "spreadsheet_summary") {
+          updateMessage(aiMsgId, { content: "", type: "text" })
+          addMessage({
+            id: `ai-sheet-summary-${Date.now()}`,
+            role: "assistant",
+            content: event.content || "",
+            type: "spreadsheet_summary",
+          })
+          return
+        }
+
+        if (event.type === "spreadsheet_anomalies" && event.data) {
+          const data = event.data as AnalysisResult & {
+            spreadsheet_id?: number
+            sheet_id?: number
+          }
+          const wantsTasks = requestedGenerationOutputsRef.current.includes("recommended_tasks")
+          const tasks = wantsTasks ? data.recommended_tasks : undefined
+          latestRecommendedTasksRef.current = tasks || null
+          setFollowUpAvailable(true)
+          setFollowUpStarted(false)
+          setStepState((prev) => ({
+            ...prev,
+            analysisComplete: true,
+            anomaliesConfirmed: true,
+          }))
+          setGeneratedTaskIndexes([])
+          setSkippedTaskIndexes([])
+          setCreatedTaskIdByIndex({})
+          addMessage({
+            id: `ai-sheet-anomalies-${Date.now()}`,
+            role: "assistant",
+            content: event.content || "",
+            type: "spreadsheet_anomalies",
+            anomalies: data.anomalies,
+            anomaliesConfirmed: true,
+            recommendedTasks: tasks,
+            spreadsheetId: data.spreadsheet_id,
+            sheetId: data.sheet_id,
+          })
+          if (wantsTasks) {
+            selectAllRecommendedTasks(tasks?.length ?? 0)
+          }
+          queueAutoExternalActionsAfterAnalysis({
+            analysis: data,
+            generationOutputs: requestedGenerationOutputsRef.current,
           })
           return
         }
@@ -2018,7 +2208,7 @@ setStepState({
         }
       }
     )
-  }, [sessionId, sessionCalendarContext, sessionDraftContext, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
+  }, [sessionId, sessionCalendarContext, sessionDraftContext, generationOutputsSelected, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   // Keep ref always pointing to the latest handleSendMessage
   handleSendMessageRef.current = handleSendMessage
@@ -2056,6 +2246,8 @@ setStepState({
     let contentParts: string[] = []
     const streamToken = activeStreamTokenRef.current
     const requestSessionId = String(sid)
+    let createTasksHadError = false
+    let createTasksSucceeded = false
 
     abortRef.current = AgentAPI.sendMessage(
       sid,
@@ -2102,6 +2294,7 @@ setStepState({
         }
 
         if (event.type === "task_created") {
+          createTasksSucceeded = true
           setStepState((prev) => ({ ...prev, tasksCreated: true }))
           setPendingTaskApproval(null)
           setTasksApprovalGenerating(false)
@@ -2185,11 +2378,17 @@ setStepState({
 
           if (kind === "task") {
             applyPendingTaskApproval(pending)
+            const draftTasks = (pending.draft as { recommended_tasks?: RecommendedTask[] })
+              ?.recommended_tasks
+            if (Array.isArray(draftTasks) && draftTasks.length > 0) {
+              updateMessage(aiMsgId, { recommendedTasks: draftTasks })
+            }
           } else if (kind === "decision_tree") {
             applyPendingDecisionApproval(pending)
           }
         }
         if (event.type === "error" && action === "create_tasks") {
+          createTasksHadError = true
           setTaskGenerationStatus("error")
         }
         if (event.type === "error" && action === "create_decisions") {
@@ -2200,6 +2399,7 @@ setStepState({
         if (activeStreamTokenRef.current !== streamToken) return
         if (String(sessionIdRef.current) !== requestSessionId) return
         if (action === "create_tasks") {
+          createTasksHadError = true
           setTaskGenerationStatus("error")
         }
         if (action === "create_decisions") {
@@ -2215,7 +2415,11 @@ setStepState({
         if (activeStreamTokenRef.current !== streamToken) return
         if (String(sessionIdRef.current) !== requestSessionId) return
         if (action === "create_tasks") {
-          setTaskGenerationStatus((status) => (status === "generating" ? "error" : status))
+          setTaskGenerationStatus((status) => {
+            if (status !== "generating") return status
+            if (createTasksHadError) return "error"
+            return "completed"
+          })
         }
         if (action === "create_decisions") {
           setDecisionGenerationStatus((status) => (status === "generating" ? "error" : status))
@@ -2433,6 +2637,23 @@ setStepState({
     handleSendMessageRef.current?.(pendingDraftPreload.message)
   }, [pendingDraftPreload, hasStarted])
 
+  // Auto-send spreadsheet insights when arriving from spreadsheet Analyze with AI.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!pendingSpreadsheetPreload || hasStarted) return
+    if (_spreadsheetAutoSendFired) return
+    _spreadsheetAutoSendFired = true
+    handleSendMessageRef.current?.(
+      pendingSpreadsheetPreload.message,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      pendingSpreadsheetPreload,
+    )
+  }, [pendingSpreadsheetPreload, hasStarted])
+
   return (
     <div className="flex h-full flex-col">
       <OnboardingTokenIntro />
@@ -2509,10 +2730,10 @@ setStepState({
           miroGenerateInFlight,
           onAction: handleAction,
           onConfirmColumns: handleConfirmColumns,
-          onConfirmAnomalies: handleConfirmAnomalies,
           onReupload: handleReupload,
           onResumeWorkflow: handleResumeWorkflow,
           latestAnalysisMessageId,
+          tasksCardMessageId: latestAnalysisMessageId,
           showFollowUpToggle: followUpAvailable || followUpStarted,
           followUpActive: followUpStarted,
           stepState,

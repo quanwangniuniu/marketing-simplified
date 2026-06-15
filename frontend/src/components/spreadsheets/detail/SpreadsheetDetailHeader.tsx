@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, Loader2, Pencil } from 'lucide-react';
+import { Bot, Check, Loader2, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Id } from '@/types/common';
 import SpreadsheetBreadcrumb from './SpreadsheetBreadcrumb';
@@ -16,6 +16,8 @@ interface Props {
   loading?: boolean;
   /** Optional presence avatars (collab). */
   presenceSlot?: ReactNode;
+  onAnalyzeWithAgent?: () => void;
+  analyzeDisabled?: boolean;
 }
 
 export default function SpreadsheetDetailHeader({
@@ -27,6 +29,8 @@ export default function SpreadsheetDetailHeader({
   onRename,
   loading = false,
   presenceSlot,
+  onAnalyzeWithAgent,
+  analyzeDisabled = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(spreadsheetName);
@@ -60,7 +64,8 @@ export default function SpreadsheetDetailHeader({
         projectName={projectName}
         spreadsheetName={spreadsheetName}
       />
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
         {loading ? (
           <div className="flex w-full max-w-xl items-center gap-2">
             <Skeleton className="h-9 w-full max-w-md rounded-md" />
@@ -120,6 +125,20 @@ export default function SpreadsheetDetailHeader({
             )}
             {presenceSlot ? <div className="ml-auto shrink-0">{presenceSlot}</div> : null}
           </div>
+        )}
+        </div>
+        {onAnalyzeWithAgent && !loading && (
+          <button
+            type="button"
+            onClick={onAnalyzeWithAgent}
+            disabled={analyzeDisabled}
+            title="Analyze this sheet with AI"
+            data-testid="header-analyze-with-ai-button"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Bot className="h-4 w-4" strokeWidth={2.3} aria-hidden="true" />
+            Analyze with AI
+          </button>
         )}
       </div>
     </header>

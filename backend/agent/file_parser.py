@@ -28,7 +28,7 @@ def _try_number(value):
         return value
 
 
-def _parse_csv(filepath):
+def _parse_csv(filepath, max_rows=MAX_ROWS):
     """Parse a CSV file into a single-sheet structure."""
     rows = []
     columns = []
@@ -37,7 +37,7 @@ def _parse_csv(filepath):
             reader = csv.DictReader(f)
             columns = list(reader.fieldnames or [])
             for i, row in enumerate(reader):
-                if i >= MAX_ROWS:
+                if max_rows is not None and i >= max_rows:
                     break
                 parsed = {}
                 for col in columns:
@@ -50,7 +50,7 @@ def _parse_csv(filepath):
     return [{"name": "Sheet1", "columns": columns, "rows": rows}]
 
 
-def _parse_excel(filepath):
+def _parse_excel(filepath, max_rows=MAX_ROWS):
     """Parse an Excel file (xlsx/xls) into a multi-sheet structure."""
     try:
         import openpyxl
@@ -74,7 +74,7 @@ def _parse_excel(filepath):
             columns = [str(c) if c is not None else f"col_{j}" for j, c in enumerate(header)]
 
             for i, row_vals in enumerate(row_iter):
-                if i >= MAX_ROWS:
+                if max_rows is not None and i >= max_rows:
                     break
                 row_dict = {}
                 for j, val in enumerate(row_vals):
@@ -89,12 +89,14 @@ def _parse_excel(filepath):
     return sheets
 
 
-def parse_file_to_json(file_path, filename=None):
+def parse_file_to_json(file_path, filename=None, max_rows=MAX_ROWS):
     """Parse a CSV or Excel file on disk into a standardised JSON structure.
 
     Args:
         file_path: Absolute path to the file on disk.
         filename: Display name (defaults to basename of file_path).
+        max_rows: Row cap per sheet (default MAX_ROWS for agent analysis).
+            Pass None to read all rows (e.g. spreadsheet import).
 
     Returns:
         dict: {"name": str, "sheets": [{"name", "columns", "rows"}]}
@@ -105,9 +107,9 @@ def parse_file_to_json(file_path, filename=None):
     ext = os.path.splitext(filename)[1].lower()
 
     if ext == '.csv':
-        sheets = _parse_csv(file_path)
+        sheets = _parse_csv(file_path, max_rows=max_rows)
     elif ext in ('.xlsx', '.xls'):
-        sheets = _parse_excel(file_path)
+        sheets = _parse_excel(file_path, max_rows=max_rows)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 

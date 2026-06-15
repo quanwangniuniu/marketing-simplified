@@ -60,10 +60,16 @@ def _get_llm_client():
         return None
 
 
-def _extract_spreadsheet_data(spreadsheet):
-    """Extract spreadsheet data into a structured dict for LLM analysis."""
+def _extract_spreadsheet_data(spreadsheet, sheet_id=None):
+    """Extract spreadsheet data into a structured dict for LLM analysis.
+
+    When *sheet_id* is set, only that sheet is included (active-sheet analysis).
+    """
     data = {"name": spreadsheet.name, "sheets": []}
-    for sheet in spreadsheet.sheets.filter(is_deleted=False).order_by('position'):
+    sheets_qs = spreadsheet.sheets.filter(is_deleted=False).order_by('position')
+    if sheet_id is not None:
+        sheets_qs = sheets_qs.filter(id=sheet_id)
+    for sheet in sheets_qs:
         columns = list(
             sheet.columns.filter(is_deleted=False)
             .order_by('position')
@@ -91,6 +97,7 @@ def _extract_spreadsheet_data(spreadsheet):
             if row_dict:
                 rows_data.append(row_dict)
         data["sheets"].append({
+            "id": sheet.id,
             "name": sheet.name,
             "columns": columns,
             "rows": rows_data,
@@ -401,6 +408,226 @@ def _assign_anomaly_ids(analysis):
         analysis['anomalies_confirmed'] = True
 
     return analysis
+
+
+_SPREADSHEET_INSIGHTS_SYSTEM_PROMPT = """\
+You are a spreadsheet data analyst. Analyze the provided sheet data and return \
+insights for the user.
+
+You MUST return ONLY valid JSON (no markdown, no explanation, no code fences) \
+with this exact structure:
+
+{
+  "summary": "Markdown summary of the data: column overview, key statistics, trends, and patterns",
+  "recommendations": ["actionable recommendation strings"],
+  "anomalies": [
+    {
+      "title": "short label for the anomaly",
+      "severity": "one of: critical, warning, info",
+      "description": "why this value or pattern is anomalous",
+      "locations": [
+        { "row": 0, "col": 2, "a1": "C1" }
+      ]
+    }
+  ],
+  "recommended_tasks": [
+    {
+      "type": "one of: optimization, alert, asset, execution, budget, report, scaling, communication, retrospective, experiment, platform_policy_update",
+      "summary": "Short task title (max 255 chars)",
+      "description": "2-4 sentence actionable description",
+      "priority": "one of: HIGH, MEDIUM, LOW"
+    }
+  ]
+}
+
+Rules:
+- Use 0-based row and col indices matching the data rows provided (first data row is row 0)
+- Include A1 notation for each location when possible
+- Only reference cells present in the provided data sample
+- Look for outliers, missing values, inconsistent formats, impossible ratios, and unexpected patterns
+- Suggest 0-5 recommended_tasks based on findings
+- If no anomalies found, return an empty anomalies array
+- Return ONLY the JSON object, nothing else\
+"""
+
+
+def _preprocess_spreadsheet_insights(spreadsheet_data):
+    """Return (column_summary, cleaned_data) for in-sheet insights analysis."""
+    all_rows = []
+    columns_info = []
+    sheet_meta = []
+    for sheet in spreadsheet_data.get('sheets', []):
+        columns = sheet.get('columns', [])
+        columns_info.extend(columns)
+        sheet_meta.append(
+            f"Sheet id={sheet.get('id')} name={sheet.get('name', 'Unknown')}"
+        )
+        for row_idx, row in enumerate(sheet.get('rows', [])):
+            if isinstance(row, dict):
+                row_with_idx = dict(row)
+                row_with_idx['_row_index'] = row_idx
+                all_rows.append(row_with_idx)
+
+    limited = all_rows[:50]
+    column_summary = (
+        f"Spreadsheet: {spreadsheet_data.get('name', 'Unknown')}, "
+        f"Sheets: {', '.join(sheet_meta) or 'none'}, "
+        f"Total rows: {len(all_rows)}, Showing: {len(limited)}, "
+        f"Columns: {list(dict.fromkeys(columns_info))}"
+    )
+    return column_summary, json.dumps(limited, default=str)
+
+
+def _normalize_spreadsheet_insights_result(raw, sheet_id=None):
+    """Validate and normalize Gemini spreadsheet insights JSON."""
+    if not isinstance(raw, dict):
+        raise ValueError('Insights response must be a JSON object')
+
+    summary = str(raw.get('summary') or '').strip()
+    recommendations = raw.get('recommendations') or []
+    if not isinstance(recommendations, list):
+        recommendations = []
+    recommendations = [str(r).strip() for r in recommendations if str(r).strip()]
+
+    anomalies_in = raw.get('anomalies') or []
+    if not isinstance(anomalies_in, list):
+        anomalies_in = []
+
+    normalized_anomalies = []
+    for i, anomaly in enumerate(anomalies_in):
+        if not isinstance(anomaly, dict):
+            continue
+        severity = anomaly.get('severity', 'info')
+        if severity not in ('critical', 'warning', 'info'):
+            severity = 'info'
+
+        locations_in = anomaly.get('locations') or []
+        norm_locations = []
+        if isinstance(locations_in, list):
+            for loc in locations_in:
+                if not isinstance(loc, dict):
+                    continue
+                if 'row' not in loc or 'col' not in loc:
+                    continue
+                try:
+                    norm_loc = {
+                        'row': int(loc['row']),
+                        'col': int(loc['col']),
+                    }
+                except (TypeError, ValueError):
+                    continue
+                if loc.get('a1'):
+                    norm_loc['a1'] = str(loc['a1'])
+                if sheet_id is not None:
+                    norm_loc['sheet_id'] = sheet_id
+                norm_locations.append(norm_loc)
+
+        title = str(anomaly.get('title') or '').strip()
+        description = str(anomaly.get('description') or '').strip()
+        if not title and description:
+            title = description[:80]
+
+        normalized_anomalies.append({
+            'id': f'anom_{i}',
+            'title': title or 'Anomaly',
+            'severity': severity,
+            'description': description or title,
+            'locations': norm_locations,
+            'metric': title or 'Data',
+            'movement': 'UNEXPECTED_SPIKE',
+            'current_value': '',
+            'previous_value': '',
+            'change_percent': 0,
+        })
+
+    recommended_tasks = raw.get('recommended_tasks') or []
+    if not isinstance(recommended_tasks, list):
+        recommended_tasks = []
+
+    return {
+        'summary': summary,
+        'recommendations': recommendations,
+        'anomalies': normalized_anomalies,
+        'recommended_tasks': recommended_tasks,
+        'anomalies_confirmed': True,
+    }
+
+
+def _call_gemini_spreadsheet_insights(
+    spreadsheet_data,
+    user_id=None,
+    sheet_id=None,
+    validation_feedback=None,
+):
+    """Call Gemini for in-sheet summarization and anomaly detection."""
+    from .gemini_client import call_gemini_json
+
+    column_summary, cleaned_data = _preprocess_spreadsheet_insights(spreadsheet_data)
+    user_prompt = (
+        f"Data summary: {column_summary}\n\n"
+        f"Analyze the following spreadsheet data:\n\n{cleaned_data}"
+    )
+    if validation_feedback:
+        user_prompt += (
+            f"\n\nYour previous JSON response failed validation: {validation_feedback}\n"
+            "Fix every issue and return ONLY the corrected JSON object."
+        )
+
+    logger.info(
+        "Calling Gemini for spreadsheet insights user_id=%s sheet_id=%s attempt=%s",
+        user_id,
+        sheet_id,
+        'retry' if validation_feedback else 'initial',
+    )
+    return call_gemini_json(
+        system_prompt=_SPREADSHEET_INSIGHTS_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        temperature=0.3,
+        timeout=300,
+    )
+
+
+def _run_spreadsheet_insights(spreadsheet_data, user_id=None, sheet_id=None):
+    """Run in-sheet insights using Gemini.
+
+    Raises RuntimeError if no provider is configured or the call fails.
+    Raises GenerationValidationError if recommended_tasks fail validation after retries.
+    """
+    from .gemini_client import _get_api_key as _gemini_key
+    from .generation_registry import GenerationValidationError, validate_recommended_tasks
+
+    if not _gemini_key():
+        raise RuntimeError("No analysis provider available.")
+
+    validation_feedback = None
+    for attempt in range(1, _ANALYSIS_VALIDATION_MAX_ATTEMPTS + 1):
+        try:
+            raw = _call_gemini_spreadsheet_insights(
+                spreadsheet_data,
+                user_id=user_id,
+                sheet_id=sheet_id,
+                validation_feedback=validation_feedback,
+            )
+            result = _normalize_spreadsheet_insights_result(raw, sheet_id=sheet_id)
+            result['recommended_tasks'] = validate_recommended_tasks(
+                result.get('recommended_tasks', [])
+            )
+            return result
+        except GenerationValidationError as exc:
+            if attempt >= _ANALYSIS_VALIDATION_MAX_ATTEMPTS:
+                raise
+            validation_feedback = str(exc)
+            logger.warning(
+                "Gemini spreadsheet insights validation failed (attempt %s/%s): %s; retrying",
+                attempt,
+                _ANALYSIS_VALIDATION_MAX_ATTEMPTS,
+                exc,
+            )
+        except Exception as e:
+            logger.error("Gemini spreadsheet insights failed: %s", e)
+            raise RuntimeError("Spreadsheet insights analysis failed.") from e
+
+    raise RuntimeError("Spreadsheet insights analysis failed.")
 
 
 def _call_gemini_calendar_from_analysis(
@@ -1021,7 +1248,7 @@ class AgentOrchestrator:
 
             yield from self._execute_steps(wr, result.output_data or {})
 
-    def handle_message(self, message, spreadsheet_id=None, csv_filename=None,
+    def handle_message(self, message, spreadsheet_id=None, sheet_id=None, csv_filename=None,
                        action=None, file_id=None, calendar_context=None,
                        draft_context=None,
                        workflow_id=None, column_mapping=None,
@@ -1032,6 +1259,13 @@ class AgentOrchestrator:
 
         Yields SSE chunks as dicts.
         """
+        if action == 'analyze_spreadsheet_insights':
+            yield from self.analyze_spreadsheet_insights(
+                spreadsheet_id, sheet_id=sheet_id,
+            )
+            yield {"type": "done"}
+            return
+
         if action == 'confirm_anomalies':
             latest_run = self.session.workflow_runs.filter(
                 is_deleted=False
@@ -1673,7 +1907,7 @@ class AgentOrchestrator:
                 is_deleted=False,
             )
         except Spreadsheet.DoesNotExist:
-            yield {"type": "error", "content": f"Spreadsheet {spreadsheet_id} not found."}
+            yield {"type": "error", "content": "Spreadsheet not found."}
             return
 
         workflow_run = AgentWorkflowRun.objects.create(
@@ -1710,6 +1944,93 @@ class AgentOrchestrator:
             "type": "analysis",
             "content": "\n".join(summary_parts),
             "data": analysis,
+        }
+
+    def analyze_spreadsheet_insights(self, spreadsheet_id, sheet_id=None):
+        """Analyze the active sheet in-place: summary + anomalies (lightweight path)."""
+        yield {"type": "text", "content": "Analyzing spreadsheet data..."}
+
+        if not spreadsheet_id:
+            yield {"type": "error", "content": "spreadsheet_id is required."}
+            return
+
+        try:
+            spreadsheet = Spreadsheet.objects.get(
+                id=spreadsheet_id,
+                project=self.project,
+                is_deleted=False,
+            )
+        except Spreadsheet.DoesNotExist:
+            yield {"type": "error", "content": "Spreadsheet not found."}
+            return
+
+        if sheet_id is not None:
+            if not spreadsheet.sheets.filter(id=sheet_id, is_deleted=False).exists():
+                yield {"type": "error", "content": "Sheet not found."}
+                return
+
+        workflow_run = AgentWorkflowRun.objects.create(
+            session=self.session,
+            spreadsheet=spreadsheet,
+            status='analyzing',
+        )
+
+        spreadsheet_data = _extract_spreadsheet_data(spreadsheet, sheet_id=sheet_id)
+
+        try:
+            insights = _run_spreadsheet_insights(
+                spreadsheet_data,
+                user_id=self.user.id,
+                sheet_id=sheet_id,
+            )
+        except Exception as e:
+            from .generation_registry import GenerationValidationError
+
+            if isinstance(e, GenerationValidationError):
+                message = f"Task suggestions failed validation: {e}"
+            elif isinstance(e, RuntimeError):
+                message = str(e)
+            else:
+                message = "Spreadsheet insights analysis failed."
+            workflow_run.status = 'failed'
+            workflow_run.error_message = message
+            workflow_run.save()
+            yield {"type": "error", "content": message}
+            return
+
+        workflow_run.analysis_result = insights
+        workflow_run.status = 'awaiting_confirmation'
+        workflow_run.save()
+
+        summary_content = insights.get('summary') or 'Analysis complete.'
+        recommendations = insights.get('recommendations') or []
+        if recommendations:
+            summary_content += '\n\n### Recommendations\n' + '\n'.join(
+                f'- {rec}' for rec in recommendations
+            )
+
+        yield {
+            "type": "spreadsheet_summary",
+            "content": summary_content,
+        }
+
+        anomalies = insights.get('anomalies', [])
+        count = len(anomalies)
+        anomaly_label = 'anomaly' if count == 1 else 'anomalies'
+        yield {
+            "type": "spreadsheet_anomalies",
+            "content": (
+                f"Found {count} {anomaly_label} in the data."
+                if count
+                else "No anomalies detected in the data."
+            ),
+            "data": {
+                "anomalies": anomalies,
+                "anomalies_confirmed": True,
+                "recommended_tasks": insights.get('recommended_tasks', []),
+                "spreadsheet_id": spreadsheet_id,
+                "sheet_id": sheet_id,
+            },
         }
 
     def analyze_csv(self, csv_filename):
@@ -1991,7 +2312,11 @@ class AgentOrchestrator:
         workflow_run.save(update_fields=['created_decisions'])
 
     def create_tasks_from_analysis(self, workflow_run):
-        """Create Tasks directly from analysis results, optionally linking to Decision if it exists."""
+        """Create Tasks directly from analysis recommended_tasks.
+
+        Recommended tasks are independent of anomaly review state; explicit
+        create_tasks always commits from ``recommended_tasks`` when present.
+        """
         yield {"type": "text", "content": "Creating tasks..."}
 
         existing_task_ids = getattr(workflow_run, "created_tasks", []) or []
@@ -2009,31 +2334,13 @@ class AgentOrchestrator:
 
         analysis = self._workflow_run_analysis(workflow_run)
 
-        # Gate only applies when anomalies were actually detected: they must be
-        # reviewed + confirmed first. Zero-anomaly analyses proceed unchanged.
-        had_anomalies = bool(analysis.get('anomalies'))
-        if had_anomalies and not analysis.get('anomalies_confirmed'):
-            yield {
-                "type": "error",
-                "content": "Anomalies must be confirmed before creating tasks.",
-            }
-            return
-
-        # All-excluded: anomalies were detected but the user included none ->
-        # skip task creation. Zero-detected-anomaly runs are NOT skipped.
-        reviewed = analysis.get('reviewed_anomalies') or []
-        included_anomalies = [a for a in reviewed if a.get('included', True)]
-        if had_anomalies and not included_anomalies:
-            yield {
-                "type": "text",
-                "content": "All anomalies were excluded; no tasks were created.",
-            }
-            return
-
         recommended_tasks = analysis.get("recommended_tasks", [])
         if not recommended_tasks:
             yield {"type": "error", "content": "No recommended tasks found in analysis."}
             return
+
+        reviewed = analysis.get('reviewed_anomalies') or []
+        included_anomalies = [a for a in reviewed if a.get('included', True)]
 
         decision = workflow_run.decision
         from .approval_gate import KIND_TASK, request_external_commit
@@ -2165,12 +2472,20 @@ class AgentOrchestrator:
         )
         input_data['generation_outputs'] = outputs
 
+        spreadsheet_obj = input_data.get('spreadsheet')
+        if spreadsheet_obj is None and spreadsheet_id:
+            spreadsheet_obj = Spreadsheet.objects.filter(
+                id=spreadsheet_id,
+                project=self.project,
+                is_deleted=False,
+            ).first()
+
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
             workflow_definition=workflow_def,
             status='analyzing',
             current_step_order=1,
-            spreadsheet=input_data.get('spreadsheet'),
+            spreadsheet=spreadsheet_obj,
             generation_outputs_requested=outputs,
         )
         if user_context:

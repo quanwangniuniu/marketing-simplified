@@ -121,8 +121,8 @@ export function getAssistantMessageBlockIds(
     wantsTasks &&
     message.recommendedTasks &&
     message.recommendedTasks.length > 0 &&
-    (message.type === "analysis" || message.type === "tasks_created") &&
-    (!tasksCardMessageId || message.id === tasksCardMessageId)
+    tasksCardMessageId != null &&
+    message.id === tasksCardMessageId
   ) {
     ids.push(`${message.id}-tasks`)
   }

@@ -1,4 +1,5 @@
 import json
+import tempfile
 import uuid
 from unittest.mock import patch, MagicMock
 
@@ -855,16 +856,15 @@ class AnomalyConfirmationTests(TestCase):
         self.assertEqual(len(msg.metadata['reviewed_anomalies']), 1)
         self.assertFalse(msg.metadata['reviewed_anomalies'][0]['included'])
 
-    # --- task-creation gate ----------------------------------------------
+    # --- task creation from recommended_tasks --------------------------------
 
-    def test_create_tasks_blocked_before_confirmation(self):
+    def test_create_tasks_without_anomaly_confirmation(self):
         from task.models import Task
         run = self._unconfirmed_run()
         chunks = list(self.orch.create_tasks_from_analysis(run))
         types = [c['type'] for c in chunks]
-        self.assertIn('error', types)
-        self.assertNotIn('task_created', types)
-        self.assertFalse(Task.objects.filter(project=self.project).exists())
+        self.assertIn('task_created', types)
+        self.assertTrue(Task.objects.filter(project=self.project).exists())
 
     def test_create_tasks_allowed_after_confirmation(self):
         from task.models import Task
@@ -876,7 +876,7 @@ class AnomalyConfirmationTests(TestCase):
         self.assertIn('task_created', types)
         self.assertTrue(Task.objects.filter(project=self.project).exists())
 
-    def test_all_excluded_confirms_but_creates_no_tasks(self):
+    def test_all_excluded_still_creates_tasks_when_requested(self):
         from task.models import Task
         run = self._unconfirmed_run()
         list(self.orch.confirm_anomalies(run, self._full_payload(included=False)))
@@ -884,8 +884,29 @@ class AnomalyConfirmationTests(TestCase):
         self.assertTrue(run.analysis_result['anomalies_confirmed'])
         chunks = list(self.orch.create_tasks_from_analysis(run))
         types = [c['type'] for c in chunks]
-        self.assertNotIn('task_created', types)
-        self.assertFalse(Task.objects.filter(project=self.project).exists())
+        self.assertIn('task_created', types)
+        self.assertTrue(Task.objects.filter(project=self.project).exists())
+
+    def test_create_tasks_with_anomalies_but_no_reviewed_list(self):
+        """Spreadsheet insights auto-confirms anomalies without reviewed_anomalies."""
+        from task.models import Task
+        run = AgentWorkflowRun.objects.create(
+            session=self.session,
+            status='awaiting_confirmation',
+            analysis_result={
+                'anomalies': [_test_anomaly()],
+                'anomalies_confirmed': True,
+                'recommended_tasks': [
+                    {'type': 'alert', 'summary': 'Investigate spike', 'priority': 'HIGH'},
+                ],
+            },
+        )
+        chunks = list(self.orch.create_tasks_from_analysis(run))
+        types = [c['type'] for c in chunks]
+        contents = ' '.join(c.get('content', '') for c in chunks)
+        self.assertIn('task_created', types)
+        self.assertNotIn('All anomalies were excluded', contents)
+        self.assertTrue(Task.objects.filter(project=self.project).exists())
 
     def test_zero_anomalies_preserves_task_creation(self):
         from task.models import Task
@@ -2204,6 +2225,92 @@ class RunAnalysisValidationRetryTests(TestCase):
 
         self.assertEqual(mock_call.call_count, _ANALYSIS_VALIDATION_MAX_ATTEMPTS)
 
+    @patch('agent.gemini_client._get_api_key', return_value='fake-key')
+    @patch('agent.services._call_gemini_analysis')
+    def test_retries_on_recommended_tasks_validation_error_then_succeeds(self, mock_call, _mock_key):
+        from agent.services import _run_analysis
+
+        invalid = {
+            'recommended_tasks': [
+                {'type': 'bogus_type', 'summary': 'Bad', 'priority': 'HIGH'},
+            ],
+        }
+        valid = {
+            'recommended_tasks': [
+                {'type': 'alert', 'summary': 'Fix issue', 'priority': 'HIGH'},
+            ],
+        }
+        mock_call.side_effect = [invalid, valid]
+
+        result = _run_analysis(
+            {'name': 'test', 'sheets': []},
+            generation_outputs=['recommended_tasks'],
+        )
+
+        self.assertEqual(mock_call.call_count, 2)
+        self.assertIn(
+            'type is invalid',
+            mock_call.call_args_list[1].kwargs['validation_feedback'],
+        )
+        self.assertEqual(result['recommended_tasks'][0]['type'], 'alert')
+
+
+class SpreadsheetInsightsValidationRetryTests(TestCase):
+    @patch('agent.gemini_client._get_api_key', return_value='fake-key')
+    @patch('agent.services._call_gemini_spreadsheet_insights')
+    def test_retries_on_recommended_tasks_validation_then_succeeds(self, mock_call, _mock_key):
+        from agent.services import _run_spreadsheet_insights
+
+        invalid = {
+            'summary': 'Overview',
+            'recommendations': [],
+            'anomalies': [],
+            'recommended_tasks': [
+                {'type': 'invalid', 'summary': 'Bad', 'priority': 'HIGH'},
+            ],
+        }
+        valid = {
+            'summary': 'Overview',
+            'recommendations': [],
+            'anomalies': [],
+            'recommended_tasks': [
+                {'type': 'Alert', 'summary': 'Fix issue', 'priority': 'High'},
+            ],
+        }
+        mock_call.side_effect = [invalid, valid]
+
+        result = _run_spreadsheet_insights({'name': 'test', 'sheets': []})
+
+        self.assertEqual(mock_call.call_count, 2)
+        self.assertIsNone(mock_call.call_args_list[0].kwargs.get('validation_feedback'))
+        self.assertIn(
+            'type is invalid',
+            mock_call.call_args_list[1].kwargs['validation_feedback'],
+        )
+        self.assertEqual(result['recommended_tasks'][0]['type'], 'alert')
+        self.assertEqual(result['recommended_tasks'][0]['priority'], 'HIGH')
+
+    @patch('agent.gemini_client._get_api_key', return_value='fake-key')
+    @patch('agent.services._call_gemini_spreadsheet_insights')
+    def test_raises_after_max_insights_validation_retries(self, mock_call, _mock_key):
+        from agent.generation_registry import GenerationValidationError
+        from agent.services import _ANALYSIS_VALIDATION_MAX_ATTEMPTS, _run_spreadsheet_insights
+
+        invalid = {
+            'summary': 'Overview',
+            'recommendations': [],
+            'anomalies': [],
+            'recommended_tasks': [
+                {'type': 'invalid', 'summary': 'Bad', 'priority': 'HIGH'},
+            ],
+        }
+        mock_call.return_value = invalid
+
+        with self.assertRaises(GenerationValidationError):
+            _run_spreadsheet_insights({'name': 'test', 'sheets': []})
+
+        self.assertEqual(mock_call.call_count, _ANALYSIS_VALIDATION_MAX_ATTEMPTS)
+
 
 class AnalyzeDataExecutorUserContextTests(TestCase):
     def setUp(self):
@@ -2274,3 +2381,266 @@ class AnalyzeDataExecutorUserContextTests(TestCase):
 
         _, kwargs = mock_analysis.call_args
         self.assertIsNone(kwargs.get('user_context'))
+
+
+class SpreadsheetInsightsTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Insights Org', slug='insights-org')
+        self.user = CustomUser.objects.create_user(
+            email='insights@test.com',
+            username='insightsuser',
+            password='testpass123',
+        )
+        self.user.organization = self.org
+        self.user.save()
+        self.project = Project.objects.create(
+            name='Insights Project',
+            organization=self.org,
+            owner=self.user,
+        )
+        ProjectMember.objects.create(
+            user=self.user,
+            project=self.project,
+            role='owner',
+            is_active=True,
+        )
+        self.session = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+        )
+
+    def _create_spreadsheet_with_sheets(self):
+        from spreadsheet.models import Spreadsheet, Sheet
+
+        spreadsheet = Spreadsheet.objects.create(project=self.project, name='Budget')
+        sheet1 = Sheet.objects.create(spreadsheet=spreadsheet, name='Sheet1', position=0)
+        sheet2 = Sheet.objects.create(spreadsheet=spreadsheet, name='Sheet2', position=1)
+        return spreadsheet, sheet1, sheet2
+
+    def test_extract_spreadsheet_data_filters_by_sheet_id(self):
+        from agent.services import _extract_spreadsheet_data
+
+        spreadsheet, sheet1, sheet2 = self._create_spreadsheet_with_sheets()
+        data = _extract_spreadsheet_data(spreadsheet, sheet_id=sheet1.id)
+        self.assertEqual(len(data['sheets']), 1)
+        self.assertEqual(data['sheets'][0]['id'], sheet1.id)
+        self.assertEqual(data['sheets'][0]['name'], 'Sheet1')
+
+        all_data = _extract_spreadsheet_data(spreadsheet)
+        self.assertEqual(len(all_data['sheets']), 2)
+
+    def test_normalize_spreadsheet_insights_result(self):
+        from agent.services import _normalize_spreadsheet_insights_result
+
+        raw = {
+            'summary': 'Two columns of sales data.',
+            'recommendations': ['Review outliers'],
+            'anomalies': [
+                {
+                    'title': 'Negative revenue',
+                    'severity': 'critical',
+                    'description': 'Row 3 has negative revenue.',
+                    'locations': [{'row': 2, 'col': 1, 'a1': 'B3'}],
+                }
+            ],
+            'recommended_tasks': [
+                {
+                    'type': 'report',
+                    'summary': 'Audit revenue row',
+                    'description': 'Investigate negative values.',
+                    'priority': 'HIGH',
+                }
+            ],
+        }
+        result = _normalize_spreadsheet_insights_result(raw, sheet_id=42)
+        self.assertEqual(result['summary'], 'Two columns of sales data.')
+        self.assertTrue(result['anomalies_confirmed'])
+        self.assertEqual(len(result['anomalies']), 1)
+        self.assertEqual(result['anomalies'][0]['id'], 'anom_0')
+        self.assertEqual(result['anomalies'][0]['locations'][0]['sheet_id'], 42)
+        self.assertEqual(len(result['recommended_tasks']), 1)
+
+    @patch('agent.services._run_spreadsheet_insights')
+    def test_analyze_spreadsheet_insights_yields_summary_and_anomalies(self, mock_insights):
+        spreadsheet, sheet1, _sheet2 = self._create_spreadsheet_with_sheets()
+        mock_insights.return_value = {
+            'summary': '## Overview\nSales look stable.',
+            'recommendations': ['Monitor Q2'],
+            'anomalies': [
+                {
+                    'id': 'anom_0',
+                    'title': 'Spike',
+                    'severity': 'warning',
+                    'description': 'Unusual value in B3',
+                    'locations': [{'row': 2, 'col': 1, 'a1': 'B3', 'sheet_id': sheet1.id}],
+                    'metric': 'Spike',
+                    'movement': 'UNEXPECTED_SPIKE',
+                    'current_value': '',
+                    'previous_value': '',
+                    'change_percent': 0,
+                }
+            ],
+            'recommended_tasks': [
+                {
+                    'type': 'report',
+                    'summary': 'Review spike',
+                    'description': 'Check the flagged cell.',
+                    'priority': 'MEDIUM',
+                }
+            ],
+            'anomalies_confirmed': True,
+        }
+
+        orchestrator = AgentOrchestrator(self.user, self.project, self.session)
+        chunks = list(
+            orchestrator.handle_message(
+                'Analyze sheet',
+                spreadsheet_id=spreadsheet.id,
+                sheet_id=sheet1.id,
+                action='analyze_spreadsheet_insights',
+            )
+        )
+        types = [chunk['type'] for chunk in chunks]
+        self.assertIn('spreadsheet_summary', types)
+        self.assertIn('spreadsheet_anomalies', types)
+        self.assertIn('done', types)
+
+        summary_chunk = next(c for c in chunks if c['type'] == 'spreadsheet_summary')
+        self.assertIn('Overview', summary_chunk['content'])
+        self.assertIn('Monitor Q2', summary_chunk['content'])
+
+        anomalies_chunk = next(c for c in chunks if c['type'] == 'spreadsheet_anomalies')
+        self.assertEqual(anomalies_chunk['data']['spreadsheet_id'], spreadsheet.id)
+        self.assertEqual(anomalies_chunk['data']['sheet_id'], sheet1.id)
+        self.assertTrue(anomalies_chunk['data']['anomalies_confirmed'])
+
+        workflow_run = AgentWorkflowRun.objects.filter(session=self.session).latest('created_at')
+        self.assertIsNotNone(workflow_run.analysis_result)
+        self.assertEqual(len(workflow_run.analysis_result.get('recommended_tasks', [])), 1)
+
+
+class FileUploadAnalyzeSpreadsheetImportTests(APITestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Upload Org', slug='upload-org')
+        self.user = CustomUser.objects.create_user(
+            email='upload@test.com',
+            username='uploaduser',
+            password='testpass123',
+        )
+        self.user.organization = self.org
+        self.user.save()
+        self.project = Project.objects.create(
+            name='Upload Project',
+            organization=self.org,
+            owner=self.user,
+        )
+        ProjectMember.objects.create(user=self.user, project=self.project, is_active=True)
+        self.session = AgentSession.objects.create(
+            user=self.user,
+            project=self.project,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    @patch('agent.views.AgentOrchestrator')
+    def test_upload_analyze_creates_spreadsheet_and_emits_link(self, MockOrch):
+        import csv
+        import os
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from spreadsheet.models import Spreadsheet
+        from agent.models import ImportedCSVFile
+
+        csv_dir = tempfile.mkdtemp()
+        with self.settings(AGENT_CSV_DIR=csv_dir):
+            mock_instance = MagicMock()
+            mock_instance.handle_message.return_value = iter([{'type': 'done'}])
+            MockOrch.return_value = mock_instance
+
+            csv_path = os.path.join(tempfile.mkdtemp(), 'perf.csv')
+            with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Campaign', 'Spend'])
+                writer.writerow(['Alpha', '100'])
+
+            with open(csv_path, 'rb') as f:
+                upload = SimpleUploadedFile('perf.csv', f.read(), content_type='text/csv')
+
+            response = self.client.post(
+                '/api/agent/upload-analyze/',
+                {
+                    'file': upload,
+                    'session_id': str(self.session.id),
+                    'generation_outputs': '["recommended_tasks"]',
+                },
+                format='multipart',
+                HTTP_X_PROJECT_ID=str(self.project.id),
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+            content = b''.join(response.streaming_content).decode()
+            self.assertIn('"type": "file_uploaded"', content)
+            self.assertIn('"spreadsheet_id"', content)
+
+            file_event = None
+            for line in content.splitlines():
+                if not line.startswith('data: '):
+                    continue
+                payload = json.loads(line[6:])
+                if payload.get('type') == 'file_uploaded':
+                    file_event = payload
+                    break
+            self.assertIsNotNone(file_event)
+            spreadsheet_id = file_event['data']['spreadsheet_id']
+            self.assertTrue(
+                Spreadsheet.objects.filter(id=spreadsheet_id, project=self.project).exists()
+            )
+
+            user_msg = AgentMessage.objects.filter(session=self.session, role='user').latest('created_at')
+            self.assertEqual(user_msg.metadata.get('spreadsheet_id'), spreadsheet_id)
+            self.assertIn('url', user_msg.metadata)
+
+            imported = ImportedCSVFile.objects.latest('created_at')
+            self.assertEqual(imported.spreadsheet_id, spreadsheet_id)
+
+            _, kwargs = mock_instance.handle_message.call_args
+            self.assertEqual(kwargs.get('spreadsheet_id'), spreadsheet_id)
+
+    @patch('agent.services.file_parser.parse_file_to_json')
+    @patch('agent.services.data_service._get_csv_dir')
+    @patch('os.path.isfile')
+    def test_start_workflow_links_spreadsheet_when_both_ids_provided(
+        self, mock_isfile, mock_csv_dir, mock_parse
+    ):
+        from agent.models import ImportedCSVFile, AgentWorkflowDefinition, AgentWorkflowStep, AgentWorkflowRun
+        from spreadsheet.models import Spreadsheet
+        from agent.services import AgentOrchestrator
+
+        mock_isfile.return_value = True
+        mock_csv_dir.return_value = '/tmp'
+        mock_parse.return_value = {'name': 'test.csv', 'sheets': []}
+
+        spreadsheet = Spreadsheet.objects.create(project=self.project, name='Linked Sheet')
+        csv_file = ImportedCSVFile.objects.create(
+            filename='test.csv',
+            original_filename='test.csv',
+            user=self.user,
+            project=self.project,
+        )
+        wf = AgentWorkflowDefinition.objects.create(
+            name='Link WF', is_default=True, is_system=True, status='active',
+        )
+        AgentWorkflowStep.objects.create(
+            workflow=wf, name='Analyze', step_type='analyze_data', order=1,
+        )
+
+        with patch('agent.services._run_analysis', return_value={'anomalies': [], 'recommended_tasks': []}):
+            orch = AgentOrchestrator(user=self.user, project=self.project, session=self.session)
+            list(orch.handle_message(
+                '',
+                file_id=str(csv_file.id),
+                spreadsheet_id=spreadsheet.id,
+            ))
+
+        run = AgentWorkflowRun.objects.filter(session=self.session).latest('created_at')
+        self.assertEqual(run.spreadsheet_id, spreadsheet.id)
+
