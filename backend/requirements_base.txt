@@ -24,6 +24,7 @@ django-prometheus==2.2.0
 python-json-logger==2.0.7
 json-log-formatter
 kafka-python==2.0.2
+python-snappy
 google-auth==2.23.0
 google-auth-oauthlib==1.1.0
 google-auth-httplib2==0.1.1
@@ -53,7 +54,10 @@ opentelemetry-instrumentation-asgi
 opentelemetry-instrumentation-requests  
 
 # Logging trace
-opentelemetry-instrumentation-logging    
+opentelemetry-instrumentation-logging
+
+# Celery trace
+opentelemetry-instrumentation-celery
 
 deprecated
-opentelemetry-exporter-jaeger-thrift
+opentelemetry-exporter-otlp-proto-grpc

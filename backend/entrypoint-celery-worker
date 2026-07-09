@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+
+export DJANGO_SETTINGS_MODULE=backend.settings
+export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-celery-worker}"
+
+exec celery -A backend worker --loglevel=info --pool=threads --concurrency=4

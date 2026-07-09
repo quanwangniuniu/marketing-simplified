@@ -531,6 +531,12 @@ KAFKA_TOPICS = {
     'TASK_UPDATED': 'task.updated.json',
     'TASK_STATUS_CHANGED': 'task.status_changed.json',
     'TASK_DELETED': 'task.deleted.json',
+
+    # Decision domain
+    'DECISION_CREATED': 'decision.created.json',
+    'DECISION_UPDATED': 'decision.updated.json',
+    'DECISION_DELETED': 'decision.deleted.json',
+    'DECISION_STATUS_CHANGED': 'decision.status_changed.json',
     
     # Retrospective domain
     'RETROSPECTIVE_CREATED': 'retrospective.created.json',
@@ -584,8 +590,35 @@ KAFKA_TOPICS = {
     'MAILCHIMP_CAMPAIGN_CREATED': 'mailchimp.campaign_created.json',
     'KLAVIYO_EMAIL_SENT': 'klaviyo.email_sent.json',
     'STRIPE_PAYMENT_PROCESSED': 'stripe_meta.payment_processed.json',
-    'NOTION_DOCUMENT_CREATED': 'notion_editor.document_created.json',
-    
+
+    # Notion domain
+    'NOTION_CREATED': 'notion.created.json',
+    'NOTION_UPDATED': 'notion.updated.json',
+    'NOTION_DELETED': 'notion.deleted.json',
+    'NOTION_STATUS_CHANGED': 'notion.status_changed.json',
+
+    # Spreadsheet domain
+    'SPREADSHEET_CREATED': 'spreadsheet.created.json',
+    'SPREADSHEET_UPDATED': 'spreadsheet.updated.json',
+    'SPREADSHEET_DELETED': 'spreadsheet.deleted.json',
+
+    # Meetings domain
+    'MEETING_CREATED': 'meetings.created.json',
+    'MEETING_UPDATED': 'meetings.updated.json',
+    'MEETING_DELETED': 'meetings.deleted.json',
+    'MEETING_STATUS_CHANGED': 'meetings.status_changed.json',
+
+    # Calendar domain
+    'CALENDAR_EVENT_CREATED': 'calendar.event_created.json',
+    'CALENDAR_EVENT_UPDATED': 'calendar.event_updated.json',
+    'CALENDAR_EVENT_DELETED': 'calendar.event_deleted.json',
+    'CALENDAR_EVENT_STATUS_CHANGED': 'calendar.event_status_changed.json',
+
+    # Messages domain (chat)
+    'MESSAGE_CREATED': 'messages.created.json',
+    'MESSAGE_UPDATED': 'messages.updated.json',
+    'MESSAGE_DELETED': 'messages.deleted.json',
+
     # Workflow domain
     'WORKFLOW_TRIGGERED': 'workflows.workflow_triggered.json',
     'WORKFLOW_COMPLETED': 'workflows.workflow_completed.json',
@@ -731,36 +764,51 @@ LOGGING = {
 import logging
 logger = logging.getLogger(__name__)
 OTEL_ENABLED = config('OTEL_ENABLED', default=False, cast=bool)
+OTEL_EXPORTER_OTLP_ENDPOINT = config('OTEL_EXPORTER_OTLP_ENDPOINT', default=None)
 JAEGER_AGENT_HOST = config('JAEGER_AGENT_HOST', default=None)
-if OTEL_ENABLED and JAEGER_AGENT_HOST:
+_otlp_endpoint = OTEL_EXPORTER_OTLP_ENDPOINT or (
+    f'http://{JAEGER_AGENT_HOST}:4317' if JAEGER_AGENT_HOST else None
+)
+if OTEL_ENABLED and _otlp_endpoint:
     try:
+        import os
+
         from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
         from opentelemetry.instrumentation.django import DjangoInstrumentor
         from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+        from opentelemetry.propagate import set_global_textmap
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-        trace.set_tracer_provider(TracerProvider())
-
-        jaeger_agent_port = config('JAEGER_AGENT_PORT', default=6831, cast=int)
-        jaeger_exporter = JaegerExporter(
-            agent_host_name=JAEGER_AGENT_HOST,
-            agent_port=jaeger_agent_port,
+        service_name = os.environ.get('OTEL_SERVICE_NAME', 'django-backend')
+        trace.set_tracer_provider(
+            TracerProvider(resource=Resource.create({'service.name': service_name}))
         )
 
-        trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(jaeger_exporter))
+        otlp_exporter = OTLPSpanExporter(endpoint=_otlp_endpoint, insecure=True)
+        trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
+
+        set_global_textmap(TraceContextTextMapPropagator())
 
         DjangoInstrumentor().instrument()
         Psycopg2Instrumentor().instrument()
-        logger.info(f"OpenTelemetry enabled with Jaeger exporter at {JAEGER_AGENT_HOST}:{jaeger_agent_port}")
+        # CeleryInstrumentor.instrument() is idempotent (no-op if already instrumented).
+        CeleryInstrumentor().instrument()
+        logger.info(f'OpenTelemetry enabled with OTLP exporter at {_otlp_endpoint} (service={service_name})')
     except Exception as e:
-        logger.warning(f"Failed to initialize OpenTelemetry: {e}. Continuing without tracing.")
+        logger.warning(f'Failed to initialize OpenTelemetry: {e}. Continuing without tracing.')
 else:
     if not OTEL_ENABLED:
-        logger.debug("OpenTelemetry is disabled. Set OTEL_ENABLED=True and JAEGER_AGENT_HOST to enable.")
-    elif not JAEGER_AGENT_HOST:
-        logger.debug("OpenTelemetry is enabled but JAEGER_AGENT_HOST is not set. Set JAEGER_AGENT_HOST to enable Jaeger exporter.")
+        logger.debug('OpenTelemetry is disabled. Set OTEL_ENABLED=True to enable.')
+    elif not _otlp_endpoint:
+        logger.debug(
+            'OpenTelemetry is enabled but no exporter endpoint is set. '
+            'Set OTEL_EXPORTER_OTLP_ENDPOINT or JAEGER_AGENT_HOST.'
+        )
 
 # Slack Configuration
 SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', default='')

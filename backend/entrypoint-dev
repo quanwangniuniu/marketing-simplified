@@ -23,9 +23,5 @@ set -e
 export DJANGO_SETTINGS_MODULE=backend.settings
 python manage.py migrate --noinput
 
-# Start Django (skip opentelemetry-instrument unless OTEL is explicitly enabled)
-if [ "${OTEL_ENABLED}" = "true" ] || [ "${OTEL_ENABLED}" = "True" ]; then
-  exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 backend.asgi:application
-else
-  exec daphne -b 0.0.0.0 -p 8000 backend.asgi:application
-fi
+# Start Django (OpenTelemetry is initialized in backend.settings when OTEL_ENABLED=True)
+exec daphne -b 0.0.0.0 -p 8000 backend.asgi:application

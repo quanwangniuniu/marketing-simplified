@@ -26,7 +26,9 @@ from asset.middleware import JWTAuthMiddleware
 
 
 http_application = get_asgi_application()
-http_application = OpenTelemetryMiddleware(http_application)
+if os.environ.get('OTEL_ENABLED', '').lower() in ('true', '1', 'yes'):
+    from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+    http_application = OpenTelemetryMiddleware(http_application)
 
 application = ProtocolTypeRouter({
     "http": http_application,

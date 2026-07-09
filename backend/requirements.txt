@@ -67,13 +67,17 @@ opentelemetry-instrumentation-asgi
 opentelemetry-instrumentation-requests  
 
 # Logging trace
-opentelemetry-instrumentation-logging    
+opentelemetry-instrumentation-logging
+
+# Celery trace
+opentelemetry-instrumentation-celery
 
 deprecated
-opentelemetry-exporter-jaeger-thrift
+opentelemetry-exporter-otlp-proto-grpc
 
 # Kafka
 kafka-python==2.0.2
+python-snappy
 
 # Google auth & OAuth
 google-auth==2.23.0
