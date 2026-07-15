@@ -20,7 +20,7 @@ from .tasks import (
 User = get_user_model()
 logger = logging.getLogger(__name__)
 TYPING_THROTTLE_SECONDS = 1
-
+CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE = 4404
 
 class ChatConsumer(AsyncWebsocketConsumer):
     """
@@ -415,6 +415,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'reason': event.get('reason', 'session_revoked'),
         }))
         await self.close(code=4001)
+    
+    async def chat_membership_revoked(self, event):
+        """Tell the client it was removed from a chat, then force-close the socket."""
+        await self.send(text_data=json.dumps({
+            'type': 'chat_membership_revoked',
+            'chat_id': event['chat_id'],
+            'reason': event.get('reason', 'removed_from_chat'),
+        }))
+        await self.close(code=CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE)
 
     async def send_error(self, message):
         """Send error message to client"""

@@ -13,10 +13,11 @@ ForeignKey joins; passing a literal Value avoids the restriction.
 """
 
 from django.db.models import Value
-from django.db.models.signals import post_save, pre_delete
+from django.db.models.signals import post_save, pre_delete, pre_save, post_delete
 from django.dispatch import receiver
 from django.contrib.postgres.search import SearchVector
-
+from .models import ChatParticipant
+from .services import ChatService
 
 @receiver(post_save, sender='chat.Message')
 def update_message_search_vector(sender, instance, **kwargs):
@@ -59,3 +60,37 @@ def mark_forwarded_attachment_copies_unavailable(sender, instance, **kwargs):
     for forwarded_message in forwarded_messages:
         forwarded_message.has_attachments = False
         forwarded_message.save(update_fields=['has_attachments', 'updated_at'])
+
+@receiver(pre_save, sender=ChatParticipant)
+def cache_previous_participant_is_active(sender, instance, **kwargs):
+    if not instance.pk:
+        instance._previous_is_active = None
+        return
+
+    try:
+        instance._previous_is_active = sender.objects.only('is_active').get(pk=instance.pk).is_active
+    except sender.DoesNotExist:
+        instance._previous_is_active = None
+
+
+@receiver(post_save, sender=ChatParticipant)
+def invalidate_participant_presence_cache_on_save(sender, instance, created, **kwargs):
+    previous_is_active = getattr(instance, '_previous_is_active', None)
+    became_active = created or (previous_is_active is False and instance.is_active is True)
+    became_inactive = previous_is_active is True and instance.is_active is False
+
+    if became_active:
+        ChatService.invalidate_presence_recipients_for_chat(instance.chat)
+    elif became_inactive:
+        ChatService.invalidate_presence_recipients_for_chat(
+            instance.chat,
+            extra_user_ids=[instance.user_id],
+        )
+
+
+@receiver(post_delete, sender=ChatParticipant)
+def invalidate_participant_presence_cache_on_delete(sender, instance, **kwargs):
+    ChatService.invalidate_presence_recipients_for_chat(
+        instance.chat,
+        extra_user_ids=[instance.user_id],
+    )

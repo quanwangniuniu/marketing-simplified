@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/authStore';
 import { useMessageData } from '@/hooks/useMessageData';
 import { useForwardMessages } from '@/hooks/useForwardMessages';
-import { useChatWebSocket, type ChatWsEvent } from '@/hooks/useChatWebSocket';
+import { useChatWebSocket, type ChatWsEvent, type ChatForcedDisconnectPayload, } from '@/hooks/useChatWebSocket';
 import { useChatStore } from '@/lib/chatStore';
 import { editMessage, deleteMessage, addReaction, removeReaction, getMessage, getChat, pinMessage, unpinMessage, saveMessage, unsaveMessage, listPins, listSavedMessages, createScheduledMessage, listScheduledMessages, updateChatDetails, updateNotificationSettings } from '@/lib/api/chatApi';
 import { buildMessagesPath } from '@/lib/messages/messagesRoutes';
@@ -176,6 +176,28 @@ export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDeskt
     useChatStore.getState().setPresenceSnapshot(event.users);
   }, []);
 
+  const handleSocketForcedDisconnect = useCallback((payload: ChatForcedDisconnectPayload) => {
+    const chatId= Number(payload.chatId);
+    if (!Number.isFinite(chatId)) return;
+
+    const store = useChatStore.getState();
+    const removedChat = Object.values(store.chatsByProject)
+    .flat()
+    .find((item) => Number(item.id) ===chatId);
+
+    store.removeChat(chatId);
+
+    if (removedChat?.type ==='group' && removedChat.name) {
+      toast.error(`You were removed from #${removedChat.name}`);
+    } else {
+      toast.error('You were removed from this chat');
+    }
+
+    if (Number(chat.id) === chatId) {
+      onBack();
+    }
+  }, [chat.id, onBack]);
+  
   const { sendTypingStart, sendTypingStop } = useChatWebSocket(currentUserId, {
     onChatMessage: handleSocketChatMessage,
     onTypingIndicator: handleSocketTypingIndicator,
@@ -183,6 +205,7 @@ export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDeskt
     onReactionUpdate: handleSocketReactionUpdate,
     onPresenceUpdate: handleSocketPresenceUpdate,
     onPresenceSnapshot: handleSocketPresenceSnapshot,
+    onForcedDisconnect: handleSocketForcedDisconnect,
   });
 
   const {

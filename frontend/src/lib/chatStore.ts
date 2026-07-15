@@ -224,6 +224,19 @@ export const useChatStore = create<ChatState>()(
           const newUnreadCounts = { ...state.unreadCounts };
           delete newUnreadCounts[chatId];
 
+          const newCapturedUnreadCounts = { ...state.capturedUnreadCounts };
+          delete newCapturedUnreadCounts[chatId];
+
+          const newTypingUsersByChat = { ...state.typingUsersByChat };
+          delete newTypingUsersByChat[chatId];
+
+          const newMentionedChatIds = { ...state.mentionedChatIds };
+          delete newMentionedChatIds[chatId];
+
+          const newPendingAttachmentsByChat = { ...state.pendingAttachmentsByChat };
+          revokeAttachmentPreviews(newPendingAttachmentsByChat[chatId]);
+          delete newPendingAttachmentsByChat[chatId];
+
           const clearCurrentChat = state.currentChatId === chatId;
           const clearWidgetChat = state.widgetChatId === chatId;
           const removedUnread = state.unreadCounts[chatId] || 0;
@@ -232,11 +245,16 @@ export const useChatStore = create<ChatState>()(
             chatsByProject: newChatsByProject,
             messages: newMessages,
             unreadCounts: newUnreadCounts,
+            capturedUnreadCounts: newCapturedUnreadCounts,
+            typingUsersByChat: newTypingUsersByChat,
+            mentionedChatIds: newMentionedChatIds,
+            pendingAttachmentsByChat: newPendingAttachmentsByChat,
             globalUnreadCount: Math.max(0, state.globalUnreadCount - removedUnread),
             currentChatId: clearCurrentChat ? null : state.currentChatId,
             currentView: clearCurrentChat ? 'list' : state.currentView,
             widgetChatId: clearWidgetChat ? null : state.widgetChatId,
             widgetView: clearWidgetChat ? 'list' : state.widgetView,
+            activeThreadMessageId: clearCurrentChat ? null : state.activeThreadMessageId,
           };
         });
       },

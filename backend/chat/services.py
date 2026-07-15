@@ -11,6 +11,8 @@ from django.utils import timezone
 from django_redis import get_redis_connection
 from .models import Chat, ChatParticipant, ChatStar, Message, MessageAttachment, MessageMention, MessageStatus, ChatType, ChannelVisibility, ThreadReadStatus
 from core.models import ProjectMember
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -564,6 +566,34 @@ class ChatService:
         return chat, True
     
     @staticmethod
+    def force_disconnect_user_from_chat(chat: Chat, user_id: int, reason: str = 'removed_from_chat') -> None:
+        """
+        Force-close every live websocket for this user so membership removal
+        takes effect immediately on the frontend.
+        """
+        def _broadcast() -> None:
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                return
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f'chat_user_{user_id}',
+                    {
+                        'type': 'chat_membership_revoked',
+                        'chat_id': chat.id,
+                        'reason': reason,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "[ChatService] Failed to force-disconnect user %s from chat %s",
+                    user_id,
+                    chat.id,
+                )
+
+        transaction.on_commit(_broadcast)
+
+    @staticmethod
     @transaction.atomic
     def create_group_chat(
         current_user: User,
@@ -753,9 +783,10 @@ class ChatService:
             raise ValueError("User is not a participant")
         
         participant.is_active = False
-        participant.save()
+        participant.save(update_fields=['is_active', 'updated_at'])
 
         ChatService.invalidate_presence_recipients_for_chat(chat, extra_user_ids=[user.id])
+        ChatService.force_disconnect_user_from_chat(chat, user.id)
         logger.info(f"Removed participant {user.id} from chat {chat.id} by user {removed_by.id}")
 
 

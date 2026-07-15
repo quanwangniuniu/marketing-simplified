@@ -12,11 +12,14 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from core.models import Project, Organization, Team, TeamMember, ProjectMember
 from chat.models import Chat, ChatParticipant, Message, MessageAttachment, MessageStatus, ChatType
-from chat.consumers import ChatConsumer
-from chat.services import OnlineStatusService
+from chat.consumers import ChatConsumer, CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE
+from chat.services import ChatService, OnlineStatusService
 from chat.routing import websocket_urlpatterns
 from asset.middleware import JWTAuthMiddleware
 from rest_framework_simplejwt.tokens import AccessToken
+from asgiref.sync import async_to_sync
+from django.test import TestCase, override_settings
+
 pytestmark = pytest.mark.django_db
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -350,6 +353,41 @@ class TestChatConsumer:
         def create():
             return ChatParticipant.objects.create(chat=chat, user=user, is_active=True)
         return await create()
+        
+@override_settings(
+    CHANNEL_LAYERS=TEST_CHANNEL_LAYERS,
+    CACHES=TEST_CACHES,
+)
+class ChatConsumerMembershipRevokedTests(TestCase):
+    def test_chat_membership_revoked_event_sends_payload_and_closes_socket(self):
+        from unittest.mock import AsyncMock
+
+        consumer = ChatConsumer()
+        consumer.scope = {
+            'type': 'websocket',
+            'path': '/ws/chat/14/',
+            'url_route': {'kwargs': {'user_id': '14'}},
+        }
+        consumer.send = AsyncMock()
+        consumer.close = AsyncMock()
+
+        event = {
+            'chat_id': 123,
+            'reason': 'removed_from_chat',
+        }
+
+        async_to_sync(consumer.chat_membership_revoked)(event)
+
+        consumer.send.assert_called_once_with(
+            text_data=json.dumps({
+                'type': 'chat_membership_revoked',
+                'chat_id': 123,
+                'reason': 'removed_from_chat',
+            })
+        )
+        consumer.close.assert_called_once_with(
+            code=CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE
+        )
 
 class TestChatConsumerSync:
     """Synchronous tests for ChatConsumer."""

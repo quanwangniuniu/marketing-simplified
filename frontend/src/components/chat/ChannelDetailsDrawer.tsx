@@ -743,7 +743,7 @@ export default function ChannelDetailsDrawer({
   const handleRemove = async (participant: ChatParticipant) => {
     setRemovingId(participant.user.id);
     try {
-      await removeParticipant(chat.id, participant.user.id);
+      await removeParticipant(chat.slug, participant.user.id);
       const nextParticipants = participants.filter((p) => p.user.id !== participant.user.id);
       setParticipants(nextParticipants);
       onChatUpdated({ ...chat, participants: nextParticipants });

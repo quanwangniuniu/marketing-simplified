@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWsUrl } from '@/lib/ws';
 import { useAuthStore } from '@/lib/authStore';
 
+export const CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE = 4404;
 // WebSocket message types (server -> client)
 export type ChatWsEventType =
   | 'chat_message'
@@ -13,6 +14,7 @@ export type ChatWsEventType =
   | 'presence_update'
   | 'presence_snapshot'
   | 'in_app_notification'
+  | 'chat_membership_revoked'
   | 'user_session_revoked'
   | 'error'
   | 'pong'
@@ -33,7 +35,14 @@ export interface ChatWsEvent<T = any> {
   notification?: any;
   timestamp?: string;
   version?: number | null;
+  reason?: string;
   users?: Array<{ user_id: number; is_online: boolean; version?: number | null }>;
+}
+
+export interface ChatForcedDisconnectPayload {
+  chatId: number;
+  code: number;
+  reason?: string;
 }
 
 export interface UseChatWebSocketHandlers {
@@ -44,6 +53,7 @@ export interface UseChatWebSocketHandlers {
   onPresenceUpdate?: (e: ChatWsEvent) => void;
   onPresenceSnapshot?: (e: ChatWsEvent) => void;
   onInAppNotification?: (e: ChatWsEvent) => void;
+  onForcedDisconnect?: (payload: ChatForcedDisconnectPayload) => void;
   onError?: (e: ChatWsEvent) => void;
   onUnknownEvent?: (e: ChatWsEvent) => void;
   onOpen?: () => void;
@@ -66,6 +76,7 @@ export function useChatWebSocket(
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const shouldRun = useMemo(() => !!userId, [userId]);
   const handlersRef = useRef(handlers);
+  const forcedDisconnectRef = useRef<{ chatId: number; reason?: string } | null>(null);
   handlersRef.current = handlers;
 
   useEffect(() => {
@@ -84,6 +95,7 @@ export function useChatWebSocket(
         setConnected(true);
         retryRef.current = 0;
         handlersRef.current.onOpen?.();
+        forcedDisconnectRef.current = null;
 
         // Start heartbeat every 30 seconds to keep connection alive
         heartbeatIntervalRef.current = setInterval(() => {
@@ -98,6 +110,16 @@ export function useChatWebSocket(
           const data: ChatWsEvent = JSON.parse(ev.data);
 
           switch (data.type) {
+            case 'chat_membership_revoked': {
+              const revokedChatId =Number(data.chat_id);
+              if (Number.isFinite(revokedChatId)) {
+                forcedDisconnectRef.current = {
+                  chatId: revokedChatId,
+                  reason: data.reason,
+                };
+              }
+              break;
+            }
             case 'chat_message':
               handlersRef.current.onChatMessage?.(data);
               break;
@@ -152,6 +174,16 @@ export function useChatWebSocket(
       ws.onclose = (ev) => {
         console.warn('[ChatWS] close', { code: ev.code, reason: ev.reason });
         setConnected(false);
+
+        if (ev.code === CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE && forcedDisconnectRef.current){
+          handlersRef.current.onForcedDisconnect?.({
+            chatId: forcedDisconnectRef.current.chatId,
+            reason: forcedDisconnectRef.current.reason,
+            code: ev.code,
+          });
+        }
+
+        forcedDisconnectRef.current = null;
         handlersRef.current.onClose?.(ev);
         wsRef.current = null;
 

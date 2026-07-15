@@ -360,8 +360,8 @@ export const addParticipant = async (chatId: number, userId: number): Promise<Ch
 /**
  * Remove a participant from a group chat
  */
-export const removeParticipant = async (chatId: number, userId: number): Promise<void> => {
-  await api.post(`/api/chat/chats/${chatId}/remove_participant/`, {
+export const removeParticipant = async (chatSlug: string, userId: number): Promise<void> => {
+  await api.post(`/api/chat/chats/${chatSlug}/remove_participant/`, {
     user_id: userId,
   });
 };

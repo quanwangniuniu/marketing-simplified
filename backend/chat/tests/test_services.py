@@ -9,8 +9,7 @@ from core.models import Organization, Project, ProjectMember
 from chat.models import Chat, ChatParticipant, ChatType
 from chat.serializers import ChatCreateSerializer
 from chat.services import ChatService, OnlineStatusService, UnsupportedAttachmentMimeType, validate_attachment_mime_type
-
-pytestmark = pytest.mark.django_db
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -266,3 +265,161 @@ class AttachmentMimeValidationTest(TestCase):
             with self.subTest(mime_type=mime_type):
                 with self.assertRaises(UnsupportedAttachmentMimeType):
                     validate_attachment_mime_type(mime_type)
+
+class ChatParticipantSignalTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.org = Organization.objects.create(name='Signal Org')
+        self.project = Project.objects.create(organization=self.org, name='Signal Project')
+        self.user_a = User.objects.create_user(
+            username='signal-a',
+            email='signal-a@example.com',
+            password='x',
+        )
+        self.user_b = User.objects.create_user(
+            username='signal-b',
+            email='signal-b@example.com',
+            password='x',
+        )
+        ProjectMember.objects.create(
+            user=self.user_a,
+            project=self.project,
+            role='Member',
+            is_active=True,
+        )
+        ProjectMember.objects.create(
+            user=self.user_b,
+            project=self.project,
+            role='Member',
+            is_active=True,
+        )
+        self.chat = Chat.objects.create(project=self.project, type=ChatType.GROUP)
+        self.participant_a = ChatParticipant.objects.create(
+            chat=self.chat,
+            user=self.user_a,
+            is_active=True,
+        )
+        self.participant_b = ChatParticipant.objects.create(
+            chat=self.chat,
+            user=self.user_b,
+            is_active=True,
+        )
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    def test_soft_removal_invalidates_presence_cache_via_signal(self):
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_a.id), [self.user_b.id])
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_b.id), [self.user_a.id])
+
+        key_a = OnlineStatusService._presence_recipients_key(self.user_a.id)
+        key_b = OnlineStatusService._presence_recipients_key(self.user_b.id)
+
+        self.assertEqual(cache.get(key_a), [self.user_b.id])
+        self.assertEqual(cache.get(key_b), [self.user_a.id])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.participant_b.is_active = False
+            self.participant_b.save(update_fields=['is_active', 'updated_at'])
+
+        self.assertIsNone(cache.get(key_a))
+        self.assertIsNone(cache.get(key_b))
+
+    def test_delete_invalidates_presence_cache_via_signal(self):
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_a.id), [self.user_b.id])
+
+        key_a = OnlineStatusService._presence_recipients_key(self.user_a.id)
+        key_b = OnlineStatusService._presence_recipients_key(self.user_b.id)
+
+        self.assertEqual(cache.get(key_a), [self.user_b.id])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.participant_b.delete()
+
+        self.assertIsNone(cache.get(key_a))
+        self.assertIsNone(cache.get(key_b))
+
+    def test_non_membership_updates_do_not_invalidate_presence_cache(self):
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_a.id), [self.user_b.id])
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_b.id), [self.user_a.id])
+
+        key_a = OnlineStatusService._presence_recipients_key(self.user_a.id)
+        key_b = OnlineStatusService._presence_recipients_key(self.user_b.id)
+
+        self.assertEqual(cache.get(key_a), [self.user_b.id])
+        self.assertEqual(cache.get(key_b), [self.user_a.id])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.participant_b.last_read_at = timezone.now()
+            self.participant_b.save(update_fields=['last_read_at', 'updated_at'])
+
+        self.assertEqual(cache.get(key_a), [self.user_b.id])
+        self.assertEqual(cache.get(key_b), [self.user_a.id])
+
+
+class RemoveParticipantServiceTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.org = Organization.objects.create(name='Remove Org')
+        self.project = Project.objects.create(organization=self.org, name='Remove Project')
+        self.user_a = User.objects.create_user(
+            username='remover',
+            email='remover@example.com',
+            password='x',
+        )
+        self.user_b = User.objects.create_user(
+            username='removed-user',
+            email='removed-user@example.com',
+            password='x',
+        )
+        ProjectMember.objects.create(
+            user=self.user_a,
+            project=self.project,
+            role='Member',
+            is_active=True,
+        )
+        ProjectMember.objects.create(
+            user=self.user_b,
+            project=self.project,
+            role='Member',
+            is_active=True,
+        )
+        self.chat = Chat.objects.create(project=self.project, type=ChatType.GROUP)
+        self.participant_a = ChatParticipant.objects.create(
+            chat=self.chat,
+            user=self.user_a,
+            is_active=True,
+        )
+        self.participant_b = ChatParticipant.objects.create(
+            chat=self.chat,
+            user=self.user_b,
+            is_active=True,
+        )
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    def test_remove_participant_invalidates_cache_and_triggers_forced_disconnect(self):
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_a.id), [self.user_b.id])
+        self.assertEqual(ChatService.get_presence_recipient_ids(self.user_b.id), [self.user_a.id])
+
+        key_a = OnlineStatusService._presence_recipients_key(self.user_a.id)
+        key_b = OnlineStatusService._presence_recipients_key(self.user_b.id)
+
+        self.assertEqual(cache.get(key_a), [self.user_b.id])
+        self.assertEqual(cache.get(key_b), [self.user_a.id])
+
+        with patch.object(ChatService, 'force_disconnect_user_from_chat') as mock_force_disconnect:
+            with self.captureOnCommitCallbacks(execute=True):
+                ChatService.remove_participant(self.chat, self.user_b, self.user_a)
+
+        self.participant_b.refresh_from_db()
+
+        self.assertFalse(self.participant_b.is_active)
+        self.assertIsNone(cache.get(key_a))
+        self.assertIsNone(cache.get(key_b))
+        mock_force_disconnect.assert_called_once_with(self.chat, self.user_b.id)

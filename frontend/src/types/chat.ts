@@ -295,6 +295,7 @@ export type WebSocketMessageType =
   | 'reaction_update'
   | 'presence_update'
   | 'presence_snapshot'
+  | 'chat_membership_revoked'
   | 'user_session_revoked'
   | 'pong'
   | 'error';
@@ -338,6 +339,7 @@ export interface WebSocketMessage {
   error?: string;
   notification?: WebSocketInAppNotificationPayload;
   reaction?: WebSocketReactionPayload;
+  reason?: string;
 }
 
 // ==================== Store Types ====================
