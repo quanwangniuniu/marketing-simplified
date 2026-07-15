@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2, Upload, Download, FileSpreadsheet, Loader2, Bot } from 'lucide-react';
+import { Undo2, Redo2, Bold, Italic, Strikethrough, Palette, ChevronLeft, ChevronRight, ChevronDown, Snowflake, Check, Table2, Upload, Download, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { googleDocsApi } from '@/lib/api/googleDocsApi';
 import toast from 'react-hot-toast';
@@ -69,8 +69,6 @@ interface SpreadsheetGridProps {
   onHighlightCommit?: (payload: ApplyHighlightParams) => void;
   highlightCell?: { row: number; col: number } | null;
   highlightLocations?: { row: number; col: number }[] | null;
-  /** Called when user clicks Analyze with AI in the toolbar. */
-  onAnalyzeWithAgent?: () => void;
   /** Called when hydration status changes (importing -> hydrating -> ready). Parent can disable Apply Pattern until ready. */
   onHydrationStatusChange?: (status: 'idle' | 'importing' | 'hydrating' | 'ready') => void;
   /** Called when user clicks the Pivot Table button. Receives cell data for pivot builder. */
@@ -5743,17 +5741,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
               document.body
             )}
         </div>
-        <button
-          type="button"
-          onClick={() => onAnalyzeWithAgent?.()}
-          title="Analyze with AI"
-          disabled={!onAnalyzeWithAgent}
-          className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-          data-testid="analyze-with-ai-button"
-        >
-          <Bot className="h-3.5 w-3.5" strokeWidth={2.3} />
-          Analyze with AI
-        </button>
         <button
           type="button"
           onClick={() => {

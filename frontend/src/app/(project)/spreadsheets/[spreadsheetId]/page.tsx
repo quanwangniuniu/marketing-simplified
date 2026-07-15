@@ -265,6 +265,32 @@ export default function SpreadsheetsV2DetailPage() {
     openAgentSidePanel();
   }, [spreadsheetId, activeSheetId, spreadsheet, sheets, projectId]);
 
+  const handleOpenPatternGenerationAgent = useCallback(() => {
+    if (activeSheetId == null) return;
+    const active = sheets.find((s) => s.id === activeSheetId);
+    window.dispatchEvent(new CustomEvent('agent:pattern-generation-mode', {
+      detail: {
+        sheetId: activeSheetId,
+        sheetName: active?.name ?? undefined,
+        spreadsheetName: spreadsheet?.name ?? undefined,
+      },
+    }));
+    openAgentSidePanel();
+  }, [activeSheetId, sheets, spreadsheet]);
+
+  useEffect(() => {
+    const onStepsGenerated = (e: Event) => {
+      const detail = (e as CustomEvent<{ sheetId: number; steps: TimelineItem[] }>).detail;
+      if (!detail?.steps?.length) return;
+      setAgentStepsBySheet((prev) => {
+        const current = prev[detail.sheetId] ?? [];
+        return { ...prev, [detail.sheetId]: [...current, ...detail.steps] };
+      });
+    };
+    window.addEventListener('agent:pattern-steps-generated', onStepsGenerated);
+    return () => window.removeEventListener('agent:pattern-steps-generated', onStepsGenerated);
+  }, []);
+
   useEffect(() => {
     let clearTimer: number | null = null;
 
@@ -367,6 +393,14 @@ export default function SpreadsheetsV2DetailPage() {
       });
     },
     [activeSheetId]
+  );
+
+  const handleAddSteps = useCallback(
+    (steps: TimelineItem[]) => {
+      if (activeSheetId == null) return;
+      updateAgentSteps((prev) => [...prev, ...steps]);
+    },
+    [activeSheetId, updateAgentSteps]
   );
 
   const ensureFirstSheet = async (existingSheets: SheetData[]) => {
@@ -999,6 +1033,8 @@ export default function SpreadsheetsV2DetailPage() {
             presenceSlot={<PresenceAvatars users={remoteUsers} />}
             onAnalyzeWithAgent={handleAnalyzeWithAgent}
             analyzeDisabled={loading || activeSheetId == null || !spreadsheet}
+            onOpenPatternGenerationAgent={handleOpenPatternGenerationAgent}
+            patternGenerationAgentDisabled={loading || !spreadsheet}
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
@@ -1077,7 +1113,6 @@ export default function SpreadsheetsV2DetailPage() {
                       }}
                       highlightCell={highlightCell}
                       highlightLocations={highlightLocations}
-                      onAnalyzeWithAgent={handleAnalyzeWithAgent}
                       onHydrationStatusChange={(status) => setSheetHydrationReady(status === 'ready')}
                       onOpenPivotBuilder={handleCreatePivotSheet}
                     />
@@ -1120,6 +1155,7 @@ export default function SpreadsheetsV2DetailPage() {
                       onRefresh={handleRefreshPivot}
                     />
                   ) : (
+                    <>
                     <PatternAgentPanelV2
                       loading={loading || patternsLoading}
                       items={activeSheet ? agentSteps : []}
@@ -1156,6 +1192,7 @@ export default function SpreadsheetsV2DetailPage() {
                       applyJobProgress={patternJobProgress}
                       applyJobError={patternJobError}
                     />
+                    </>
                   )}
                 </div>
               ) : sheets.length === 0 ? (

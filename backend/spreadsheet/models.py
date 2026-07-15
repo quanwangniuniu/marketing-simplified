@@ -198,6 +198,11 @@ class SheetColumn(TimeStampedModel):
             models.Index(fields=['sheet', 'position']),
         ]
 
+    @property
+    def index(self) -> int:
+        """0-based column index; alias for `position`."""
+        return self.position
+
     def __str__(self):
         return f"{self.name} (Column {self.position} in {self.sheet.name})"
 

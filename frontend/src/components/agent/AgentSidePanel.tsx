@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Bot, Settings } from 'lucide-react';
+import { X, Bot, Settings, FileSpreadsheet } from 'lucide-react';
 import { AgentLayoutProvider } from './AgentLayoutContext';
 import { AgentChatPage } from './chat/AgentChatPage';
 import { useAgentSidePanelStore } from '@/lib/agentSidePanelStore';
@@ -24,6 +24,7 @@ export default function AgentSidePanel() {
   const [messageBoardsOpen, setMessageBoardsOpen] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
+  const [spreadsheetContext, setSpreadsheetContext] = useState<{ spreadsheetName: string; sheetName: string } | null>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(MAX_WIDTH);
@@ -81,6 +82,24 @@ export default function AgentSidePanel() {
     if (isOpen) return;
     setMessageBoardsOpen(true);
   }, [isOpen]);
+
+  useEffect(() => {
+    const onSpreadsheetContext = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { spreadsheetName?: string; sheetName?: string } | undefined;
+      if (detail?.spreadsheetName) {
+        setSpreadsheetContext({ spreadsheetName: detail.spreadsheetName, sheetName: detail.sheetName ?? '' });
+      }
+    };
+    window.addEventListener('agent:spreadsheet-context', onSpreadsheetContext);
+    return () => window.removeEventListener('agent:spreadsheet-context', onSpreadsheetContext);
+  }, []);
+
+  // Clear spreadsheet context when a new chat starts.
+  useEffect(() => {
+    const onNewChat = () => setSpreadsheetContext(null);
+    window.addEventListener('agent:new-chat', onNewChat);
+    return () => window.removeEventListener('agent:new-chat', onNewChat);
+  }, []);
 
   // Sync from AgentChatPage broadcasts.
   useEffect(() => {
@@ -198,6 +217,27 @@ export default function AgentSidePanel() {
             </button>
           </div>
         </div>
+
+        {/* Spreadsheet context banner */}
+        {spreadsheetContext && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-[#3CCED7]/20 bg-[#3CCED7]/5 px-3 py-1.5">
+            <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-[#0E8A96]" />
+            <span className="min-w-0 truncate text-xs text-[#0E8A96]">
+              <span className="font-semibold">{spreadsheetContext.spreadsheetName}</span>
+              {spreadsheetContext.sheetName && (
+                <span className="text-[#3CCED7]"> · {spreadsheetContext.sheetName}</span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSpreadsheetContext(null)}
+              className="ml-auto shrink-0 rounded p-0.5 text-[#0E8A96]/60 hover:text-[#0E8A96]"
+              aria-label="Dismiss context"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
 
         {/* Message boards (left) + chat (right) */}
         <div className="flex min-h-0 flex-1 flex-row overflow-hidden">

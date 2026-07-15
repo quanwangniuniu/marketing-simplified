@@ -27,6 +27,8 @@ import { StepProgress, type StepProgressItem } from "./StepProgress"
 import type { PendingExternalApproval } from "./ExternalApprovalModal"
 import type { TaskGenerationStatus } from "./TaskListCard"
 import type { DecisionGenerationStatus } from "./DecisionTreeListCard"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { AgentMessageBoardBlock } from "./AgentMessageBoardBlock"
 import { AgentMessageBoardMarkdown } from "./AgentMessageBoardMarkdown"
 import { AgentMessageBoardText } from "./AgentMessageBoardText"
@@ -124,6 +126,8 @@ export interface MessageListProps {
   showRevisitThinkingBubble?: boolean
   onRenderFinishChange?: (finished: boolean) => void
   requestedGenerationOutputs?: GenerationOutputKey[]
+  /** Skip the sequential reveal queue for assistant bubbles (e.g. pattern generation mode). */
+  bypassRevealQueue?: boolean
 }
 
 export function MessageList({
@@ -168,6 +172,7 @@ export function MessageList({
   showRevisitThinkingBubble = false,
   onRenderFinishChange,
   requestedGenerationOutputs = DEFAULT_GENERATION_OUTPUTS,
+  bypassRevealQueue = false,
 }: MessageListProps) {
   const effectiveGenerationOutputs =
     requestedGenerationOutputs.length > 0
@@ -465,20 +470,33 @@ export function MessageList({
                 message.type !== "calendar_invite" &&
                 message.type !== "file_uploaded" && (
                 message.role === "assistant" ? (
-                  <AgentMessageBoardBlock blockId={`${message.id}-bubble`}>
+                  bypassRevealQueue ? (
                     <div
                       className={cn(
                         "rounded-lg px-4 py-2.5 text-sm bg-muted text-foreground",
                         message.content === AGENT_MESSAGES.CHAT_THINKING && "animate-pulse"
                       )}
                     >
-                      <AgentMessageBoardMarkdown
-                        target={message.content}
-                        partId={`${message.id}-content`}
-                        blockId={`${message.id}-bubble`}
-                      />
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
                     </div>
-                  </AgentMessageBoardBlock>
+                  ) : (
+                    <AgentMessageBoardBlock blockId={`${message.id}-bubble`}>
+                      <div
+                        className={cn(
+                          "rounded-lg px-4 py-2.5 text-sm bg-muted text-foreground",
+                          message.content === AGENT_MESSAGES.CHAT_THINKING && "animate-pulse"
+                        )}
+                      >
+                        <AgentMessageBoardMarkdown
+                          target={message.content}
+                          partId={`${message.id}-content`}
+                          blockId={`${message.id}-bubble`}
+                        />
+                      </div>
+                    </AgentMessageBoardBlock>
+                  )
                 ) : (
                   <div className="rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap bg-primary text-primary-foreground">
                     {message.content}

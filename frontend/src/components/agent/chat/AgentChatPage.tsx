@@ -10,6 +10,7 @@ import { ActionBar } from "./ActionBar"
 import OnboardingTokenIntro from "./OnboardingTokenIntro"
 import type { PendingExternalApproval } from "./ExternalApprovalModal"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { PatternAPI, PatternAgentError } from "@/lib/api/patternApi"
 import {
   setAgentMessageBoardWaitingForFileAnalysisResponse,
   setAgentMessageBoardRenderEffectsCompletedOnQuit,
@@ -48,6 +49,7 @@ import {
 import { getPendingMiroWorkflowRunIds } from "@/lib/agentMiroBoardStatus"
 import { agentMiroBoardHref } from "@/lib/agentMiroBoardHref"
 import { useBuildUrl } from "@/lib/buildUrl"
+import { TableProperties } from "lucide-react"
 
 function pickRecommendedDecisionTree(
   data: AnalysisResult | null | undefined,
@@ -422,6 +424,12 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
   const [followUpAvailable, setFollowUpAvailable] = useState(false)
   const [followUpStarted, setFollowUpStarted] = useState(false)
   const [sessionTitle, setSessionTitle] = useState("Chat")
+  const [patternGenerationSheetId, setPatternGenerationSheetId] = useState<number | null>(null)
+  const [patternGenerationSheetName, setPatternGenerationSheetName] = useState<string | null>(null)
+  const [patternGenerationSpreadsheetName, setPatternGenerationSpreadsheetName] = useState<string | null>(null)
+  // Separate ref for the pattern-generation sidebar session — never wired into the main
+  // session restore / polling flow so it can't clobber the local chat state.
+  const patternGenerationSessionIdRef = useRef<string | null>(null)
   const [approvalRequired, setApprovalRequired] = useState(false)
   const [generatedTaskIndexes, setGeneratedTaskIndexes] = useState<number[]>([])
   const [skippedTaskIndexes, setSkippedTaskIndexes] = useState<number[]>([])
@@ -1135,6 +1143,14 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       setPendingCalendarPreload(null)
       setPendingSpreadsheetPreload(spreadsheetPreload)
       _spreadsheetAutoSendFired = false
+      window.dispatchEvent(
+        new CustomEvent('agent:spreadsheet-context', {
+          detail: {
+            spreadsheetName: spreadsheetPreload.spreadsheetName,
+            sheetName: spreadsheetPreload.sheetName,
+          },
+        })
+      )
     }
 
     // Draft → Agent (Open in Agent / Ask Agent from a draft).
@@ -1183,6 +1199,10 @@ export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps
       setProjectId(null)
       sessionStorage.removeItem("agent-session-calendar-context")
       sessionStorage.removeItem("agent-session-draft-context")
+      setPatternGenerationSheetId(null)
+      setPatternGenerationSheetName(null)
+      setPatternGenerationSpreadsheetName(null)
+      patternGenerationSessionIdRef.current = null
       setMessages([])
       setSessionCalendarContext(null)
       setSessionDraftContext(null)
@@ -1206,11 +1226,47 @@ setStepState({
       void loadSessionById(String(detail.sessionId))
     }
 
+    const handlePatternGenerationMode = (e: Event) => {
+      const detail = (e as CustomEvent<{ sheetId?: number; sheetName?: string; spreadsheetName?: string }>).detail
+      sessionLoadRequestRef.current += 1
+      invalidateActiveStreams()
+      resetTransientChatUiState()
+      setSessionId(null)
+      sessionStorage.removeItem("agent-session-calendar-context")
+      patternGenerationSessionIdRef.current = null
+      setPatternGenerationSheetId(detail?.sheetId ?? null)
+      setPatternGenerationSheetName(detail?.sheetName ?? null)
+      setPatternGenerationSpreadsheetName(detail?.spreadsheetName ?? null)
+      setMessages([
+        {
+          id: `pattern-mode-${Date.now()}`,
+          role: "assistant",
+          type: "text",
+          content:
+            "You are now in **Pattern Generation Mode**. Please describe the action you would like to implement for the current spreadsheet — for example, \"add a column K that sums I and J, then highlight rows where K > 1000\". I will generate the pattern steps automatically.",
+        },
+      ])
+      setSessionCalendarContext(null)
+      setHasStarted(true)
+      setFollowUpAvailable(false)
+      setFollowUpStarted(false)
+      setSessionTitle("Pattern Generation")
+      setApprovalRequired(false)
+      setStepState({
+        analysisComplete: false,
+        anomaliesConfirmed: false,
+        tasksCreated: false,
+        decisionsCreated: false,
+      })
+    }
+
     window.addEventListener("agent:new-chat", handleNewChat)
     window.addEventListener("agent:load-session", handleLoadSession)
+    window.addEventListener("agent:pattern-generation-mode", handlePatternGenerationMode)
     return () => {
       window.removeEventListener("agent:new-chat", handleNewChat)
       window.removeEventListener("agent:load-session", handleLoadSession)
+      window.removeEventListener("agent:pattern-generation-mode", handlePatternGenerationMode)
     }
   }, [invalidateActiveStreams, loadSessionById, resetTransientChatUiState, setSessionId])
 
@@ -1820,6 +1876,55 @@ setStepState({
     reuseAiMsgId?: string,
     spreadsheetPreload?: SpreadsheetPreload,
   ) => {
+    // Pattern generation mode: call the NL→steps API instead of the regular agent.
+    if (patternGenerationSheetId != null) {
+      const userMsgId = `user-${Date.now()}`
+      addMessage({ id: userMsgId, role: "user", content: text, type: "text" })
+      const thinkingId = `ai-${Date.now()}`
+      addMessage({ id: thinkingId, role: "assistant", content: "Generating pattern steps…", type: "text" })
+
+      // Create a sidebar session on first message. We use a separate ref (not setSessionId)
+      // so the main session restore / polling flow is never triggered and cannot clobber
+      // the local pattern-generation chat state.
+      if (!patternGenerationSessionIdRef.current) {
+        try {
+          const session = await AgentAPI.createSession({ approval_required: getApprovalPref() })
+          const sid = String(session.id)
+          patternGenerationSessionIdRef.current = sid
+          await AgentAPI.updateSession(sid, { title: "Pattern Generation" })
+          window.dispatchEvent(new CustomEvent("agent:sessions-changed"))
+        } catch {
+          // Non-fatal — sidebar tracking failed but generation can still proceed
+        }
+      }
+
+      try {
+        const steps = await PatternAPI.generatePatternSteps(patternGenerationSheetId, text)
+        updateMessage(thinkingId, {
+          content: `Done! I've generated **${steps.length} pattern step${steps.length !== 1 ? 's' : ''}** and added them to the Pattern Agent panel. You can review, reorder, or apply them from there.`,
+        })
+        window.dispatchEvent(
+          new CustomEvent('agent:pattern-steps-generated', {
+            detail: { sheetId: patternGenerationSheetId, steps },
+          })
+        )
+      } catch (err) {
+        let msg = "Generation failed: Unable to generate pattern steps. Please try rephrasing your instruction."
+        if (err instanceof PatternAgentError) {
+          msg = `Invalid request: ${err.message}`
+        } else if (err instanceof Error) {
+          const axiosData = (err as any)?.response?.data
+          if (axiosData?.error) {
+            msg = `Generation failed: ${axiosData.error}`
+          } else if (err.message) {
+            msg = `Generation failed: ${err.message}`
+          }
+        }
+        updateMessage(thinkingId, { content: msg, type: "error" })
+      }
+      return
+    }
+
     if (spreadsheetPreload) {
       if (generationOutputsSelected.length === 0) return
       const outputsForSpreadsheet = [...generationOutputsSelected]
@@ -2208,7 +2313,7 @@ setStepState({
         }
       }
     )
-  }, [sessionId, sessionCalendarContext, sessionDraftContext, generationOutputsSelected, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
+  }, [patternGenerationSheetId, sessionId, sessionCalendarContext, sessionDraftContext, generationOutputsSelected, addMessage, updateMessage, setMessages, setSessionId, refreshFollowUpState, refreshSession, getApprovalPref, embeddedInFloating, queueAutoExternalActionsAfterAnalysis])
 
   // Keep ref always pointing to the latest handleSendMessage
   handleSendMessageRef.current = handleSendMessage
@@ -2659,7 +2764,19 @@ setStepState({
       <OnboardingTokenIntro />
       {!embeddedInFloating && (
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 shrink-0 bg-background">
-          <h2 className="text-sm font-semibold truncate text-foreground">{sessionTitle}</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-sm font-semibold truncate text-foreground">{sessionTitle}</h2>
+            {patternGenerationSheetId != null && (patternGenerationSheetName || patternGenerationSpreadsheetName) && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 shrink-0">
+                <TableProperties className="h-3 w-3" />
+                {patternGenerationSheetName
+                  ? patternGenerationSpreadsheetName
+                    ? `${patternGenerationSpreadsheetName} · ${patternGenerationSheetName}`
+                    : patternGenerationSheetName
+                  : patternGenerationSpreadsheetName}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             <GenerationOutputsSettings
               disabled={isStreaming}
@@ -2737,6 +2854,7 @@ setStepState({
           showFollowUpToggle: followUpAvailable || followUpStarted,
           followUpActive: followUpStarted,
           stepState,
+          bypassRevealQueue: patternGenerationSheetId != null,
           onNavigate: (view: string, msg?: ChatMessage) => {
         if (msg?.navigateHref && typeof window !== "undefined") {
           window.location.href = buildUrl(msg.navigateHref)

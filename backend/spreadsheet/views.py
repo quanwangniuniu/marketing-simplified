@@ -26,6 +26,8 @@ from .models import (
     Sheet,
     SheetRow,
     SheetColumn,
+    Cell,
+    CellValueType,
     WorkflowPattern,
     PatternJob,
     PatternJobStatus,
@@ -1457,3 +1459,54 @@ class SheetXlsxExportView(APIView):
         safe_name = re.sub(r'["\\\r\n]|[\x00-\x1f]', '', (sheet.name or 'sheet')).strip() or 'sheet'
         response['Content-Disposition'] = f'attachment; filename="{safe_name}.xlsx"'
         return response
+
+
+class GeneratePatternStepsView(APIView):
+    """Convert a natural-language instruction into PatternStep[] via Gemini."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, sheet_id):
+        from .nl_pattern_service import generate_pattern_steps
+
+        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
+
+        instruction = (request.data.get('instruction') or '').strip()
+        if not instruction:
+            return Response({'error': 'instruction is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Build sheet schema
+        columns = list(
+            SheetColumn.objects.filter(sheet=sheet, is_deleted=False).order_by('position')
+        )
+        # Determine which columns have any non-empty cell
+        cols_with_data = set(
+            Cell.objects.filter(
+                sheet=sheet,
+                is_deleted=False,
+                column__is_deleted=False,
+                row__is_deleted=False,
+            )
+            .exclude(value_type=CellValueType.EMPTY)
+            .values_list('column_id', flat=True)
+            .distinct()
+        )
+        row_count = SheetRow.objects.filter(sheet=sheet, is_deleted=False).count()
+
+        sheet_schema = {
+            'columns': [
+                {
+                    'index': col.index,
+                    'name': col.name or f'Column {col.index}',
+                    'has_data': col.id in cols_with_data,
+                }
+                for col in columns
+            ],
+            'row_count': row_count,
+        }
+
+        try:
+            steps = generate_pattern_steps(instruction, sheet_schema)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        return Response({'steps': steps})
