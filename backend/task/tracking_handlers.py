@@ -5,6 +5,7 @@ from django.core.cache import cache
 from tracking.enums import EventType
 
 _TASK_PATH_RE = re.compile(r'^/api/tasks/(\d+)/')
+_APPROVAL_DECISION_RE = re.compile(r'^/api/tasks/\d+/make-approval/?$')
 _TASK_OPEN_TTL = 30              # 30-second dedup window
 _FIRST_INTERACTION_TTL = 2_592_000  # 30 days — once per user per task
 _WRITE_METHODS = frozenset({'POST', 'PATCH', 'PUT', 'DELETE'})
@@ -48,10 +49,17 @@ def handle_task_request(user_id, request_path, request_method, request_meta):
                     'target': task,
                     'metadata': request_meta,
                 })
+        write_metadata = request_meta
+        # Approval decisions are recorded distinctly as the *winning* transition.
+        # The tracking middleware only emits for 2xx responses, so a decision
+        # that reaches here is by definition the approver who won the race — the
+        # loser got a 409 and is never recorded (see task.views.make_approval).
+        if _APPROVAL_DECISION_RE.match(request_path):
+            write_metadata = {**request_meta, 'transition': 'approval_decision'}
         events.append({
             'event_type': EventType.TASK_WRITE,
             'target': task,
-            'metadata': request_meta,
+            'metadata': write_metadata,
         })
     else:
         return []

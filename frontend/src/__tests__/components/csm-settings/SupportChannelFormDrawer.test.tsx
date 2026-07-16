@@ -95,7 +95,12 @@ describe('SupportChannelFormDrawer', () => {
     );
     expect(await screen.findByLabelText(/default queue/i)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/default queue/i));
-    expect(await screen.findByRole('option', { name: 'Frontline' })).toBeInTheDocument();
+    // listProjectQueues() resolves async, then the popover re-renders with the
+    // fetched option. The default findBy timeout (1000ms) can be too tight
+    // under CI load; give it more headroom, same as SpreadsheetGrid.test.tsx.
+    expect(
+      await screen.findByRole('option', { name: 'Frontline' }, { timeout: 3000 }),
+    ).toBeInTheDocument();
   });
 
   it('shows ticket form dropdown when type is contact_form', async () => {

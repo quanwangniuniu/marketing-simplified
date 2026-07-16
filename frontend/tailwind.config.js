@@ -17,8 +17,8 @@ module.exports = {
     			brand: {
     				teal: '#3cced7',
     				'teal-dark': '#2bb8c1',
-    				agent: '#2563eb',
-    				'agent-dark': '#1d4ed8',
+    				agent: '#169BA3',
+    				'agent-dark': '#138A91',
     				lime: '#a6e661',
     			},
     			background: 'hsl(var(--background))',

@@ -703,6 +703,8 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
 .csm-rich-light p  { margin: 0; }
 .csm-rich-light ul,
 .csm-rich-light ol { margin: 2px 0; padding-left: 1.25rem; }
+.csm-rich-light ul { list-style-type: disc; }
+.csm-rich-light ol { list-style-type: decimal; }
 .csm-rich-light li { margin: 0; }
 .csm-rich-light strong { font-weight: 600; }
 .csm-rich-light em    { font-style: italic; }
@@ -710,6 +712,8 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
 .csm-rich-dark p  { margin: 0; color: #fff; }
 .csm-rich-dark ul,
 .csm-rich-dark ol { margin: 2px 0; padding-left: 1.25rem; color: #fff; }
+.csm-rich-dark ul { list-style-type: disc; }
+.csm-rich-dark ol { list-style-type: decimal; }
 .csm-rich-dark li { margin: 0; color: #fff; }
 .csm-rich-dark li::marker { color: rgba(255,255,255,0.7); }
 .csm-rich-dark strong { font-weight: 600; color: #fff; }

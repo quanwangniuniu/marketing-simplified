@@ -285,6 +285,25 @@ class Task(SluggedResourceModelMixin, models.Model):
             or ApprovalChain.objects.filter(project__isnull=True, task_type=task_type).first()
         )
 
+    @classmethod
+    def lock_for_transition(cls, pk):
+        """
+        Fetch a task row with a database-level write lock (SELECT ... FOR UPDATE)
+        so concurrent status transitions are serialized.
+
+        When multiple approvers act on the same approval chain at once, the
+        second caller blocks here until the first transaction commits, then
+        re-reads the freshly-committed status. That lets the caller detect the
+        decision was already made instead of overwriting it (lost update).
+
+        Must be called inside a `transaction.atomic()` block. Returns the locked
+        Task, or None if no row matches the given pk.
+        """
+        try:
+            return cls.objects.select_for_update().get(pk=pk)
+        except cls.DoesNotExist:
+            return None
+
     # --- Helpful Properties ---
     @property
     def is_linked(self):

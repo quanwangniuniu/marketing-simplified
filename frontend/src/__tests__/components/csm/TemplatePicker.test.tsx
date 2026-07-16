@@ -16,6 +16,7 @@ const mockedList = QuickReplyTemplateAPI.list as jest.Mock;
 function makeTemplate(overrides: Partial<QuickReplyTemplate>): QuickReplyTemplate {
   return {
     id: 1,
+    slug: 'greeting',
     organisation: 5,
     team: null,
     title: 'Greeting',
@@ -55,7 +56,7 @@ describe('TemplatePicker', () => {
     mockedList.mockResolvedValue([]);
     renderPicker();
 
-    expect(await screen.findByText(/No templates yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No quick reply templates yet/i)).toBeInTheDocument();
   });
 
   test('filters by keyword search across title and content', async () => {
@@ -79,7 +80,7 @@ describe('TemplatePicker', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Search…'), { target: { value: 'nonexistent' } });
 
-    expect(await screen.findByText('No matches.')).toBeInTheDocument();
+    expect(await screen.findByText('No templates found')).toBeInTheDocument();
   });
 
   test('filters by tag using the tag select', async () => {

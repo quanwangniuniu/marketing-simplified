@@ -24,6 +24,7 @@ TIME_PATTERN = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
 WRITABLE_SCALAR_FIELDS = (
     'display_name',
     'welcome_message',
+    'ticket_confirmation_message',
     'operating_hours',
     'timezone',
     'offline_fallback_message',

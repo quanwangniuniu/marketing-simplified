@@ -29,6 +29,8 @@ class CsmConversationConsumer(AsyncWebsocketConsumer):
         self.user_id = self.scope['url_route']['kwargs']['user_id']
         self.user = self.scope.get('user')
         self.joined_conversations = set()
+        self.accessible_queue_ids = set()
+        self.is_privileged = False
 
         if not self.user or not self.user.is_authenticated:
             await self.close(code=4001)
@@ -37,6 +39,10 @@ class CsmConversationConsumer(AsyncWebsocketConsumer):
         if str(self.user.id) != str(self.user_id):
             await self.close(code=4003)
             return
+
+        # Cache the agent's accessible queue IDs so real-time events can be
+        # filtered without a DB hit on every broadcast.
+        self.is_privileged, self.accessible_queue_ids = await self._load_accessible_queue_ids()
 
         # Join personal agent group (for targeted notifications)
         self.agent_group = f'csm_agent_{self.user_id}'
@@ -127,16 +133,28 @@ class CsmConversationConsumer(AsyncWebsocketConsumer):
 
     async def conversation_updated(self, event):
         """Broadcast conversation metadata updates (status, queue, assigned_to, tags)."""
+        conv = event.get('conversation', {})
+        queue_id = conv.get('queue') or conv.get('queue_id')
+        if not self._can_see_queue(queue_id):
+            return
         await self.send(text_data=json.dumps({
             'type': 'conversation_updated',
-            'conversation': event['conversation'],
+            'conversation': conv,
         }))
 
     async def new_conversation(self, event):
-        """Broadcast to agents when a customer creates a new conversation."""
+        """Broadcast to agents when a customer creates a new conversation.
+
+        Only forward the event if the conversation's queue is accessible to
+        this agent, mirroring the REST-level queue filtering.
+        """
+        conv = event.get('conversation', {})
+        queue_id = conv.get('queue') or conv.get('queue_id')
+        if not self._can_see_queue(queue_id):
+            return
         await self.send(text_data=json.dumps({
             'type': 'new_conversation',
-            'conversation': event['conversation'],
+            'conversation': conv,
         }))
 
     async def typing_indicator(self, event):
@@ -154,6 +172,55 @@ class CsmConversationConsumer(AsyncWebsocketConsumer):
 
     async def send_error(self, detail: str):
         await self.send(text_data=json.dumps({'type': 'error', 'detail': detail}))
+
+    def _can_see_queue(self, queue_id) -> bool:
+        """Return True if this agent is allowed to see a given queue.
+
+        Privileged users (staff/superuser) see everything. Regular agents
+        only see queues whose IDs were cached at connect time.
+        """
+        if self.is_privileged:
+            return True
+        if queue_id is None:
+            return False
+        return int(queue_id) in self.accessible_queue_ids
+
+    @database_sync_to_async
+    def _load_accessible_queue_ids(self):
+        """Return (is_privileged, set_of_queue_ids) for the connected user.
+
+        Mirrors the REST view's ``_accessible_queues`` logic.
+        """
+        from django.db.models import Q
+        from .models import Queue, CustomerUser, QueueAgent
+
+        user = self.user
+        if user.is_staff or user.is_superuser:
+            return True, set()
+
+        admin_org_ids = CustomerUser.objects.filter(
+            user=user, is_active=True,
+            user_type__in=('supervisor', 'admin'),
+            organisation__isnull=False,
+        ).values_list('organisation_id', flat=True)
+
+        agent_queue_ids = QueueAgent.objects.filter(
+            user=user,
+        ).values_list('queue_id', flat=True)
+
+        profile_queue_ids = CustomerUser.objects.filter(
+            user=user, is_active=True,
+            queue__isnull=False,
+        ).values_list('queue_id', flat=True)
+
+        ids = set(Queue.objects.filter(
+            Q(is_active=True),
+            Q(organisation_id__in=admin_org_ids)
+            | Q(id__in=agent_queue_ids)
+            | Q(id__in=profile_queue_ids),
+        ).distinct().values_list('id', flat=True))
+
+        return False, ids
 
     @database_sync_to_async
     def can_access_conversation(self, conversation_id: int) -> bool:

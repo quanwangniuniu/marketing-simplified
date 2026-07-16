@@ -11,7 +11,9 @@ import {
   QuickReplyTemplateHistory,
   TemplateTag,
   Ticket,
+  AssignableAgent,
 } from '@/types/csmConversation';
+import { Queue } from '@/types/csm';
 
 const BASE = '/api/csm/conversations';
 
@@ -46,6 +48,16 @@ export default class CsmConversationAPI {
     return res.data;
   }
 
+  static async assignableAgents(conversationId: number): Promise<AssignableAgent[]> {
+    const res = await api.get<AssignableAgent[]>(`${BASE}/${conversationId}/assignable_agents/`);
+    return Array.isArray(res.data) ? res.data : [];
+  }
+
+  static async availableQueues(params?: { organisation?: number }): Promise<Queue[]> {
+    const res = await api.get(`${BASE}/available_queues/`, { params });
+    return unwrap<Queue>(res.data);
+  }
+
   static async sendMessage(
     conversationId: number,
     payload: SendMessagePayload & { image?: File | null }
@@ -54,9 +66,7 @@ export default class CsmConversationAPI {
       const form = new FormData();
       if (payload.content) form.append('content', payload.content);
       form.append('image', payload.image);
-      const res = await api.post<ConversationMessage>(`${BASE}/${conversationId}/messages/`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post<ConversationMessage>(`${BASE}/${conversationId}/messages/`, form);
       return res.data;
     }
     const res = await api.post<ConversationMessage>(`${BASE}/${conversationId}/messages/`, payload);

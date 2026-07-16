@@ -6,13 +6,13 @@ import { Queue } from '@/types/csm';
 import { useCsmConversationStore } from '@/lib/csmConversationStore';
 import { useCsmConversationSocket } from '@/hooks/useCsmConversationSocket';
 import CsmConversationAPI from '@/lib/api/csmConversationApi';
-import CsmAPI from '@/lib/api/csmApi';
 import { ConversationList } from '@/components/csm/conversations/ConversationList';
 import { ConversationThread } from '@/components/csm/conversations/ConversationThread';
 import { ConversationComposer } from '@/components/csm/conversations/ConversationComposer';
 import { CustomerProfilePanel } from '@/components/csm/conversations/CustomerProfilePanel';
 import { MyTicketsPanel } from '@/components/csm/conversations/MyTicketsPanel';
 import { ConversationActions } from '@/components/csm/conversations/ConversationActions';
+import { CreateTicketModal } from '@/components/csm/conversations/CreateTicketModal';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 
@@ -21,10 +21,13 @@ function ConversationsPageContent() {
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [leftTab, setLeftTab] = useState<'conversations' | 'mytickets'>('conversations');
   const [ticketRefreshKey, setTicketRefreshKey] = useState(0);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
 
   // Queue selector state
   const [queues, setQueues] = useState<Queue[]>([]);
   const [selectedQueue, setSelectedQueue] = useState<number | null>(null);
+  const [queueLoadError, setQueueLoadError] = useState(false);
+  const setSelectedQueueId = useCsmConversationStore((s) => s.setSelectedQueueId);
 
   const conversations = useCsmConversationStore((s) => s.conversations);
   const setConversations = useCsmConversationStore((s) => s.setConversations);
@@ -37,11 +40,18 @@ function ConversationsPageContent() {
 
   // Load available queues once
   useEffect(() => {
-    CsmAPI.getQueues().then((data) => {
+    CsmConversationAPI.availableQueues().then((data) => {
       const list = Array.isArray(data) ? data : [];
       setQueues(list);
-    }).catch(() => {});
+      setQueueLoadError(false);
+    }).catch(() => setQueueLoadError(true));
   }, []);
+
+  // Sync selectedQueue into the zustand store so the WS hook can use it for
+  // client-side queue filtering of new_conversation events.
+  useEffect(() => {
+    setSelectedQueueId(selectedQueue);
+  }, [selectedQueue, setSelectedQueueId]);
 
   // Load conversation list — re-fetches when selectedQueue changes
   const loadConversations = useCallback(() => {
@@ -61,13 +71,21 @@ function ConversationsPageContent() {
       setDetail(null);
       return;
     }
+    // Clear stale detail immediately so the UI doesn't mix old/new data.
+    setDetail(null);
+    let cancelled = false;
     CsmConversationAPI.get(activeId).then((data) => {
+      if (cancelled) return;
       setDetail(data);
       setMessages(activeId, data.messages);
     });
+    return () => { cancelled = true; };
   }, [activeId, setMessages]);
 
   const activeConversation = conversations.find((c) => c.id === activeId) ?? null;
+  const selectedQueueName = selectedQueue
+    ? queues.find((q) => q.id === selectedQueue)?.name ?? null
+    : null;
   const messages = activeId ? (messagesByConversation[activeId] ?? []) : [];
   const typingUsers = activeId ? (typingByConversation[activeId] ?? []) : [];
 
@@ -102,6 +120,10 @@ function ConversationsPageContent() {
         {/* Queue selector — only shown on Conversations tab */}
         {leftTab === 'conversations' && (
           <div className="px-3 py-2 border-b border-gray-100 shrink-0">
+            <div className="mb-1.5 flex items-center justify-between text-[11px] text-gray-400">
+              <span>Assigned queues</span>
+              <span>{queueLoadError ? 'Unavailable' : `${queues.length} available`}</span>
+            </div>
             <select
               value={selectedQueue ?? ''}
               onChange={(e) => setSelectedQueue(e.target.value ? Number(e.target.value) : null)}
@@ -112,6 +134,16 @@ function ConversationsPageContent() {
                 <option key={q.id} value={q.id}>{q.name}</option>
               ))}
             </select>
+            {queueLoadError && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-red-500">
+                Queue access could not be loaded. Conversation visibility may be limited.
+              </p>
+            )}
+            {!queueLoadError && queues.length === 0 && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-orange-500">
+                You are not assigned to any active queue. Ask an admin to assign one.
+              </p>
+            )}
           </div>
         )}
 
@@ -121,6 +153,9 @@ function ConversationsPageContent() {
               conversations={conversations}
               loading={loading}
               onClaimed={() => setTicketRefreshKey((k) => k + 1)}
+              selectedQueueName={selectedQueueName}
+              queueLoadError={queueLoadError}
+              hasAvailableQueues={queues.length > 0}
             />
           ) : (
             <MyTicketsPanel refreshKey={ticketRefreshKey} />
@@ -131,8 +166,13 @@ function ConversationsPageContent() {
       {/* MIDDLE: Conversation thread + composer */}
       <div className="flex flex-1 min-w-0 flex-col">
         {!activeConversation ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-            Select a conversation to begin
+          <div className="flex flex-1 items-center justify-center px-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Select a conversation</p>
+              <p className="mt-1 text-xs text-gray-400">
+                Open an assigned conversation to view the thread, reply, create a ticket, or update tags and ownership.
+              </p>
+            </div>
           </div>
         ) : (
           <>
@@ -156,6 +196,7 @@ function ConversationsPageContent() {
             <ConversationThread messages={messages} typingUserIds={typingUsers} />
             {activeConversation.ticket ? (
               <ConversationComposer
+                key={activeId}
                 conversationId={activeId!}
                 organisationId={activeConversation.queue_organisation_id}
                 onTyping={sendTyping}
@@ -171,8 +212,16 @@ function ConversationsPageContent() {
 
       {/* RIGHT: Customer profile panel */}
       <div className="hidden h-full w-72 shrink-0 border-l border-gray-200 md:flex md:flex-col">
-        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
           <h2 className="font-semibold text-gray-900 text-sm">Customer Profile</h2>
+          {detail && !activeConversation?.ticket && (
+            <button
+              onClick={() => setShowCreateTicket(true)}
+              className="px-2.5 py-1 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Create Ticket
+            </button>
+          )}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {detail ? (
@@ -188,6 +237,29 @@ function ConversationsPageContent() {
           )}
         </div>
       </div>
+
+      {/* Create Ticket modal (AC4): form pre-populated from the linked customer profile */}
+      {showCreateTicket && detail && activeId && (
+        <CreateTicketModal
+          conversationId={activeId}
+          customerProfile={detail.customer_profile}
+          defaultQueueId={activeConversation?.queue ?? null}
+          onClose={() => setShowCreateTicket(false)}
+          onCreated={() => {
+            setTicketRefreshKey((k) => k + 1);
+            loadConversations();
+            // Capture the current activeId so we don't overwrite detail if the
+            // agent switched to a different conversation while the request was
+            // in flight.
+            const currentId = activeId;
+            CsmConversationAPI.get(currentId).then((data) => {
+              if (useCsmConversationStore.getState().activeConversationId !== currentId) return;
+              setDetail(data);
+              setMessages(currentId, data.messages);
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

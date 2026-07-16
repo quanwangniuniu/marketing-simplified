@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { TaskAPI } from '@/lib/api/taskApi';
+import { TaskAPI, isApprovalConflict } from '@/lib/api/taskApi';
 import type { TaskData, UserSummary } from '@/types/task';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
 import InlineSelect, { UserInitialsAvatar, type InlineSelectOption } from './InlineSelect';
@@ -83,7 +83,15 @@ export default function FSMActionBar({ task, members, onMutated }: Props) {
     } catch (e) {
       const data = (e as any)?.response?.data;
       const detail = data?.detail || data?.error || (e as Error)?.message || 'Action failed';
-      toast.error(detail);
+      // 409 = another approver decided this task first. Show the "already
+      // decided" message and refresh so the loser sees the winning status
+      // instead of a stale one they can keep acting on.
+      if (isApprovalConflict(e)) {
+        toast.error(detail, { id: 'fsm-approval-conflict' });
+        await onMutated();
+      } else {
+        toast.error(detail);
+      }
     } finally {
       setBusy(false);
     }

@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Conversation, ConversationStatus, UpdateConversationPayload } from '@/types/csmConversation';
+import { Conversation, ConversationStatus, UpdateConversationPayload, AssignableAgent } from '@/types/csmConversation';
 import { TicketPriority, PRIORITY_LABELS } from '@/types/csm';
 import CsmConversationAPI from '@/lib/api/csmConversationApi';
 import { TicketAPI } from '@/lib/api/csmConversationApi';
 import { useCsmConversationStore } from '@/lib/csmConversationStore';
-import api from '@/lib/api';
 
 const STATUS_OPTIONS: { value: ConversationStatus; label: string }[] = [
   { value: 'active',   label: 'Active' },
@@ -57,6 +56,10 @@ interface ConversationActionsProps {
 export function ConversationActions({ conversation, onPriorityChanged }: ConversationActionsProps) {
   const [tagInput, setTagInput] = useState('');
   const [queues, setQueues] = useState<Queue[]>([]);
+  const [queuesLoading, setQueuesLoading] = useState(true);
+  const [queueLoadError, setQueueLoadError] = useState(false);
+  const [agents, setAgents] = useState<AssignableAgent[]>([]);
+  const [agentsLoadError, setAgentsLoadError] = useState(false);
   const [ticketPriority, setTicketPriority] = useState<string>(
     conversation.ticket?.priority ?? 'medium'
   );
@@ -73,17 +76,33 @@ export function ConversationActions({ conversation, onPriorityChanged }: Convers
 
   // Fetch available queues once per organisation
   useEffect(() => {
-    const params: Record<string, string> = {};
-    if (conversation.queue_organisation_id) {
-      params.organisation = String(conversation.queue_organisation_id);
-    }
-    api.get('/api/csm/queues/', { params })
-      .then((res) => {
-        const data = Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
+    setQueuesLoading(true);
+    CsmConversationAPI.availableQueues(
+      conversation.queue_organisation_id ? { organisation: conversation.queue_organisation_id } : undefined
+    )
+      .then((data) => {
         setQueues(data);
+        setQueueLoadError(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        setQueues([]);
+        setQueueLoadError(true);
+      })
+      .finally(() => setQueuesLoading(false));
   }, [conversation.queue_organisation_id]);
+
+  // Fetch agents this conversation can be reassigned to (its queue's organisation)
+  useEffect(() => {
+    CsmConversationAPI.assignableAgents(conversation.id)
+      .then((data) => {
+        setAgents(data);
+        setAgentsLoadError(false);
+      })
+      .catch(() => {
+        setAgents([]);
+        setAgentsLoadError(true);
+      });
+  }, [conversation.id]);
 
   const patch = async (data: UpdateConversationPayload) => {
     try {
@@ -101,6 +120,11 @@ export function ConversationActions({ conversation, onPriorityChanged }: Convers
   const handleQueueChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     patch({ queue: val ? Number(val) : null });
+  };
+
+  const handleAssignChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    patch({ assigned_to: val ? Number(val) : null });
   };
 
   const handlePriorityChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -159,7 +183,7 @@ export function ConversationActions({ conversation, onPriorityChanged }: Convers
       <select
         value={conversation.status}
         onChange={handleStatusChange}
-        className={`text-xs px-2.5 py-1 rounded-full border-0 font-medium cursor-pointer outline-none ${STATUS_COLORS[conversation.status]}`}
+        className={`text-xs px-2.5 py-1 rounded-md border-0 font-medium cursor-pointer outline-none ${STATUS_COLORS[conversation.status]}`}
       >
         {STATUS_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -178,7 +202,7 @@ export function ConversationActions({ conversation, onPriorityChanged }: Convers
             value={ticketPriority}
             onChange={handlePriorityChange}
             disabled={updatingPriority}
-            className={`text-xs pl-5 pr-2.5 py-1 rounded-full border-0 font-medium cursor-pointer outline-none appearance-none disabled:opacity-60 disabled:cursor-wait ${
+            className={`text-xs pl-5 pr-2.5 py-1 rounded-md border-0 font-medium cursor-pointer outline-none appearance-none disabled:opacity-60 disabled:cursor-wait ${
               PRIORITY_SELECT_COLORS[ticketPriority] ?? 'bg-gray-100 text-gray-500'
             }`}
           >
@@ -190,14 +214,54 @@ export function ConversationActions({ conversation, onPriorityChanged }: Convers
       )}
 
       {/* Queue selector */}
+      <div className="flex items-center gap-1.5">
+        <select
+          value={conversation.queue ?? ''}
+          onChange={handleQueueChange}
+          disabled={queueLoadError || queuesLoading}
+          title={
+            queueLoadError
+              ? 'Queue list could not be loaded'
+              : queues.length > 0
+                ? 'Change queue assignment'
+                : 'No assigned queues available'
+          }
+          className="text-xs text-gray-600 bg-gray-100 rounded-md px-2.5 py-1 border-0 outline-none cursor-pointer hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <option value="">
+            {queuesLoading ? 'Loading queues' : 'No queue'}
+          </option>
+          {queues.map((q) => (
+            <option key={q.id} value={q.id}>{q.name}</option>
+          ))}
+        </select>
+        <span className="text-[11px] text-gray-400">
+          {queueLoadError
+            ? 'Queues unavailable'
+            : queues.length > 0
+              ? `${queues.length} queue${queues.length === 1 ? '' : 's'}`
+              : 'No assigned queues'}
+        </span>
+      </div>
+
+      {/* Assignee selector — reassign the conversation to another agent */}
       <select
-        value={conversation.queue ?? ''}
-        onChange={handleQueueChange}
-        className="text-xs text-gray-600 bg-gray-100 rounded-full px-2.5 py-1 border-0 outline-none cursor-pointer hover:bg-gray-200 transition-colors"
+        value={conversation.assigned_to ?? ''}
+        onChange={handleAssignChange}
+        disabled={agentsLoadError}
+        title={agentsLoadError ? 'Assignable agents could not be loaded' : 'Assign to agent'}
+        className="text-xs text-gray-600 bg-gray-100 rounded-md px-2.5 py-1 border-0 outline-none cursor-pointer hover:bg-gray-200 transition-colors max-w-[140px] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <option value="">No queue</option>
-        {queues.map((q) => (
-          <option key={q.id} value={q.id}>{q.name}</option>
+        <option value="">{agentsLoadError ? 'Agents unavailable' : 'Unassigned'}</option>
+        {/* Keep the current assignee selectable even if not in the fetched list */}
+        {conversation.assigned_to != null &&
+          !agents.some((a) => a.id === conversation.assigned_to) && (
+          <option value={conversation.assigned_to}>
+            {conversation.assigned_to_name ?? 'Current agent'}
+          </option>
+        )}
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>{a.name}</option>
         ))}
       </select>
 

@@ -1226,70 +1226,97 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def make_approval(self, request, pk=None):
         """Make approval decision (approve or reject) for a task"""
+        # Resolve the row up front so we lock the correct pk (routes may be slug-based).
         task = self.get_object()
-        
-        # Validate task can be approved/rejected
-        if task.status != Task.Status.UNDER_REVIEW:
-            return Response(
-                {'error': 'Task must be in UNDER_REVIEW status to be approved or rejected'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
-        # Verify the requesting user is the designated approver for this step
-        if task.current_approver_id and request.user.id != task.current_approver_id:
-            return Response(
-                {'error': 'Only the designated approver for this step can approve or reject.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # Validate request data
+        # Validate request data before opening a transaction
         serializer = TaskApprovalSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         action = serializer.validated_data['action']
         comment = serializer.validated_data.get('comment', '')
-        
+
         try:
-            # Execute the action
-            if action == 'approve':
-                task.approve()   # UNDER_REVIEW → APPROVED
-                is_approved = True
-            else:  # action == 'reject'
-                task.reject()    # UNDER_REVIEW → REJECTED
-                is_approved = False
+            # Serialize concurrent approvals: lock the row, then re-read status.
+            # A second approver acting at the same time blocks until the first
+            # transaction commits, then sees the already-decided status here and
+            # is rejected with 409 instead of overwriting the winning transition.
+            with transaction.atomic():
+                task = Task.lock_for_transition(task.pk)
+                if task is None:
+                    return Response(
+                        {'error': 'Task not found.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
 
-            # Record the decision for the current step
-            step_number = (
-                task.current_approval_step
-                if task.current_approval_step
-                else task.approval_records.count() + 1
-            )
-            # Update revision round so next submission is tracked as a new round
-            ApprovalRecord.objects.create(
-                task=task,
-                approved_by=task.current_approver or request.user,
-                is_approved=is_approved,
-                comment=comment,
-                step_number=step_number,
-                revision_round=task.revision_round,
-                resubmitted_after_reject=task.revision_round > 0,
-                has_rejection_history=task.approval_records.filter(is_approved=False).exists()
-            )
+                # Re-validate under lock: task must still be awaiting a decision.
+                if task.status != Task.Status.UNDER_REVIEW:
+                    # A task that already moved to a decided state means another
+                    # approver won a concurrent race → 409 so the loser refreshes.
+                    # Never-review-ready states (DRAFT/SUBMITTED) are a plain 400.
+                    decided_states = {
+                        Task.Status.APPROVED,
+                        Task.Status.REJECTED,
+                        Task.Status.LOCKED,
+                        Task.Status.CANCELLED,
+                    }
+                    if task.status in decided_states:
+                        return Response(
+                            {'error': 'This task has already been decided by another approver.'},
+                            status=status.HTTP_409_CONFLICT
+                        )
+                    return Response(
+                        {'error': 'Task must be in UNDER_REVIEW status to be approved or rejected'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            # If approved and a chain is active, auto-advance to the next step
-            if is_approved and task.approval_chain and task.current_approval_step:
-                next_step_num = task.current_approval_step + 1
-                next_step = task.approval_chain.get_step(next_step_num)
-                if next_step:
-                    # More steps remain: APPROVED → UNDER_REVIEW with next approver
-                    task.forward_to_next()
-                    task.current_approver = next_step.approver
-                    task.current_approval_step = next_step_num
-                # else: chain is complete — task stays APPROVED, ready to be locked
+                # Verify the requesting user is the designated approver for this step
+                if task.current_approver_id and request.user.id != task.current_approver_id:
+                    return Response(
+                        {'error': 'Only the designated approver for this step can approve or reject.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
-            # Save all changes
-            task.save()
+                # Execute the action
+                if action == 'approve':
+                    task.approve()   # UNDER_REVIEW → APPROVED
+                    is_approved = True
+                else:  # action == 'reject'
+                    task.reject()    # UNDER_REVIEW → REJECTED
+                    is_approved = False
+
+                # Record the decision for the current step
+                step_number = (
+                    task.current_approval_step
+                    if task.current_approval_step
+                    else task.approval_records.count() + 1
+                )
+                # Update revision round so next submission is tracked as a new round
+                ApprovalRecord.objects.create(
+                    task=task,
+                    approved_by=task.current_approver or request.user,
+                    is_approved=is_approved,
+                    comment=comment,
+                    step_number=step_number,
+                    revision_round=task.revision_round,
+                    resubmitted_after_reject=task.revision_round > 0,
+                    has_rejection_history=task.approval_records.filter(is_approved=False).exists()
+                )
+
+                # If approved and a chain is active, auto-advance to the next step
+                if is_approved and task.approval_chain and task.current_approval_step:
+                    next_step_num = task.current_approval_step + 1
+                    next_step = task.approval_chain.get_step(next_step_num)
+                    if next_step:
+                        # More steps remain: APPROVED → UNDER_REVIEW with next approver
+                        task.forward_to_next()
+                        task.current_approver = next_step.approver
+                        task.current_approval_step = next_step_num
+                    # else: chain is complete — task stays APPROVED, ready to be locked
+
+                # Save all changes
+                task.save()
 
             # Sync budget request status when a budget task is approved or rejected
             if task.type == 'budget':

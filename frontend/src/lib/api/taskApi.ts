@@ -119,7 +119,9 @@ export const TaskAPI = {
   // Revise a task
   revise: (taskId: number | string) => api.post(`/api/tasks/${taskId}/revise/`),
 
-  // Make approval decision (approve or reject)
+  // Make approval decision (approve or reject).
+  // Returns 409 when another approver already decided this task first
+  // (see isApprovalConflict); callers should refresh and surface the message.
   makeApproval: (taskId: number | string, data: TaskApprovalData) =>
     api.post(`/api/tasks/${taskId}/make-approval/`, data),
 
@@ -302,3 +304,11 @@ export const TaskAPI = {
     date_to?: string;
   }) => api.get('/api/tasks/status-report/', { params }),
 };
+
+/**
+ * True when a task action failed because another approver decided it first
+ * (HTTP 409 from make-approval). Lets components refresh the task and show the
+ * "already decided" message instead of treating it as a generic failure.
+ */
+export const isApprovalConflict = (error: unknown): boolean =>
+  (error as { response?: { status?: number } })?.response?.status === 409;

@@ -108,8 +108,38 @@ def _field_value(old_instance, new_instance, field):
 
 
 # ── Status/anomaly caches (for notifications) ─────────────────────────────────
+# The module-level dicts are a process-global fallback keyed by pk. They are
+# clobbered when two threads save the same task concurrently, so the pre-save
+# value is also stashed on the instance itself (per-object, thread-safe) and
+# preferred when emitting. See _consume_prev_status / _consume_prev_anomaly.
 _task_status_cache: dict[int, str] = {}
 _task_anomaly_cache: dict[int, str] = {}
+
+
+def _consume_prev_status(instance):
+    """Return the pre-save status exactly once, preferring the instance-scoped
+    value so concurrent saves of the same task don't emit off a clobbered cache.
+
+    Consuming clears both the instance attribute and the module-level dict, so a
+    repeated post_save for the same instance won't re-emit the same transition
+    (idempotent emission).
+    """
+    if hasattr(instance, '_prev_status'):
+        old = instance._prev_status
+        del instance._prev_status
+        _task_status_cache.pop(instance.pk, None)
+        return old
+    return _task_status_cache.pop(instance.pk, None)
+
+
+def _consume_prev_anomaly(instance):
+    """Anomaly-status counterpart of _consume_prev_status (idempotent, per-instance)."""
+    if hasattr(instance, '_prev_anomaly'):
+        old = instance._prev_anomaly
+        del instance._prev_anomaly
+        _task_anomaly_cache.pop(instance.pk, None)
+        return old
+    return _task_anomaly_cache.pop(instance.pk, None)
 
 
 @receiver(pre_delete, sender=Task)
@@ -124,16 +154,22 @@ def unmark_task_deleting(sender, instance, **kwargs):
 
 @receiver(pre_save, sender=Task)
 def _cache_previous_task_status(sender, instance, **kwargs):
-    """Cache previous status and anomaly_status for notification signals."""
+    """Cache previous status and anomaly_status for notification signals.
+
+    The value is stashed on the instance (thread-safe, per-object) and mirrored
+    into the module-level dict for consumers that only hold the pk.
+    """
     if not instance.pk:
         return
     try:
         prev = Task.objects.get(pk=instance.pk)
-        _task_status_cache[instance.pk] = prev.status
-        _task_anomaly_cache[instance.pk] = prev.anomaly_status
+        prev_status, prev_anomaly = prev.status, prev.anomaly_status
     except Task.DoesNotExist:
-        _task_status_cache[instance.pk] = None
-        _task_anomaly_cache[instance.pk] = None
+        prev_status, prev_anomaly = None, None
+    instance._prev_status = prev_status
+    instance._prev_anomaly = prev_anomaly
+    _task_status_cache[instance.pk] = prev_status
+    _task_anomaly_cache[instance.pk] = prev_anomaly
 
 
 @receiver(pre_save, sender=Task)
@@ -192,9 +228,9 @@ def notify_task_owner_on_status_change(sender, instance, created, **kwargs):
     if created:
         return
     if getattr(instance, '_suppress_status_notification', False):
-        _task_status_cache.pop(instance.pk, None)
+        _consume_prev_status(instance)
         return
-    old = _task_status_cache.pop(instance.pk, None)
+    old = _consume_prev_status(instance)
     if old is None or old == instance.status or not instance.owner_id:
         return
     # Skip while the owner hasn't accepted their assignment yet
@@ -234,9 +270,9 @@ def notify_task_owner_on_status_change(sender, instance, created, **kwargs):
 def notify_on_anomaly_status_change(sender, instance, created, **kwargs):
     """Fire TASK_ANOMALY when anomaly_status transitions away from NORMAL."""
     if created:
-        _task_anomaly_cache.pop(instance.pk, None)
+        _consume_prev_anomaly(instance)
         return
-    old_anomaly = _task_anomaly_cache.pop(instance.pk, None)
+    old_anomaly = _consume_prev_anomaly(instance)
     if old_anomaly is None or old_anomaly == instance.anomaly_status:
         return
     if instance.anomaly_status in (None, "", "NORMAL"):

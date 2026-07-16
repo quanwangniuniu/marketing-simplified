@@ -72,6 +72,7 @@ export default function SupportChannelFormDrawer({
   const [channelType, setChannelType] = useState<ChannelType>('live_chat');
   const [isActive, setIsActive] = useState(true);
   const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [ticketConfirmationMessage, setTicketConfirmationMessage] = useState('');
   const [offlineMessage, setOfflineMessage] = useState('');
   const [offlineAlternative, setOfflineAlternative] = useState<OfflineAlternative>('message_only');
   const [offlineTargetId, setOfflineTargetId] = useState('');
@@ -102,6 +103,7 @@ export default function SupportChannelFormDrawer({
     setChannelType(editing?.channel_type ?? 'live_chat');
     setIsActive(editing?.is_active ?? true);
     setWelcomeMessage(editing?.welcome_message ?? '');
+    setTicketConfirmationMessage(editing?.ticket_confirmation_message ?? '');
     setOfflineMessage(editing?.offline_fallback_message ?? '');
     setOfflineAlternative(editing?.offline_alternative ?? 'message_only');
     setOfflineTargetId(
@@ -225,6 +227,7 @@ export default function SupportChannelFormDrawer({
     channel_type: channelType,
     display_name: displayName.trim(),
     welcome_message: welcomeMessage,
+    ticket_confirmation_message: ticketConfirmationMessage,
     offline_fallback_message: offlineMessage,
     offline_alternative: offlineAlternative,
     offline_alternative_target_id:
@@ -407,6 +410,20 @@ export default function SupportChannelFormDrawer({
                 value={welcomeMessage}
                 onChange={(e) => { markDirty(); setWelcomeMessage(e.target.value); }}
                 disabled={submitting}
+                className={BUILDER_CONTROL_CLASS}
+              />
+            </div>
+            <div>
+              <label htmlFor="sc-ticket-confirm" className={FORM_LABEL_INLINE_CLASS}>
+                Ticket confirmation message
+              </label>
+              <textarea
+                id="sc-ticket-confirm"
+                rows={3}
+                value={ticketConfirmationMessage}
+                onChange={(e) => { markDirty(); setTicketConfirmationMessage(e.target.value); }}
+                disabled={submitting}
+                placeholder="Sent to the customer when a ticket is created from their conversation. Leave blank to send nothing."
                 className={BUILDER_CONTROL_CLASS}
               />
             </div>

@@ -90,6 +90,20 @@ def _raise_drf_validation(exc):
     raise ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)
 
 
+SUPPORTED_MESSAGE_IMAGE_TYPES = {
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+    'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence',
+}
+SUPPORTED_MESSAGE_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif'}
+MAX_MESSAGE_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def _is_supported_message_image(image):
+    content_type = (getattr(image, 'content_type', '') or '').lower()
+    extension = image.name.rsplit('.', 1)[-1].lower() if '.' in image.name else ''
+    return content_type in SUPPORTED_MESSAGE_IMAGE_TYPES or extension in SUPPORTED_MESSAGE_IMAGE_EXTENSIONS
+
+
 class QueueViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     # Slug-only lookups; numeric path segments return 404.
     """
@@ -297,6 +311,38 @@ class CustomerUserViewSet(viewsets.ModelViewSet):
 
 
 
+def _send_ticket_confirmation(conversation):
+    """
+    AC5: notify the customer with the channel's configured confirmation message
+    after a ticket is created from their conversation. No-op when the conversation's
+    support channel has no confirmation message configured.
+    """
+    channel = conversation.support_channel
+    message_text = (channel.ticket_confirmation_message or '').strip() if channel else ''
+    if not message_text:
+        return None
+
+    msg = ConversationMessage.objects.create(
+        conversation=conversation,
+        sender_type='system',
+        content=message_text,
+    )
+
+    channel_layer = get_channel_layer()
+    # Agent side: appears in the workspace thread.
+    async_to_sync(channel_layer.group_send)(
+        f'csm_conversation_{conversation.id}',
+        {'type': 'conversation.message', 'message': ConversationMessageSerializer(msg).data},
+    )
+    # Customer side: delivered to the customer portal in real time.
+    from portal.serializers import PortalMessageSerializer
+    async_to_sync(channel_layer.group_send)(
+        f'portal_conversation_{conversation.id}',
+        {'type': 'conversation.message', 'message': PortalMessageSerializer(msg).data},
+    )
+    return msg
+
+
 class ConversationPagination(PageNumberPagination):
     page_size = 50
     page_size_query_param = 'page_size'
@@ -318,31 +364,53 @@ class ConversationViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
     pagination_class = ConversationPagination
 
+    def _accessible_queues(self):
+        user = self.request.user
+        qs = Queue.objects.filter(is_active=True)
+        if user.is_staff or user.is_superuser:
+            return qs
+
+        admin_org_ids = CustomerUser.objects.filter(
+            user=user,
+            is_active=True,
+            user_type__in=('supervisor', 'admin'),
+            organisation__isnull=False,
+        ).values_list('organisation_id', flat=True)
+        agent_queue_ids = QueueAgent.objects.filter(user=user).values_list('queue_id', flat=True)
+        profile_queue_ids = CustomerUser.objects.filter(
+            user=user,
+            is_active=True,
+            queue__isnull=False,
+        ).values_list('queue_id', flat=True)
+
+        return qs.filter(
+            Q(organisation_id__in=admin_org_ids)
+            | Q(id__in=agent_queue_ids)
+            | Q(id__in=profile_queue_ids)
+        ).distinct()
+
     def get_queryset(self):
         user = self.request.user
-        base_qs = Conversation.objects.select_related('customer', 'queue', 'assigned_to__user')
+        base_qs = Conversation.objects.select_related('customer', 'queue', 'assigned_to__user').prefetch_related('tickets')
 
         # Permission-based filtering
         if user.is_staff or user.is_superuser:
             qs = base_qs.all()
         else:
-            admin_org_ids = CustomerUser.objects.filter(
-                user=user, is_active=True, user_type__in=('supervisor', 'admin')
-            ).values_list('organisation_id', flat=True)
-
-            if admin_org_ids:
-                org_queue_ids = Queue.objects.filter(
-                    organisation_id__in=admin_org_ids,
-                ).values_list('id', flat=True)
-                qs = base_qs.filter(Q(queue_id__in=org_queue_ids) | Q(queue__isnull=True))
-            else:
-                agent_queue_ids = QueueAgent.objects.filter(user=user).values_list('queue_id', flat=True)
-                qs = base_qs.filter(Q(queue_id__in=agent_queue_ids) | Q(queue__isnull=True))
+            accessible_queue_ids = self._accessible_queues().values_list('id', flat=True)
+            qs = base_qs.filter(queue_id__in=accessible_queue_ids)
 
         # Optional queue filter from query params
         queue_id = self.request.query_params.get('queue')
         if queue_id:
             qs = qs.filter(queue_id=queue_id)
+
+        # Status filter — defaults to active+pending for the agent inbox
+        status = self.request.query_params.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        elif self.action == 'list':
+            qs = qs.filter(status__in=['active', 'pending'])
 
         return qs
 
@@ -357,6 +425,69 @@ class ConversationViewSet(viewsets.ModelViewSet):
         instance._prefetched_objects_cache = {}
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def available_queues(self, request):
+        """
+        GET /conversations/available_queues/
+        Queues the current agent can see/use in the conversation workspace.
+        """
+        qs = self._accessible_queues().select_related('organisation')
+        org_id = request.query_params.get('organisation')
+        if org_id:
+            qs = qs.filter(organisation_id=org_id)
+        return Response(QueueSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def assignable_agents(self, request, pk=None):
+        """
+        GET /conversations/{id}/assignable_agents/
+        List active CSM users in the conversation's organisation that this
+        conversation can be reassigned to. Each entry's ``id`` is the CustomerUser
+        id used for ``assigned_to``. Visible to any agent who can see the
+        conversation (get_object enforces queue-based visibility).
+        """
+        conversation = self.get_object()
+        if not conversation.queue_id:
+            return Response([])
+
+        queue_agent_user_ids = set(
+            QueueAgent.objects.filter(queue=conversation.queue)
+            .values_list('user_id', flat=True)
+        )
+        qs = CustomerUser.objects.filter(
+            organisation_id=conversation.queue.organisation_id,
+            is_active=True,
+            user_type__in=('agent', 'supervisor', 'admin'),
+        ).select_related('user')
+
+        # A user may have multiple CustomerUser rows (one per queue). Keep one per
+        # person, preferring the profile scoped to this conversation's queue.
+        best = {}
+        for cu in qs:
+            if (
+                cu.user_type == 'agent'
+                and cu.queue_id != conversation.queue_id
+                and cu.user_id not in queue_agent_user_ids
+            ):
+                continue
+            current = best.get(cu.user_id)
+            if current is None or (
+                cu.queue_id == conversation.queue_id
+                and current.queue_id != conversation.queue_id
+            ):
+                best[cu.user_id] = cu
+
+        agents = []
+        for cu in best.values():
+            full = cu.user.get_full_name()
+            agents.append({
+                'id': cu.id,
+                'name': full if full.strip() else cu.user.email,
+                'email': cu.user.email,
+            })
+        agents.sort(key=lambda a: a['name'].lower())
+        return Response(agents)
 
     @action(detail=True, methods=['post'])
     def claim(self, request, pk=None):
@@ -434,6 +565,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
             {'type': 'conversation.updated', 'conversation': ConversationSerializer(conversation).data},
         )
 
+        # AC5: deliver the channel's configured confirmation message to the customer.
+        _send_ticket_confirmation(conversation)
+
         return Response(TicketSerializer(ticket).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -444,10 +578,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         image = request.FILES.get('image')
         if image:
-            if not image.content_type.startswith('image/'):
-                return Response({'detail': 'File must be an image.'}, status=status.HTTP_400_BAD_REQUEST)
-            if image.size > 5 * 1024 * 1024:
-                return Response({'detail': 'Image must be under 5MB.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not _is_supported_message_image(image):
+                return Response(
+                    {'detail': 'Only PNG, JPG, GIF, WebP, or HEIC images can be attached.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if image.size > MAX_MESSAGE_IMAGE_BYTES:
+                return Response({'detail': 'Image must be under 10MB.'}, status=status.HTTP_400_BAD_REQUEST)
         msg = ConversationMessage.objects.create(
             conversation=conversation,
             sender_type='agent',
@@ -489,6 +626,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         customer = conversation.customer
 
+        # Enforce 1 conversation : 1 ticket (mirrors the claim flow).
+        existing = conversation.tickets.first()
+        if existing:
+            return Response(
+                {'detail': 'This conversation already has a linked ticket.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         title = request.data.get('title', f'Ticket from conversation #{conversation.id}')
         description = request.data.get('description', '')
         priority = request.data.get('priority', 'medium')
@@ -499,12 +644,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 {'detail': 'A queue must be selected to create a ticket.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not self._accessible_queues().filter(id=queue_id).exists():
+            raise PermissionDenied('You cannot create a ticket in that queue.')
 
         ticket = Ticket.objects.create(
             queue_id=queue_id,
             title=title,
             description=description,
             priority=priority,
+            status='in_progress',
+            assigned_to=request.user,
             customer_email=customer.email if customer else '',
             conversation=conversation,
         )
@@ -512,6 +661,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
         recalculate_ticket_sla(ticket)
         if ticket.first_response_due is not None or ticket.resolution_due is not None:
             ticket.save(update_fields=['first_response_due', 'resolution_due'])
+
+        # Ensure the conversation is active (mirrors the claim flow).
+        if conversation.status in ('pending',):
+            Conversation.objects.filter(id=conversation.id).update(status='active')
+            conversation.refresh_from_db()
 
         # Post a system message in the conversation thread
         system_msg = ConversationMessage.objects.create(
@@ -526,6 +680,16 @@ class ConversationViewSet(viewsets.ModelViewSet):
             f'csm_conversation_{conversation.id}',
             {'type': 'conversation.message', 'message': payload},
         )
+        # Broadcast the updated conversation so all agents' lists (and the active
+        # workspace) pick up the newly linked ticket and unlock the composer.
+        conversation.refresh_from_db()
+        async_to_sync(channel_layer.group_send)(
+            'csm_new_conversations',
+            {'type': 'conversation.updated', 'conversation': ConversationSerializer(conversation).data},
+        )
+
+        # AC5: deliver the channel's configured confirmation message to the customer.
+        _send_ticket_confirmation(conversation)
 
         return Response(
             {
@@ -1184,7 +1348,8 @@ class SupportChannelViewSet(ProjectScopedViewSetMixin, viewsets.ModelViewSet):
     def _service_kwargs(self, data):
         kwargs = {}
         for key in (
-            'channel_type', 'display_name', 'welcome_message', 'operating_hours',
+            'channel_type', 'display_name', 'welcome_message',
+            'ticket_confirmation_message', 'operating_hours',
             'timezone', 'offline_fallback_message', 'offline_alternative',
             'offline_alternative_target_id', 'email_address', 'sort_order', 'is_active',
         ):

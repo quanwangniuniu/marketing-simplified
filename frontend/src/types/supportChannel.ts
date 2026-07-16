@@ -65,6 +65,7 @@ export interface SupportChannelListItem {
 export interface SupportChannelDetail extends SupportChannelListItem {
   project: number;
   welcome_message: string;
+  ticket_confirmation_message: string;
   operating_hours: OperatingHours;
   timezone: string;
   offline_fallback_message: string;
@@ -83,6 +84,7 @@ export interface CreateSupportChannelData {
   channel_type: ChannelType;
   display_name: string;
   welcome_message?: string;
+  ticket_confirmation_message?: string;
   operating_hours?: OperatingHours;
   timezone?: string;
   offline_fallback_message?: string;

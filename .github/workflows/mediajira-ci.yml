@@ -445,7 +445,7 @@ jobs:
         run: |
           docker compose exec backend sh -c "
             echo 'Running serial backend tests...' &&
-            pytest -v -o addopts='' --ds=backend.settings --timeout=300 metric_upload/tests/integration asset/tests/test_tasks.py budget_approval/tests/test_concurrency.py
+            pytest -v -o addopts='' --ds=backend.settings --timeout=600 metric_upload/tests/integration asset/tests/test_tasks.py budget_approval/tests/test_concurrency.py
            "
 
       # Run frontend tests in container

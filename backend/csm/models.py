@@ -719,6 +719,9 @@ class SupportChannel(TimeStampedModel):
     channel_type = models.CharField(max_length=20, choices=ChannelType.choices)
     display_name = models.CharField(max_length=200)
     welcome_message = models.TextField(blank=True)
+    # Sent to the customer when a ticket is created from a conversation on this
+    # channel (AC5). Blank = no confirmation message is sent.
+    ticket_confirmation_message = models.TextField(blank=True)
     operating_hours = models.JSONField(default=default_operating_hours)
     timezone = models.CharField(max_length=64, default='UTC')
     offline_fallback_message = models.TextField(blank=True)

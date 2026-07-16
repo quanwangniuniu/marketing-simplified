@@ -69,11 +69,16 @@ export function useCsmConversationSocket(activeConversationId: number | null) {
       if (parsed.type === 'new_message') {
         addMessage(parsed.message.conversation, parsed.message);
       } else if (parsed.type === 'new_conversation') {
-        // A customer just submitted a new ticket — prepend to the list
-        useCsmConversationStore.getState().setConversations([
-          parsed.conversation,
-          ...useCsmConversationStore.getState().conversations,
-        ]);
+        // Prepend new conversation to the list. The backend already filters
+        // by queue, but guard on the client side as well in case of a
+        // selected-queue mismatch (e.g. stale cache).
+        const conv = parsed.conversation;
+        const { conversations, selectedQueueId } = useCsmConversationStore.getState();
+        if (selectedQueueId != null && conv.queue !== selectedQueueId) {
+          // Conversation belongs to a different queue than the active filter.
+          return;
+        }
+        useCsmConversationStore.getState().setConversations([conv, ...conversations]);
       } else if (parsed.type === 'conversation_updated') {
         updateConversation(parsed.conversation);
       } else if (parsed.type === 'typing_indicator') {

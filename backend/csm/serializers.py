@@ -176,11 +176,84 @@ class ConversationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'started_at']
 
+    def _validate_queue_access(self, queue):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not queue or not user or user.is_staff or user.is_superuser:
+            return
+
+        is_org_admin = CustomerUser.objects.filter(
+            user=user,
+            organisation_id=queue.organisation_id,
+            is_active=True,
+            user_type__in=('supervisor', 'admin'),
+        ).exists()
+        if is_org_admin:
+            return
+
+        is_queue_agent = (
+            QueueAgent.objects.filter(user=user, queue=queue).exists()
+            or CustomerUser.objects.filter(
+                user=user,
+                queue=queue,
+                is_active=True,
+                user_type='agent',
+            ).exists()
+        )
+        if not is_queue_agent:
+            raise serializers.ValidationError({
+                'queue': 'You can only assign conversations to queues you can access.',
+            })
+
     def get_assigned_to_name(self, obj):
         if not obj.assigned_to:
             return None
         full = obj.assigned_to.user.get_full_name()
         return full if full.strip() else obj.assigned_to.user.email
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if 'queue' in attrs:
+            self._validate_queue_access(attrs.get('queue'))
+
+        if 'assigned_to' not in attrs:
+            return attrs
+
+        assignee = attrs.get('assigned_to')
+        if assignee is None:
+            return attrs
+
+        conversation = self.instance
+        queue = attrs.get('queue') or (conversation.queue if conversation else None)
+        customer = attrs.get('customer') or (conversation.customer if conversation else None)
+        organisation_id = (
+            queue.organisation_id if queue else
+            customer.organisation_id if customer else
+            None
+        )
+
+        if not assignee.is_active:
+            raise serializers.ValidationError({
+                'assigned_to': 'Assignee must be an active CSM user.',
+            })
+
+        if organisation_id and assignee.organisation_id != organisation_id:
+            raise serializers.ValidationError({
+                'assigned_to': 'Assignee must belong to the conversation organisation.',
+            })
+
+        if queue and assignee.user_type == 'agent':
+            has_queue_profile = assignee.queue_id == queue.id
+            has_queue_assignment = QueueAgent.objects.filter(
+                user_id=assignee.user_id,
+                queue=queue,
+            ).exists()
+            if not has_queue_profile and not has_queue_assignment:
+                raise serializers.ValidationError({
+                    'assigned_to': 'Agent must be assigned to the conversation queue.',
+                })
+
+        return attrs
 
     def get_ticket(self, obj):
         t = obj.tickets.first()
@@ -579,6 +652,7 @@ class SupportChannelDetailSerializer(serializers.ModelSerializer):
         model = SupportChannel
         fields = [
             'id', 'project', 'channel_type', 'display_name', 'welcome_message',
+            'ticket_confirmation_message',
             'operating_hours', 'timezone', 'offline_fallback_message',
             'offline_alternative', 'offline_alternative_target_id',
             'default_queue', 'default_queue_name',
@@ -604,7 +678,8 @@ class SupportChannelCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupportChannel
         fields = [
-            'channel_type', 'display_name', 'welcome_message', 'operating_hours',
+            'channel_type', 'display_name', 'welcome_message',
+            'ticket_confirmation_message', 'operating_hours',
             'timezone', 'offline_fallback_message', 'offline_alternative',
             'offline_alternative_target_id', 'default_queue', 'ticket_form',
             'email_address', 'sort_order', 'is_active',

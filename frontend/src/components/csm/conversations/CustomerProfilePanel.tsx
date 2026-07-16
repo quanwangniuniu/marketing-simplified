@@ -53,6 +53,9 @@ export function CustomerProfilePanel({
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Profile header */}
       <div className="px-4 py-4 border-b border-gray-100">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+          Conversation #{conversationId}
+        </p>
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm shrink-0">
             {profile.full_name.charAt(0).toUpperCase()}
@@ -111,11 +114,17 @@ export function CustomerProfilePanel({
       <div className="px-4 py-3 flex flex-col gap-2">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Linked Tickets</p>
         {linkedTickets.length === 0 ? (
-          <p className="text-xs text-gray-400">No tickets yet</p>
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
+            <p className="text-xs font-medium text-gray-600">No linked ticket yet</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-400">
+              Create a ticket from this conversation to establish the bidirectional reference.
+            </p>
+          </div>
         ) : (
           linkedTickets.map((ticket) => (
             <div key={ticket.id} className="rounded-lg border border-gray-100 p-2">
               <p className="text-xs font-medium text-gray-800 truncate">#{ticket.id} {ticket.title}</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">Linked to conversation #{conversationId}</p>
               <div className="flex items-center gap-1 mt-1.5">
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${TICKET_STATUS_COLORS[ticket.status] ?? 'bg-gray-100 text-gray-500'}`}>
                   {ticket.status.replace('_', ' ')}

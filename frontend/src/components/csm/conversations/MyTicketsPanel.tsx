@@ -138,6 +138,11 @@ export function MyTicketsPanel({ refreshKey }: MyTicketsPanelProps) {
                       {ticket.queue_name && (
                         <span className="text-[10px] text-gray-400 truncate">{ticket.queue_name}</span>
                       )}
+                      {ticket.conversation != null && (
+                        <span className="text-[10px] text-blue-400 truncate">
+                          Conversation #{ticket.conversation}
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"

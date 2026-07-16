@@ -6,6 +6,7 @@ import { Conversation, ConversationStatus, TicketSummary } from '@/types/csmConv
 import { useCsmConversationStore } from '@/lib/csmConversationStore';
 import CsmConversationAPI from '@/lib/api/csmConversationApi';
 import { cn } from '@/lib/utils';
+import { Inbox, RefreshCw } from 'lucide-react';
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
   active: 'bg-green-100 text-green-700',
@@ -30,9 +31,19 @@ interface ConversationListProps {
   conversations: Conversation[];
   loading?: boolean;
   onClaimed?: () => void;
+  selectedQueueName?: string | null;
+  queueLoadError?: boolean;
+  hasAvailableQueues?: boolean;
 }
 
-export function ConversationList({ conversations, loading, onClaimed }: ConversationListProps) {
+export function ConversationList({
+  conversations,
+  loading,
+  onClaimed,
+  selectedQueueName,
+  queueLoadError,
+  hasAvailableQueues = true,
+}: ConversationListProps) {
   const activeId = useCsmConversationStore((s) => s.activeConversationId);
   const setActive = useCsmConversationStore((s) => s.setActiveConversation);
   const updateConversation = useCsmConversationStore((s) => s.updateConversation);
@@ -76,9 +87,25 @@ export function ConversationList({ conversations, loading, onClaimed }: Conversa
   }
 
   if (conversations.length === 0) {
+    const title = queueLoadError
+      ? 'Queue list unavailable'
+      : hasAvailableQueues
+        ? 'No conversations in your assigned queues'
+        : 'No assigned queues';
+    const description = queueLoadError
+      ? 'Refresh the page or ask an admin to check your queue access.'
+      : hasAvailableQueues
+        ? selectedQueueName
+          ? `There are no active conversations in ${selectedQueueName}.`
+          : 'Only conversations from queues assigned to you appear here.'
+        : 'Ask an admin to assign you to an active queue before handling customer conversations.';
     return (
-      <div className="flex flex-col items-center justify-center h-full text-sm text-gray-400 p-6">
-        No conversations in your queues
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+          {queueLoadError ? <RefreshCw size={18} /> : <Inbox size={18} />}
+        </div>
+        <p className="text-sm font-medium text-gray-700">{title}</p>
+        <p className="mt-1 max-w-[220px] text-xs leading-relaxed text-gray-400">{description}</p>
       </div>
     );
   }
