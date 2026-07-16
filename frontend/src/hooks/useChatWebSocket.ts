@@ -77,6 +77,7 @@ export function useChatWebSocket(
   const shouldRun = useMemo(() => !!userId, [userId]);
   const handlersRef = useRef(handlers);
   const forcedDisconnectRef = useRef<{ chatId: number; reason?: string } | null>(null);
+  const handledForcedDisconnectRef = useRef<string | null>(null);
   handlersRef.current = handlers;
 
   useEffect(() => {
@@ -174,26 +175,35 @@ export function useChatWebSocket(
       ws.onclose = (ev) => {
         console.warn('[ChatWS] close', { code: ev.code, reason: ev.reason });
         setConnected(false);
-
-        if (ev.code === CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE && forcedDisconnectRef.current){
-          handlersRef.current.onForcedDisconnect?.({
-            chatId: forcedDisconnectRef.current.chatId,
-            reason: forcedDisconnectRef.current.reason,
-            code: ev.code,
-          });
+      
+        const isMembershipRevoked = ev.code === CHAT_MEMBERSHIP_REVOKED_CLOSE_CODE;
+      
+        if (isMembershipRevoked && forcedDisconnectRef.current) {
+          const disconnectKey = `${forcedDisconnectRef.current.chatId}:${forcedDisconnectRef.current.reason ?? ''}`;
+      
+          if (handledForcedDisconnectRef.current !== disconnectKey) {
+            handledForcedDisconnectRef.current = disconnectKey;
+      
+            handlersRef.current.onForcedDisconnect?.({
+              chatId: forcedDisconnectRef.current.chatId,
+              reason: forcedDisconnectRef.current.reason,
+              code: ev.code,
+            });
+          }
+      
+          // membership revoked is a terminal state for this socket instance
+          stopped = true;
         }
-
+      
         forcedDisconnectRef.current = null;
         handlersRef.current.onClose?.(ev);
         wsRef.current = null;
-
-        // Clear heartbeat
+      
         if (heartbeatIntervalRef.current) {
           clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = null;
         }
-
-        // Reconnect with exponential backoff
+      
         if (!stopped) {
           const retry = Math.min(1000 * Math.pow(2, retryRef.current++), 10000);
           setTimeout(connect, retry);

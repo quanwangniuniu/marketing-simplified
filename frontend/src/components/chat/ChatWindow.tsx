@@ -182,21 +182,25 @@ export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDeskt
 
     const store = useChatStore.getState();
     const removedChat = Object.values(store.chatsByProject)
-    .flat()
-    .find((item) => Number(item.id) ===chatId);
+      .flat()
+      .find((item) => Number(item.id) === chatId);
 
     store.removeChat(chatId);
 
-    if (removedChat?.type ==='group' && removedChat.name) {
-      toast.error(`You were removed from #${removedChat.name}`);
+    if (removedChat?.type === 'group' && removedChat.name) {
+      toast.error(`You were removed from #${removedChat.name}`, {
+        id: `chat-membership-revoked-${chatId}`,
+      });
     } else {
-      toast.error('You were removed from this chat');
+      toast.error('You were removed from this chat', {
+        id: `chat-membership-revoked-${chatId}`,
+      });
     }
 
     if (Number(chat.id) === chatId) {
       onBack();
     }
-  }, [chat.id, onBack]);
+    }, [chat.id, onBack]);
   
   const { sendTypingStart, sendTypingStop } = useChatWebSocket(currentUserId, {
     onChatMessage: handleSocketChatMessage,
@@ -223,6 +227,7 @@ export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDeskt
   // Track last message count to detect new messages
   const lastMessageCountRef = useRef<number>(0);
   const lastReadChatIdRef = useRef<number | null>(null);
+  const handledForcedDisconnectChatIdsRef = useRef<Set<number>>(new Set());
   const markAsReadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const jumpLoadAttemptsRef = useRef(0);
   const jumpedToMessageRef = useRef<string | null>(null);
