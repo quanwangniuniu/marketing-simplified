@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from csm.models import ConversationMessage, Ticket
 from csm.services.sla import notify_sla_breach
+from csm.services.automation import fire_trigger
 from csm.services.status_machine import (
     tickets_due_for_auto_resolve,
     RESOLVED_STATUS,
@@ -63,6 +64,7 @@ def notify_sla_breaches():
         notify_sla_breach(ticket, 'first_response')
         ticket.first_response_breach_notified = True
         ticket.save(update_fields=['first_response_breach_notified'])
+        fire_trigger(ticket, 'sla_breached')
         notified += 1
 
     resolution = Ticket.objects.filter(
@@ -75,6 +77,7 @@ def notify_sla_breaches():
         notify_sla_breach(ticket, 'resolution')
         ticket.resolution_breach_notified = True
         ticket.save(update_fields=['resolution_breach_notified'])
+        fire_trigger(ticket, 'sla_breached')
         notified += 1
 
     return notified

@@ -7,6 +7,7 @@ from .models import (
     SupportProject, CsmWorkType, SupportChannel,
     SLAPolicy, SLAPriorityTarget, BusinessHoursCalendar,
     TicketStatus, TicketStatusTransition, TicketAutoResolveConfig,
+    AutomationRule, AutomationExecutionLog,
 )
 
 
@@ -333,7 +334,7 @@ class TicketSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'queue', 'queue_name', 'title', 'description',
             'status', 'status_display', 'status_color', 'priority', 'priority_display',
-            'assigned_to', 'assigned_to_name', 'customer_email',
+            'assigned_to', 'assigned_to_name', 'customer_email', 'tags',
             'conversation', 'created_at',
             'first_response_due', 'resolution_due', 'sla',
             'available_next_statuses',
@@ -750,3 +751,49 @@ class ReplaceTransitionsSerializer(serializers.Serializer):
         child=serializers.DictField(child=serializers.CharField()),
         default=list,
     )
+
+
+class AutomationRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationRule
+        fields = [
+            'id', 'project', 'name', 'trigger_event', 'conditions', 'actions',
+            'is_active', 'order', 'created_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'project', 'created_by', 'created_at', 'updated_at']
+
+    def validate_conditions(self, value):
+        # Validate on write against the shared allowlist so a typo'd field can't
+        # silently make a rule never match.
+        from csm.services.rule_conditions import CONDITION_FIELD_CHOICES, OPERATOR_CHOICES
+        if not isinstance(value, list):
+            raise serializers.ValidationError('conditions must be a list.')
+        for cond in value:
+            if not isinstance(cond, dict):
+                raise serializers.ValidationError('each condition must be an object.')
+            if cond.get('field') not in CONDITION_FIELD_CHOICES:
+                raise serializers.ValidationError(f"unknown condition field: {cond.get('field')}")
+            if cond.get('operator') not in OPERATOR_CHOICES:
+                raise serializers.ValidationError(f"unknown operator: {cond.get('operator')}")
+        return value
+
+    def validate_actions(self, value):
+        from csm.services.automation import ACTIONS
+        if not isinstance(value, list) or not value:
+            raise serializers.ValidationError('at least one action is required.')
+        for act in value:
+            if not isinstance(act, dict):
+                raise serializers.ValidationError('each action must be an object.')
+            if act.get('type') not in ACTIONS:
+                raise serializers.ValidationError(f"unknown action type: {act.get('type')}")
+        return value
+
+
+class AutomationExecutionLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutomationExecutionLog
+        fields = [
+            'id', 'rule', 'rule_name', 'trigger_event', 'ticket', 'ticket_ref',
+            'actions_performed', 'created_at',
+        ]
+        read_only_fields = fields

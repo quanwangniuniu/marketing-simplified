@@ -131,6 +131,7 @@ class CsmNotification(TimeStampedModel):
     NOTIFICATION_TYPES = [
         ('org_invitation', 'Organisation Invitation'),
         ('sla_breach', 'SLA Breach'),
+        ('automation', 'Automation Rule'),
     ]
     ACTION_STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -192,6 +193,10 @@ class Ticket(TimeStampedModel):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    # Free-form labels, shown on the ticket and usable in automation conditions
+    # and the "add tag" action. Seeded from the linked conversation's tags when
+    # the ticket is created, then managed on the ticket itself.
+    tags = models.JSONField(default=list, blank=True)
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True,
@@ -942,3 +947,80 @@ class TicketAutoResolveConfig(TimeStampedModel):
 
     def __str__(self):
         return f"AutoResolveConfig(project={self.project_id}, enabled={self.enabled})"
+
+
+class AutomationRule(TimeStampedModel):
+    """A no-code automation rule.
+
+    When the trigger event fires on a ticket and every condition matches, the
+    configured actions run. Admins build these through a form; the engine reads
+    the stored rules and executes them on ticket events.
+    """
+
+    TRIGGER_CHOICES = [
+        ('ticket_created', 'Ticket Created'),
+        ('status_changed', 'Status Changed'),
+        ('priority_changed', 'Priority Changed'),
+        ('sla_breached', 'SLA Breached'),
+        ('customer_replied', 'Customer Replied'),
+        ('tag_added', 'Tag Added'),
+    ]
+
+    project = models.ForeignKey(
+        'core.Project', on_delete=models.CASCADE,
+        related_name='automation_rules',
+    )
+    name = models.CharField(max_length=200)
+    trigger_event = models.CharField(max_length=30, choices=TRIGGER_CHOICES)
+    # Filter conditions, all ANDed together, e.g.
+    # [{"field": "priority", "operator": "eq", "value": "high"}]. Empty = no filter.
+    conditions = models.JSONField(default=list, blank=True)
+    # Actions run in list order, e.g.
+    # [{"type": "set_priority", "value": "critical"}, {"type": "notify", ...}].
+    actions = models.JSONField(default=list)
+    # An inactive rule is skipped even when its trigger and conditions match.
+    is_active = models.BooleanField(default=True)
+    # Lower runs first when several rules match the same event.
+    order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_automation_rules',
+    )
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_trigger_event_display()})"
+
+
+class AutomationExecutionLog(TimeStampedModel):
+    """A record of one automation rule run against one ticket.
+
+    The rule name and ticket id are snapshotted so the log stays readable even
+    if the rule or ticket is later deleted, and ``actions_performed`` records the
+    outcome of each action (so a partial failure is visible, not hidden).
+    """
+
+    rule = models.ForeignKey(
+        AutomationRule, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='execution_logs',
+    )
+    rule_name = models.CharField(max_length=200)
+    trigger_event = models.CharField(max_length=30)
+    ticket = models.ForeignKey(
+        'Ticket', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='automation_logs',
+    )
+    # Preserved even if the ticket row is deleted, so the admin log stays complete.
+    ticket_ref = models.PositiveIntegerField(null=True, blank=True)
+    # e.g. [{"type": "set_priority", "status": "ok"},
+    #       {"type": "customer_notify", "status": "skipped", "detail": "no conversation"}]
+    actions_performed = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.rule_name} → ticket {self.ticket_ref}"

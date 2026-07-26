@@ -270,4 +270,7 @@ def create_ticket_from_submission(
             attachment.file = upload
             attachment.save()
 
+    from csm.services.automation import fire_trigger
+    fire_trigger(ticket, 'ticket_created')
+
     return ticket, submission

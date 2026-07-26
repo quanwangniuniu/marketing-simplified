@@ -23,6 +23,7 @@ from .models import (
     TemplateTag,
     TicketForm, TicketFormAssignment, SupportProject, CsmWorkType,
     SupportChannel, SLAPolicy, SLAPriorityTarget, BusinessHoursCalendar,
+    AutomationRule, AutomationExecutionLog,
 )
 from .serializers import (
     QueueSerializer, QueueAgentSerializer,
@@ -43,6 +44,8 @@ from .serializers import (
     WorkTypeReorderSerializer,
     SLAPolicySerializer,
     BusinessHoursCalendarSerializer,
+    AutomationRuleSerializer,
+    AutomationExecutionLogSerializer,
     SupportChannelListSerializer,
     SupportChannelDetailSerializer,
     SupportChannelCreateUpdateSerializer,
@@ -547,6 +550,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if ticket.first_response_due is not None or ticket.resolution_due is not None:
             ticket.save(update_fields=['first_response_due', 'resolution_due'])
 
+        from csm.services.automation import fire_trigger
+        fire_trigger(ticket, 'ticket_created')
+
         Conversation.objects.filter(id=conversation.id).update(status='active')
         conversation.refresh_from_db()
 
@@ -668,6 +674,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         recalculate_ticket_sla(ticket)
         if ticket.first_response_due is not None or ticket.resolution_due is not None:
             ticket.save(update_fields=['first_response_due', 'resolution_due'])
+
+        from csm.services.automation import fire_trigger
+        fire_trigger(ticket, 'ticket_created')
 
         # Ensure the conversation is active (mirrors the claim flow).
         if conversation.status in ('pending',):
@@ -1036,7 +1045,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         from csm.services.sla import recalculate_ticket_sla
         from csm.services.status_machine import assert_transition_allowed
         ticket = self.get_object()
+        old_status = ticket.status
         old_priority = ticket.priority
+        old_tags = set(ticket.tags or [])
         new_status = request.data.get('status')
         new_priority = request.data.get('priority')
 
@@ -1053,15 +1064,28 @@ class TicketViewSet(viewsets.ModelViewSet):
         # stay independent.
         response = super().partial_update(request, *args, **kwargs)
 
+        status_changed = bool(new_status) and new_status != old_status
+        priority_changed = bool(new_priority) and new_priority != old_priority
+        tags_added = 'tags' in request.data and bool(set(request.data.get('tags') or []) - old_tags)
+
         # Recalculate SLA when priority changes, using now() so the countdown
         # restarts from the moment of the change rather than ticket creation.
-        if new_priority and old_priority != new_priority:
+        if priority_changed:
             from django.utils import timezone as tz
             ticket.refresh_from_db()
             recalculate_ticket_sla(ticket, base_time=tz.now())
             ticket.save(update_fields=['first_response_due', 'resolution_due'])
-            return Response(TicketSerializer(ticket).data)
 
+        from csm.services.automation import fire_trigger
+        if status_changed:
+            fire_trigger(ticket, 'status_changed')
+        if priority_changed:
+            fire_trigger(ticket, 'priority_changed')
+        if tags_added:
+            fire_trigger(ticket, 'tag_added')
+
+        if priority_changed:
+            return Response(TicketSerializer(ticket).data)
         return response
 
     @action(detail=True, methods=['post'])
@@ -1554,6 +1578,43 @@ class BusinessHoursCalendarViewSet(ProjectScopedViewSetMixin, viewsets.ModelView
 
     def perform_create(self, serializer):
         serializer.save(project_id=self.get_required_project_id())
+
+
+class AutomationRuleViewSet(ProjectScopedViewSetMixin, viewsets.ModelViewSet):
+    """Workflow automation rule CRUD.
+
+    List/create require ?project={id}. Conditions and actions are validated on
+    write by the serializer against the shared field/operator/action allowlist.
+    """
+    serializer_class = AutomationRuleSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
+    http_method_names = ['get', 'post', 'patch', 'put', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        if self.action == 'list':
+            project_id = self.get_required_project_id()
+            return AutomationRule.objects.filter(project_id=project_id)
+        return self.filter_by_accessible_projects(AutomationRule.objects.all())
+
+    def perform_create(self, serializer):
+        serializer.save(
+            project_id=self.get_required_project_id(),
+            created_by=self.request.user,
+        )
+
+
+class AutomationExecutionLogViewSet(ProjectScopedViewSetMixin, viewsets.ReadOnlyModelViewSet):
+    """Read-only execution log for a project's automation rules (?project={id})."""
+    serializer_class = AutomationExecutionLogSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
+
+    def get_queryset(self):
+        project_id = self.get_required_project_id()
+        return (
+            AutomationExecutionLog.objects
+            .filter(rule__project_id=project_id)
+            .select_related('rule', 'ticket')
+        )
 
 
 # --- Status machine admin config ------------------------------------------

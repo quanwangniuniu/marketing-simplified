@@ -221,6 +221,10 @@ class PortalConversationViewSet(
             ticket.status = 'in_progress'
             ticket.save(update_fields=['status'])
 
+        from csm.services.automation import fire_trigger
+        for ticket in conversation.tickets.all():
+            fire_trigger(ticket, 'customer_replied')
+
         portal_payload = PortalMessageSerializer(msg, context={'request': request}).data
 
         agent_payload = ConversationMessageSerializer(msg, context={'request': request}).data

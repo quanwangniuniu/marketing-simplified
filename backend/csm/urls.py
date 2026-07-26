@@ -11,6 +11,8 @@ from .views import (
     SupportChannelViewSet,
     SLAPolicyViewSet,
     BusinessHoursCalendarViewSet,
+    AutomationRuleViewSet,
+    AutomationExecutionLogViewSet,
     TicketStatusViewSet,
     StatusMachineView,
 )
@@ -29,6 +31,8 @@ router.register(r'work-types', CsmWorkTypeViewSet, basename='csm-work-type')
 router.register(r'support-channels', SupportChannelViewSet, basename='support-channel')
 router.register(r'sla-policy', SLAPolicyViewSet, basename='sla-policy')
 router.register(r'business-hours-calendars', BusinessHoursCalendarViewSet, basename='business-hours-calendar')
+router.register(r'automation-rules', AutomationRuleViewSet, basename='automation-rule')
+router.register(r'automation-logs', AutomationExecutionLogViewSet, basename='automation-log')
 router.register(r'ticket-statuses', TicketStatusViewSet, basename='ticket-status')
 
 urlpatterns = [
