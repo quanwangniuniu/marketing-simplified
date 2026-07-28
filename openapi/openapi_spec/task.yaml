@@ -511,9 +511,12 @@ paths:
     post:
       summary: Add a subtask to a parent task
       description: |
-        Add a child task as a subtask of the parent task. 
+        Add a child task as a subtask of the parent task.
         Only 1 level of nesting is allowed (subtasks cannot have subtasks).
         Both tasks must be saved and user must have access to both tasks' projects.
+
+        If the assignment would create a hierarchy cycle, the API returns **422** with
+        ``code: task_hierarchy_cycle`` (see ``TaskHierarchyCycleErrorResponse``).
       parameters:
         - in: path
           name: id
@@ -539,15 +542,87 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
         "400":
-          description: Bad request (invalid child_task_id, subtask already has subtasks, circular reference, or self-reference)
+          description: Bad request (invalid child_task_id, subtask already has subtasks, or self-reference)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            Proposed parent assignment would create a cycle in the task hierarchy.
+            Clients should match on HTTP 422 and/or ``code: task_hierarchy_cycle``.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskHierarchyCycleErrorResponse"
         "403":
           description: Forbidden (user is not a member of the task's project)
         "404":
           description: Task not found
+        "401":
+          description: Unauthorized
+
+  /tasks/{id}/subtasks/{subtask_id}/move:
+    post:
+      summary: Move a subtask to a new parent
+      description: |
+        Reassign ``subtask_id`` from ``old_parent_id`` to the task identified by ``id`` (the new parent).
+        Both tasks must belong to projects the caller can access. Only one level of nesting is allowed.
+
+        Concurrent moves are serialized with row-level locks; a conflicting assignment that would
+        create a cycle returns **422** with ``code: task_hierarchy_cycle`` (see schema below).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+          description: ID or slug of the new parent task
+        - in: path
+          name: subtask_id
+          required: true
+          schema: { type: integer }
+          description: ID or slug of the subtask to move
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_parent_id]
+              properties:
+                old_parent_id:
+                  type: integer
+                  description: Primary key of the subtask's current parent task
+      responses:
+        "200":
+          description: Subtask moved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Bad request (missing old_parent_id or other validation error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            Proposed parent assignment would create a cycle in the task hierarchy.
+            Clients should match on HTTP 422 and/or ``code: task_hierarchy_cycle``.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskHierarchyCycleErrorResponse"
+        "403":
+          description: Forbidden (user is not a member of the task's project)
+        "404":
+          description: Task, subtask, or subtask relationship not found
         "401":
           description: Unauthorized
 
@@ -796,6 +871,21 @@ components:
           type: string
           nullable: true
           example: "Additional error details"
+
+    TaskHierarchyCycleErrorResponse:
+      type: object
+      description: |
+        Returned when adding or moving a subtask would create a cycle (HTTP 422).
+        Stable contract for UI and integrations (MED-235).
+      required: [detail, code]
+      properties:
+        detail:
+          type: string
+          example: "Cannot set this parent: it would create a circular task hierarchy."
+        code:
+          type: string
+          enum: [task_hierarchy_cycle]
+          example: task_hierarchy_cycle
 
     ValidationErrorResponse:
       type: object

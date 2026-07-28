@@ -19,6 +19,7 @@ import {
   Minus,
 } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import {
   exportMatrixToCSV,
   exportMatrixToXLSX,
@@ -242,9 +243,10 @@ function SectionCard({ icon, title, count, children }: {
 }
 
 function TaskRow({ task }: { task: TaskStub }) {
+  const buildUrl = useBuildUrl();
   return (
     <a
-      href={`/tasks/${task.slug}`}
+      href={buildUrl(`/tasks/${task.slug}`)}
       target="_blank"
       rel="noreferrer"
       className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm transition hover:bg-gray-50"

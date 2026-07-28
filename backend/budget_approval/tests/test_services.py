@@ -365,8 +365,45 @@ class TestReviseRejectedRequest:
         assert revised.notes == 'Revised notes'
 
     def test_revise_raises_when_not_rejected(self, budget_request_draft):
-        with pytest.raises(ValidationError, match="Only rejected budget requests"):
+        with pytest.raises(ValidationError, match="Only rejected or cancelled budget requests"):
             BudgetRequestService.revise_rejected_request(budget_request_draft, {})
+
+    def test_revise_allowed_when_cancelled(self, budget_request_under_review):
+        """A cancelled request can also be revised back to draft (guard mirrors the FSM)."""
+        br = budget_request_under_review
+        _force_status(br, BudgetRequestStatus.CANCELLED)
+
+        revised = BudgetRequestService.revise_rejected_request(
+            br, {'amount': Decimal('900.00')}
+        )
+        assert revised.status == BudgetRequestStatus.DRAFT
+        assert revised.amount == Decimal('900.00')
+
+    def test_revise_clears_stale_approver(self, budget_request_under_review, user2):
+        """The rejecting approver must not stay assigned to the new draft."""
+        br = budget_request_under_review
+        _force_status(br, BudgetRequestStatus.REJECTED)
+        assert br.current_approver == user2  # previous round's approver
+
+        revised = BudgetRequestService.revise_rejected_request(br, {})
+
+        assert revised.status == BudgetRequestStatus.DRAFT
+        assert revised.current_approver is None
+        persisted = BudgetRequest.objects.get(pk=br.pk)
+        assert persisted.current_approver is None
+
+    def test_stale_approver_cannot_process_revised_draft(self, budget_request_under_review, user2):
+        """In the revise→resubmit window, the old approver holds no rights."""
+        br = budget_request_under_review
+        _force_status(br, BudgetRequestStatus.REJECTED)
+
+        BudgetRequestService.revise_rejected_request(br, {})
+        revised = BudgetRequest.objects.get(pk=br.pk)
+
+        with pytest.raises(ValidationError):
+            BudgetRequestService.process_approval(
+                revised, user2, is_approved=True, comment="sneaky re-approve"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +428,21 @@ class TestLockBudgetRequest:
     def test_lock_raises_when_not_approved(self, budget_request_draft):
         with pytest.raises(ValidationError, match="cannot be locked"):
             BudgetRequestService.lock_budget_request(budget_request_draft)
+
+    def test_lock_raises_when_rejected(self, budget_request_under_review, budget_pool):
+        """A REJECTED request must never reach LOCKED (governance bypass)."""
+        br = budget_request_under_review
+        _force_status(br, BudgetRequestStatus.REJECTED)
+
+        with pytest.raises(ValidationError, match="cannot be locked"):
+            BudgetRequestService.lock_budget_request(br)
+
+        # Re-fetch instead of refresh_from_db(): FSMField(protected=True)
+        # rejects direct attribute assignment during refresh.
+        persisted = BudgetRequest.objects.get(pk=br.pk)
+        assert persisted.status == BudgetRequestStatus.REJECTED
+        budget_pool.refresh_from_db()
+        assert budget_pool.used_amount == Decimal('0.00')
 
     def test_lock_raises_when_insufficient_budget(self, user1, task, user2, ad_channel, project):
         tight_pool = BudgetPool.objects.create(

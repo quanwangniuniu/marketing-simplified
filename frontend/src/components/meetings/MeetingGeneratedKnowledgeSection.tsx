@@ -9,6 +9,7 @@ import { Id } from '@/types/common';
 import { taskWorkspaceCreateFromMeetingHref } from '@/lib/tasks/taskWorkspaceDeepLinks';
 import { nestedProjectPath } from '@/lib/projectNestedRoutes';
 import { decisionCaptureAPI } from '@/lib/api';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 function MetaLine({ children }: { children: ReactNode }) {
   return <div className="text-xs text-slate-500">{children}</div>;
@@ -61,6 +62,7 @@ export function MeetingGeneratedKnowledgeSection({
   meetingTitle?: string;
   meetingSummary?: string;
 }) {
+  const buildUrl = useBuildUrl();
   const [localGeneratedDecisions, setLocalGeneratedDecisions] = useState(generatedDecisions);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [decisionTitle, setDecisionTitle] = useState('');
@@ -130,7 +132,7 @@ export function MeetingGeneratedKnowledgeSection({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-900">Generated tasks</h3>
           <Link
-            href={taskWorkspaceCreateFromMeetingHref(projectId, meetingId)}
+            href={buildUrl(taskWorkspaceCreateFromMeetingHref(projectId, meetingId))}
             className="text-xs font-medium text-emerald-700 hover:underline"
           >
             Create task from this meeting
@@ -143,7 +145,7 @@ export function MeetingGeneratedKnowledgeSection({
             {generatedTasks.map((t) => (
               <li key={t.id}>
                 <Link
-                  href={t.detail_url ?? t.url}
+                  href={buildUrl(t.detail_url ?? t.url)}
                   className="block rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50/60 hover:underline"
                 >
                   {t.title}
@@ -231,7 +233,7 @@ export function MeetingGeneratedKnowledgeSection({
             {localGeneratedDecisions.map((d) => (
               <li key={d.id}>
                 <Link
-                  href={d.detail_url ?? d.url}
+                  href={buildUrl(d.detail_url ?? d.url)}
                   className="block rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm font-medium text-[#1a9ba3] hover:bg-[#3CCED7]/10 hover:underline"
                 >
                   {d.title}

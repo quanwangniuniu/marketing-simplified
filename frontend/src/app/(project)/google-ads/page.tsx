@@ -14,6 +14,7 @@ import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useGoogleAdsData } from '@/hooks/useGoogleAdsData';
 import type { AdStatus, AdType } from '@/lib/api/googleAdsApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const SECTION_CLS = 'rounded-xl bg-white shadow-sm ring-1 ring-gray-100';
 const EYEBROW_CLS = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
@@ -37,6 +38,7 @@ const TYPE_OPTIONS: Array<{ value: AdType | ''; label: string }> = [
 
 function GoogleAdsV2Content() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const {
     ads,
     loading,
@@ -70,7 +72,7 @@ function GoogleAdsV2Content() {
       const created = await createAd({ name: payload.name, type: payload.type });
       setCreateOpen(false);
       if (created?.slug || created?.id) {
-        router.push(`/google-ads/${created.slug ?? created.id}`);
+        router.push(buildUrl(`/google-ads/${created.slug ?? created.id}`));
       }
     } catch {
       // useGoogleAdsData shows toast on error; keep modal open
@@ -157,7 +159,7 @@ function GoogleAdsV2Content() {
         <AdTableV2
           ads={ads}
           loading={loading}
-          onRowClick={(id) => router.push(`/google-ads/${id}`)}
+          onRowClick={(id) => router.push(buildUrl(`/google-ads/${id}`))}
           onDelete={(id) => setDeleteTargetId(id)}
         />
 

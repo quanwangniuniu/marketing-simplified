@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.slug_mixins import resolve_lookup_kwargs
+from task.lookups import resolve_task_lookup_kwargs
 from task.models import Task
 
 from .engagement_summary import TaskEngagementSummaryService
@@ -14,7 +14,7 @@ class TaskEngagementSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, task_id):
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
         result = TaskEngagementSummaryService.get_summary(
             user=request.user,
             task_id=task.pk,

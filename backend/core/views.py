@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
-from core.slug_mixins import SlugLookupViewSetMixin, resolve_lookup_kwargs, resolve_project_pk
+from core.slug_mixins import SlugLookupViewSetMixin, resolve_lookup_kwargs, resolve_pk_for, resolve_project_pk
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -1552,14 +1552,15 @@ class OrganizationDetailView(APIView):
         Returns org basic info, membership details, subscription plan, and current-month usage.
         """
         user = request.user
+        resolved_id = resolve_pk_for(Organization, org_id)
 
-        if not can_user_access_organization(user, org_id):
+        if not can_user_access_organization(user, resolved_id):
             return Response(
                 {'error': 'You do not have access to this organization.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        org = get_object_or_404(Organization, id=org_id)
+        org = get_object_or_404(Organization, id=resolved_id)
         org_data = OrganizationSerializer(org, context={'request': request}).data
 
         # ── Subscription & plan ──────────────────────────────────────────────
@@ -1633,6 +1634,7 @@ class OrganizationDetailView(APIView):
         unless ?force=true is passed (used by onboarding undo flow).
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         force = request.query_params.get('force', '').lower() == 'true'
 
         if not can_user_access_organization(user, org_id):
@@ -1690,6 +1692,7 @@ class UpdateOrganizationSlugView(APIView):
         from core.services.tenant import rename_tenant_schema  # noqa: PLC0415
 
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
 
         if not can_user_access_organization(user, org_id):
             return Response(
@@ -1815,6 +1818,7 @@ class OrganizationMembersView(APIView):
         Returns list of members for the organization (any member can view).
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
 
         # Check if user has access to this organization (any member may view)
@@ -1856,6 +1860,7 @@ class RemoveOrganizationMemberView(APIView):
         Cannot remove yourself.
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
         target_user = get_object_or_404(User, id=user_id)
 
@@ -1926,6 +1931,7 @@ class LeaveOrganizationView(APIView):
         Leave an organization. Fails if user owns projects in this organization.
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
 
         # Check if user has membership in this organization
@@ -2019,6 +2025,7 @@ class CreateOrganizationInvitationView(APIView):
         from core.utils.org_invitations import create_org_invitation
 
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
 
         # Check if user has access to this organization
@@ -2084,6 +2091,7 @@ class ListOrganizationInvitationsView(APIView):
         Returns list of all active invitations for the organization.
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
 
         # Check if user has access to this organization
@@ -2133,6 +2141,7 @@ class RevokeOrganizationInvitationView(APIView):
         Deactivates the invitation.
         """
         user = request.user
+        org_id = resolve_pk_for(Organization, org_id)
         organization = get_object_or_404(Organization, id=org_id)
 
         # Check if user has access to this organization

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import type { OriginMeetingPayload } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 /**
  * Task / decision detail: shows provenance meeting or empty state.
@@ -13,6 +14,7 @@ export function OriginMeetingBlock({
 }: {
   origin: OriginMeetingPayload | null | undefined;
 }) {
+  const buildUrl = useBuildUrl();
   if (!origin) {
     return (
       <section
@@ -24,7 +26,7 @@ export function OriginMeetingBlock({
     );
   }
 
-  const href = origin.detail_url ?? origin.url;
+  const href = buildUrl(origin.detail_url ?? origin.url);
 
   return (
     <section className="space-y-2" data-testid="origin-meeting-card">

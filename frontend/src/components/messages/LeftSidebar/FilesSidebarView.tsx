@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { listAccessibleChatFiles } from '@/lib/api/attachmentApi';
 import { buildMessagesPath } from '@/lib/messages/messagesRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useChatStore } from '@/lib/chatStore';
 import type { ChatFileListItem } from '@/types/chat';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +30,7 @@ function getFileIcon(row: ChatFileListItem) {
 
 export default function FilesSidebarView({ selectedProjectId }: { selectedProjectId: number | string }) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ChatFileListItem[]>([]);
@@ -112,13 +114,13 @@ export default function FilesSidebarView({ selectedProjectId }: { selectedProjec
               if (!chatSlug) return;
               const timelineMessageId = row.thread_root_message_id ?? row.message_id;
               router.push(
-                buildMessagesPath(chatSlug, {
+                buildUrl(buildMessagesPath(chatSlug, {
                   messageId: timelineMessageId ?? undefined,
                   threadMessageId:
                     row.thread_root_message_id && row.message_id ? row.message_id : undefined,
                   fileId: row.id,
                   jumpId: `${row.id}-${Date.now()}`,
-                }),
+                })),
               );
             }}
             className="w-full text-left px-3 py-2 flex gap-2 hover:bg-gray-50"

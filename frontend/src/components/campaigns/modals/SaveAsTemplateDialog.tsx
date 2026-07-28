@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { CampaignAPI } from '@/lib/api/campaignApi';
 import type { SaveCampaignAsTemplateData, TemplateSharingScope } from '@/types/campaign';
 import { useProjectStore } from '@/lib/projectStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import { Button } from '@/components/ui/button';
 import BrandButton from '../BrandButton';
@@ -31,6 +32,7 @@ export default function SaveAsTemplateDialog({
   campaignName,
 }: Props) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const activeProject = useProjectStore((s) => s.activeProject);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -75,7 +77,10 @@ export default function SaveAsTemplateDialog({
       const res = await CampaignAPI.saveCampaignAsTemplate(campaignId, data);
       toast.success('Saved as template');
       handleClose(false);
-      router.push(`/campaigns/templates/${res.data.slug}`);
+      const projectKey = activeProject?.slug ?? activeProject?.id;
+      if (projectKey) {
+        router.push(buildUrl(`/campaigns/templates/${res.data.slug}`));
+      }
     } catch (err: any) {
       const msg =
         err?.response?.data?.error ||

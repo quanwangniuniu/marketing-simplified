@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ProjectAPI } from '@/lib/api/projectApi';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { PatternAPI } from '@/lib/api/patternApi';
@@ -102,6 +103,7 @@ export default function SpreadsheetsV2DetailPage() {
   const params = useParams();
   const spreadsheetId = params?.spreadsheetId as string;
   const { projectId } = useActiveProjectForFlatRoute();
+  const buildUrl = useBuildUrl();
 
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([]);
@@ -837,7 +839,7 @@ export default function SpreadsheetsV2DetailPage() {
               <p className="mt-3 text-sm font-semibold text-rose-700">Could not load spreadsheet</p>
               <p className="mt-1 text-xs text-rose-600">{error}</p>
               <Link
-                href="/spreadsheets"
+                href={buildUrl("/spreadsheets")}
                 className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
               >
                 Back to spreadsheets
@@ -859,7 +861,7 @@ export default function SpreadsheetsV2DetailPage() {
               <p className="mt-3 text-sm font-semibold text-gray-900">Spreadsheet not found</p>
               <p className="mt-1 text-xs text-gray-500">The spreadsheet you&apos;re looking for doesn&apos;t exist.</p>
               <Link
-                href="/spreadsheets"
+                href={buildUrl("/spreadsheets")}
                 className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
               >
                 Back to spreadsheets

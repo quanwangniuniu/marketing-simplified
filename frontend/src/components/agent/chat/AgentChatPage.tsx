@@ -44,6 +44,7 @@ import {
 } from "@/lib/agentLaunchContext"
 import { getPendingMiroWorkflowRunIds } from "@/lib/agentMiroBoardStatus"
 import { agentMiroBoardHref } from "@/lib/agentMiroBoardHref"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 function pickRecommendedDecisionTree(
   data: AnalysisResult | null | undefined,
@@ -327,6 +328,7 @@ type AgentChatPageProps = {
 
 export function AgentChatPage({ embeddedInFloating = false }: AgentChatPageProps) {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const { setActiveView, floatingChat, toggleMaximize, setFloatingSessionId } = useAgentLayout()
   const [sessionId, setSessionIdState] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -2515,15 +2517,15 @@ setStepState({
           stepState,
           onNavigate: (view: string, msg?: ChatMessage) => {
         if (msg?.navigateHref && typeof window !== "undefined") {
-          window.location.href = msg.navigateHref
+          window.location.href = buildUrl(msg.navigateHref)
           return
         }
         if (view === "tasks") {
-          router.push("/tasks")
+          router.push(buildUrl("/tasks"))
           return
         }
         if (view === "decisions") {
-          router.push("/decisions")
+          router.push(buildUrl("/decisions"))
           return
         }
         setActiveView(view as AgentView)

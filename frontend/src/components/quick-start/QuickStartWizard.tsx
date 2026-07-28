@@ -40,6 +40,7 @@ import QuickStartPromptStep from './steps/QuickStartPromptStep';
 import QuickStartSupplementStep from './steps/QuickStartSupplementStep';
 import type { QuickStartSelectedModules } from '@/types/quickStart';
 import type { QuickStartPreviewPayload, QuickStartWizardState } from './types';
+import { buildUrl } from '@/lib/buildUrl';
 
 type LoadingMode = 'preview' | 'confirm' | null;
 
@@ -256,7 +257,7 @@ export default function QuickStartWizard() {
           ? `Created "${project.name}" with ${parts.join(', ')}.`
           : `Created "${project.name}".`
       );
-      router.push('/overview');
+      router.push(buildUrl('/overview'));
     } catch (error) {
       const message = confirmFailureMessage(error);
       setStepError(message);

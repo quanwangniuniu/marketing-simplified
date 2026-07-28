@@ -52,10 +52,15 @@ class TestTaskEngagementSummaryView:
         response = authed_client.get(_summary_url(999_999))
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_numeric_id_of_existing_task_returns_404(self, authed_client, task):
-        # Lookups are slug-only; numeric IDs are never resolved.
+    def test_numeric_id_of_existing_task_resolves(self, authed_client, task):
         response = authed_client.get(_summary_url(task.id))
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {
+            "visits": 0,
+            "estimated_active_ms": 0,
+            "last_operated_at": None,
+            "write_operations_count": 0,
+        }
 
     def test_no_events_returns_zeros(self, authed_client, task):
         response = authed_client.get(_summary_url(task.slug))

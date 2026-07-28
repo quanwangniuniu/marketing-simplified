@@ -4,18 +4,29 @@ import { config as loadEnv } from 'dotenv';
 // Load .env.local for local dev credentials (gitignored; CI uses env vars directly).
 loadEnv({ path: '.env.local', override: false });
 
+const baseURL = process.env.BASE_URL || 'http://localhost';
+
+/** When nginx/Docker already serves BASE_URL, set E2E_USE_EXISTING_SERVER=1 to skip `npm run dev`. */
+const useExistingServer =
+  process.env.E2E_USE_EXISTING_SERVER === '1' ||
+  process.env.E2E_USE_EXISTING_SERVER === 'true';
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './e2e',
-  /* Start Next.js so you don't have to run frontend/backend manually. */
-  webServer: {
-    command: 'npm run dev',
-    url: process.env.BASE_URL || 'http://localhost',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  ...(useExistingServer
+    ? {}
+    : {
+        /* Start Next.js when no external stack is running. */
+        webServer: {
+          command: 'npm run dev',
+          url: baseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+      }),
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -29,7 +40,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. Next.js dev runs on 3000. */
-    baseURL: process.env.BASE_URL || 'http://localhost',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',

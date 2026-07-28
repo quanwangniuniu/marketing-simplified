@@ -30,6 +30,7 @@ import {
   formatRatio,
   thumbnailOrFallback,
 } from '@/components/meta-ads/metaAdsUtils';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 
@@ -89,6 +90,7 @@ export default function AdSetDetailPage({
 
 function AdSetDetailContent({ adsetId }: { adsetId: string }) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [days, setDays] = useState<number>(28);
   const [detail, setDetail] = useState<MetaAdSetDetail | null>(null);
   const [series, setSeries] = useState<MetaAdSetTimeseries | null>(null);
@@ -147,12 +149,12 @@ function AdSetDetailContent({ adsetId }: { adsetId: string }) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-gray-500">
-        <Link href="/meta-ads" className="hover:text-[#1a9ba3]">
+        <Link href={buildUrl("/meta-ads")} className="hover:text-[#1a9ba3]">
           Meta Ads
         </Link>
         <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
         <Link
-          href={`/meta-ads/campaigns/${detail.campaign.slug}`}
+          href={buildUrl(`/meta-ads/campaigns/${detail.campaign.slug}`)}
           className="truncate hover:text-[#1a9ba3]"
         >
           {detail.campaign.name || detail.campaign.meta_campaign_id}
@@ -297,7 +299,7 @@ function AdSetDetailContent({ adsetId }: { adsetId: string }) {
                           <td className="px-3 py-2">
                             {ad.creative ? (
                               <Link
-                                href={`/meta-ads/creatives/${ad.creative.slug}`}
+                                href={buildUrl(`/meta-ads/creatives/${ad.creative.slug}`)}
                                 className="block h-10 w-10 overflow-hidden rounded-md border border-gray-200 bg-gray-50 transition-shadow hover:border-[#3CCED7]/60 hover:shadow"
                               >
                                 {thumb ? (
@@ -329,7 +331,7 @@ function AdSetDetailContent({ adsetId }: { adsetId: string }) {
                               </span>
                               {ad.creative?.meta_creative_id && (
                                 <Link
-                                  href={`/meta-ads/creatives/${ad.creative.slug}`}
+                                  href={buildUrl(`/meta-ads/creatives/${ad.creative.slug}`)}
                                   className="font-mono text-gray-400 hover:text-[#1a9ba3]"
                                 >
                                   creative {ad.creative.meta_creative_id}
@@ -396,7 +398,7 @@ function AdSetDetailContent({ adsetId }: { adsetId: string }) {
                 <dt>Campaign</dt>
                 <dd className="max-w-[200px] truncate">
                   <Link
-                    href={`/meta-ads/campaigns/${detail.campaign.slug}`}
+                    href={buildUrl(`/meta-ads/campaigns/${detail.campaign.slug}`)}
                     className="text-gray-700 hover:text-[#1a9ba3]"
                   >
                     {detail.campaign.name || detail.campaign.meta_campaign_id}

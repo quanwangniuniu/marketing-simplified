@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { CampaignTemplate } from '@/types/campaign';
 import { useProjectStore } from '@/lib/projectStore';
-import { nestedProjectPathFromProject } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import SharingScopePill from '../pills/SharingScopePill';
 
 interface Props {
@@ -33,6 +33,7 @@ export default function TemplateListTable({
   showArchived = false,
 }: Props) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const activeProject = useProjectStore((s) => s.activeProject);
 
   return (
@@ -85,11 +86,16 @@ export default function TemplateListTable({
                 <tr
                   key={t.id}
                   className={`cursor-pointer transition hover:bg-gray-50/80 ${t.is_archived ? 'opacity-60 italic' : ''}`}
-                  onClick={() =>
-                    onRowClick
-                      ? onRowClick(t)
-                      : router.push(nestedProjectPathFromProject(activeProject, `/campaigns/templates/${t.slug}`))
-                  }
+                  onClick={() => {
+                    if (onRowClick) {
+                      onRowClick(t);
+                      return;
+                    }
+                    const projectKey = activeProject?.slug ?? activeProject?.id;
+                    if (projectKey) {
+                      router.push(buildUrl(`/campaigns/templates/${t.slug}`));
+                    }
+                  }}
                 >
                   <td className="px-4 py-3">
                     <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CalendarClock, ClipboardList, FolderKanban, ListOrdered, Radio, Settings, Shield, Workflow, Zap } from 'lucide-react';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const ACTIVE_COLOR = 'text-[#3CCED7]';
 const ACTIVE_BAR = 'bg-[#3CCED7]';
@@ -41,15 +42,16 @@ function NavLink({
 
 export default function CsmSettingsSidebar() {
   const pathname = usePathname();
-  const hub = '/admin/csm/settings';
-  const supportProjects = '/admin/csm/settings/support-projects';
-  const channels = '/admin/csm/settings/channels';
-  const workTypes = '/admin/csm/settings/work-types';
-  const assignments = '/admin/csm/settings/assignments';
-  const slaPolicy = '/admin/csm/settings/sla';
-  const businessHours = '/admin/csm/settings/business-hours';
-  const ticketStatuses = '/admin/csm/settings/ticket-statuses';
-  const automation = '/admin/csm/settings/automation';
+  const buildUrl = useBuildUrl();
+  const hub = buildUrl('/admin/csm/settings');
+  const supportProjects = buildUrl('/admin/csm/settings/support-projects');
+  const channels = buildUrl('/admin/csm/settings/channels');
+  const workTypes = buildUrl('/admin/csm/settings/work-types');
+  const assignments = buildUrl('/admin/csm/settings/assignments');
+  const slaPolicy = buildUrl('/admin/csm/settings/sla');
+  const businessHours = buildUrl('/admin/csm/settings/business-hours');
+  const ticketStatuses = buildUrl('/admin/csm/settings/ticket-statuses');
+  const automation = buildUrl('/admin/csm/settings/automation');
 
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col border-r border-gray-200 bg-white sm:flex">

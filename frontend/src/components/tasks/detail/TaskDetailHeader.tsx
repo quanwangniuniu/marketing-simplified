@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import {
   ChevronRight, Trash2, Share2, ArrowLeft, KanbanSquare,
   Calendar, ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown,
@@ -156,7 +156,8 @@ export default function TaskDetailHeader({
   const activeMembers = members.filter((m) => m.is_active);
   const overdue = isDueOverdue(task.due_date);
 
-  const tasksListHref = nestedProjectPath(projectId, '/tasks');
+  const buildUrl = useBuildUrl();
+  const tasksListHref = buildUrl('/tasks');
 
   return (
     <section className="rounded-xl bg-white shadow-sm ring-1 ring-gray-100">

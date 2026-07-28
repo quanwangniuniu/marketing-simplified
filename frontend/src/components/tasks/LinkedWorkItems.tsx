@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Link2, Plus } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { TaskRelationsResponse, TaskRelationItem, userDisplayName } from '@/types/task';
 import LinkTaskModal from './LinkTaskModal';
 
@@ -24,6 +25,7 @@ const RELATIONSHIP_LABELS: Record<string, string> = {
 
 export default function LinkedWorkItems({ taskId }: LinkedWorkItemsProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [relations, setRelations] = useState<TaskRelationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function LinkedWorkItems({ taskId }: LinkedWorkItemsProps) {
   };
 
   const handleTaskClick = (taskKey: number | string) => {
-    router.push(`/tasks/${taskKey}`);
+    router.push(buildUrl(`/tasks/${taskKey}`));
   };
 
   // Get all non-empty relationship groups

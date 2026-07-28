@@ -5,6 +5,7 @@ import { ChevronRight, Loader2 } from 'lucide-react';
 
 import type { MeetingListItem, MeetingStatus } from '@/types/meeting';
 import { cn } from '@/lib/utils';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const STATUS_LABELS: Record<MeetingStatus, string> = {
   draft: 'Draft',
@@ -104,6 +105,7 @@ function MeetingResultCard({
   memberLabel: (userId: number) => string;
   projectId?: number | string;
 }) {
+  const buildUrl = useBuildUrl();
   const participants = Array.isArray(m.participants) ? m.participants : [];
   const tags = Array.isArray(m.tags) ? m.tags : [];
   const nDecisions = m.decision_count ?? 0;
@@ -115,7 +117,7 @@ function MeetingResultCard({
     (genDecisions.length > 0 || genTasks.length > 0);
   const meetingPageKnowledgeHref =
     hasContextualNav && projectId != null
-      ? `/projects/${projectId}/meetings/${m.slug}#contextual-knowledge`
+      ? buildUrl(`/meetings/${m.slug}#contextual-knowledge`)
       : null;
   const visibleTags = tags.slice(0, 3);
   const tagOverflow = tags.length - visibleTags.length;
@@ -259,7 +261,7 @@ function MeetingResultCard({
                 {genDecisions.slice(0, MAX_INLINE_KNOWLEDGE_LINKS).map((item) => (
                   <Link
                     key={`d-${item.id}`}
-                    href={item.detail_url ?? item.url}
+                    href={buildUrl(item.detail_url ?? item.url)}
                     className="max-w-[min(100%,220px)] truncate text-xs font-medium text-[#1a9ba3] hover:underline"
                   >
                     {item.title}
@@ -278,7 +280,7 @@ function MeetingResultCard({
                 {genTasks.slice(0, MAX_INLINE_KNOWLEDGE_LINKS).map((item) => (
                   <Link
                     key={`t-${item.id}`}
-                    href={item.detail_url ?? item.url}
+                    href={buildUrl(item.detail_url ?? item.url)}
                     className="max-w-[min(100%,220px)] truncate text-xs font-medium text-emerald-800 hover:underline"
                   >
                     {item.title}

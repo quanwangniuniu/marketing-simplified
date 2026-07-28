@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { clearSlackOAuthState, readSlackOAuthState, slackApi } from '@/lib/api/slackApi';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -9,6 +10,7 @@ import toast from 'react-hot-toast';
 function SlackCallbackContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const buildUrl = useBuildUrl();
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [errorMessage, setErrorMessage] = useState('');
 
@@ -60,7 +62,7 @@ function SlackCallbackContent() {
                 // Redirect after delay
                 setTimeout(() => {
                     // Return to integrations page with the modal auto-opened
-                    router.push('/integrations?open_slack=1');
+                    router.push(buildUrl('/integrations?open_slack=1'));
                 }, 3000);
 
             } catch (err: any) {
@@ -109,7 +111,7 @@ function SlackCallbackContent() {
                         <h1 className="text-xl font-semibold text-gray-900">Connection Failed</h1>
                         <p className="text-red-500 text-sm">{errorMessage}</p>
                         <button
-                            onClick={() => router.push('/integrations?open_slack=1')}
+                            onClick={() => router.push(buildUrl('/integrations?open_slack=1'))}
                             className="mt-4 px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                         >
                             Return to Integrations

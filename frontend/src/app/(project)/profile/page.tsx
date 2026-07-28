@@ -464,7 +464,7 @@ function ProfileContent() {
                 <button
                   key={org.id}
                   type="button"
-                  onClick={() => router.push(`/organizations/${org.id}`)}
+                  onClick={() => router.push(`/organizations/${org.slug ?? org.id}`)}
                   className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-[#3CCED7]/40 hover:bg-[#3CCED7]/5 transition-colors text-left group"
                 >
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3CCED7] to-[#A6E661] flex items-center justify-center shrink-0">

@@ -5,6 +5,7 @@ import { buildMessagesPath } from '@/lib/messages/messagesRoutes';
 import { useRouter } from 'next/navigation';
 import type { Chat } from '@/types/chat';
 import { useAuthStore } from '@/lib/authStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface DrawerChatHeaderProps {
   chat: Chat | null;
@@ -36,6 +37,7 @@ export default function DrawerChatHeader({
   fallbackSubtitle = '',
 }: DrawerChatHeaderProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const user = useAuthStore((state) => state.user);
   const currentUserId = user?.id ? Number(user.id) : null;
 
@@ -77,7 +79,7 @@ export default function DrawerChatHeader({
   // Navigate to full messages page
   const handleOpenFullChat = () => {
     if (!chat) return;
-    router.push(buildMessagesPath(chat.slug));
+    router.push(buildUrl(buildMessagesPath(chat.slug)));
     onClose();
   };
 

@@ -10,6 +10,7 @@ import { useProjectMemberRoles } from '@/hooks/useProjectMemberRoles';
 import { useProjectMembers } from '@/hooks/useProjectMembers';
 import { useProjectStore } from '@/lib/projectStore';
 import { activateProjectForNavigation } from '@/lib/notificationRoutes';
+import { buildUrl } from '@/lib/buildUrl';
 import { getChat, resolveLegacyChatSlug } from '@/lib/api/chatApi';
 import {
   buildMessagesPath,
@@ -110,11 +111,11 @@ export default function MessagePageContent() {
         replace?: boolean;
       },
     ) => {
-      const href = buildMessagesPath(next.chatSlug, {
+      const href = buildUrl(buildMessagesPath(next.chatSlug, {
         messageId: next.messageId,
         threadMessageId: next.threadMessageId,
         jumpId: next.jumpId,
-      });
+      }));
       if (next.replace) router.replace(href, { scroll: false });
       else router.push(href);
     },

@@ -447,6 +447,142 @@ class TestTaskListFilters:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "has_parent" in response.data
 
+    def test_filter_search_matches_summary(self, authenticated_client, project, user):
+        """search filters tasks by summary (case-insensitive)."""
+        user.active_project = project
+        user.save()
+
+        matching = Task.objects.create(
+            summary="Q4 Campaign Budget",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+        Task.objects.create(
+            summary="Weekly report",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+
+        url = reverse("task-list")
+        response = authenticated_client.get(
+            url,
+            {"search": "Campaign", "has_parent": "false", "project_id": project.id},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        tasks = _tasks_from_response(response)
+        task_ids = [t["id"] for t in tasks]
+        assert matching.id in task_ids
+        assert len(task_ids) == 1
+
+    def test_filter_search_with_has_parent_false_excludes_subtasks(
+        self, authenticated_client, project, user
+    ):
+        """search + has_parent=false returns only matching top-level tasks."""
+        user.active_project = project
+        user.save()
+
+        Task.objects.create(
+            summary="Campaign subtask item",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=True,
+        )
+        parent_match = Task.objects.create(
+            summary="Campaign parent item",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+
+        url = reverse("task-list")
+        response = authenticated_client.get(
+            url,
+            {"search": "Campaign", "has_parent": "false", "project_id": project.id},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        tasks = _tasks_from_response(response)
+        task_ids = [t["id"] for t in tasks]
+        assert parent_match.id in task_ids
+        assert len(task_ids) == 1
+
+    def test_filter_search_does_not_match_slug_when_summary_unrelated(
+        self, authenticated_client, project, user
+    ):
+        """search matches summary only, not slug (avoids misleading picker hits)."""
+        user.active_project = project
+        user.save()
+
+        misleading = Task.objects.create(
+            summary="A",
+            slug="final-campaign-performance-summary",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+        Task.objects.create(
+            summary="Final Campaign Performance Summary",
+            slug="another-slug",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+
+        url = reverse("task-list")
+        response = authenticated_client.get(
+            url,
+            {"search": "F", "has_parent": "false", "project_id": project.id},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        task_ids = [t["id"] for t in _tasks_from_response(response)]
+        assert misleading.id not in task_ids
+
+    def test_filter_search_exact_summary_ranks_before_substring(
+        self, authenticated_client, project, user
+    ):
+        """Exact summary matches sort ahead of titles that merely contain the letter."""
+        user.active_project = project
+        user.save()
+
+        exact = Task.objects.create(
+            summary="A",
+            slug="task-a",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+        Task.objects.create(
+            summary="Define Prospecting Audience",
+            slug="define-prospecting",
+            type="asset",
+            project=project,
+            owner=user,
+            is_subtask=False,
+        )
+
+        url = reverse("task-list")
+        response = authenticated_client.get(
+            url,
+            {"search": "A", "has_parent": "false", "project_id": project.id, "page_size": 20},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        tasks = _tasks_from_response(response)
+        task_ids = [t["id"] for t in tasks]
+        assert exact.id in task_ids
+        assert task_ids[0] == exact.id
+
     def test_filter_due_date_after(self, authenticated_client, project, user):
         """due_date_after filters correctly."""
         user.active_project = project

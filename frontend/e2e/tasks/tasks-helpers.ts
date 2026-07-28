@@ -1,5 +1,56 @@
 import { type Page, type Locator, expect } from '@playwright/test';
 
+function isProjectsListGetResponse(resp: { url(): string; request(): { method(): string } }): boolean {
+  const url = new URL(resp.url());
+  return url.pathname.includes('/api/core/projects') && resp.request().method() === 'GET';
+}
+
+function isTaskListGetResponse(resp: { url(): string; request(): { method(): string } }): boolean {
+  const url = new URL(resp.url());
+  const path = url.pathname.replace(/\/$/, '');
+  return resp.request().method() === 'GET' && (path === '/api/tasks' || path === '/api/tasks/');
+}
+
+export async function waitForAppGatewayReady(page: Page): Promise<void> {
+  const origin = process.env.BASE_URL || 'http://localhost';
+
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(`${origin}/`, { timeout: 10_000 });
+        return response.status() !== 502 && response.status() !== 504;
+      },
+      {
+        message: `App gateway at ${origin} did not become ready`,
+        timeout: 120_000,
+        intervals: [1_000, 2_000, 3_000, 5_000],
+      },
+    )
+    .toBe(true);
+}
+
+export async function ensureE2EPageReady(page: Page): Promise<void> {
+  await waitForAppGatewayReady(page);
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await waitForTasksPageReady(page);
+}
+
+/**
+ * Wait until workspace bootstrap finishes (projects API + loading overlay gone).
+ */
+export async function waitForWorkspaceReady(page: Page): Promise<void> {
+  const preparing = page.getByText('Preparing your workspace');
+  const alreadyReady = !(await preparing.isVisible({ timeout: 1_000 }).catch(() => false));
+  if (!alreadyReady) {
+    await page.waitForResponse(
+      (resp) => isProjectsListGetResponse(resp) && resp.ok(),
+      { timeout: 30_000 },
+    );
+    await expect(preparing).not.toBeVisible({ timeout: 30_000 });
+  }
+  await waitForTasksPageReady(page);
+}
+
 /**
  * Wait for any blocking overlay (Guided Onboarding, "Preparing your workspace")
  * to dismiss before interacting with the tasks page.
@@ -34,14 +85,38 @@ export async function getActiveProjectSlug(page: Page): Promise<string> {
 }
 
 /**
+ * Read active project id from persisted store after workspace bootstrap.
+ * Lighter than navigateToTasksAndSelectProject — use in beforeAll when tests
+ * navigate to tasks themselves.
+ */
+export async function getActiveProjectIdFromStore(page: Page): Promise<number> {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await waitForWorkspaceReady(page);
+
+  const projectId: number | null = await page.evaluate(() => {
+    try {
+      const raw = localStorage.getItem('project-storage');
+      if (!raw) return null;
+      return (JSON.parse(raw) as any)?.state?.activeProject?.id ?? null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (!projectId) {
+    throw new Error('No active project found in store — ensure the test user has at least one project');
+  }
+  return projectId;
+}
+
+/**
  * Navigate to /tasks, select a project by name, and return its ID.
  * Run once before all tests (in beforeAll) to grab the project ID.
  * Uses E2E_PROJECT_NAME env var (default "Q1 E2E Task").
  */
 export async function navigateToTasksAndSelectProject(page: Page): Promise<number> {
-  await page.goto('/');
-  await expect(page.getByText('Preparing your workspace')).not.toBeVisible({ timeout: 30_000 });
-  await waitForTasksPageReady(page);
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await waitForWorkspaceReady(page);
 
   const projectId: number | null = await page.evaluate(() => {
     try {
@@ -56,7 +131,10 @@ export async function navigateToTasksAndSelectProject(page: Page): Promise<numbe
   if (!projectId) throw new Error('No active project found in store — ensure the test user has at least one project');
 
   const projectSlug = await getActiveProjectSlug(page);
-  await page.goto(`/projects/${encodeURIComponent(projectSlug)}/tasks`);
+  await page.goto(`/projects/${encodeURIComponent(projectSlug)}/tasks`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page.getByTestId('tab-tasks')).toBeVisible({ timeout: 30_000 });
   await waitForTasksPageReady(page);
   return projectId;
 }
@@ -247,6 +325,19 @@ export function buildTasksListDrawerUrl(projectSlug: string, taskSlug: string): 
 
 export type DraftTaskFixture = { id: number; slug: string };
 
+function taskPathKey(task: Pick<DraftTaskFixture, 'id' | 'slug'> | number | string): string {
+  if (typeof task === 'number') {
+    return String(task);
+  }
+  if (typeof task === 'object' && task != null) {
+    return String(task.id);
+  }
+  if (typeof task === 'string') {
+    return task;
+  }
+  throw new Error('Task path key requires a task id, slug, or fixture');
+}
+
 export async function createDraftTaskViaApi(
   page: Page,
   projectId: number,
@@ -278,6 +369,156 @@ export async function createDraftTaskViaApi(
     throw new Error('Task fixture response did not include id and slug');
   }
   return { id: body.id as number, slug: body.slug as string };
+}
+
+export async function linkSubtaskViaApi(
+  page: Page,
+  parent: Pick<DraftTaskFixture, 'id' | 'slug'> | number | string,
+  childTaskId: number,
+): Promise<void> {
+  const token = await getAuthToken(page);
+  if (!token) throw new Error('No auth token found for subtask link');
+
+  const origin = new URL(page.url()).origin;
+  const response = await page.request.post(`${origin}/api/tasks/${taskPathKey(parent)}/subtasks/`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: { child_task_id: childTaskId },
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to link subtask (${response.status()}): ${await response.text()}`);
+  }
+}
+
+export async function moveSubtaskViaApi(
+  page: Page,
+  newParent: Pick<DraftTaskFixture, 'id' | 'slug'> | number | string,
+  child: Pick<DraftTaskFixture, 'id' | 'slug'> | number | string,
+  oldParentId: number,
+): Promise<{ status: number; body: Record<string, unknown> | null }> {
+  const token = await getAuthToken(page);
+  if (!token) throw new Error('No auth token found for subtask move');
+
+  const origin = new URL(page.url()).origin;
+  const response = await page.request.post(
+    `${origin}/api/tasks/${taskPathKey(newParent)}/subtasks/${taskPathKey(child)}/move/`,
+    {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { old_parent_id: oldParentId },
+    },
+  );
+
+  const text = await response.text();
+  let body: Record<string, unknown> | null = null;
+  if (text) {
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      body = { raw: text };
+    }
+  }
+
+  return { status: response.status(), body };
+}
+
+export async function openTaskDetailPage(page: Page, taskSlug: string): Promise<void> {
+  await page.goto(`/tasks/${encodeURIComponent(taskSlug)}`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+}
+
+function isTaskDetailGetResponse(
+  resp: { url(): string; request(): { method(): string }; ok(): boolean },
+  task: Pick<DraftTaskFixture, 'id' | 'slug'> | string,
+): boolean {
+  if (resp.request().method() !== 'GET' || !resp.ok()) {
+    return false;
+  }
+  const url = new URL(resp.url());
+  const path = decodeURIComponent(url.pathname.replace(/\/$/, ''));
+  const prefix = '/api/tasks/';
+  if (!path.startsWith(prefix)) {
+    return false;
+  }
+  const segment = path.slice(prefix.length);
+  if (!segment || segment.includes('/')) {
+    return false;
+  }
+  if (typeof task === 'string') {
+    return segment === decodeURIComponent(task);
+  }
+  return segment === task.slug || segment === String(task.id);
+}
+
+function isTaskSearchGetResponse(resp: { url(): string; request(): { method(): string } }): boolean {
+  const url = new URL(resp.url());
+  const path = url.pathname.replace(/\/$/, '');
+  return (
+    resp.request().method() === 'GET' &&
+    (path === '/api/tasks' || path === '/api/tasks/') &&
+    url.searchParams.has('search')
+  );
+}
+
+/**
+ * Open a subtask detail page and wait for the task GET + parent picker to be ready.
+ * Deterministic waits: task detail API 200, then task-parent-picker visible.
+ */
+export async function openSubtaskDetailWithPicker(
+  page: Page,
+  task: Pick<DraftTaskFixture, 'id' | 'slug'> | string,
+): Promise<void> {
+  const slug = typeof task === 'string' ? task : task.slug;
+
+  await expect
+    .poll(
+      async () => {
+        const detailResponse = page
+          .waitForResponse((resp) => isTaskDetailGetResponse(resp, task), { timeout: 15_000 })
+          .catch(() => null);
+
+        await page.goto(`/tasks/${encodeURIComponent(slug)}`, { waitUntil: 'domcontentloaded' });
+
+        const gatewayError = page.getByText(/502 Bad Gateway|504 Gateway/i);
+        if (await gatewayError.isVisible({ timeout: 500 }).catch(() => false)) {
+          return false;
+        }
+
+        await detailResponse;
+        return page.getByTestId('task-parent-picker').isVisible().catch(() => false);
+      },
+      {
+        message: `Subtask detail and parent picker did not become ready for ${slug}`,
+        timeout: 90_000,
+        intervals: [1_000, 2_000, 3_000],
+      },
+    )
+    .toBe(true);
+
+  await expect(page.getByRole('combobox', { name: 'Parent task' })).toBeVisible();
+}
+
+/**
+ * Open the parent picker, run a debounced search, wait for GET /api/tasks/?search=…,
+ * then select the matching option.
+ */
+export async function searchAndSelectParentInPicker(
+  page: Page,
+  searchText: string,
+  optionLabel: string,
+): Promise<void> {
+  await page.getByRole('combobox', { name: 'Parent task' }).click();
+
+  const searchResponse = page.waitForResponse(
+    (resp) => isTaskSearchGetResponse(resp) && resp.ok(),
+    { timeout: 15_000 },
+  );
+
+  await page.getByTestId('task-parent-picker-search').fill(searchText);
+  await searchResponse;
+
+  const option = page.getByRole('option', { name: optionLabel });
+  await expect(option).toBeVisible({ timeout: 10_000 });
+  await option.click();
 }
 
 export async function ensureTaskListReadyWithRows(

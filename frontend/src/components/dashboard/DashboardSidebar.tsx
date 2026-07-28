@@ -29,6 +29,7 @@ import { useProjectStore } from '@/lib/projectStore';
 import {
   isNestedProjectNavActive,
 } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const getInitials = (name?: string | null): string => {
   if (!name) return '?';
@@ -150,6 +151,7 @@ const isAdminRole = (roles?: unknown): boolean => {
 
 export default function DashboardSidebar() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<string[]>([]);
   const [projectHeaderChecking, setProjectHeaderChecking] = useState(true);
@@ -167,7 +169,7 @@ export default function DashboardSidebar() {
       toggleAgentPanel();
       return;
     }
-    router.push(href);
+    router.push(buildUrl(href));
   };
 
   const userDisplayName = useMemo(() => {
@@ -389,7 +391,7 @@ export default function DashboardSidebar() {
                         if (item.href === AGENT_PANEL_NAV_HREF) {
                           toggleAgentPanel();
                         } else {
-                          router.push(item.href);
+                          router.push(buildUrl(item.href));
                         }
                       }}
                       title={item.label}
@@ -500,7 +502,7 @@ export default function DashboardSidebar() {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => router.push('/csm')}
+            onSelect={() => router.push(buildUrl('/csm'))}
           >
             <Headset className="text-gray-500" />
             <span>Customer Service</span>
@@ -514,7 +516,7 @@ export default function DashboardSidebar() {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => router.push('/integrations')}
+            onSelect={() => router.push(buildUrl('/integrations'))}
           >
             <Plug className="text-gray-500" />
             <span>Integrations</span>

@@ -848,6 +848,67 @@ class TaskRelation(models.Model):
         super().save(*args, **kwargs)
 
 
+def _hierarchy_edges_queryset(*, excluding_edges=None):
+    """Return TaskHierarchy rows, optionally omitting specific parent→child edges."""
+    qs = TaskHierarchy.objects.all()
+    if not excluding_edges:
+        return qs
+    for parent_id, child_id in excluding_edges:
+        qs = qs.exclude(parent_task_id=parent_id, child_task_id=child_id)
+    return qs
+
+
+def would_create_task_hierarchy_cycle(
+    parent_task_id,
+    child_task_id,
+    *,
+    excluding_edges=None,
+) -> bool:
+    """
+    Return True if adding parent_task → child_task would create a cycle.
+
+    Adding edge P→C closes a loop when C can already reach P by following
+    existing parent→child edges (C is an ancestor of P in the tree/DAG).
+    """
+    if parent_task_id == child_task_id:
+        return True
+
+    qs = _hierarchy_edges_queryset(excluding_edges=excluding_edges)
+    visited = set()
+    stack = [child_task_id]
+
+    while stack:
+        current_id = stack.pop()
+        if current_id == parent_task_id:
+            return True
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+        stack.extend(
+            qs.filter(parent_task_id=current_id).values_list('child_task_id', flat=True)
+        )
+
+    return False
+
+
+def validate_task_hierarchy_no_cycle(
+    parent_task_id,
+    child_task_id,
+    *,
+    excluding_edges=None,
+):
+    """Raise ValidationError when the proposed parent→child edge would cycle."""
+    if would_create_task_hierarchy_cycle(
+        parent_task_id,
+        child_task_id,
+        excluding_edges=excluding_edges,
+    ):
+        raise ValidationError(
+            "Circular reference detected: this parent assignment would create "
+            "a cycle in the task hierarchy."
+        )
+
+
 class TaskHierarchy(models.Model):
     """
     Task hierarchy model for storing parent-subtask relationships.
@@ -893,10 +954,11 @@ class TaskHierarchy(models.Model):
             if existing_qs.filter(parent_task_id=self.child_task_id).exists():
                 raise ValidationError("A subtask cannot have subtasks. Only 1 level of nesting is allowed.")
             
-            # Prevent circular references
-            # Check if parent_task is a subtask of child_task
-            if existing_qs.filter(parent_task_id=self.child_task_id, child_task_id=self.parent_task_id).exists():
-                raise ValidationError("Circular reference detected: tasks cannot be subtasks of each other.")
+            # Prevent circular references (2-node and longer cycles)
+            validate_task_hierarchy_no_cycle(
+                self.parent_task_id,
+                self.child_task_id,
+            )
     
     def save(self, *args, **kwargs):
         """Override save to run validation"""
