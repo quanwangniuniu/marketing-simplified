@@ -753,6 +753,12 @@ class ReplaceTransitionsSerializer(serializers.Serializer):
     )
 
 
+def _rule_value_blank(v):
+    """A condition/action value counts as missing when it's None, an empty or
+    whitespace-only string, or an empty list."""
+    return v is None or (isinstance(v, str) and not v.strip()) or (isinstance(v, (list, tuple)) and not v)
+
+
 class AutomationRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutomationRule
@@ -766,7 +772,7 @@ class AutomationRuleSerializer(serializers.ModelSerializer):
         # Validate on write against the shared allowlist so a typo'd field can't
         # silently make a rule never match.
         from csm.services.rule_conditions import (
-            CONDITION_FIELD_CHOICES, OPERATOR_CHOICES, operator_valid_for_field,
+            CONDITION_FIELD_CHOICES, OPERATOR_CHOICES, VALUELESS_OPERATORS, operator_valid_for_field,
         )
         if not isinstance(value, list):
             raise serializers.ValidationError('conditions must be a list.')
@@ -782,17 +788,29 @@ class AutomationRuleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"'contains' can't be used with the '{field}' field."
                 )
+            # Every operator except is_set/is_empty needs a value, matching the builder.
+            if operator not in VALUELESS_OPERATORS and _rule_value_blank(cond.get('value')):
+                raise serializers.ValidationError(f"the '{field}' condition needs a value.")
         return value
 
     def validate_actions(self, value):
         from csm.services.automation import ACTIONS
         if not isinstance(value, list) or not value:
             raise serializers.ValidationError('at least one action is required.')
+        value_actions = {'add_tag', 'set_priority', 'set_status', 'assign_queue', 'assign_agent'}
         for act in value:
             if not isinstance(act, dict):
                 raise serializers.ValidationError('each action must be an object.')
-            if act.get('type') not in ACTIONS:
-                raise serializers.ValidationError(f"unknown action type: {act.get('type')}")
+            atype = act.get('type')
+            if atype not in ACTIONS:
+                raise serializers.ValidationError(f"unknown action type: {atype}")
+            # Reject actions missing the value/message they need, matching the builder.
+            if atype in value_actions and _rule_value_blank(act.get('value')):
+                raise serializers.ValidationError(f"the '{atype}' action needs a value.")
+            if atype == 'notify' and _rule_value_blank(act.get('text')):
+                raise serializers.ValidationError("the 'notify' action needs a message.")
+            if atype in ('customer_notify', 'add_note') and _rule_value_blank(act.get('text')) and not act.get('template_id'):
+                raise serializers.ValidationError(f"the '{atype}' action needs a message.")
         return value
 
     def _project_id(self):

@@ -65,6 +65,10 @@ OPERATORS = {
 CONDITION_FIELD_CHOICES = tuple(CONDITION_FIELDS)
 OPERATOR_CHOICES = tuple(OPERATORS)
 
+# These operators test presence, so they take no value; every other operator
+# needs one. Used by the write-time validator to reject value-less conditions.
+VALUELESS_OPERATORS = ('is_set', 'is_empty')
+
 # `contains` reads the field as a collection or string, so it only makes sense
 # for the list/text fields. Choosing it for a single-value field (a queue, an id)
 # is meaningless and can even raise at run time, so it is rejected on write.

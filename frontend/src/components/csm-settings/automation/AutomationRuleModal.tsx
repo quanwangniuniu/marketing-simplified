@@ -374,7 +374,7 @@ export default function AutomationRuleModal({
                 <div key={i} className="flex flex-wrap items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
                   <select
                     value={a.type}
-                    onChange={(e) => patchAction(i, { type: e.target.value, value: '', text: '', recipient: undefined, email: undefined })}
+                    onChange={(e) => patchAction(i, { type: e.target.value, value: '', text: '', template_id: undefined, recipient: undefined, email: undefined })}
                     className={BUILDER_CONTROL_CLASS} disabled={submitting}
                   >
                     {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}

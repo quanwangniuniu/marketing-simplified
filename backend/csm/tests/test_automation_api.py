@@ -62,6 +62,30 @@ class TestAutomationRuleAPI:
         }, format='json')
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_condition_without_value_rejected(self, member_client, project):
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'no cond value', 'trigger_event': 'tag_added',
+            'conditions': [{'field': 'priority', 'operator': 'eq', 'value': ''}],
+            'actions': [{'type': 'add_tag', 'value': 'x'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_action_without_value_rejected(self, member_client, project):
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'no action value', 'trigger_event': 'tag_added',
+            'conditions': [], 'actions': [{'type': 'add_tag', 'value': ''}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_valueless_operator_needs_no_value(self, member_client, project):
+        # is_set / is_empty legitimately carry no value.
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'assignee is set', 'trigger_event': 'tag_added',
+            'conditions': [{'field': 'assignee', 'operator': 'is_set'}],
+            'actions': [{'type': 'add_tag', 'value': 'x'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_201_CREATED
+
     def test_toggle_active(self, member_client, project):
         rule = AutomationRule.objects.create(
             project=project, name='R', trigger_event='ticket_created',
