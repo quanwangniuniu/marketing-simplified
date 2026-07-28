@@ -107,9 +107,11 @@ export default function TicketDetailDrawer({
       onUpdated(updated);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
+      // A ticket outside the agent's queues returns 404 (queryset scoping), not
+      // 403, so both map to the same access message rather than "not found".
       toast.error(
         status === 403 || status === 404
-          ? "You don't have access to edit this ticket's queue."
+          ? "You don't have access to edit this ticket."
           : 'Failed to update tags.',
       );
     } finally {
