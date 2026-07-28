@@ -765,16 +765,23 @@ class AutomationRuleSerializer(serializers.ModelSerializer):
     def validate_conditions(self, value):
         # Validate on write against the shared allowlist so a typo'd field can't
         # silently make a rule never match.
-        from csm.services.rule_conditions import CONDITION_FIELD_CHOICES, OPERATOR_CHOICES
+        from csm.services.rule_conditions import (
+            CONDITION_FIELD_CHOICES, OPERATOR_CHOICES, operator_valid_for_field,
+        )
         if not isinstance(value, list):
             raise serializers.ValidationError('conditions must be a list.')
         for cond in value:
             if not isinstance(cond, dict):
                 raise serializers.ValidationError('each condition must be an object.')
-            if cond.get('field') not in CONDITION_FIELD_CHOICES:
-                raise serializers.ValidationError(f"unknown condition field: {cond.get('field')}")
-            if cond.get('operator') not in OPERATOR_CHOICES:
-                raise serializers.ValidationError(f"unknown operator: {cond.get('operator')}")
+            field, operator = cond.get('field'), cond.get('operator')
+            if field not in CONDITION_FIELD_CHOICES:
+                raise serializers.ValidationError(f"unknown condition field: {field}")
+            if operator not in OPERATOR_CHOICES:
+                raise serializers.ValidationError(f"unknown operator: {operator}")
+            if not operator_valid_for_field(field, operator):
+                raise serializers.ValidationError(
+                    f"'contains' can't be used with the '{field}' field."
+                )
         return value
 
     def validate_actions(self, value):
@@ -787,6 +794,56 @@ class AutomationRuleSerializer(serializers.ModelSerializer):
             if act.get('type') not in ACTIONS:
                 raise serializers.ValidationError(f"unknown action type: {act.get('type')}")
         return value
+
+    def _project_id(self):
+        if self.instance is not None:
+            return self.instance.project_id
+        request = self.context.get('request')
+        raw = request.query_params.get('project') if request else None
+        return int(raw) if raw and str(raw).isdigit() else None
+
+    def validate(self, attrs):
+        project_id = self._project_id()
+
+        # Names are unique per project so two rules can't be confused for each other.
+        name = attrs.get('name', getattr(self.instance, 'name', None))
+        if name and project_id:
+            dupes = AutomationRule.objects.filter(project_id=project_id, name__iexact=name.strip())
+            if self.instance is not None:
+                dupes = dupes.exclude(pk=self.instance.pk)
+            if dupes.exists():
+                raise serializers.ValidationError(
+                    {'name': 'A rule with this name already exists in this project.'}
+                )
+
+        # When a rule pins the ticket's status with a `status eq X` condition and
+        # also sets the status, the from→to move is knowable at save time — reject
+        # it up front if the workflow forbids it, instead of saving a rule that can
+        # only ever no-op at run time. Unpinned rules can't be judged here; the
+        # engine's guardrail handles those at run time.
+        conditions = attrs.get('conditions')
+        if conditions is None:
+            conditions = getattr(self.instance, 'conditions', None) or []
+        actions = attrs.get('actions')
+        if actions is None:
+            actions = getattr(self.instance, 'actions', None) or []
+
+        pinned = next(
+            (c.get('value') for c in conditions
+             if c.get('field') == 'status' and c.get('operator') == 'eq'),
+            None,
+        )
+        if pinned and project_id:
+            from csm.services.status_machine import is_transition_allowed
+            for act in actions:
+                if act.get('type') != 'set_status':
+                    continue
+                target = act.get('value')
+                if target and target != pinned and not is_transition_allowed(project_id, pinned, target):
+                    raise serializers.ValidationError(
+                        f'This rule moves status {pinned} → {target}, which your workflow does not allow.'
+                    )
+        return attrs
 
 
 class AutomationExecutionLogSerializer(serializers.ModelSerializer):

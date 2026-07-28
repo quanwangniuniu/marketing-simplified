@@ -73,6 +73,46 @@ class TestAutomationRuleAPI:
         rule.refresh_from_db()
         assert rule.is_active is False
 
+    def test_illegal_status_transition_rejected(self, member_client, project):
+        # Pins status = todo and jumps to resolved, which the default workflow
+        # forbids → rejected at save time rather than saved as a no-op rule.
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'bad move', 'trigger_event': 'status_changed',
+            'conditions': [{'field': 'status', 'operator': 'eq', 'value': 'todo'}],
+            'actions': [{'type': 'set_status', 'value': 'resolved'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_duplicate_name_rejected(self, member_client, project):
+        AutomationRule.objects.create(
+            project=project, name='Escalate', trigger_event='tag_added',
+            actions=[{'type': 'add_tag', 'value': 'x'}],
+        )
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'escalate',  # same name, different case
+            'trigger_event': 'tag_added', 'conditions': [],
+            'actions': [{'type': 'add_tag', 'value': 'y'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_contains_on_single_value_field_rejected(self, member_client, project):
+        # 'contains' only applies to list/text fields; 'queue contains X' is
+        # nonsensical and rejected at save time.
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'nonsense', 'trigger_event': 'tag_added',
+            'conditions': [{'field': 'queue', 'operator': 'contains', 'value': 5}],
+            'actions': [{'type': 'add_tag', 'value': 'x'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_legal_status_transition_accepted(self, member_client, project):
+        resp = member_client.post(_rules_url(project.id), {
+            'name': 'good move', 'trigger_event': 'status_changed',
+            'conditions': [{'field': 'status', 'operator': 'eq', 'value': 'todo'}],
+            'actions': [{'type': 'set_status', 'value': 'in_progress'}],
+        }, format='json')
+        assert resp.status_code == status.HTTP_201_CREATED
+
 
 class TestAutomationLogAPI:
     def test_log_list_read_only(self, member_client, project, csm_queue):

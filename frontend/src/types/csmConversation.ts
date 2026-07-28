@@ -55,6 +55,7 @@ export interface Ticket {
   assigned_to: number | null;
   assigned_to_name: string | null;
   customer_email: string;
+  tags: string[];
   conversation: number | null;
   created_at: string;
   first_response_due: string | null;

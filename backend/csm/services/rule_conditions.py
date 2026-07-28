@@ -65,6 +65,19 @@ OPERATORS = {
 CONDITION_FIELD_CHOICES = tuple(CONDITION_FIELDS)
 OPERATOR_CHOICES = tuple(OPERATORS)
 
+# `contains` reads the field as a collection or string, so it only makes sense
+# for the list/text fields. Choosing it for a single-value field (a queue, an id)
+# is meaningless and can even raise at run time, so it is rejected on write.
+CONTAINS_FIELDS = ('tags', 'customer_email')
+
+
+def operator_valid_for_field(field, operator):
+    """Whether an operator is meaningful for a field. Keeps nonsensical combos
+    like 'queue contains X' out of a rule at configuration time."""
+    if operator == 'contains':
+        return field in CONTAINS_FIELDS
+    return True
+
 
 def conditions_match(ticket, conditions):
     """Whether ``ticket`` satisfies every condition (logical AND).
@@ -77,6 +90,12 @@ def conditions_match(ticket, conditions):
         operator = OPERATORS.get(cond.get('operator'))
         if extractor is None or operator is None:
             return False
-        if not operator(extractor(ticket), cond.get('value')):
+        try:
+            if not operator(extractor(ticket), cond.get('value')):
+                return False
+        except Exception:
+            # A malformed condition (e.g. 'contains' on a non-list field) can
+            # raise; treat it as not-matching so one bad rule can't crash the run
+            # and stop the other rules from firing.
             return False
     return True

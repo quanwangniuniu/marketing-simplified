@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 import { TicketAPI } from '@/lib/api/csmConversationApi';
 import type { Ticket } from '@/types/csmConversation';
 import CsmSettingsDrawerShell from '@/components/csm-settings/CsmSettingsDrawerShell';
@@ -40,6 +40,8 @@ export default function TicketDetailDrawer({
   const [now, setNow] = useState(() => Date.now());
   const [desc, setDesc] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [savingTags, setSavingTags] = useState(false);
   // Render from a locally-refreshed copy so the drawer's SLA and status stay
   // current even when the list snapshot that opened it has gone stale (e.g. the
   // SLA policy was toggled on another page).
@@ -96,6 +98,33 @@ export default function TicketDetailDrawer({
       setSavingDesc(false);
     }
   };
+
+  const commitTags = async (next: string[]) => {
+    setSavingTags(true);
+    try {
+      const updated = await TicketAPI.update(ticket.id, { tags: next });
+      setLive(updated);
+      onUpdated(updated);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(
+        status === 403 || status === 404
+          ? "You don't have access to edit this ticket's queue."
+          : 'Failed to update tags.',
+      );
+    } finally {
+      setSavingTags(false);
+    }
+  };
+
+  const addTag = () => {
+    const tag = tagInput.trim();
+    if (!tag || (ticket.tags ?? []).includes(tag)) { setTagInput(''); return; }
+    setTagInput('');
+    commitTags([...(ticket.tags ?? []), tag]);
+  };
+
+  const removeTag = (tag: string) => commitTags((ticket.tags ?? []).filter((t) => t !== tag));
 
   const nextStatuses = ticket.available_next_statuses ?? [];
   const descDirty = desc !== (ticket.description ?? '');
@@ -160,6 +189,51 @@ export default function TicketDetailDrawer({
             <Row label="Created">
               {new Date(ticket.created_at).toLocaleString()}
             </Row>
+          </div>
+
+          <div className="mt-4">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              Tags
+            </span>
+            {(ticket.tags ?? []).length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {(ticket.tags ?? []).map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      disabled={savingTags}
+                      className="text-gray-400 hover:text-red-600 disabled:opacity-50"
+                      aria-label={`Remove ${tag}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="mt-2 flex gap-2">
+              <input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+                disabled={savingTags}
+                placeholder="Add a tag…"
+                className="min-w-0 flex-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-300 disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={addTag}
+                disabled={savingTags || tagInput.trim() === ''}
+                className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {savingTags ? 'Adding…' : 'Add'}
+              </button>
+            </div>
           </div>
 
           <div className="mt-4">

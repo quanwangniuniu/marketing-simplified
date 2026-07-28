@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarClock, ClipboardList, FolderKanban, ListOrdered, Radio, Settings, Shield, Workflow } from 'lucide-react';
+import { CalendarClock, ClipboardList, FolderKanban, ListOrdered, Radio, Settings, Shield, Workflow, Zap } from 'lucide-react';
 
 const ACTIVE_COLOR = 'text-[#3CCED7]';
 const ACTIVE_BAR = 'bg-[#3CCED7]';
@@ -49,6 +49,7 @@ export default function CsmSettingsSidebar() {
   const slaPolicy = '/admin/csm/settings/sla';
   const businessHours = '/admin/csm/settings/business-hours';
   const ticketStatuses = '/admin/csm/settings/ticket-statuses';
+  const automation = '/admin/csm/settings/automation';
 
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col border-r border-gray-200 bg-white sm:flex">
@@ -103,6 +104,12 @@ export default function CsmSettingsSidebar() {
           label="Ticket Statuses"
           icon={<Workflow className="h-4 w-4" aria-hidden />}
           isActive={pathname === '/admin/csm/settings/ticket-statuses'}
+        />
+        <NavLink
+          href={automation}
+          label="Automation"
+          icon={<Zap className="h-4 w-4" aria-hidden />}
+          isActive={pathname === '/admin/csm/settings/automation'}
         />
       </nav>
     </aside>

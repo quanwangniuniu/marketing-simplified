@@ -7,11 +7,14 @@ existing CSM capabilities; a re-entrancy guard stops an action's own writes from
 re-triggering the engine into a loop.
 """
 
+import logging
 import threading
 from contextlib import contextmanager
 
 from csm.services.rule_conditions import conditions_match
 
+
+logger = logging.getLogger(__name__)
 
 _ctx = threading.local()
 
@@ -46,8 +49,14 @@ def _guard():
 # field writes used to prove the engine end to end.
 
 def _act_set_priority(ticket, action):
+    from django.utils import timezone
+    from csm.services.sla import recalculate_ticket_sla
     ticket.priority = action.get('value')
     ticket.save(update_fields=['priority'])
+    # SLA targets are per-priority, so a change restarts the countdown from now,
+    # the same as a manual priority change.
+    recalculate_ticket_sla(ticket, base_time=timezone.now())
+    ticket.save(update_fields=['first_response_due', 'resolution_due'])
 
 
 def _act_add_tag(ticket, action):
@@ -77,8 +86,14 @@ def _act_assign_agent(ticket, action):
 
 
 def _act_assign_queue(ticket, action):
+    from csm.services.sla import recalculate_ticket_sla
     ticket.queue_id = action.get('value')
     ticket.save(update_fields=['queue'])
+    # The SLA policy attaches to the queue, so moving queues re-applies the new
+    # queue's policy targets. Refresh so the new queue relation resolves.
+    ticket.refresh_from_db()
+    recalculate_ticket_sla(ticket)
+    ticket.save(update_fields=['first_response_due', 'resolution_due'])
 
 
 def _template_text(action):
@@ -125,13 +140,22 @@ def _act_notify(ticket, action):
     if not recipients:
         raise SkipAction('no recipients')
     text = action.get('text', '')
+    title = f'Automation: {ticket.title}'
     CsmNotification.objects.bulk_create([
         CsmNotification(
             recipient=user, notification_type='automation',
-            title=f'Automation: {ticket.title}', message=text,
+            title=title, message=text,
         )
         for user in recipients
     ])
+    # Optionally also email the recipients, the same channel SLA-breach uses.
+    if action.get('email'):
+        from django.conf import settings
+        from django.core.mail import send_mail
+        emails = [u.email for u in recipients if u.email]
+        if emails:
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@mediajira.com')
+            send_mail(title, text, from_email, emails, fail_silently=True)
 
 
 def _act_customer_notify(ticket, action):
@@ -210,18 +234,23 @@ def evaluate_rules(ticket, event_type):
     fired = 0
     with _guard():
         for rule in rules:
-            if not conditions_match(ticket, rule.conditions):
-                continue
-            performed = [_execute_action(ticket, a) for a in (rule.actions or [])]
-            AutomationExecutionLog.objects.create(
-                rule=rule,
-                rule_name=rule.name,
-                trigger_event=event_type,
-                ticket=ticket,
-                ticket_ref=ticket.id,
-                actions_performed=performed,
-            )
-            fired += 1
+            # Isolate each rule: an unexpected failure in one is logged and
+            # skipped so it can't stop the remaining rules from firing.
+            try:
+                if not conditions_match(ticket, rule.conditions):
+                    continue
+                performed = [_execute_action(ticket, a) for a in (rule.actions or [])]
+                AutomationExecutionLog.objects.create(
+                    rule=rule,
+                    rule_name=rule.name,
+                    trigger_event=event_type,
+                    ticket=ticket,
+                    ticket_ref=ticket.id,
+                    actions_performed=performed,
+                )
+                fired += 1
+            except Exception:
+                logger.exception('automation rule %s failed to evaluate', rule.id)
     return fired
 
 

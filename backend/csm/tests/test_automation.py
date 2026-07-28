@@ -28,6 +28,12 @@ class TestConditionsMatch:
     def test_empty_conditions_always_match(self):
         assert conditions_match(_Ticket(), []) is True
 
+    def test_malformed_condition_fails_closed_without_raising(self):
+        # 'queue contains X' (contains on an int field) would raise; it must be
+        # treated as not-matching, never crash, so one bad rule can't stop others.
+        cond = [{'field': 'queue', 'operator': 'contains', 'value': 5}]
+        assert conditions_match(_Ticket(queue_id=1), cond) is False
+
     def test_eq_match_and_mismatch(self):
         t = _Ticket(priority='high')
         assert conditions_match(t, [{'field': 'priority', 'operator': 'eq', 'value': 'high'}]) is True
@@ -242,6 +248,27 @@ class TestCommunicationActions:
         self._run(project, ticket, [{'type': 'notify', 'recipient': 'assigned_agent', 'text': 'hi'}])
         assert AutomationExecutionLog.objects.first().actions_performed[0]['status'] == 'skipped'
 
+    def test_notify_email_flag_sends_email(self, project, ticket, user2, mailoutbox):
+        user2.email = 'agent@example.com'
+        user2.save(update_fields=['email'])
+        ticket.assigned_to = user2
+        ticket.save(update_fields=['assigned_to'])
+        self._run(project, ticket, [
+            {'type': 'notify', 'recipient': 'assigned_agent', 'text': 'hi', 'email': True},
+        ])
+        assert len(mailoutbox) == 1
+        assert 'agent@example.com' in mailoutbox[0].to
+
+    def test_notify_without_email_flag_no_email(self, project, ticket, user2, mailoutbox):
+        user2.email = 'agent@example.com'
+        user2.save(update_fields=['email'])
+        ticket.assigned_to = user2
+        ticket.save(update_fields=['assigned_to'])
+        self._run(project, ticket, [
+            {'type': 'notify', 'recipient': 'assigned_agent', 'text': 'hi'},
+        ])
+        assert mailoutbox == []
+
     def test_customer_notify_posts_message(self, project, csm_queue, customer):
         from csm.models import Conversation, ConversationMessage
         conv = Conversation.objects.create(queue=csm_queue, customer=customer, status='active')
@@ -272,3 +299,65 @@ class TestCommunicationActions:
     def test_add_note_no_customer_skipped(self, project, ticket):
         self._run(project, ticket, [{'type': 'add_note', 'text': 'x'}])
         assert AutomationExecutionLog.objects.first().actions_performed[0]['status'] == 'skipped'
+
+
+class TestActionsRecomputeSla:
+    """set_priority and assign_queue keep SLA deadlines consistent with the
+    manual path: per-priority targets and per-queue policies re-apply."""
+
+    def _policy(self, project, targets):
+        from csm.models import SLAPolicy, SLAPriorityTarget
+        policy = SLAPolicy.objects.create(project=project, name='P')
+        for priority, fr, res in targets:
+            SLAPriorityTarget.objects.create(
+                policy=policy, priority=priority,
+                first_response_minutes=fr, resolution_minutes=res,
+            )
+        return policy
+
+    def test_set_priority_recomputes_sla(self, project, csm_queue):
+        from csm.services.sla import recalculate_ticket_sla
+        csm_queue.sla_policy = self._policy(project, [
+            ('medium', 480, 1440), ('critical', 60, 240),
+        ])
+        csm_queue.save(update_fields=['sla_policy'])
+        ticket = Ticket.objects.create(queue=csm_queue, title='T', priority='medium')
+        recalculate_ticket_sla(ticket)
+        ticket.save(update_fields=['first_response_due', 'resolution_due'])
+        medium_due = ticket.resolution_due
+        assert medium_due is not None
+
+        AutomationRule.objects.create(
+            project=project, name='esc', trigger_event='tag_added', conditions=[],
+            actions=[{'type': 'set_priority', 'value': 'critical'}], is_active=True,
+        )
+        evaluate_rules(ticket, 'tag_added')
+        ticket.refresh_from_db()
+        assert ticket.priority == 'critical'
+        # critical target (240 min) is far tighter than medium (1440 min)
+        assert ticket.resolution_due < medium_due
+
+    def test_assign_queue_reapplies_policy(self, project, csm_queue, customer_organisation):
+        from csm.models import Queue
+        from csm.services.sla import recalculate_ticket_sla
+        csm_queue.sla_policy = self._policy(project, [('medium', 1440, 2880)])
+        csm_queue.save(update_fields=['sla_policy'])
+        fast = Queue.objects.create(
+            project=project, organisation=customer_organisation, name='Fast',
+            tier='T1', display_order=1, is_active=True,
+            sla_policy=self._policy(project, [('medium', 30, 60)]),
+        )
+        ticket = Ticket.objects.create(queue=csm_queue, title='T', priority='medium')
+        recalculate_ticket_sla(ticket)
+        ticket.save(update_fields=['first_response_due', 'resolution_due'])
+        loose_due = ticket.resolution_due
+
+        AutomationRule.objects.create(
+            project=project, name='route', trigger_event='ticket_created', conditions=[],
+            actions=[{'type': 'assign_queue', 'value': fast.id}], is_active=True,
+        )
+        evaluate_rules(ticket, 'ticket_created')
+        ticket.refresh_from_db()
+        assert ticket.queue_id == fast.id
+        # the faster queue's policy (60 min) replaces the loose one (2880 min)
+        assert ticket.resolution_due < loose_due
