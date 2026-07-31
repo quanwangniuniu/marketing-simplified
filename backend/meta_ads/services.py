@@ -441,6 +441,9 @@ def sync_insights(ad_account: MetaAdAccount, access_token: str, *, days: int = 3
             lpv_count = _parse_landing_page_views(actions)
             video_3sec_count = _parse_video_3sec(actions)
             comment_count = _parse_comments(actions)
+            # Upsert on unique (ad, date): overlap-widened windows may re-fetch
+            # the same calendar day; refresh metrics in place, never insert a
+            # second row (MED-246 acceptance: no duplicates from overlap).
             MetaInsightDaily.objects.update_or_create(
                 ad=ad,
                 date=_dt.date.fromisoformat(date_str),
