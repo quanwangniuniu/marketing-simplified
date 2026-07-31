@@ -370,10 +370,43 @@ def backfill_missing_creative_fks(
     return fixed
 
 
+# Extra calendar day added on top of the caller-requested trailing window so a
+# sync that straddles UTC midnight still covers the day that just rolled over.
+# See MED-246. Pad=1 is enough for rollover; attribution freshness is handled
+# by the wider days=30 hourly path, not by enlarging this pad.
+INSIGHTS_WINDOW_OVERLAP_PAD = 1
+
+
+def build_insights_date_window(
+    days: int,
+    overlap_pad: int = INSIGHTS_WINDOW_OVERLAP_PAD,
+    *,
+    now: _dt.datetime | None = None,
+) -> tuple[_dt.date, _dt.date]:
+    """Compute the insights `since`/`until` window at request time.
+
+    Must be called immediately before the Graph insights request — not at
+    Celery task enqueue / `sync_ad_account` start — so the calendar day matches
+    the moment we actually query. `overlap_pad` widens the trailing window to
+    tolerate UTC midnight rollover (effective span = days + overlap_pad).
+    """
+    if days < 0:
+        raise ValueError("days must be >= 0")
+    if overlap_pad < 0:
+        raise ValueError("overlap_pad must be >= 0")
+    current = now if now is not None else timezone.now()
+    until = current.date()
+    since = until - _dt.timedelta(days=days + overlap_pad)
+    return since, until
+
+
 def sync_insights(ad_account: MetaAdAccount, access_token: str, *, days: int = 30) -> int:
-    """Pull per-ad per-day insights for the trailing `days` window."""
-    until = timezone.now().date()
-    since = until - _dt.timedelta(days=days)
+    """Pull per-ad per-day insights for the trailing `days` window.
+
+    The calendar window is anchored here (insights-query time), not earlier in
+    the sync pipeline, and includes INSIGHTS_WINDOW_OVERLAP_PAD extra day(s).
+    """
+    since, until = build_insights_date_window(days)
     time_range = f'{{"since":"{since.isoformat()}","until":"{until.isoformat()}"}}'
     params = {
         "fields": INSIGHT_FIELDS,
