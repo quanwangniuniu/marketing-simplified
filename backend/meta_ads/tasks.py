@@ -57,14 +57,33 @@ def sync_recent_meta(days: int = 2) -> dict:
 @shared_task
 def sync_single_ad_account(ad_account_id: int, days: int = 30) -> dict:
     """Manual sync trigger used by the UI Refresh button."""
+    from .models import MetaSyncRun
+
     try:
         ad_account = MetaAdAccount.objects.get(pk=ad_account_id)
     except MetaAdAccount.DoesNotExist:
         return {"error": "not_found"}
-    token = ad_account.connection.get_access_token()
+    connection = ad_account.connection
+    token = connection.get_access_token()
     if not token:
+        # Persist a failed run so the UI poll does not treat a prior seed/ok
+        # row as "this refresh just succeeded" (MED-246 QA / no-token case).
+        now = timezone.now()
+        MetaSyncRun.objects.create(
+            ad_account=ad_account,
+            kind="manual",
+            status="error",
+            finished_at=now,
+            error_message="no_token: reconnect Meta on the Integrations page",
+            level_counts={},
+            current_phase="",
+            current_progress="",
+        )
         return {"error": "no_token"}
     run = sync_ad_account(ad_account, token, days=days, kind="manual")
+    if run.status == "ok":
+        connection.last_synced_at = timezone.now()
+        connection.save(update_fields=["last_synced_at", "updated_at"])
     return {"status": run.status, "level_counts": run.level_counts, "error": run.error_message}
 
 

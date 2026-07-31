@@ -26,6 +26,46 @@ export function formatPercent(value: string | number, digits = 2): string {
   return `${n.toFixed(digits)}%`;
 }
 
+/** Prefer finished_at, then started_at, then connection-level last_synced_at. */
+export function resolveLastSyncedAt(sources: {
+  finishedAt?: string | null;
+  startedAt?: string | null;
+  connectionLastSyncedAt?: string | null;
+}): string | null {
+  return (
+    sources.finishedAt ||
+    sources.startedAt ||
+    sources.connectionLastSyncedAt ||
+    null
+  );
+}
+
+/** True when `run` is newer than the sync that was visible before Refresh. */
+export function isNewerSyncRun(
+  run: { id: number; started_at: string },
+  baselineRunId: number | null,
+  baselineStartedAt: string | null
+): boolean {
+  if (baselineRunId != null && run.id !== baselineRunId) return true;
+  if (baselineRunId == null && baselineStartedAt == null) return true;
+  if (baselineStartedAt != null && run.started_at > baselineStartedAt) return true;
+  return false;
+}
+
+/** Human-readable tooltip / title text for last sync time (MED-246). */
+export function formatLastSyncedTooltip(
+  iso: string | null | undefined,
+  locale = 'en-US'
+): string {
+  if (!iso) return 'Not synced yet';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return 'Not synced yet';
+  return `Last synced: ${parsed.toLocaleString(locale, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })}`;
+}
+
 export function hookRateBandClass(rate: string | number): string {
   const n = typeof rate === 'string' ? Number(rate) : rate;
   if (!Number.isFinite(n) || n <= 0) return 'bg-gray-100 text-gray-400';

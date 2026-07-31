@@ -42,7 +42,13 @@ import CampaignHierarchyTable from '@/components/meta-ads/CampaignHierarchyTable
 import CreativesPanel from '@/components/meta-ads/CreativesPanel';
 import CreativeRankPanel from '@/components/meta-ads/CreativeRankPanel';
 import ExportActionMenu from '@/components/meta-ads/ExportActionMenu';
+import LastSyncTimeTooltip from '@/components/meta-ads/LastSyncTimeTooltip';
 import RankingPanel from '@/components/meta-ads/RankingPanel';
+import {
+  formatLastSyncedTooltip,
+  isNewerSyncRun,
+  resolveLastSyncedAt,
+} from '@/components/meta-ads/metaAdsUtils';
 import {
   facebookApi,
   type FacebookAdAccount,
@@ -201,6 +207,9 @@ function MetaAdsContent() {
   const [pendingMoveAccount, setPendingMoveAccount] =
     useState<FacebookAdAccount | null>(null);
   const [latestRun, setLatestRun] = useState<MetaSyncRun | null>(null);
+  const [connectionLastSyncedAt, setConnectionLastSyncedAt] = useState<
+    string | null
+  >(null);
   const [viewTab, setViewTab] = useState<ViewKey>(initialTab);
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<number>>(
     new Set()
@@ -237,6 +246,7 @@ function MetaAdsContent() {
       .then((status) => {
         if (!active) return;
         setConnected(status.connected);
+        setConnectionLastSyncedAt(status.last_synced_at ?? null);
         const accounts = status.ad_accounts ?? [];
         setAdAccounts(accounts);
         setAccountTotalCount(null);
@@ -253,12 +263,25 @@ function MetaAdsContent() {
           setSelectedId(null);
         }
       })
-      .catch(() => setConnected(false))
+      .catch(() => {
+        setConnected(false);
+        setConnectionLastSyncedAt(null);
+      })
       .finally(() => setLoadingStatus(false));
     return () => {
       active = false;
     };
   }, [activeProjectId, hasProjectStoreHydrated]);
+
+  const lastSyncedAt = useMemo(
+    () =>
+      resolveLastSyncedAt({
+        finishedAt: latestRun?.finished_at,
+        startedAt: latestRun?.started_at,
+        connectionLastSyncedAt,
+      }),
+    [latestRun?.finished_at, latestRun?.started_at, connectionLastSyncedAt]
+  );
 
   const handleSelectAccount = useCallback((id: number, account?: FacebookAdAccount) => {
     setSelectedId(id);
@@ -398,6 +421,8 @@ function MetaAdsContent() {
   const handleSync = async () => {
     if (!selectedId) return;
     setSyncing(true);
+    const baselineRunId = latestRun?.id ?? null;
+    const baselineStartedAt = latestRun?.started_at ?? null;
     try {
       await facebookApi.triggerAdAccountSync(selectedId);
       toast.success('Sync started. Data will refresh when it finishes.');
@@ -409,31 +434,57 @@ function MetaAdsContent() {
       setTimeout(() => {
         facebookApi
           .getSyncRuns(accountId)
-          .then((runs) => setLatestRun(runs[0] ?? null))
+          .then((runs) => {
+            const run = runs[0] ?? null;
+            if (run && isNewerSyncRun(run, baselineRunId, baselineStartedAt)) {
+              setLatestRun(run);
+            }
+          })
           .catch(() => undefined);
       }, 500);
-      pollSync(selectedId);
+      pollSync(selectedId, baselineRunId, baselineStartedAt);
     } catch {
       toast.error('Failed to start sync.');
       setSyncing(false);
     }
   };
 
-  const pollSync = (adAccountId: number) => {
+  const pollSync = (
+    adAccountId: number,
+    baselineRunId: number | null,
+    baselineStartedAt: string | null
+  ) => {
     let stopped = false;
     let attempts = 0;
     const tick = async () => {
       if (stopped || attempts > 60) {
         setSyncing(false);
+        if (attempts > 60) {
+          toast.error('Sync timed out waiting for a new run. Check Celery / Meta connection.');
+        }
         return;
       }
       attempts += 1;
       try {
         const runs = await facebookApi.getSyncRuns(adAccountId);
         const run = runs[0];
-        if (run) setLatestRun(run);
-        if (run && (run.status === 'ok' || run.status === 'error')) {
+        // Ignore the previous completed run until a NEW MetaSyncRun appears.
+        // Otherwise a no-token / delayed worker makes Refresh look successful
+        // while the tooltip stays stuck on the old timestamp.
+        if (!run || !isNewerSyncRun(run, baselineRunId, baselineStartedAt)) {
+          setTimeout(tick, 2000);
+          return;
+        }
+        setLatestRun(run);
+        if (run.status === 'running') {
+          setTimeout(tick, 2000);
+          return;
+        }
+        if (run.status === 'ok' || run.status === 'error') {
           setSyncing(false);
+          if (run.finished_at) {
+            setConnectionLastSyncedAt(run.finished_at);
+          }
           if (run.status === 'ok') {
             toast.success(
               `Synced ${run.level_counts?.campaigns ?? 0} campaigns, ${run.level_counts?.ads ?? 0} ads, ${run.level_counts?.insights_rows ?? 0} insight rows.`
@@ -452,7 +503,7 @@ function MetaAdsContent() {
       } catch {
         // keep polling
       }
-      setTimeout(tick, 5000);
+      setTimeout(tick, 2000);
     };
     tick();
     return () => {
@@ -622,18 +673,20 @@ function MetaAdsContent() {
             onAccountsLoaded={handleAccountsLoaded}
           />
           {canSyncSelectedAccount && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-            >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCcw className="h-4 w-4" />
-              )}
-              {syncing ? 'Syncing...' : 'Refresh data'}
-            </button>
+            <LastSyncTimeTooltip lastSyncedAt={lastSyncedAt}>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-4 w-4" />
+                )}
+                {syncing ? 'Syncing...' : 'Refresh data'}
+              </button>
+            </LastSyncTimeTooltip>
           )}
         </div>
       </header>
@@ -1045,7 +1098,10 @@ function SyncStatusCard({ run }: { run: MetaSyncRun }) {
           {s.icon}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-900">
+              <span
+                className="text-xs font-semibold text-gray-900"
+                title={formatLastSyncedTooltip(run.finished_at || run.started_at)}
+              >
                 Last sync · {timeAgo(run.started_at)}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${s.chip}`}>
