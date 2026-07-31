@@ -17,7 +17,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Organization, Project, ProjectMember
+from core.models import Organization, OrganizationMembership, Project, ProjectMember
 from facebook_integration.models import FacebookConnection, MetaAdAccount
 
 from .models import (
@@ -131,14 +131,30 @@ def seed_med246_qa_mock_data(
         defaults={
             "username": username,
             "organization": org,
+            "current_organization": org,
         },
     )
     if user_created:
         user.set_password(password)
         user.save(update_fields=["password"])
-    elif user.organization_id is None:
-        user.organization = org
-        user.save(update_fields=["organization"])
+    else:
+        user_updates: list[str] = []
+        if user.organization_id is None:
+            user.organization = org
+            user_updates.append("organization")
+        if getattr(user, "current_organization_id", None) is None:
+            user.current_organization = org
+            user_updates.append("current_organization")
+        if user_updates:
+            user.save(update_fields=user_updates)
+
+    # OnboardingGate keys off OrganizationMembership (not user.organization FK).
+    # Without this row the UI shows "Set up your first project" forever.
+    OrganizationMembership.objects.get_or_create(
+        user=user,
+        organization=org,
+        defaults={"role": "admin", "is_active": True},
+    )
 
     project, project_created = Project.objects.get_or_create(
         name=PROJECT_NAME,
@@ -150,6 +166,9 @@ def seed_med246_qa_mock_data(
         project=project,
         defaults={"role": "owner", "is_active": True},
     )
+    if getattr(user, "active_project_id", None) != project.id:
+        user.active_project = project
+        user.save(update_fields=["active_project"])
 
     connection, connection_created = FacebookConnection.objects.get_or_create(
         user=user,

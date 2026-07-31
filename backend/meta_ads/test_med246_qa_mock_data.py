@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from freezegun import freeze_time
 
+from core.models import OrganizationMembership
 from facebook_integration.models import FacebookConnection, MetaAdAccount
 from meta_ads.models import MetaAd, MetaInsightDaily, MetaSyncRun
 from meta_ads.qa_mock_data import (
@@ -59,10 +60,15 @@ class Med246QaMockDataTests(TestCase):
         self.assertTrue(
             MetaSyncRun.objects.filter(ad_account=account, status="ok").exists()
         )
-        self.assertEqual(
-            get_user_model().objects.get(pk=summary["user_id"]).email,
-            summary["user_email"],
+        user = get_user_model().objects.get(pk=summary["user_id"])
+        self.assertEqual(user.email, summary["user_email"])
+        self.assertTrue(
+            OrganizationMembership.objects.filter(
+                user=user, organization_id=summary["org_id"], is_active=True
+            ).exists()
         )
+        self.assertEqual(user.current_organization_id, summary["org_id"])
+        self.assertEqual(user.active_project_id, summary["project_id"])
 
     @freeze_time("2026-07-31 00:05:00", tz_offset=0)
     def test_seed_is_idempotent_on_unique_ad_date(self):
