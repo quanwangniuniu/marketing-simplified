@@ -76,6 +76,18 @@ export async function mockAuthenticatedUserApis(
 }
 
 export async function mockProjectShellApis(page: Page) {
+	await page.route('**/api/core/onboarding-status**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				needs_onboarding: false,
+				has_org: true,
+				has_project: true,
+			}),
+		});
+	});
+
 	await page.route('**/api/core/projects**', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -97,6 +109,14 @@ export async function mockProjectShellApis(page: Page) {
 	// Without a mock, the fake e2e token returns 401 from the real backend,
 	// triggering the axios interceptor's hard redirect to /login.
 	await page.route('**/api/notifications/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ count: 0, next: null, previous: null, results: [] }),
+		});
+	});
+
+	await page.route('**/api/csm/notifications**', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -234,41 +254,39 @@ export async function mockProjectShellApis(page: Page) {
 
 export async function seedActiveProject(page: Page, project: MessagesProjectSeed) {
 	await page.addInitScript((activeProject) => {
-		window.localStorage.setItem(
-			'project-storage',
-			JSON.stringify({
-				state: {
-					activeProject,
-					activeProjectIds: [activeProject.id],
-					inactiveProjectIds: [],
-					completedProjectIds: [],
-					hasHydrated: true,
-					loading: false,
-					error: null,
-				},
-				version: 0,
-			})
-		);
+		const state = JSON.stringify({
+			state: {
+				activeProject,
+				activeProjectIds: [activeProject.id],
+				inactiveProjectIds: [],
+				completedProjectIds: [],
+				hasHydrated: true,
+				loading: false,
+				error: null,
+			},
+			version: 0,
+		});
+		window.localStorage.setItem('project-storage-v1', state);
+		window.localStorage.setItem('project-storage', state);
 	}, project);
 }
 
 export async function clearProjectStore(page: Page) {
 	await page.addInitScript(() => {
-		window.localStorage.setItem(
-			'project-storage',
-			JSON.stringify({
-				state: {
-					activeProject: null,
-					activeProjectIds: [],
-					inactiveProjectIds: [],
-					completedProjectIds: [],
-					hasHydrated: true,
-					loading: false,
-					error: null,
-				},
-				version: 0,
-			})
-		);
+		const state = JSON.stringify({
+			state: {
+				activeProject: null,
+				activeProjectIds: [],
+				inactiveProjectIds: [],
+				completedProjectIds: [],
+				hasHydrated: true,
+				loading: false,
+				error: null,
+			},
+			version: 0,
+		});
+		window.localStorage.setItem('project-storage-v1', state);
+		window.localStorage.setItem('project-storage', state);
 	});
 }
 

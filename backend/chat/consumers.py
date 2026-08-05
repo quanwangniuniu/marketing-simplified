@@ -213,6 +213,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'type': 'chat_message',
                 'message': {
                     'id': message.id,
+                    'seq': message.seq,
                     'chat_id': chat_id,
                     'sender': {
                         'id': self.user.id,

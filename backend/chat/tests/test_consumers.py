@@ -118,6 +118,7 @@ class TestChatConsumer:
             assert response['type'] == 'chat_message'
             assert response['message']['content'] == 'Hello, this is a test message!'
             assert response['message']['chat_id'] == chat.id
+            assert response['message']['seq'] == 1
         finally:
             await _disconnect_communicators(communicator1)
 
@@ -500,6 +501,7 @@ class TestChatConsumerSync:
         queued_messages = consumer.get_queued_messages()
         assert len(queued_messages) == 1
         payload = queued_messages[0]
+        assert payload['seq'] == forwarded_message.seq
         assert payload['has_attachments']
         assert payload['attachment_count'] == 1
         assert len(payload['attachments']) == 1
@@ -524,4 +526,3 @@ class TestChatConsumerSync:
         assert payload['attachments'] == []
         assert not payload['is_forwarded']
         assert payload['forwarded_from'] is None
-
