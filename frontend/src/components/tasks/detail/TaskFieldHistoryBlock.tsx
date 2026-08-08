@@ -116,7 +116,11 @@ function HistoryRow({ entry }: { entry: TaskFieldHistoryEntry }) {
   }
 
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div
+      data-testid="task-history-row"
+      data-history-entry-id={entry.id}
+      className="flex items-start gap-3 py-3"
+    >
       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7ee3e8] to-[#b9ee98] text-[10px] font-bold text-white">
         {entry.changed_by_avatar ? (
           <img src={entry.changed_by_avatar} alt={actor} className="h-7 w-7 rounded-full object-cover" />

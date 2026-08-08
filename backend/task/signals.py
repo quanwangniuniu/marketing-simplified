@@ -173,32 +173,107 @@ def _cache_previous_task_status(sender, instance, **kwargs):
 
 
 @receiver(pre_save, sender=Task)
-def record_task_field_changes(sender, instance, **kwargs):
-    """Record field changes to TaskFieldHistory before save."""
+def capture_task_field_changes(
+    sender,
+    instance,
+    update_fields=None,
+    **kwargs,
+):
+    """
+    Capture this save's transitions and author before the Task is written.
+
+    A stack is used instead of a single instance attribute so nested or
+    repeated saves in the same transaction cannot overwrite a pending batch.
+    """
     if not instance.pk:
         return
+
     try:
         old = Task.objects.select_related('owner').get(pk=instance.pk)
     except Task.DoesNotExist:
         return
 
-    user = _get_current_user_safe()
-    records = []
+    tracked_fields = list(TaskFieldHistory.TRACKED_FIELDS)
+
+    if update_fields is not None:
+        updated_names = set(update_fields)
+        tracked_fields = [
+            field
+            for field in tracked_fields
+            if (
+                field in updated_names
+                or Task._meta.get_field(field).attname in updated_names
+            )
+        ]
+
     try:
-        for field in TaskFieldHistory.TRACKED_FIELDS:
+        transitions = []
+
+        for field in tracked_fields:
             old_val, new_val = _field_value(old, instance, field)
             if old_val != new_val:
-                records.append(TaskFieldHistory(
-                    task=instance,
-                    field_name=field,
-                    old_value=old_val,
-                    new_value=new_val,
-                    changed_by=user,
-                ))
-        if records:
-            TaskFieldHistory.objects.bulk_create(records)
+                transitions.append({
+                    'field_name': field,
+                    'old_value': old_val,
+                    'new_value': new_val,
+                })
+
+        if not transitions:
+            return
+
+        pending_batches = getattr(
+            instance,
+            '_pending_task_field_history_batches',
+            None,
+        )
+        if pending_batches is None:
+            pending_batches = []
+            instance._pending_task_field_history_batches = pending_batches
+
+        pending_batches.append({
+            'transitions': transitions,
+            'changed_by': _get_current_user_safe(),
+        })
     except Exception:
-        logger.exception('TaskFieldHistory: failed to record field changes for task %s', instance.pk)
+        logger.exception(
+            'TaskFieldHistory: failed to capture field changes for task %s',
+            instance.pk,
+        )
+        raise
+
+
+@receiver(post_save, sender=Task)
+def append_task_field_changes(sender, instance, **kwargs):
+    """Append exactly one captured transition batch for this completed save."""
+    pending_batches = getattr(
+        instance,
+        '_pending_task_field_history_batches',
+        None,
+    )
+    if not pending_batches:
+        return
+
+    # LIFO is intentional: it also handles a nested save occurring while an
+    # outer save is still between pre_save and post_save.
+    batch = pending_batches.pop()
+
+    if not pending_batches:
+        del instance._pending_task_field_history_batches
+
+    try:
+        TaskFieldHistory.append_transitions(
+            task=instance,
+            transitions=batch['transitions'],
+            changed_by=batch['changed_by'],
+        )
+    except Exception:
+        logger.exception(
+            'TaskFieldHistory: failed to append field changes for task %s',
+            instance.pk,
+        )
+        # Task.save() wraps the save and post_save signals in transaction.atomic.
+        # Raising here prevents a Task write from committing without its history.
+        raise
 
 
 @receiver(post_save, sender=Task)

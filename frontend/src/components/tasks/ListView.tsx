@@ -173,6 +173,9 @@ export default function ListView({
   const [recentlyUpdatedIds, setRecentlyUpdatedIds] = useState<number[]>([]);
   const [truncatedSummaryIds, setTruncatedSummaryIds] = useState<number[]>([]);
   const updateTaskInStore = useTaskStore((s) => s.updateTask);
+  const resolveTaskFromServer = useTaskStore(
+    (s) => s.resolveTaskFromServer
+  );
   const updateTasksBulkInStore = useTaskStore((s) => s.updateTasksBulk);
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -901,7 +904,11 @@ export default function ListView({
     updateTaskInStore(task.id, patch);
     setTaskSaving(task.id, true);
     try {
-      await TaskAPI.updateTask(task.slug ?? task.id, requestData as Partial<TaskData>);
+      const response = await TaskAPI.updateTask(
+        task.slug ?? task.id,
+        requestData as Partial<TaskData>
+      );
+      resolveTaskFromServer(task.id, response.data as TaskData);
       markRecentlyUpdated([task.id]);
       if (resolveTaskSlug(task) === drawerTaskSlug) setDrawerRefreshKey((k) => k + 1);
       return true;
