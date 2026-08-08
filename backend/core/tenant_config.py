@@ -209,6 +209,7 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
         RolePermission,
         UserRole,
         ModuleApprover,
+        AdminOverrideAudit,
     )
 
     # ------------------------------------------------------------------
@@ -360,6 +361,7 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
         RolePermission,
         UserRole,
         ModuleApprover,
+        AdminOverrideAudit,  # depends on User + Organization only, same as Role
         # comments
         Comment,
         CommentMention,
