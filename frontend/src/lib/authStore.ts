@@ -270,6 +270,7 @@ export const useAuthStore = create<AuthState>()(
           return { success: false, error: message };
         }
       },
+      
 
       // Initialize authentication state on app startup
       initializeAuth: async () => {
@@ -298,7 +299,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ loading: true });
-
+ 
         try {
           if (refreshToken) {
             const refreshedToken = await authAPI.refreshToken(refreshToken);

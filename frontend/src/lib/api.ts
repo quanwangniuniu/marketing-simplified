@@ -17,6 +17,9 @@ const API_BASE_URL =
   (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.trim()) ||
   DEFAULT_API_BASE_URL;
 
+//Shared promise to prevent concurrent refresh token requests
+let sharedRefreshPromise: Promise<string | null> | null = null;
+
 /** Resolved API origin for browser and server; respects `NEXT_PUBLIC_API_URL` when set. */
 export function resolveApiBaseUrl(): string {
   return API_BASE_URL;
@@ -397,15 +400,22 @@ api.interceptors.response.use(
 
     if (status === 401 && !isAuthEndpoint && !shouldBypassGlobalLogout) {
       if (typeof window !== 'undefined' && config && !config._retry) {
-        const authData = readPersistedAuthState();
-        const refreshToken = authData?.state?.refreshToken;
-        if (refreshToken) {
-          config._retry = true;
-          const accessToken = await refreshAccessToken(refreshToken);
-          if (accessToken) {
-            config.headers.Authorization = `Bearer ${accessToken}`;
-            return api(config);
+        if (!sharedRefreshPromise) {
+          const authData = readPersistedAuthState();
+          const refreshToken = authData?.state?.refreshToken;
+          if (refreshToken) {
+            sharedRefreshPromise = refreshAccessToken(refreshToken);
           }
+        }
+        const accessToken = await sharedRefreshPromise;
+        // Reset sharedRefreshPromise no matter the refreshToken succeed or fail.
+        sharedRefreshPromise = null;
+
+        //Mark the request as retried so we don't end up in the infinite loop.
+        config._retry = true;
+        if (accessToken) {
+          config.headers.Authorization = `Bearer ${accessToken}`;
+          return api(config);
         }
       }
     }
