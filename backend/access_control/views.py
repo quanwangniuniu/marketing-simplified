@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, Http404
 from django.views import View
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.db import transaction
@@ -14,10 +15,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
-from .models import Organization, Role, Permission, UserRole, RolePermission, ModuleApprover, Team
+from .models import Organization, Role, Permission, UserRole, RolePermission, ModuleApprover, Team, AdminOverrideAudit
+from .serializers import AdminOverrideAuditSerializer
 from core.models import OrganizationMembership, Permission as CorePermission
 from core.models import Project
+from core.admin_utils import is_org_admin
 from .services import get_project_permission_matrix
 
 User = get_user_model()
@@ -833,9 +838,67 @@ def remove_user_role(request, user_id: int, role_id: int):
         return Response({
             'message': f'User role "{role.name}" has been removed successfully'
         }, status=status.HTTP_200_OK)
-        
+
     except Exception as e:
         return Response({
             "error": "An unexpected error occurred",
             "detail": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminOverrideAuditPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+    page_size_query_description = "Number of override audit entries per page (max 200)"
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_override_audit_list(request):
+    """
+    List AdminOverrideAudit entries. Superuser/org-admin bypasses of
+    the module permission check are recorded by AuthorizationMiddleware; this
+    endpoint is read-only and restricted to superusers and org admins, since
+    an override log is itself sensitive access-control data.
+
+    Query params: user_id, override_type, module, from, to (ISO 8601, filters created_at).
+    """
+    if not (request.user.is_superuser or is_org_admin(request.user)):
+        return Response(
+            {'error': 'Superuser or organization admin access required.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    queryset = AdminOverrideAudit.objects.filter(is_deleted=False).select_related('user', 'organization')
+
+    user_id = request.query_params.get('user_id')
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+
+    override_type = request.query_params.get('override_type')
+    if override_type:
+        queryset = queryset.filter(override_type=override_type.upper())
+
+    module = request.query_params.get('module')
+    if module:
+        queryset = queryset.filter(module=module.upper())
+
+    from_date = request.query_params.get('from')
+    if from_date:
+        from_datetime = parse_datetime(from_date.replace(' ', '+').replace('Z', '+00:00'))
+        if from_datetime is None:
+            raise DRFValidationError({'from': 'Invalid ISO 8601 date format'})
+        queryset = queryset.filter(created_at__gte=from_datetime)
+
+    to_date = request.query_params.get('to')
+    if to_date:
+        to_datetime = parse_datetime(to_date.replace(' ', '+').replace('Z', '+00:00'))
+        if to_datetime is None:
+            raise DRFValidationError({'to': 'Invalid ISO 8601 date format'})
+        queryset = queryset.filter(created_at__lte=to_datetime)
+
+    paginator = AdminOverrideAuditPagination()
+    page = paginator.paginate_queryset(queryset, request)
+    serializer = AdminOverrideAuditSerializer(page, many=True)
+    return paginator.get_paginated_response(serializer.data)

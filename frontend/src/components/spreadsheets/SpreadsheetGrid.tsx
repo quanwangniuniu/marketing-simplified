@@ -13,10 +13,15 @@ import {
   buildCellOperations,
   chunkOperations,
   exportMatrixToCSV,
-  exportMatrixToXLSX,
   CellOperation,
   XLSXParseResult,
 } from '@/components/spreadsheets/spreadsheetImportExport';
+import SparklineCell from '@/components/spreadsheets/SparklineCell';
+import {
+  isSparklineRawInput,
+  parseSparklinePayload,
+  type SparklinePayload,
+} from '@/components/spreadsheets/sparklineData';
 import { adjustFormulaReferences, colLabelToIndex } from '@/lib/spreadsheet/formulaFill';
 import { ApplyHighlightParams } from '@/types/patterns';
 import BrandSelect from '@/components/ui/BrandSelect';
@@ -2758,6 +2763,10 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       const cellData = cells.get(key);
       if (!cellData) return '';
       const rawInput = cellData.rawInput || '';
+      // Sparkline cells render as a chart (SparklineCell wins in the render path),
+      // so this value is only used for copy/paste and CSV export. Return the
+      // formula itself — never the backend JSON payload, and not a blank.
+      if (isSparklineRawInput(rawInput)) return rawInput.trim();
       const numberFormat = getCellFormat(row, col).numberFormat;
       const formatNum = (v: number | string) =>
         formatNumericForDisplay(Number(v), numberFormat);
@@ -2793,6 +2802,15 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
       return '';
     },
     [cells, evaluateFormulaLocally, formatNumericForDisplay, getCellFormat]
+  );
+
+  const getCellSparkline = useCallback(
+    (row: number, col: number): SparklinePayload | null => {
+      const cellData = cells.get(getCellKey(row, col));
+      if (!cellData || !isSparklineRawInput(cellData.rawInput)) return null;
+      return parseSparklinePayload(cellData.computedString);
+    },
+    [cells],
   );
 
   const getFormulaBarDisplayValue = useCallback((): string => {
@@ -4296,16 +4314,16 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   }, [buildUsedRangeMatrix, getExportFileBaseName]);
 
   const handleExportXLSX = useCallback(async () => {
-    const matrix = buildUsedRangeMatrix();
-    const sheetTitle = sheetName?.trim() || 'Sheet1';
-    const blob = await exportMatrixToXLSX(matrix, sheetTitle);
+    // Delegate to the backend so the .xlsx carries native charts for sparkline
+    // cells (the frontend SheetJS path is value-only). See MED-295.
+    const blob = await SpreadsheetAPI.exportSheetXlsx(spreadsheetId, sheetId);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `${getExportFileBaseName()}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [buildUsedRangeMatrix, getExportFileBaseName, sheetName]);
+  }, [spreadsheetId, sheetId, getExportFileBaseName]);
 
   const handleImportClick = useCallback(() => {
     if (isImporting) return;
@@ -6532,6 +6550,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                       isActive && isSingleCellSelection && !isEditing && !isFilling
                     );
                     const displayValue = isEditing ? editValue : getCellDisplayValue(row, col);
+                    const sparkline = isEditing ? null : getCellSparkline(row, col);
                     const highlightColor = getHighlightColor(row, col);
                     const hasHighlight = Boolean(highlightColor);
                     const remotePresence = resolveRemoteCellPresence(remotePresenceUsers, row, col);
@@ -6626,7 +6645,11 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                               fontSize: getCellFormat(row, col).fontSize != null ? `${getCellFormat(row, col).fontSize}px` : undefined,
                             }}
                           >
-                            {displayValue}
+                            {sparkline ? (
+                              <SparklineCell payload={sparkline} width={colWidth} height={rowHeight} />
+                            ) : (
+                              displayValue
+                            )}
                           </div>
                         )}
                         {remotePresence.cursors.map((user) => (
@@ -6756,6 +6779,7 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                       isActive && isSingleCellSelection && !isEditing && !isFilling
                     );
                     const displayValue = isEditing ? editValue : getCellDisplayValue(row, col);
+                    const sparkline = isEditing ? null : getCellSparkline(row, col);
                     const highlightColor = getHighlightColor(row, col);
                     const hasHighlight = Boolean(highlightColor);
                     const remotePresence = resolveRemoteCellPresence(remotePresenceUsers, row, col);
@@ -6850,7 +6874,11 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
                               fontSize: getCellFormat(row, col).fontSize != null ? `${getCellFormat(row, col).fontSize}px` : undefined,
                             }}
                           >
-                            {displayValue}
+                            {sparkline ? (
+                              <SparklineCell payload={sparkline} width={colWidth} height={rowHeight} />
+                            ) : (
+                              displayValue
+                            )}
                           </div>
                         )}
                         {remotePresence.cursors.map((user) => (

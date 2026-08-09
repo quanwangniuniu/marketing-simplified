@@ -4,6 +4,7 @@ API views for spreadsheet operations
 Handles CRUD operations for spreadsheets, sheets, rows, columns, and cells
 """
 import logging
+import re
 import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -16,6 +17,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.http import HttpResponse
+
+from .xlsx_export import build_sheet_workbook
 
 from .models import (
     Spreadsheet,
@@ -1432,3 +1436,24 @@ class SpreadsheetCellFormatBatchView(APIView):
             updated += 1
 
         return Response({'updated': updated, 'revision': sheet.revision})
+
+
+class SheetXlsxExportView(APIView):
+    """Export a sheet to .xlsx, embedding native charts for sparkline cells (MED-295)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, spreadsheet_id, sheet_id):
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
+        sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
+        content = build_sheet_workbook(sheet)
+        response = HttpResponse(
+            content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        # sheet.name is user-controlled: strip quotes/backslashes and control
+        # chars so it can't break or inject into the Content-Disposition header.
+        safe_name = re.sub(r'["\\\r\n]|[\x00-\x1f]', '', (sheet.name or 'sheet')).strip() or 'sheet'
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}.xlsx"'
+        return response
