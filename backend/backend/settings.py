@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'django_filters',
     'django_fsm',
     'channels',
+    'audit.apps.AuditConfig',
     'authentication.apps.AuthenticationConfig',
     'core.apps.CoreConfig',
     'spreadsheet.apps.SpreadsheetConfig',
