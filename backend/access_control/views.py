@@ -19,8 +19,23 @@ from .models import Organization, Role, Permission, UserRole, RolePermission, Mo
 from core.models import OrganizationMembership, Permission as CorePermission
 from core.models import Project
 from .services import get_project_permission_matrix
+from audit.utils import capture_snapshot, record_audit_entry
 
 User = get_user_model()
+
+
+def _permissions_snapshot(role):
+    """
+    Return a JSON-safe dict of the active permissions currently assigned to a role.
+    Used as before/after payload for role.permissions_updated and role.permissions_copied.
+    Format: {"permissions": ["ASSET_VIEW", "CAMPAIGN_EDIT", ...]}
+    """
+    perms = (
+        RolePermission.objects
+        .filter(role=role, is_deleted=False)
+        .values_list('permission__module', 'permission__action')
+    )
+    return {'permissions': sorted(f"{m}_{a}" for m, a in perms)}
 
 
 # original asset view
@@ -163,13 +178,22 @@ def roles_list(request):
                     'error': f'Role with name "{name}" already exists for this organization'
                 }, status=status.HTTP_409_CONFLICT)
             
-            # Create the role
-            role = Role.objects.create(
-                name=name,
-                level=level,
-                organization=organization
-            )
-            
+            # Create the role and write an audit entry in one atomic operation so
+            # a failure in either step rolls both back together.
+            with transaction.atomic():
+                role = Role.objects.create(
+                    name=name,
+                    level=level,
+                    organization=organization
+                )
+                record_audit_entry(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action='role.created',
+                    target=role,
+                    before=None,
+                    after=capture_snapshot(role),
+                )
+
             return Response({
                 'id': role.id,
                 'name': role.name,
@@ -196,6 +220,9 @@ def role_detail(request, role_id):
     if request.method == 'PUT':
         """Update an existing role"""
         try:
+            # Capture state before any changes so the diff is accurate.
+            before = capture_snapshot(role)
+
             name = request.data.get('name')
             level = request.data.get('level')
             organization_id = request.data.get('organization_id')
@@ -261,9 +288,18 @@ def role_detail(request, role_id):
             
             if should_update_org:
                 role.organization = organization
-            
-            role.save()
-            
+
+            # Save and record audit in one atomic operation.
+            with transaction.atomic():
+                role.save()
+                record_audit_entry(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action='role.updated',
+                    target=role,
+                    before=before,
+                    after=capture_snapshot(role),
+                )
+
             return Response({
                 'id': role.id,
                 'name': role.name,
@@ -273,20 +309,31 @@ def role_detail(request, role_id):
                 'organization_id': role.organization_id,
                 'isReadOnly': False
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     elif request.method == 'DELETE':
         """Permanently delete a role"""
         try:
-            role_snapshot = {"name": role.name, "level": role.level, "organization_id": role.organization_id}
-            role.delete()  # Permanently delete the role from database
-            
+            # Snapshot before deletion; the object still holds its field values
+            # in memory after .delete() so it can still be passed as target.
+            before = capture_snapshot(role)
+
+            with transaction.atomic():
+                role.delete()
+                record_audit_entry(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action='role.deleted',
+                    target=role,
+                    before=before,
+                    after=None,
+                )
+
             return Response({
-                'message': f'Role "{role_snapshot["name"]}" has been deleted successfully'
+                'message': f'Role "{before["name"]}" has been deleted successfully'
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -373,13 +420,16 @@ def update_role_permissions(request, role_id):
     try:
         # check if the role exist or not
         role = get_object_or_404(Role, id=role_id, is_deleted=False)
-        
+
         # fetch request data
         permissions_data = request.data.get('permissions', [])
-        
+
         if not permissions_data:
             return Response({'error': 'No permissions data provided'}, status=400)
-        
+
+        # Capture the permission set before any changes for the audit diff.
+        before = _permissions_snapshot(role)
+
         # start to updating permissions
         success_count = 0
         error_count = 0
@@ -476,12 +526,21 @@ def update_role_permissions(request, role_id):
                 error_count += 1
                 print(f"❌ Permission not found: permission_id={permission_id}, parsed as module={module}, action={action}")
                 continue
+        # Record which permissions were added/removed.
+        record_audit_entry(
+            actor=request.user if request.user.is_authenticated else None,
+            action='role.permissions_updated',
+            target=role,
+            before=before,
+            after=_permissions_snapshot(role),
+        )
+
         return Response({
             'message': f'Permissions updated successfully. {success_count} updated, {error_count} errors.',
             'success_count': success_count,
             'error_count': error_count
         })
-        
+
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
@@ -498,7 +557,10 @@ def copy_role_permissions(request, to_role_id):
         # check if the two roles both exist
         from_role = get_object_or_404(Role, id=from_role_id, is_deleted=False)
         to_role = get_object_or_404(Role, id=to_role_id, is_deleted=False)
-        
+
+        # Capture the destination role's permissions before the copy.
+        before = _permissions_snapshot(to_role)
+
         # fetch all permissions of the roles
         source_permissions = RolePermission.objects.filter(
             role=from_role,
@@ -526,11 +588,20 @@ def copy_role_permissions(request, to_role_id):
                 role_perm.updated_at = timezone.now()
                 role_perm.save()
                 copied_count += 1
+        # Record what the destination role's permissions looked like before and after.
+        record_audit_entry(
+            actor=request.user if request.user.is_authenticated else None,
+            action='role.permissions_copied',
+            target=to_role,
+            before=before,
+            after=_permissions_snapshot(to_role),
+        )
+
         return Response({
             'message': f'Successfully copied {copied_count} permissions from {from_role.name} to {to_role.name}',
             'copied_count': copied_count
         })
-        
+
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
@@ -754,6 +825,22 @@ def assign_user_role(request, user_id: int):
                     status_code = status.HTTP_201_CREATED
                     created = True
 
+                # Audit the assignment inside the same transaction so it rolls
+                # back together if anything above fails.
+                record_audit_entry(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action='user_role.assigned',
+                    target=user,
+                    before=None,
+                    after={
+                        'role_id': role.id,
+                        'role_name': role.name,
+                        'team_id': team.id if team else None,
+                        'valid_from': str(parsed_from),
+                        'valid_to': str(parsed_to) if parsed_to else None,
+                    },
+                )
+
             return Response({
                 "message": "user role assigned" if created else "user role restored",
                 "user_role": {
@@ -821,9 +908,26 @@ def remove_user_role(request, user_id: int, role_id: int):
             # This shouldn't happen due to unique_together, but handle it just in case
             return Response({"error": "Multiple UserRole records found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Permanently delete the UserRole
+        # Capture before deletion; the object still holds its data in memory after .delete().
+        before = {
+            'role_id': role.id,
+            'role_name': role.name,
+            'team_id': team.id if team else None,
+            'valid_from': str(ur.valid_from),
+            'valid_to': str(ur.valid_to) if ur.valid_to else None,
+        }
+
+        # Delete and audit in one atomic operation.
         try:
-            ur.delete()
+            with transaction.atomic():
+                ur.delete()
+                record_audit_entry(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action='user_role.removed',
+                    target=user,
+                    before=before,
+                    after=None,
+                )
         except Exception as e:
             return Response({
                 "error": "Failed to remove user role",
