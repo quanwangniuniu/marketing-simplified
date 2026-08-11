@@ -24,6 +24,20 @@ from audit.utils import capture_snapshot, record_audit_entry
 User = get_user_model()
 
 
+def _actor_org(request):
+    """Return the Organization instance for the request user, or None."""
+    org_id = (
+        getattr(request.user, 'current_organization_id', None)
+        or getattr(request.user, 'organization_id', None)
+    )
+    if not org_id:
+        return None
+    try:
+        return Organization.objects.get(pk=org_id)
+    except Organization.DoesNotExist:
+        return None
+
+
 def _permissions_snapshot(role):
     """
     Return a JSON-safe dict of the active permissions currently assigned to a role.
@@ -192,7 +206,7 @@ def roles_list(request):
                     target=role,
                     before=None,
                     after=capture_snapshot(role),
-                    organization=organization,
+                    organization=_actor_org(request),
                 )
 
             return Response({
@@ -299,7 +313,7 @@ def role_detail(request, role_id):
                     target=role,
                     before=before,
                     after=capture_snapshot(role),
-                    organization=role.organization,
+                    organization=_actor_org(request),
                 )
 
             return Response({
@@ -331,7 +345,7 @@ def role_detail(request, role_id):
                     target=role,
                     before=before,
                     after=None,
-                    organization=role_organization,
+                    organization=_actor_org(request),
                 )
 
             return Response({
@@ -539,7 +553,7 @@ def update_role_permissions(request, role_id):
                 target=role,
                 before=before,
                 after=_permissions_snapshot(role),
-                organization=role.organization,
+                organization=_actor_org(request),
             )
 
         return Response({
@@ -604,7 +618,7 @@ def copy_role_permissions(request, to_role_id):
                 target=to_role,
                 before=before,
                 after=_permissions_snapshot(to_role),
-                organization=to_role.organization,
+                organization=_actor_org(request),
             )
 
         return Response({
@@ -849,7 +863,7 @@ def assign_user_role(request, user_id: int):
                         'valid_from': str(parsed_from),
                         'valid_to': str(parsed_to) if parsed_to else None,
                     },
-                    organization=role.organization,
+                    organization=_actor_org(request),
                 )
 
             return Response({
@@ -938,7 +952,7 @@ def remove_user_role(request, user_id: int, role_id: int):
                     target=user,
                     before=before,
                     after=None,
-                    organization=role.organization,
+                    organization=_actor_org(request),
                 )
         except Exception as e:
             return Response({

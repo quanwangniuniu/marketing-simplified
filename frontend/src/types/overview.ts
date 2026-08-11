@@ -1,7 +1,7 @@
 import type { DashboardSummary } from './dashboard';
 import type { DecisionListItem, DecisionRiskLevel } from './decision';
 import type { MeetingListItem, MeetingActionItem } from './meeting';
-import type { AuditEvent } from '@/components/overview/AuditCard';
+import type { AdminAuditEvent } from '@/types/audit';
 
 export interface PendingDecisionDisplay extends DecisionListItem {
   riskLevel?: DecisionRiskLevel | null;
@@ -43,5 +43,5 @@ export interface OverviewMock {
   pendingAssetReviews: PendingAssetReviewItem[];
   activeCampaigns: ActiveCampaignSummary[];
   pendingInvitations: ProjectInvitationSummary[];
-  recentAuditEvents: AuditEvent[];
+  recentAuditEvents: AdminAuditEvent[];
 }

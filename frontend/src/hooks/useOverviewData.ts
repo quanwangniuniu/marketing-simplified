@@ -21,7 +21,7 @@ import type { DashboardSummary } from '@/types/dashboard';
 import type { MeetingListItem } from '@/types/meeting';
 import type { AlertData, AlertSeverity, AlertType } from '@/lib/mock/dashboardMock';
 import { AdminAuditLogAPI } from '@/lib/api/auditLogApi';
-import type { AuditEvent } from '@/components/overview/AuditCard';
+import type { AdminAuditEvent } from '@/types/audit';
 
 const EMPTY_SUMMARY: DashboardSummary = {
   time_metrics: {
@@ -267,10 +267,10 @@ export function useOverviewData(projectId: number | string | null | undefined): 
         nextErrors.alerts = errMessage(rAlerts.reason);
       }
 
-      let recentAuditEvents: AuditEvent[] = [];
+      let recentAuditEvents: AdminAuditEvent[] = [];
       const rAudit = initial[8];
       if (rAudit.status == 'fulfilled'){
-        const raw = rAudit.value.data as { results?: AuditEvent[] } | AuditEvent[];
+        const raw = rAudit.value.data as { results?: AdminAuditEvent[] } | AdminAuditEvent[];
         recentAuditEvents = Array.isArray(raw) ? raw : (raw.results ?? []);
       } else{
         nextErrors.recentAuditEvents = errMessage(rAudit.reason);

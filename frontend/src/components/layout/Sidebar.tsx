@@ -1,5 +1,6 @@
 // src/components/layout/Sidebar.tsx
 import { useState, useEffect, useMemo } from "react";
+import { useAuthStore } from "@/lib/authStore";
 import type { FC, ComponentType } from "react";
 import { useChatStore } from "@/lib/chatStore";
 import { useAgentSidePanelStore } from "@/lib/agentSidePanelStore";
@@ -209,6 +210,8 @@ const Sidebar: FC<SidebarProps> = ({
   const { t } = useLanguage();
   const { toggle: toggleAgentPanel, isOpen: isAgentPanelOpen } = useAgentSidePanelStore();
   const activeProject = useProjectStore((s) => s.activeProject);
+  const authUser = useAuthStore((s) => s.user);
+  const effectiveRoleLevel = (authUser?.is_staff || authUser?.is_org_admin) ? 1 : userRoleLevel;
 
   // Get current pathname using Next.js 13+ App Router hook
   const pathname = usePathname();
@@ -223,7 +226,7 @@ const Sidebar: FC<SidebarProps> = ({
   const globalUnreadCount = useChatStore(state => state.globalUnreadCount);
 
   const navigationItems = useMemo(() => {
-    const items = getNavigationItems(userRole, userRoleLevel, t);
+    const items = getNavigationItems(userRole, effectiveRoleLevel, t);
     return items.map(item => {
       if (item.name === (t ? t("sidebar.messages") : "Messages") || item.href === "/messages") {
         return { ...item, badge: globalUnreadCount > 0 ? globalUnreadCount : undefined };

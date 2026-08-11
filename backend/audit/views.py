@@ -14,7 +14,18 @@ class AdminAuditEventListView(ListAPIView):
         # Always scope to the current user's organization so that admins from
         # different orgs cannot see each other's audit logs.
         org_id = getattr(user, 'current_organization_id', None) or getattr(user, 'organization_id', None)
-        qs = AdminAuditEvent.objects.select_related('actor').filter(organization_id=org_id)
+
+        # Safety: if org_id is None we cannot determine which tenant this user
+        # belongs to. Returning all null-org events would expose data across
+        # org boundaries (filter(organization_id=None) generates IS NULL which
+        # matches every system-level event). Staff/superusers may see all events.
+        if org_id is None:
+            if user.is_staff or user.is_superuser:
+                qs = AdminAuditEvent.objects.select_related('actor').all()
+            else:
+                return AdminAuditEvent.objects.none()
+        else:
+            qs = AdminAuditEvent.objects.select_related('actor').filter(organization_id=org_id)
 
         # Optional: filter by project.
         # Returns events that belong to the given project OR have no project
