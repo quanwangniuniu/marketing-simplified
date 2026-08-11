@@ -5,6 +5,7 @@ import RecentActivityCard from './RecentActivityCard';
 import TeamManagementSection from './TeamManagementSection';
 import WorkspaceDashboard from '@/components/projects/WorkspaceDashboard';
 import type { OverviewMock } from '@/types/overview';
+import AuditCard from './AuditCard';
 
 interface OverviewContentProps {
   data: OverviewMock;
@@ -30,6 +31,7 @@ export default function OverviewContent({
       </div>
       <MeetingsCard upcoming={data.upcomingMeetings} actions={data.actionItems} />
       <RecentActivityCard activities={data.taskSummary.recent_activity} />
+      <AuditCard events={data.recentAuditEvents} />
       <div className="xl:col-span-2 scroll-mt-24" id="project-team">
         <TeamManagementSection projectId={projectId} projectName={projectName} />
       </div>

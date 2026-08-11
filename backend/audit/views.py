@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from .models import AdminAuditEvent
@@ -8,13 +9,26 @@ class AdminAuditEventListView(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = AdminAuditEvent.objects.select_related('actor')
+        user = self.request.user
 
-        # filter by action
+        # Always scope to the current user's organization so that admins from
+        # different orgs cannot see each other's audit logs.
+        org_id = getattr(user, 'current_organization_id', None) or getattr(user, 'organization_id', None)
+        qs = AdminAuditEvent.objects.select_related('actor').filter(organization_id=org_id)
+
+        # Optional: filter by project.
+        # Returns events that belong to the given project OR have no project
+        # (org-level actions like role changes, slug updates, etc.)
+        project_id = self.request.query_params.get("project_id")
+        if project_id:
+            qs = qs.filter(Q(project_id=project_id) | Q(project__isnull=True))
+
+        # Optional: filter by action code
         action = self.request.query_params.get("action")
         if action:
-            qs = qs.filter(action = action)
+            qs = qs.filter(action=action)
 
+        # Optional: filter by target model type
         target_type = self.request.query_params.get("target_type")
         if target_type:
             qs = qs.filter(target_type=target_type)

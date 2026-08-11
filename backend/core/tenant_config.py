@@ -231,11 +231,6 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
     )
 
     # ------------------------------------------------------------------
-    # audit — admin action audit log (per-org isolation)
-    # ------------------------------------------------------------------
-    from audit.models import AdminAuditEvent
-
-    # ------------------------------------------------------------------
     # notion_editor — notion-style document editor
     # ------------------------------------------------------------------
     from notion_editor.models import (
@@ -374,8 +369,6 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
         BoardItem,
         BoardRevision,
         BoardAccess,
-        # audit (no intra-tenant FK dependencies)
-        AdminAuditEvent,
         # notion_editor (Draft depends on User in public schema)
         Draft,
         ContentBlock,

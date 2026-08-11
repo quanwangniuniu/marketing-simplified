@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.conf import settings
+from django.apps import apps
 
 ACTION_CHOICES = [
     ('role.created',              'Role Created'),
@@ -22,11 +23,28 @@ ACTION_CHOICES = [
 
 class AdminAuditEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        'core.Organization',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="admin_audit_events"
+    )
+    project = models.ForeignKey(
+        'core.Project',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        db_constraint=False,  # Project lives in tenant schema; no cross-schema FK constraint
+        related_name="admin_audit_events"
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="admin_audit_events"
+        related_name="audit_events_acted"
     )
     action      = models.CharField(max_length=64, choices=ACTION_CHOICES, db_index=True)
     target_type = models.CharField(max_length=64)

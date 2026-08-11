@@ -9,6 +9,8 @@ class AdminAuditEventSerializer(serializers.ModelSerializer):
         model = AdminAuditEvent
         fields = [
             "id",
+            "organization_id",
+            "project_id",
             "actor_id",
             "actor_email",
             "actor_name",

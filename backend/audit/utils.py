@@ -27,13 +27,23 @@ def record_audit_entry(
         target,
         before: Optional[Dict[str, Any]] = None,
         after: Optional[Dict[str, Any]] = None,
+        organization=None,
+        project=None,
 ) -> AdminAuditEvent:
     """
-    Insert an audit record into AdminAuditEvent table
+    Insert an audit record into AdminAuditEvent table in the public schema.
 
     Must be called in transaction.atomic() block.
+
+    Args:
+        actor: The user performing the action.
+        action: One of ACTION_CHOICES codes.
+        target: The model instance being acted on.
+        before: Snapshot of the target before the action.
+        after: Snapshot of the target after the action.
+        organization: The Organization this action belongs to.
+        project: The Project this action belongs to (None for org-level actions).
     """
-    # check does action valid
     valid_actions = {code for code, _ in ACTION_CHOICES}
     if action not in valid_actions:
         raise ValueError(f"Invalid action: '{action}'. Valid: {valid_actions}")
@@ -41,10 +51,10 @@ def record_audit_entry(
     return AdminAuditEvent.objects.create(
         actor=actor,
         action=action,
-        # class name of action
+        organization=organization,
+        project=project,
         target_type=target.__class__.__name__,
         target_id=str(target.pk),
-        # use name field first, use targe.pk otherwise
         target_name=getattr(target, 'name', str(target.pk)),
         before=before,
         after=after,

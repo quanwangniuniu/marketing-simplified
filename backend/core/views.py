@@ -3,6 +3,7 @@ import logging
 from django.contrib.auth import get_user_model
 from django.http import FileResponse
 from django.db import transaction
+from audit.utils import capture_snapshot, record_audit_entry
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -564,9 +565,24 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
 
         return organization
 
+    def perform_update(self, serializer):
+        before = capture_snapshot(serializer.instance)
+        with transaction.atomic():
+            instance = serializer.save()
+            record_audit_entry(
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                action='project.updated',
+                target=instance,
+                before=before,
+                after=capture_snapshot(instance),
+                organization=instance.organization,
+            )
+
     def perform_destroy(self, instance):
         """Delete project using raw SQL to bypass Django's cross-schema cascade issues."""
         from django.db import connection
+        before = capture_snapshot(instance)
+        project_org = instance.organization
 
         # CRITICAL: Multi-tenant architecture has FK relationships across schemas:
         # - public schema: slack_integration_notificationpreference, google_calendar_connections, etc.
@@ -675,6 +691,15 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                     'DELETE FROM core_project WHERE id = %s',
                     [project_id]
                 )
+
+            record_audit_entry(
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                action='project.deleted',
+                target=instance,
+                before=before,
+                after=None,
+                organization=project_org,
+            )
 
     @action(detail=True, methods=['post'])
     def set_active(self, request, pk=None):
@@ -797,11 +822,21 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        label, _ = DecisionTopicLabel.objects.update_or_create(
-            project=project,
-            topic=normalized_topic,
-            defaults={'title': title, 'is_deleted': False},
-        )
+        with transaction.atomic():
+            label, _ = DecisionTopicLabel.objects.update_or_create(
+                project=project,
+                topic=normalized_topic,
+                defaults={'title': title, 'is_deleted': False},
+            )
+            record_audit_entry(
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                action='project.labels_updated',
+                target=project,
+                before=None,
+                after={'topic': normalized_topic, 'title': title},
+                organization=project.organization,
+                project=project,
+            )
         return Response(
             {
                 'topic': normalized_topic,
@@ -1660,9 +1695,21 @@ class OrganizationDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Soft-delete the organization
-        org.is_active = False
-        org.save(update_fields=['is_active', 'updated_at'])
+        before = capture_snapshot(org)
+
+        with transaction.atomic():
+            # Soft-delete the organization
+            org.is_active = False
+            org.save(update_fields=['is_active', 'updated_at'])
+
+            record_audit_entry(
+                actor=user if user.is_authenticated else None,
+                action='org.deleted',
+                target=org,
+                before=before,
+                after=None,
+                organization=org,
+            )
 
         # Switch current_organization for every user who had this as their active org
         User = get_user_model()
@@ -1743,6 +1790,15 @@ class UpdateOrganizationSlugView(APIView):
                 #    is NOT called again — only save() triggers it for new orgs)
                 org.slug = new_slug
                 org.save(update_fields=['slug', 'updated_at'])
+
+                record_audit_entry(
+                    actor=user if user.is_authenticated else None,
+                    action='org.slug_updated',
+                    target=org,
+                    before={'slug': old_slug},
+                    after={'slug': new_slug},
+                    organization=org,
+                )
         except Exception as exc:
             return Response(
                 {'error': f'Failed to rename slug: {exc}'},

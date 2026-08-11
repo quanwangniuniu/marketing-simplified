@@ -4,17 +4,22 @@ Tests for GET /api/audit/events/
 Covers:
   - Unauthenticated requests are rejected with 401
   - Authenticated requests return 200 with a list
+  - Response fields include organization_id and project_id
+  - Org isolation: events from another org are never returned
   - Filtering by action query param
   - Filtering by target_type query param
+  - Filtering by project_id: returns matching project events + org-level events
+  - Filtering by project_id: excludes events from other projects
   - Events are returned in reverse chronological order (newest first)
 """
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
 from rest_framework.test import APIClient
 
 from core.test_utils import TenantTestCase
-from core.models import Role
+from core.models import Organization, Project, Role
 from audit.utils import capture_snapshot, record_audit_entry
 
 User = get_user_model()
@@ -32,20 +37,32 @@ class AuditEventListViewTest(TenantTestCase):
             email='admin@test.com',
             password='pw',
         )
+        # Set current_organization so the view's org filter resolves correctly.
+        # User lives in public schema, so switch there to save, then switch back.
+        with connection.cursor() as cursor:
+            cursor.execute('SET search_path TO public')
+        self.user.current_organization_id = self.test_org.id
+        self.user.save(update_fields=['current_organization_id'])
+        with connection.cursor() as cursor:
+            cursor.execute(f'SET search_path TO {self.test_schema}, public')
+
         self.role = Role.objects.create(
             organization=self.test_org,
             name='Editor',
             level=10,
         )
+        self.project = Project.objects.create(
+            name='Test Project',
+            organization=self.test_org,
+        )
+
         # Pre-populate the middleware slug-validation cache so _validate_slug()
-        # never queries core_organization (which lives in public schema, invisible
-        # when TenantTestCase sets search_path to the tenant schema only).
+        # never queries core_organization during tests.
         cache.set(f'tenant:valid:{self.test_org.slug}', True, 300)
-        # Pass org slug so TenantSchemaMiddleware switches to the correct schema
         self.tenant_headers = {'HTTP_X_ORGANIZATION_SLUG': self.test_org.slug}
 
-    def _create_event(self, action='role.updated', target=None):
-        """Helper to insert one audit event into the tenant schema."""
+    def _create_event(self, action='role.updated', target=None, organization=None, project=None):
+        """Insert one audit event. Defaults to the test org and no project."""
         target = target or self.role
         record_audit_entry(
             actor=self.user,
@@ -53,6 +70,8 @@ class AuditEventListViewTest(TenantTestCase):
             target=target,
             before=capture_snapshot(target),
             after=capture_snapshot(target),
+            organization=organization if organization is not None else self.test_org,
+            project=project,
         )
 
     # ------------------------------------------------------------------
@@ -94,12 +113,54 @@ class AuditEventListViewTest(TenantTestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.get(EVENTS_URL, **self.tenant_headers)
         event = response.data['results'][0]
-        for field in ['id', 'actor_id', 'actor_email', 'actor_name', 'action',
-                      'target_type', 'target_id', 'target_name', 'before', 'after', 'timestamp']:
+        for field in [
+            'id', 'organization_id', 'project_id',
+            'actor_id', 'actor_email', 'actor_name',
+            'action', 'target_type', 'target_id', 'target_name',
+            'before', 'after', 'timestamp',
+        ]:
             self.assertIn(field, event)
 
+    def test_organization_id_and_project_id_in_response(self):
+        """organization_id should match the org; project_id should be None for org-level events."""
+        self._create_event()
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(EVENTS_URL, **self.tenant_headers)
+        event = response.data['results'][0]
+        self.assertEqual(event['organization_id'], self.test_org.id)
+        self.assertIsNone(event['project_id'])
+
     # ------------------------------------------------------------------
-    # Filtering
+    # Org isolation
+    # ------------------------------------------------------------------
+
+    def test_only_returns_current_org_events(self):
+        """Events belonging to a different org must not appear in the results."""
+        # Create a second org and a user who belongs to it
+        other_org = Organization.objects.create(
+            name='Other Org',
+            slug='other-org-isolation',
+        )
+        other_role = Role.objects.create(organization=other_org, name='Viewer', level=5)
+
+        # Write one event for the current org and one for the other org
+        self._create_event(organization=self.test_org)
+        record_audit_entry(
+            actor=self.user,
+            action='role.created',
+            target=other_role,
+            organization=other_org,
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(EVENTS_URL, **self.tenant_headers)
+
+        # Only the event for the current org should be returned
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['organization_id'], self.test_org.id)
+
+    # ------------------------------------------------------------------
+    # Filtering by action / target_type
     # ------------------------------------------------------------------
 
     def test_filter_by_action(self):
@@ -125,6 +186,67 @@ class AuditEventListViewTest(TenantTestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.get(EVENTS_URL, {'action': 'org.deleted'}, **self.tenant_headers)
         self.assertEqual(response.data['count'], 0)
+
+    # ------------------------------------------------------------------
+    # Filtering by project_id
+    # ------------------------------------------------------------------
+
+    def test_filter_by_project_id_returns_project_events(self):
+        """?project_id= should return events that belong to that project."""
+        self._create_event(action='project.updated', project=self.project)
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            EVENTS_URL, {'project_id': self.project.id}, **self.tenant_headers
+        )
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['project_id'], self.project.id)
+
+    def test_filter_by_project_id_includes_org_level_events(self):
+        """?project_id= should also include org-level events (project=None) in results."""
+        # org-level event (no project)
+        self._create_event(action='role.updated', project=None)
+        # project-scoped event
+        self._create_event(action='project.updated', project=self.project)
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            EVENTS_URL, {'project_id': self.project.id}, **self.tenant_headers
+        )
+        # Both the project event and the org-level event should appear
+        self.assertEqual(response.data['count'], 2)
+
+    def test_filter_by_project_id_excludes_other_projects(self):
+        """?project_id= must not return events belonging to a different project."""
+        other_project = Project.objects.create(
+            name='Other Project',
+            organization=self.test_org,
+        )
+        # Event for a different project
+        self._create_event(action='project.updated', project=other_project)
+        # Event for the target project
+        self._create_event(action='project.labels_updated', project=self.project)
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            EVENTS_URL, {'project_id': self.project.id}, **self.tenant_headers
+        )
+        # Only the event for self.project (plus any org-level ones) should appear
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['project_id'], self.project.id)
+
+    def test_no_project_filter_returns_all_org_events(self):
+        """Without ?project_id, all events for the org are returned regardless of project."""
+        other_project = Project.objects.create(
+            name='Another Project',
+            organization=self.test_org,
+        )
+        self._create_event(action='role.updated', project=None)
+        self._create_event(action='project.updated', project=self.project)
+        self._create_event(action='project.labels_updated', project=other_project)
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(EVENTS_URL, **self.tenant_headers)
+        self.assertEqual(response.data['count'], 3)
 
     # ------------------------------------------------------------------
     # Ordering

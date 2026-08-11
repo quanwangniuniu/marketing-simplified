@@ -395,6 +395,8 @@ export type AdminAuditAction =
 
 export interface AdminAuditEvent {
   id: string;
+  organization_id: number | null;
+  project_id: number | null;
   actor_id: number | null;
   actor_email: string | null;
   actor_name: string | null;
@@ -417,5 +419,6 @@ export interface PaginatedAdminAuditEvents {
 export interface AdminAuditEventFilters {
   action?: AdminAuditAction;
   target_type?: string;
+  project_id?: number | string;
 }
 

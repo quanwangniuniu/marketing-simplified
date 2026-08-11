@@ -192,6 +192,7 @@ def roles_list(request):
                     target=role,
                     before=None,
                     after=capture_snapshot(role),
+                    organization=organization,
                 )
 
             return Response({
@@ -298,6 +299,7 @@ def role_detail(request, role_id):
                     target=role,
                     before=before,
                     after=capture_snapshot(role),
+                    organization=role.organization,
                 )
 
             return Response({
@@ -321,6 +323,7 @@ def role_detail(request, role_id):
             before = capture_snapshot(role)
 
             with transaction.atomic():
+                role_organization = role.organization
                 role.delete()
                 record_audit_entry(
                     actor=request.user if request.user.is_authenticated else None,
@@ -328,6 +331,7 @@ def role_detail(request, role_id):
                     target=role,
                     before=before,
                     after=None,
+                    organization=role_organization,
                 )
 
             return Response({
@@ -430,110 +434,113 @@ def update_role_permissions(request, role_id):
         # Capture the permission set before any changes for the audit diff.
         before = _permissions_snapshot(role)
 
-        # start to updating permissions
+        # All permission writes + audit in one atomic block so a failure in
+        # any write rolls back everything, including the audit entry.
         success_count = 0
         error_count = 0
-        
-        for perm_data in permissions_data:
-            permission_id = perm_data.get('permission_id') or perm_data.get('permissionId')
-            granted = perm_data.get('granted', True)
-            
-            if not permission_id:
-                error_count += 1
-                continue
-            
-            # decode permission_id (format: "asset_view" or "budget_request_view" -> module=ASSET/BUDGET_REQUEST, action=VIEW)
-            # Note: Action is always a single word (VIEW, EDIT, APPROVE, DELETE, EXPORT)
-            # Module can contain underscores (BUDGET_REQUEST, BUDGET_POOL, etc.)
-            # So we split from the right to get the last part as action
-            try:
-                if isinstance(permission_id, str) and '_' in permission_id:
-                    # Split from the right: "budget_request_view" -> ["budget_request", "view"]
-                    # This handles modules with underscores like "BUDGET_REQUEST"
-                    parts = permission_id.rsplit('_', 1)
-                    if len(parts) == 2:
-                        module_part = parts[0]  # "budget_request"
-                        action_part = parts[1]  # "view"
-                        module = module_part.upper()  # "BUDGET_REQUEST"
-                        action = action_part.upper()  # "VIEW"
-                    else:
-                        # Fallback: try to find by matching known actions from Permission model
-                        # Get all valid actions from Permission.ACTION_CHOICES dynamically
-                        # This ensures we stay in sync with model changes
-                        known_actions = [choice[0] for choice in CorePermission.ACTION_CHOICES]
-                        for known_action in known_actions:
-                            if permission_id.lower().endswith('_' + known_action.lower()):
-                                action = known_action
-                                module = permission_id[:-len('_' + known_action.lower())].upper()
-                                break
+
+        with transaction.atomic():
+            for perm_data in permissions_data:
+                permission_id = perm_data.get('permission_id') or perm_data.get('permissionId')
+                granted = perm_data.get('granted', True)
+
+                if not permission_id:
+                    error_count += 1
+                    continue
+
+                # decode permission_id (format: "asset_view" or "budget_request_view" -> module=ASSET/BUDGET_REQUEST, action=VIEW)
+                # Note: Action is always a single word (VIEW, EDIT, APPROVE, DELETE, EXPORT)
+                # Module can contain underscores (BUDGET_REQUEST, BUDGET_POOL, etc.)
+                # So we split from the right to get the last part as action
+                try:
+                    if isinstance(permission_id, str) and '_' in permission_id:
+                        # Split from the right: "budget_request_view" -> ["budget_request", "view"]
+                        # This handles modules with underscores like "BUDGET_REQUEST"
+                        parts = permission_id.rsplit('_', 1)
+                        if len(parts) == 2:
+                            module_part = parts[0]  # "budget_request"
+                            action_part = parts[1]  # "view"
+                            module = module_part.upper()  # "BUDGET_REQUEST"
+                            action = action_part.upper()  # "VIEW"
                         else:
-                            # If no known action found, try old method as fallback
-                            module_part, action_part = permission_id.split('_', 1)
-                            module = module_part.upper()
-                            action = action_part.upper()
-                else:
-                    # if the ID is integer format，search by id
-                    permission = Permission.objects.get(id=permission_id, is_deleted=False)
-                    module = permission.module
-                    action = permission.action
-            except (ValueError, Permission.DoesNotExist) as e:
-                error_count += 1
-                print(f"Error parsing permission_id '{permission_id}': {e}")
-                continue
-            
-            try:
-                # Search by permission
-                permission = Permission.objects.get(
-                    module=module, 
-                    action=action, 
-                    is_deleted=False
-                )
-                
-                if granted:
-                    # Add permission（if not exist）
-                    role_perm, created = RolePermission.objects.get_or_create(
-                        role=role,
-                        permission=permission,
-                        defaults={'created_at': timezone.now()}
-                    )
-                    if created or role_perm.is_deleted:
-                        role_perm.is_deleted = False
-                        role_perm.updated_at = timezone.now()
-                        role_perm.save()
-                        success_count += 1
-                        print(f"✅ Permission granted: role={role_id}, permission={permission_id} (module={module}, action={action})")
+                            # Fallback: try to find by matching known actions from Permission model
+                            # Get all valid actions from Permission.ACTION_CHOICES dynamically
+                            # This ensures we stay in sync with model changes
+                            known_actions = [choice[0] for choice in CorePermission.ACTION_CHOICES]
+                            for known_action in known_actions:
+                                if permission_id.lower().endswith('_' + known_action.lower()):
+                                    action = known_action
+                                    module = permission_id[:-len('_' + known_action.lower())].upper()
+                                    break
+                            else:
+                                # If no known action found, try old method as fallback
+                                module_part, action_part = permission_id.split('_', 1)
+                                module = module_part.upper()
+                                action = action_part.upper()
                     else:
-                        # Already exists and not deleted
-                        success_count += 1
-                else:
-                    # remove permission
-                    try:
-                        role_perm = RolePermission.objects.get(
+                        # if the ID is integer format，search by id
+                        permission = Permission.objects.get(id=permission_id, is_deleted=False)
+                        module = permission.module
+                        action = permission.action
+                except (ValueError, Permission.DoesNotExist) as e:
+                    error_count += 1
+                    print(f"Error parsing permission_id '{permission_id}': {e}")
+                    continue
+
+                try:
+                    # Search by permission
+                    permission = Permission.objects.get(
+                        module=module,
+                        action=action,
+                        is_deleted=False
+                    )
+
+                    if granted:
+                        # Add permission（if not exist）
+                        role_perm, created = RolePermission.objects.get_or_create(
                             role=role,
-                            permission=permission
+                            permission=permission,
+                            defaults={'created_at': timezone.now()}
                         )
-                        role_perm.is_deleted = True
-                        role_perm.updated_at = timezone.now()
-                        role_perm.save()
-                        success_count += 1
-                        print(f"✅ Permission removed: role={role_id}, permission={permission_id} (module={module}, action={action})")
-                    except RolePermission.DoesNotExist:
-                        # permission does not exist, already in desired state
-                        success_count += 1
-                        print(f"✅ Permission already removed: role={role_id}, permission={permission_id}")
-                        
-            except Permission.DoesNotExist:
-                error_count += 1
-                print(f"❌ Permission not found: permission_id={permission_id}, parsed as module={module}, action={action}")
-                continue
-        # Record which permissions were added/removed.
-        record_audit_entry(
-            actor=request.user if request.user.is_authenticated else None,
-            action='role.permissions_updated',
-            target=role,
-            before=before,
-            after=_permissions_snapshot(role),
-        )
+                        if created or role_perm.is_deleted:
+                            role_perm.is_deleted = False
+                            role_perm.updated_at = timezone.now()
+                            role_perm.save()
+                            success_count += 1
+                            print(f"✅ Permission granted: role={role_id}, permission={permission_id} (module={module}, action={action})")
+                        else:
+                            # Already exists and not deleted
+                            success_count += 1
+                    else:
+                        # remove permission
+                        try:
+                            role_perm = RolePermission.objects.get(
+                                role=role,
+                                permission=permission
+                            )
+                            role_perm.is_deleted = True
+                            role_perm.updated_at = timezone.now()
+                            role_perm.save()
+                            success_count += 1
+                            print(f"✅ Permission removed: role={role_id}, permission={permission_id} (module={module}, action={action})")
+                        except RolePermission.DoesNotExist:
+                            # permission does not exist, already in desired state
+                            success_count += 1
+                            print(f"✅ Permission already removed: role={role_id}, permission={permission_id}")
+
+                except Permission.DoesNotExist:
+                    error_count += 1
+                    print(f"❌ Permission not found: permission_id={permission_id}, parsed as module={module}, action={action}")
+                    continue
+
+            record_audit_entry(
+                actor=request.user if request.user.is_authenticated else None,
+                action='role.permissions_updated',
+                target=role,
+                before=before,
+                after=_permissions_snapshot(role),
+                organization=role.organization,
+            )
 
         return Response({
             'message': f'Permissions updated successfully. {success_count} updated, {error_count} errors.',
@@ -567,35 +574,38 @@ def copy_role_permissions(request, to_role_id):
             is_deleted=False
         )
         
-        # Temporarily delete the permissions of the role
-        existing_permissions = RolePermission.objects.filter(
-            role=to_role,
-            is_deleted=False
-        )
-        existing_permissions.update(is_deleted=True, updated_at=timezone.now())
-        
-        # copy permissions
+        # All writes + audit in one atomic block.
         copied_count = 0
-        for source_perm in source_permissions:
-            role_perm, created = RolePermission.objects.get_or_create(
+        with transaction.atomic():
+            # Temporarily delete the permissions of the role
+            existing_permissions = RolePermission.objects.filter(
                 role=to_role,
-                permission=source_perm.permission,
-                defaults={'created_at': timezone.now()}
+                is_deleted=False
             )
-            
-            if created or role_perm.is_deleted:
-                role_perm.is_deleted = False
-                role_perm.updated_at = timezone.now()
-                role_perm.save()
-                copied_count += 1
-        # Record what the destination role's permissions looked like before and after.
-        record_audit_entry(
-            actor=request.user if request.user.is_authenticated else None,
-            action='role.permissions_copied',
-            target=to_role,
-            before=before,
-            after=_permissions_snapshot(to_role),
-        )
+            existing_permissions.update(is_deleted=True, updated_at=timezone.now())
+
+            # copy permissions
+            for source_perm in source_permissions:
+                role_perm, created = RolePermission.objects.get_or_create(
+                    role=to_role,
+                    permission=source_perm.permission,
+                    defaults={'created_at': timezone.now()}
+                )
+
+                if created or role_perm.is_deleted:
+                    role_perm.is_deleted = False
+                    role_perm.updated_at = timezone.now()
+                    role_perm.save()
+                    copied_count += 1
+
+            record_audit_entry(
+                actor=request.user if request.user.is_authenticated else None,
+                action='role.permissions_copied',
+                target=to_role,
+                before=before,
+                after=_permissions_snapshot(to_role),
+                organization=to_role.organization,
+            )
 
         return Response({
             'message': f'Successfully copied {copied_count} permissions from {from_role.name} to {to_role.name}',
@@ -839,6 +849,7 @@ def assign_user_role(request, user_id: int):
                         'valid_from': str(parsed_from),
                         'valid_to': str(parsed_to) if parsed_to else None,
                     },
+                    organization=role.organization,
                 )
 
             return Response({
@@ -927,6 +938,7 @@ def remove_user_role(request, user_id: int, role_id: int):
                     target=user,
                     before=before,
                     after=None,
+                    organization=role.organization,
                 )
         except Exception as e:
             return Response({
