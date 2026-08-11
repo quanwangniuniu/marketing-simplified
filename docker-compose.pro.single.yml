@@ -29,7 +29,9 @@ services:
       context: ./pgbackrest
       dockerfile: Dockerfile
     container_name: pgbackrest
-    restart: always    
+    restart: always
+    environment:
+      PGBACKREST_PG1_USER: ${POSTGRES_USER:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - pgbackups:/var/lib/pgbackrest

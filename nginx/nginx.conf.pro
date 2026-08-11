@@ -65,6 +65,13 @@ http {
     # reload on deploy if keepalive to the backend matters under load.
 
 
+    # Redirect all plain HTTP traffic to HTTPS
+    server {
+        listen 80;
+        server_name zmarkio.com;
+        return 301 https://$host$request_uri;
+    }
+
     server {
         listen 443 ssl;
         server_name zmarkio.com;

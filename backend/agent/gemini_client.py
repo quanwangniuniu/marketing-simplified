@@ -17,7 +17,7 @@ from agent.log_redaction import redact_string
 logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
-_GEMINI_BASE = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+_GEMINI_BASE = "https://aiplatform.googleapis.com/v1/projects/406201877905/locations/global/publishers/google/models"
 
 # Retries for HTTP 429 (rate limit) before surfacing to callers.
 _RATE_LIMIT_MAX_ATTEMPTS = 4
