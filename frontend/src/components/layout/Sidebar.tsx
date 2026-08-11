@@ -34,6 +34,7 @@ import {
   Presentation,
   PiggyBank,
   Layers,
+  ScrollText,
 } from "lucide-react";
 import { AgentPanelToggleIcon } from "@/components/agent/AgentPanelToggleIcon";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -175,6 +176,11 @@ const getNavigationItems = (
           name: t ? t("sidebar.notifications") : "Notifications",
           href: "/admin/notifications",
           icon: Bell,
+        },
+        {
+          name: "Audit Log",
+          href: "/admin/audit-log",
+          icon: ScrollText,
         },
       ],
     });

@@ -3,6 +3,7 @@
 import { ShieldCheck, UserCog, Users, FolderOpen, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import type { AdminAuditEvent } from "@/types/audit";
+import { useRouter } from "next/navigation";
 
 const ACTION_LABEL: Record<string, string> = {
   'role.created':             'created role',
@@ -41,6 +42,7 @@ function formatTime(iso: string): string {
 }
 
 export default function AuditCard({ events }: { events: AdminAuditEvent[] }) {
+  const router = useRouter();
   return (
     <Card data-overview-card="audit" className="border-[0.5px] border-gray-200 bg-white shadow-none">
       <CardHeader className="pb-2 px-4 pt-4">
@@ -84,7 +86,10 @@ export default function AuditCard({ events }: { events: AdminAuditEvent[] }) {
           </div>
         )}
 
-        <button className="w-full text-center text-[11px] text-[#3CCED7] font-medium mt-2 hover:underline">
+        <button
+          onClick={() => router.push('/admin/audit-log')}
+          className="w-full text-center text-[11px] text-[#3CCED7] font-medium mt-2 hover:underline"
+        >
           View all actions →
         </button>
       </CardContent>
