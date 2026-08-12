@@ -1,5 +1,8 @@
-import toast, { type ToastOptions } from "react-hot-toast";
-import { useNotificationStore, type ToastTag } from "@/lib/notificationStore";
+'use client';
+
+import toast, { type ToastOptions } from 'react-hot-toast';
+import DedupeToastContent from '@/components/state-feedback/DedupeToastContent';
+import { useNotificationStore, type ToastTag } from '@/lib/notificationStore';
 
 type DedupeToastResult = {
   dedupeKey: string;
@@ -14,19 +17,26 @@ function showDedupedToast(type: ToastTag, message: string, options?: ToastOption
   });
 
   const toastId = dedupeKey;
+  const displayMessage =
+    useNotificationStore.getState().toastQueue[dedupeKey]?.message ?? message;
+
+  const content = (
+    <DedupeToastContent message={displayMessage} count={count} type={type} />
+  );
+
   switch (type) {
-    case "success":
-      toast.success(message, { ...options, id: toastId });
+    case 'success':
+      toast.success(content, { ...options, id: toastId });
       break;
-    case "error":
-      toast.error(message, { ...options, id: toastId });
+    case 'error':
+      toast.error(content, { ...options, id: toastId });
       break;
-    case "loading":
-      toast.loading(message, { ...options, id: toastId });
+    case 'loading':
+      toast.loading(content, { ...options, id: toastId });
       break;
-    case "info":
+    case 'info':
     default:
-      toast(message, { ...options, id: toastId });
+      toast(content, { ...options, id: toastId });
       break;
   }
 
@@ -35,16 +45,15 @@ function showDedupedToast(type: ToastTag, message: string, options?: ToastOption
 
 export const toastDeduped = {
   error(message: string, options?: ToastOptions): DedupeToastResult {
-    return showDedupedToast("error", message, options);
+    return showDedupedToast('error', message, options);
   },
   success(message: string, options?: ToastOptions): DedupeToastResult {
-    return showDedupedToast("success", message, options);
+    return showDedupedToast('success', message, options);
   },
   loading(message: string, options?: ToastOptions): DedupeToastResult {
-    return showDedupedToast("loading", message, options);
+    return showDedupedToast('loading', message, options);
   },
   info(message: string, options?: ToastOptions): DedupeToastResult {
-    return showDedupedToast("info", message, options);
+    return showDedupedToast('info', message, options);
   },
 };
-
