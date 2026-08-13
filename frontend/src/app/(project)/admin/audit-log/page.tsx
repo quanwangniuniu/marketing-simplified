@@ -72,6 +72,55 @@ function formatDateTime(iso: string): string {
 
 // ─── Diff View ────────────────────────────────────────────────────────────────
 
+// Fields that are purely technical and add no value for non-technical readers.
+const SKIP_FIELDS = new Set([
+  'id', 'owner', 'organization', 'org_id', 'user_id',
+  'is_deleted', 'created_at', 'updated_at',
+  'budget_config', 'kpis', 'audience_targeting',
+  'pacing_enabled', 'budget_management_type', 'target_kpi_value',
+  'primary_audience_type', 'advertising_platforms',
+]);
+
+const KEY_LABEL: Record<string, string> = {
+  name:                'Name',
+  description:         'Description',
+  project_type:        'Project Type',
+  objectives:          'Objectives',
+  work_model:          'Work Model',
+  total_monthly_budget:'Monthly Budget',
+  level:               'Permission Level',
+  role_name:           'Role',
+  role_id:             'Role ID',
+  team_id:             'Team',
+  valid_from:          'Valid From',
+  valid_to:            'Valid To',
+  email:               'Email',
+  title:               'Label Title',
+  topic:               'Topic',
+  slug:                'Slug',
+  permissions:         'Permissions',
+};
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '(none)';
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    // Render plain objects as "key: value" pairs on separate lines
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return '(empty)';
+    return entries.map(([k, v]) => `${k}: ${v ?? '—'}`).join(' · ');
+  }
+  return String(value);
+}
+
+function labelFor(key: string): string {
+  return KEY_LABEL[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 interface DiffLine {
   type: 'added' | 'removed' | 'unchanged';
   key: string;
@@ -89,6 +138,8 @@ function buildDiff(
   ]);
 
   for (const key of allKeys) {
+    if (SKIP_FIELDS.has(key)) continue;
+
     const bVal = before?.[key];
     const aVal = after?.[key];
     const bStr = JSON.stringify(bVal);
@@ -120,19 +171,20 @@ function DiffView({ before, after }: { before: Record<string, unknown> | null; a
   if (!before || !after) {
     const data = before ?? after;
     const isCreate = !before;
+    const visibleEntries = Object.entries(data!).filter(([key]) => !SKIP_FIELDS.has(key));
     return (
       <div className="font-mono text-xs rounded-md overflow-hidden border border-gray-200">
         <div className={`px-2 py-1 text-[10px] font-semibold ${isCreate ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
           {isCreate ? '+ Created' : '- Deleted'}
         </div>
-        {Object.entries(data!).map(([key, value]) => (
+        {visibleEntries.map(([key, value]) => (
           <div
             key={key}
             className={`flex gap-2 px-3 py-0.5 ${isCreate ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}
           >
             <span className="select-none w-3">{isCreate ? '+' : '-'}</span>
-            <span className="text-gray-500 shrink-0">{key}:</span>
-            <span className="break-all">{JSON.stringify(value)}</span>
+            <span className="text-gray-500 shrink-0">{labelFor(key)}:</span>
+            <span className="break-all">{formatValue(value)}</span>
           </div>
         ))}
       </div>
@@ -150,8 +202,8 @@ function DiffView({ before, after }: { before: Record<string, unknown> | null; a
           return (
             <div key={i} className="flex gap-2 px-3 py-0.5 bg-white text-gray-500">
               <span className="select-none w-3 text-gray-300"> </span>
-              <span className="shrink-0">{line.key}:</span>
-              <span className="break-all">{JSON.stringify(line.value)}</span>
+              <span className="shrink-0">{labelFor(line.key)}:</span>
+              <span className="break-all">{formatValue(line.value)}</span>
             </div>
           );
         }
@@ -159,8 +211,8 @@ function DiffView({ before, after }: { before: Record<string, unknown> | null; a
           return (
             <div key={i} className="flex gap-2 px-3 py-0.5 bg-red-50 text-red-800">
               <span className="select-none w-3 text-red-400">-</span>
-              <span className="shrink-0">{line.key}:</span>
-              <span className="break-all">{JSON.stringify(line.value)}</span>
+              <span className="shrink-0">{labelFor(line.key)}:</span>
+              <span className="break-all">{formatValue(line.value)}</span>
             </div>
           );
         }
@@ -168,8 +220,8 @@ function DiffView({ before, after }: { before: Record<string, unknown> | null; a
         return (
           <div key={i} className="flex gap-2 px-3 py-0.5 bg-green-50 text-green-800">
             <span className="select-none w-3 text-green-500">+</span>
-            <span className="shrink-0">{line.key}:</span>
-            <span className="break-all">{JSON.stringify(line.value)}</span>
+            <span className="shrink-0">{labelFor(line.key)}:</span>
+            <span className="break-all">{formatValue(line.value)}</span>
           </div>
         );
       })}
@@ -179,12 +231,23 @@ function DiffView({ before, after }: { before: Record<string, unknown> | null; a
 
 // ─── Event Row ────────────────────────────────────────────────────────────────
 
+// Actions whose label already tells the full story — no need to expand a diff.
+const NO_DIFF_ACTIONS = new Set([
+  'role.created',
+  'role.deleted',
+  'user_role.assigned',
+  'user_role.removed',
+  'org.admin_assigned',
+  'org.admin_removed',
+  'project.deleted',
+]);
+
 function EventRow({ event }: { event: AdminAuditEvent }) {
   const [expanded, setExpanded] = useState(false);
   const { Icon, colors } = actionIcon(event.action);
   const label = ACTION_LABEL[event.action] ?? event.action;
   const actor = event.actor_name || event.actor_email || 'Unknown';
-  const hasDiff = event.before !== null || event.after !== null;
+  const hasDiff = !NO_DIFF_ACTIONS.has(event.action) && (event.before !== null || event.after !== null);
 
   return (
     <>
