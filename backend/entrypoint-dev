@@ -24,8 +24,15 @@ export DJANGO_SETTINGS_MODULE=backend.settings
 python manage.py migrate --noinput
 
 # Start Django (skip opentelemetry-instrument unless OTEL is explicitly enabled)
+#
+# --websocket_connect_timeout: daphne's default is 5s and it maps to the
+# handshake timeout, so a burst of connections that queues for longer is
+# refused outright. 30s turns a slow handshake into a slow connection rather
+# than a failed one. This is a safety margin, not the fix — see CONN_MAX_AGE
+# in settings.py for what actually makes the handshake fast.
+WS_CONNECT_TIMEOUT="${WS_CONNECT_TIMEOUT:-30}"
 if [ "${OTEL_ENABLED}" = "true" ] || [ "${OTEL_ENABLED}" = "True" ]; then
-  exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+  exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
 else
-  exec daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+  exec daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
 fi

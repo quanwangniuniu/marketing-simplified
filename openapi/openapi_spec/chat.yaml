@@ -206,6 +206,81 @@ components:
       required:
         - content
 
+    PinMessageRequest:
+      type: object
+      description: Request to pin a message in a group channel
+      properties:
+        message_id:
+          type: integer
+          minimum: 1
+          description: ID of a visible, non-deleted, non-revoked message in this channel
+      required:
+        - message_id
+
+    PinnedMessageContent:
+      type: object
+      description: Lightweight message summary displayed by the pinned drawer
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        chat:
+          type: integer
+          description: ID of the channel containing the message
+          readOnly: true
+        sender:
+          $ref: '#/components/schemas/User'
+        content:
+          type: string
+          description: Message text preview
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Time the message was sent
+          readOnly: true
+        parent_message_id:
+          type: integer
+          nullable: true
+          description: Root message ID when this pin is a thread reply
+          readOnly: true
+      required:
+        - id
+        - chat
+        - sender
+        - content
+        - created_at
+
+    PinnedMessage:
+      type: object
+      description: A message pinned in a group channel
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        chat:
+          type: integer
+          description: ID of the channel containing the pin
+          readOnly: true
+        message:
+          $ref: '#/components/schemas/PinnedMessageContent'
+        pinned_by:
+          allOf:
+            - $ref: '#/components/schemas/User'
+          nullable: true
+          description: User who pinned the message; null if that user was deleted
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Time the message was pinned
+          readOnly: true
+      required:
+        - id
+        - chat
+        - message
+        - created_at
+
     ForwardedFrom:
       type: object
       description: Metadata about the original message for forwarded messages
@@ -757,6 +832,163 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Pinned Messages ====================
+
+  /chats/{chat_slug}/pins/:
+    get:
+      summary: List pinned messages in a channel
+      description: |
+        Return visible pinned messages for an active channel participant.
+        Results are ordered by pin time, newest first. Deleted and revoked
+        messages are not returned.
+      operationId: listPinnedMessages
+      tags:
+        - Pinned Messages
+      parameters:
+        - name: chat_slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Canonical channel slug
+      responses:
+        '200':
+          description: Pinned messages ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PinnedMessage'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User is not an active participant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel not found or not visible to the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /chats/{chat_slug}/pin/:
+    post:
+      summary: Pin a message in a channel
+      description: |
+        Pin a visible message in a group channel. Only an active channel
+        manager may perform this action. Repeating an existing pin is
+        idempotent and returns the existing record.
+      operationId: pinChannelMessage
+      tags:
+        - Pinned Messages
+      parameters:
+        - name: chat_slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Canonical channel slug
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PinMessageRequest'
+      responses:
+        '200':
+          description: Message was already pinned; existing pin returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PinnedMessage'
+        '201':
+          description: Message pinned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PinnedMessage'
+        '400':
+          description: Invalid or missing message ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Only channel managers may pin messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel or eligible message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /chats/{chat_slug}/pin/{message_id}/:
+    delete:
+      summary: Unpin a message from a channel
+      description: Only an active channel manager may remove a pin.
+      operationId: unpinChannelMessage
+      tags:
+        - Pinned Messages
+      parameters:
+        - name: chat_slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Canonical channel slug
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: ID of the message to unpin
+      responses:
+        '204':
+          description: Message unpinned successfully
+        '400':
+          description: Invalid message ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Only channel managers may unpin messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel or pin not found
           content:
             application/json:
               schema:

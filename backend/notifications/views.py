@@ -501,6 +501,12 @@ async def stream_notifications(request):
         logger.warning("SSE: invalid or expired token", exc_info=True)
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")
 
+    # NOTE: the database connection is released inside sse_event_generator, not
+    # here. Releasing it at this point does not work: TenantSchemaMiddleware
+    # resets search_path in a finally block that runs as soon as this view
+    # returns the response object, which re-opens the connection before a
+    # single byte of the stream has been sent.
+
     # ── 3. Resolve Last-Event-ID ─────────────────────────────────────────
     # Browser sets the ``Last-Event-ID`` *header* automatically on reconnect;
     # the query param is a manual fallback for the initial EventSource URL.

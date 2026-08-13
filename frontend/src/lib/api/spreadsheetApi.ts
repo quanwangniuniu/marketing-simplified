@@ -63,6 +63,22 @@ api.interceptors.response.use(
 );
 
 export const SpreadsheetAPI = {
+  /**
+   * Export a sheet to .xlsx. The backend (openpyxl) writes cell values plus a
+   * native chart for every sparkline cell — something the frontend SheetJS
+   * exporter cannot do (MED-295). Returns the file as a Blob to download.
+   */
+  exportSheetXlsx: async (
+    spreadsheetId: number | string,
+    sheetId: number | string,
+  ): Promise<Blob> => {
+    const response = await api.get(
+      `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/export.xlsx`,
+      { responseType: 'blob' },
+    );
+    return response.data as Blob;
+  },
+
   createWebSocketTicket: async (
     sheetId: number | string,
     clientId: string

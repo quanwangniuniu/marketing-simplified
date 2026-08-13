@@ -27,6 +27,7 @@ import type {
   RecommendedTask,
   RecommendedDecisionTreeNode,
   SuggestedCalendarEvent,
+  StepExecutionStatus,
 } from "@/types/agent"
 import { useGenerationOutputs } from "@/hooks/useGenerationOutputs"
 import { GenerationOutputsSettings } from "./GenerationOutputsSettings"
@@ -1214,7 +1215,7 @@ setStepState({
             content: event.content || "File uploaded. Analyzing...",
           })
         } else if (event.type === "step_progress" && event.data) {
-          const { step_order, step_name, total_steps } = event.data
+          const { step_order, step_name, total_steps, status } = event.data
           if (step_order != null && step_name && total_steps) {
             setStepProgress((prev) => {
               const updated = [...prev]
@@ -1225,7 +1226,7 @@ setStepState({
               }
               const existing = updated.find((s) => s.order === step_order)
               if (existing) {
-                existing.status = "running"
+                existing.status = (status as StepExecutionStatus) || "running"
                 existing.name = step_name
               } else {
                 while (updated.length < total_steps) {
@@ -1233,7 +1234,7 @@ setStepState({
                   updated.push({
                     order,
                     name: order === step_order ? step_name : `Step ${order}`,
-                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                    status: order < step_order ? "completed" : order === step_order ? ((status as StepExecutionStatus) || "running") : "pending",
                   })
                 }
               }
@@ -1445,7 +1446,7 @@ setStepState({
         if (event.type === "done") return
 
         if (event.type === "step_progress" && event.data) {
-          const { step_order, step_name, total_steps } = event.data
+          const { step_order, step_name, total_steps, status } = event.data
           if (step_order != null && step_name && total_steps) {
             setStepProgress((prev) => {
               const updated = [...prev]
@@ -1456,7 +1457,7 @@ setStepState({
               }
               const existing = updated.find((s) => s.order === step_order)
               if (existing) {
-                existing.status = "running"
+                existing.status = (status as StepExecutionStatus) || "running"
                 existing.name = step_name
               } else {
                 while (updated.length < total_steps) {
@@ -1464,7 +1465,7 @@ setStepState({
                   updated.push({
                     order,
                     name: order === step_order ? step_name : `Step ${order}`,
-                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                    status: order < step_order ? "completed" : order === step_order ? ((status as StepExecutionStatus) || "running") : "pending",
                   })
                 }
               }
@@ -1830,7 +1831,7 @@ setStepState({
         }
 
         if (event.type === "step_progress" && event.data) {
-          const { step_order, step_name, total_steps } = event.data
+          const { step_order, step_name, total_steps, status } = event.data
           if (step_order != null && step_name && total_steps) {
             setStepProgress((prev) => {
               const updated = [...prev]
@@ -1843,7 +1844,7 @@ setStepState({
               // Add or update current step
               const existing = updated.find((s) => s.order === step_order)
               if (existing) {
-                existing.status = "running"
+                existing.status = (status as StepExecutionStatus) || "running"
                 existing.name = step_name
               } else {
                 // Fill pending steps up to total_steps
@@ -1852,7 +1853,7 @@ setStepState({
                   updated.push({
                     order,
                     name: order === step_order ? step_name : `Step ${order}`,
-                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                    status: order < step_order ? "completed" : order === step_order ? ((status as StepExecutionStatus) || "running") : "pending",
                   })
                 }
               }
@@ -2065,7 +2066,7 @@ setStepState({
         if (event.type === "done") return
 
         if (event.type === "step_progress" && event.data) {
-          const { step_order, step_name, total_steps } = event.data
+          const { step_order, step_name, total_steps, status } = event.data
           if (step_order != null && step_name && total_steps) {
             setStepProgress((prev) => {
               const updated = [...prev]
@@ -2074,7 +2075,7 @@ setStepState({
               }
               const existing = updated.find((s) => s.order === step_order)
               if (existing) {
-                existing.status = "running"
+                existing.status =  (status as StepExecutionStatus)|| "running"
                 existing.name = step_name
               } else {
                 while (updated.length < total_steps) {
@@ -2082,7 +2083,7 @@ setStepState({
                   updated.push({
                     order,
                     name: order === step_order ? step_name : `Step ${order}`,
-                    status: order < step_order ? "completed" : order === step_order ? "running" : "pending",
+                    status: order < step_order ? "completed" : order === step_order ? ((status as StepExecutionStatus) || "running") : "pending",
                   })
                 }
               }

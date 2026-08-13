@@ -97,6 +97,12 @@ class UserSimpleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'username', 'email', 'first_name', 'last_name', 'avatar']
 
     def get_is_online(self, obj):
+        # Callers that serialize many users at once can pass a precomputed set
+        # under `online_user_ids` to avoid one Redis round trip per user. The
+        # per-user lookup stays the default so existing callers are unaffected.
+        online_user_ids = self.context.get('online_user_ids')
+        if online_user_ids is not None:
+            return obj.id in online_user_ids
         from .services import OnlineStatusService
         return OnlineStatusService.is_online(obj.id)
 
@@ -200,6 +206,26 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
     thread_participants = serializers.SerializerMethodField()
     has_unread_thread_replies = serializers.SerializerMethodField()
     parent_message_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('send_response'):
+            # A create response is immediately rendered only by the sender.
+            # Recipient and thread aggregates are available from normal reads
+            # and realtime status events; calculating them here makes send
+            # latency grow with channel size and adds several ORM queries.
+            for field_name in (
+                'statuses',
+                'reactions',
+                'is_hidden_by_me',
+                'thread_reply_count',
+                'thread_last_reply_at',
+                'thread_participants',
+                'has_unread_thread_replies',
+            ):
+                self.fields.pop(field_name, None)
+        elif self.context.get('omit_recipient_statuses'):
+            self.fields.pop('statuses', None)
 
     class Meta:
         model = Message
@@ -966,9 +992,20 @@ class ChatCreateSerializer(serializers.ModelSerializer):
         return chat
 
 
+class PinnedMessageContentSerializer(serializers.ModelSerializer):
+    """Lightweight message summary required by the pinned drawer."""
+
+    sender = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = Message
+        fields = ['id', 'chat', 'sender', 'content', 'created_at', 'parent_message_id']
+        read_only_fields = fields
+
+
 class PinnedMessageSerializer(serializers.ModelSerializer):
     """Serializer for pinned messages in a channel."""
-    message = serializers.SerializerMethodField()
+    message = PinnedMessageContentSerializer(read_only=True)
     pinned_by = UserSimpleSerializer(read_only=True)
 
     class Meta:
@@ -976,8 +1013,15 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
         fields = ['id', 'chat', 'message', 'pinned_by', 'created_at']
         read_only_fields = fields
 
-    def get_message(self, obj):
-        return MessageSerializer(obj.message, context=self.context).data
+class PinMessageRequestSerializer(serializers.Serializer):
+    """Validate the message identifier used by pin and unpin actions."""
+
+    # Bounded by what the column can hold, not by an arbitrary limit: Message
+    # uses BigAutoField, and DRF's IntegerField accepts any Python int, so
+    # without the ceiling an oversized id passes validation and only fails once
+    # PostgreSQL rejects it as out of range for bigint — a 500 for what is
+    # plainly a malformed request.
+    message_id = serializers.IntegerField(min_value=1, max_value=2 ** 63 - 1)
 
 
 class SavedMessageSerializer(serializers.ModelSerializer):

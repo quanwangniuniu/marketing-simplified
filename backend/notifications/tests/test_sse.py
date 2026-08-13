@@ -417,8 +417,12 @@ class SSEGeneratorReplayTests(TestCase):
 
     def test_no_replay_when_last_event_id_is_absent(self):
         """
-        Without Last-Event-ID the generator must skip the DB query entirely
-        (sync_to_async is never called).
+        Without Last-Event-ID the generator must skip the replay DB query.
+
+        Asserted on what was handed to sync_to_async rather than on the call
+        count: the generator also releases the request's database connection
+        through sync_to_async before going long-lived, so "never called" would
+        no longer distinguish "no replay" from "no work at all".
         """
         mock_pubsub = _make_mock_pubsub(stop_after=1)
         mock_redis = _make_mock_redis(pubsub=mock_pubsub)
@@ -428,11 +432,16 @@ class SSEGeneratorReplayTests(TestCase):
 
         with (
             patch("redis.asyncio.from_url", return_value=mock_redis),
-            patch("asgiref.sync.sync_to_async") as mock_s2a,
+            patch("asgiref.sync.sync_to_async", return_value=AsyncMock()) as mock_s2a,
         ):
             asyncio.run(run())
 
-        mock_s2a.assert_not_called()
+        wrapped = [
+            getattr(call.args[0], "__name__", "")
+            for call in mock_s2a.call_args_list
+            if call.args
+        ]
+        self.assertNotIn("_fetch_missed", wrapped)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

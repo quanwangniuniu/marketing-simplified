@@ -1367,12 +1367,31 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # Verify the requesting user is the designated approver for this step
-                if task.current_approver_id and request.user.id != task.current_approver_id:
-                    return Response(
-                        {'error': 'Only the designated approver for this step can approve or reject.'},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+                # Designated chain approver, or same-org org-admin override on budget (MED-240).
+                is_current_approver = (
+                    task.current_approver_id is not None
+                    and request.user.id == task.current_approver_id
+                )
+                is_admin_override = False
+                if task.current_approver_id and not is_current_approver:
+                    if task.type == 'budget':
+                        from budget_approval.approver_access import (
+                            is_org_admin_override_action,
+                            user_may_process_budget_approval,
+                        )
+                        br = task.linked_object or task.budget_requests.first()
+                        if br is not None and user_may_process_budget_approval(request.user, br):
+                            is_admin_override = is_org_admin_override_action(request.user, br)
+                        else:
+                            return Response(
+                                {'error': 'Only the designated approver for this step can approve or reject.'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                    else:
+                        return Response(
+                            {'error': 'Only the designated approver for this step can approve or reject.'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
 
                 # Execute the action
                 if action == 'approve':
@@ -1388,12 +1407,25 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                     if task.current_approval_step
                     else task.approval_records.count() + 1
                 )
-                # Update revision round so next submission is tracked as a new round
+                # Attribute the decision to the actor (org-admin on override, not the chain assignee).
+                from budget_approval.approver_access import (
+                    format_org_admin_override_marker,
+                )
+                record_comment = comment
+                if is_admin_override:
+                    decision = 'approve' if is_approved else 'reject'
+                    marker = format_org_admin_override_marker(
+                        user_id=request.user.id,
+                        decision=decision,
+                        replaced_step=step_number,
+                        timestamp=timezone.now().isoformat(),
+                    )
+                    record_comment = f'{marker}\n{comment}'.strip() if comment else marker
                 ApprovalRecord.objects.create(
                     task=task,
-                    approved_by=task.current_approver or request.user,
+                    approved_by=request.user,
                     is_approved=is_approved,
-                    comment=comment,
+                    comment=record_comment,
                     step_number=step_number,
                     revision_round=task.revision_round,
                     resubmitted_after_reject=task.revision_round > 0,

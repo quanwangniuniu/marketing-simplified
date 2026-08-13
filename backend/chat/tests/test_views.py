@@ -5,12 +5,14 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 from rest_framework import status
 from rest_framework.throttling import ScopedRateThrottle
 from core.models import Project, Organization, Team, TeamMember, ProjectMember
-from chat.models import Chat, ChatParticipant, ChatStar, Message, MessageAttachment, MessageStatus, ChatType, ChannelVisibility
+from chat.models import Chat, ChatOutboxEvent, ChatParticipant, ChatStar, Message, MessageAttachment, MessageStatus, ChatType, ChannelVisibility
 from chat.services import MessageService
 from chat.serializers import MessageSerializer
 from notifications.models import Notification, NotificationEventType
@@ -298,7 +300,10 @@ class TestMessageAPI:
         assert message.content == 'Hello, this is a test message!'
         assert message.sender == self.user1
         msg_status = MessageStatus.objects.filter(message=message, user=self.user2)
-        assert msg_status.count() == 1
+        # Recipient fan-out is intentionally deferred to the durable realtime
+        # outbox task so the HTTP write cost is independent of channel size.
+        assert msg_status.count() == 0
+        assert ChatOutboxEvent.objects.filter(aggregate_id=message.id).count() == 2
 
     def test_send_message_is_scoped_throttled(self):
         """Message writes should be rate-limited without throttling reads."""
@@ -312,9 +317,7 @@ class TestMessageAPI:
         assert second.status_code == status.HTTP_429_TOO_MANY_REQUESTS
         assert read.status_code == status.HTTP_200_OK
 
-    @patch('chat.tasks.notify_new_message.delay')
-    @patch('chat.tasks.notify_message_recipients.delay')
-    def test_send_rich_message_with_mention_queues_notification_fanout(self, mock_notify_recipients, mock_notify_ws, capture_on_commit_callbacks):
+    def test_send_rich_message_with_mention_queues_notification_fanout(self, capture_on_commit_callbacks):
         """Sending a rich @mention stores mention data and queues async notification fanout."""
         url = reverse('message-list')
         rich_body = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Hi '}, {'type': 'mention', 'attrs': {'id': self.user2.id, 'label': self.user2.username}}]}]}
@@ -327,8 +330,14 @@ class TestMessageAPI:
         assert response.data['mentioned_user_ids'] == [self.user2.id]
         message = Message.objects.get(id=response.data['id'])
         assert message.mentions.get().mentioned_user_id == self.user2.id
-        mock_notify_recipients.assert_called_once_with(message.id)
-        mock_notify_ws.assert_called_once_with(message.id)
+        assert set(
+            ChatOutboxEvent.objects.filter(aggregate_id=message.id).values_list(
+                'event_type', flat=True
+            )
+        ) == {
+            ChatOutboxEvent.EVENT_MESSAGE_REALTIME,
+            ChatOutboxEvent.EVENT_MESSAGE_NOTIFICATIONS,
+        }
 
     def test_notify_message_recipients_creates_chat_mention_notification(self):
         """The async fanout task creates persisted mention notifications."""
@@ -351,9 +360,7 @@ class TestMessageAPI:
         assert not Notification.objects.filter(recipient=outsider, event_type=NotificationEventType.CHAT_MENTION).exists()
 
 
-    @patch('chat.tasks.notify_new_message.delay')
-    @patch('chat.tasks.notify_message_recipients.delay')
-    def test_send_message_dedupes_by_client_message_id(self, mock_notify_recipients, mock_notify_ws, capture_on_commit_callbacks):
+    def test_send_message_dedupes_by_client_message_id(self, capture_on_commit_callbacks):
         """Retried REST sends with the same client_message_id must not duplicate side effects."""
         from django.core.files.uploadedfile import SimpleUploadedFile
         from chat.models import Message, MessageAttachment, MessageStatus
@@ -383,9 +390,8 @@ class TestMessageAPI:
         assert second.data['id'] == first.data['id']
         assert len(second.data['attachments']) == 1
         assert Message.objects.filter(chat=self.chat, sender=self.user1).count() == 1
-        assert MessageStatus.objects.filter(message_id=first.data['id']).count() == 1
-        mock_notify_recipients.assert_called_once_with(first.data['id'])
-        mock_notify_ws.assert_called_once_with(first.data['id'])
+        assert MessageStatus.objects.filter(message_id=first.data['id']).count() == 0
+        assert ChatOutboxEvent.objects.filter(aggregate_id=first.data['id']).count() == 2
         assert Message.objects.get(
             sender=self.user1,
             client_message_id=client_message_id,
@@ -533,8 +539,7 @@ class TestMessageAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['unread_count'] == 2
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_success_multi_messages_multi_targets(self, mock_notify):
+    def test_forward_batch_success_multi_messages_multi_targets(self):
         """Test forwarding multiple messages to existing chat + member target."""
         user3 = User.objects.create_user(email='user3@example.com', username='user3', password='testpass123')
         TeamMember.objects.create(user=user3, team=self.team)
@@ -568,10 +573,11 @@ class TestMessageAPI:
         user3_private_chat = Chat.objects.filter(project=self.project, type=ChatType.PRIVATE, participants__user=self.user1, participants__is_active=True).filter(participants__user=user3, participants__is_active=True).distinct().first()
         assert user3_private_chat is not None
         assert Message.objects.filter(chat=user3_private_chat, sender=self.user1).count() == 2
-        assert mock_notify.call_count == 4
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 4
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_partial_success_with_invalid_target_chat(self, mock_notify):
+    def test_forward_batch_partial_success_with_invalid_target_chat(self):
         """Test partial success when one target chat is invalid for the sender."""
         valid_target = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Valid Target')
         ChatParticipant.objects.create(chat=valid_target, user=self.user1, is_active=True)
@@ -589,10 +595,11 @@ class TestMessageAPI:
         failure_reasons = {item['reason'] for item in response.data['failures']}
         assert 'not_participant' in failure_reasons
         assert Message.objects.filter(chat=valid_target, sender=self.user1).exists()
-        assert mock_notify.call_count == 1
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 1
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_forwards_text_and_attachment_messages(self, mock_notify):
+    def test_forward_batch_forwards_text_and_attachment_messages(self):
         """Text and attachment messages should both be forwardable."""
         target_chat = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Target Group')
         ChatParticipant.objects.create(chat=target_chat, user=self.user1, is_active=True)
@@ -620,10 +627,11 @@ class TestMessageAPI:
         assert copied_attachment.mime_type == source_attachment.mime_type
         assert copied_attachment.uploader_id == self.user1.id
         assert copied_attachment.file.name != source_attachment.file.name
-        assert mock_notify.call_count == 2
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 2
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_forwards_attachment_only_message(self, mock_notify):
+    def test_forward_batch_forwards_attachment_only_message(self):
         """Attachment-only message should forward successfully."""
         target_chat = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Attachment Target')
         ChatParticipant.objects.create(chat=target_chat, user=self.user1, is_active=True)
@@ -639,10 +647,11 @@ class TestMessageAPI:
         assert forwarded_message.content == ''
         assert forwarded_message.has_attachments
         assert forwarded_message.attachments.count() == 1
-        assert mock_notify.call_count == 1
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 1
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_attachment_copy_failure_returns_partial_success(self, mock_notify):
+    def test_forward_batch_attachment_copy_failure_returns_partial_success(self):
         """A single attachment copy failure should fail only that send unit."""
         target_chat_a = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Target A')
         target_chat_b = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Target B')
@@ -669,10 +678,11 @@ class TestMessageAPI:
         assert 'attachment_copy_failed' in {f['reason'] for f in response.data['failures']}
         assert Message.objects.filter(chat=target_chat_a, sender=self.user1).count() == 0
         assert Message.objects.filter(chat=target_chat_b, sender=self.user1).count() == 1
-        assert mock_notify.call_count == 1
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 1
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_batch_skips_empty_messages(self, mock_notify):
+    def test_forward_batch_skips_empty_messages(self):
         """Messages with no text and no attachments should still be skipped."""
         target_chat = Chat.objects.create(project=self.project, type=ChatType.GROUP, name='Skip Empty Target')
         ChatParticipant.objects.create(chat=target_chat, user=self.user1, is_active=True)
@@ -685,7 +695,9 @@ class TestMessageAPI:
         assert response.data['summary']['forwardable_messages'] == 1
         assert empty_message.id in response.data['resolved']['skipped_message_ids']
         assert Message.objects.filter(chat=target_chat, sender=self.user1).count() == 1
-        assert mock_notify.call_count == 1
+        assert ChatOutboxEvent.objects.filter(
+            event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+        ).count() == 1
 
     def test_forward_batch_requires_source_participant(self):
         """Test that non-participants of source chat cannot forward messages."""
@@ -1038,3 +1050,59 @@ class AttachmentMimeUploadAPITest(TestCase):
         self.assertEqual(response.data['mime_type'], 'application/zip')
         self.assertIn('Unsupported MIME type', response.data['error'])
         self.assertEqual(MessageAttachment.objects.count(), initial_count)
+
+
+class TestMessageCreateQueryScaling:
+    """The send endpoint must not scale its query count with channel size."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.organization = Organization.objects.create(name='Send Scaling Organization')
+        self.project = Project.objects.create(
+            name='Send Scaling Project',
+            organization=self.organization,
+        )
+        self.client = APIClient()
+
+    def _build_channel(self, label, member_count):
+        chat = Chat.objects.create(
+            project=self.project,
+            type=ChatType.GROUP,
+            name=f'send-scaling-{label}',
+        )
+        members = []
+        for index in range(member_count):
+            user = User.objects.create_user(
+                email=f'scale-{label}-{index}@example.com',
+                username=f'scale-{label}-{index}',
+                password='testpass123',
+            )
+            members.append(user)
+            ChatParticipant.objects.create(chat=chat, user=user, is_active=True)
+        return chat, members
+
+    def _send_query_count(self, chat, sender):
+        self.client.force_authenticate(user=sender)
+        payload = {'chat': chat.id, 'content': 'scaling probe'}
+        # Warm anything cached per sender so only the steady-state cost is compared.
+        self.client.post(reverse('message-list'), payload, format='json')
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.post(reverse('message-list'), payload, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        return len(captured)
+
+    def test_send_query_count_does_not_grow_with_channel_size(self):
+        """The response embeds one status per recipient, each with a nested user.
+
+        Without prefetching that user the send request costs an extra query per
+        recipient, which is what made large channels slow under concurrency.
+        """
+        small_chat, small_members = self._build_channel('small', 4)
+        large_chat, large_members = self._build_channel('large', 20)
+
+        small_queries = self._send_query_count(small_chat, small_members[0])
+        large_queries = self._send_query_count(large_chat, large_members[0])
+
+        assert large_queries == small_queries

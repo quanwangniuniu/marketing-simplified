@@ -5,6 +5,7 @@ Handles spreadsheet, sheet, row, column, and cell management
 from typing import Dict, List, Any, Optional, Tuple, Union
 from decimal import Decimal, InvalidOperation
 import hashlib
+import json
 import logging
 import re
 from functools import cmp_to_key
@@ -20,6 +21,8 @@ from .models import (
 )
 from .formula_engine import evaluate_formula, extract_references, reference_to_indexes, FormulaError
 from .formula_rewrite import rewrite_cells_for_operation
+from .sparkline import compute_sparkline, is_sparkline
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from .exceptions import SheetRevisionConflict
 from core.models import Project, ProjectMember
 from .access import accessible_sheets
@@ -1478,6 +1481,25 @@ class CellService:
                         formula_source = formula_value
                     else:
                         continue
+
+                # SPARKLINE cells are not scalar formulas: resolve the chart
+                # spec + series ourselves and stash it as JSON in computed_string.
+                if is_sparkline(formula_source):
+                    try:
+                        payload = compute_sparkline(formula_source, cell.sheet)
+                        cell.computed_type = ComputedCellType.STRING
+                        cell.computed_number = None
+                        cell.computed_string = json.dumps(payload)
+                        cell.error_code = None
+                    except DRFValidationError:
+                        cell.computed_type = ComputedCellType.ERROR
+                        cell.computed_number = None
+                        cell.computed_string = None
+                        cell.error_code = '#ERROR!'
+                    cell.updated_at = timezone.now()
+                    level_updates.append(cell)
+                    continue
+
                 result = evaluate_formula(formula_source, cell.sheet)
                 cell.computed_type = result.computed_type
                 if result.computed_type == ComputedCellType.NUMBER and result.computed_number is not None:

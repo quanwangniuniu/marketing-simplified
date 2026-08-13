@@ -117,6 +117,7 @@ export const useChatStore = create<ChatState>()(
       presenceByUserId: {},     // userId -> current online/offline state
       presenceVersionByUserId: {}, // userId -> latest applied presence version
       mentionedChatIds: {},     // chatId -> true when current user has unread @-mention
+      unseenPinChatIds: {},     // chatId -> true until the user opens Pins
       outbox: [],
 
       // Thread panel
@@ -1016,6 +1017,7 @@ export const useChatStore = create<ChatState>()(
           presenceByUserId: {},
           presenceVersionByUserId: {},
           mentionedChatIds: {},
+          unseenPinChatIds: {},
           activeThreadMessageId: null,
           threadReplies: {},
           outbox: [],
@@ -1048,6 +1050,18 @@ export const useChatStore = create<ChatState>()(
             );
           });
           return { mentionedChatIds: next, chatsByProject: newChatsByProject };
+        }),
+
+      // ── Shared pin badges ─────────────────────────────────────────────
+      markChatPinUnseen: (chatId) =>
+        set((state) => ({
+          unseenPinChatIds: { ...state.unseenPinChatIds, [chatId]: true },
+        })),
+      clearChatPinUnseen: (chatId) =>
+        set((state) => {
+          const next = { ...state.unseenPinChatIds };
+          delete next[chatId];
+          return { unseenPinChatIds: next };
         }),
 
       // ── Thread panel ─────────────────────────────────────────────────
@@ -1091,6 +1105,7 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => ({
         isWidgetOpen: state.isWidgetOpen,
         outbox: state.outbox,
+        unseenPinChatIds: state.unseenPinChatIds,
         // Don't persist chats/messages as they should be fetched fresh
       }),
     }

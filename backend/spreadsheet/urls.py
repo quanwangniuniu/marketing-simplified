@@ -39,6 +39,7 @@ urlpatterns = [
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/range/', views.CellRangeReadView.as_view(), name='cell-range-read'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/batch/', views.CellBatchUpdateView.as_view(), name='cell-batch-update'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/import-finalize/', views.ImportFinalizeView.as_view(), name='cell-import-finalize'),
+    path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/export.xlsx', views.SheetXlsxExportView.as_view(), name='sheet-xlsx-export'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/pivot-config/', views.PivotConfigView.as_view(), name='pivot-config'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/pivot-recompute/', views.PivotRecomputeView.as_view(), name='pivot-recompute'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/highlights/', views.SpreadsheetHighlightListView.as_view(), name='sheet-highlight-list'),

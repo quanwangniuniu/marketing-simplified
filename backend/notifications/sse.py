@@ -28,6 +28,7 @@ import logging
 import time
 
 from django.conf import settings
+from django.db import connections
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,25 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
             )
         except Exception:
             logger.exception("SSE: replay failed for user_id=%s", user_id)
+
+    # ── 1b. Release the database connection before going long-lived ───────
+    #
+    # Everything from here on is Redis pub/sub and needs no database access,
+    # but the connection opened for this request (by TenantSchemaMiddleware and
+    # by the view's auth lookup) is thread-local and is only returned when the
+    # request finishes — and a streaming response does not finish until the
+    # client disconnects. Left alone, each open stream pins one PostgreSQL
+    # connection: 30 streams measured 30 extra connections, so ~100 browser
+    # tabs exhaust max_connections=100 on their own and the stack freezes until
+    # the backend is restarted.
+    #
+    # This has to happen here rather than in the view: the middleware resets
+    # search_path in a finally block that runs the moment the view returns the
+    # response object, re-opening anything the view closed. The generator body
+    # does not run until the response is actually being streamed, which is
+    # after that. close_all() rather than close_old_connections() because the
+    # latter spares connections still within CONN_MAX_AGE.
+    await sync_to_async(connections.close_all)()
 
     # ── 2. Open Redis Pub/Sub connection ──────────────────────────────────
     host, port = _redis_host_port()
