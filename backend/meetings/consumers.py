@@ -1,9 +1,9 @@
 import json
 
 from channels.db import database_sync_to_async
-from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 from meetings.models import Meeting
 from meetings.services import (
     get_or_create_meeting_document,
@@ -27,7 +27,9 @@ def _optional_int_from_json(value, field_name: str):
     raise ValueError(f"{field_name} must be an integer")
 
 
-class MeetingDocumentConsumer(AsyncWebsocketConsumer):
+class MeetingDocumentConsumer(InstrumentedAsyncWebsocketConsumer):
+    ws_channel = 'meetings'
+
     async def connect(self):
         self.meeting_id = int(self.scope["url_route"]["kwargs"]["meeting_id"])
         self.room_group_name = f"meeting_document_{self.meeting_id}"
