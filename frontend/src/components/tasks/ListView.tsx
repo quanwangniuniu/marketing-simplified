@@ -35,6 +35,17 @@ function resolveTaskSlug(task: Pick<TaskData, 'slug'>): string | null {
   return slug || null;
 }
 
+function pickTaskFields(
+  task: Partial<TaskData>,
+  fields: Array<keyof TaskData>,
+): Partial<TaskData> {
+  return Object.fromEntries(
+    fields
+      .filter((field) => field in task)
+      .map((field) => [field, task[field]])
+  ) as Partial<TaskData>;
+}
+
 interface ListViewProps {
   tasks: TaskData[];
   loading: boolean;
@@ -168,13 +179,22 @@ export default function ListView({
   const [openOwnerTaskId, setOpenOwnerTaskId] = useState<number | null>(null);
   const [openApproverTaskId, setOpenApproverTaskId] = useState<number | null>(null);
   const [savingIds, setSavingIds] = useState<number[]>([]);
+  const savingCountByTaskId = useRef(
+    new Map<number, number>()
+  );
   const [pinBusyIds, setPinBusyIds] = useState<number[]>([]);
   const [bulkFailures, setBulkFailures] = useState<TaskBulkFailureItem[]>([]);
   const [recentlyUpdatedIds, setRecentlyUpdatedIds] = useState<number[]>([]);
   const [truncatedSummaryIds, setTruncatedSummaryIds] = useState<number[]>([]);
   const updateTaskInStore = useTaskStore((s) => s.updateTask);
+  const beginTaskOperation = useTaskStore(
+    (s) => s.beginTaskOperation
+  );
   const resolveTaskFromServer = useTaskStore(
     (s) => s.resolveTaskFromServer
+  );
+  const rollbackTaskOperation = useTaskStore(
+    (s) => s.rollbackTaskOperation
   );
   const updateTasksBulkInStore = useTaskStore((s) => s.updateTasksBulk);
 
@@ -843,12 +863,36 @@ export default function ListView({
     });
   };
 
-  const setTaskSaving = (taskId: number, saving: boolean) => {
-    setSavingIds((prev) => {
-      const next = new Set(prev);
-      if (saving) next.add(taskId);
-      else next.delete(taskId);
-      return Array.from(next);
+  const setTaskSaving = (
+    taskId: number,
+    saving: boolean,
+  ) => {
+    const currentCount =
+      savingCountByTaskId.current.get(taskId) ?? 0;
+
+    const nextCount = saving
+      ? currentCount + 1
+      : Math.max(0, currentCount - 1);
+
+    if (nextCount === 0) {
+      savingCountByTaskId.current.delete(taskId);
+    } else {
+      savingCountByTaskId.current.set(
+        taskId,
+        nextCount,
+      );
+    }
+
+    setSavingIds((previousIds) => {
+      const nextIds = new Set(previousIds);
+
+      if (nextCount > 0) {
+        nextIds.add(taskId);
+      } else {
+        nextIds.delete(taskId);
+      }
+
+      return Array.from(nextIds);
     });
   };
 
@@ -900,21 +944,94 @@ export default function ListView({
     fallbackError: string
   ): Promise<boolean> => {
     if (!task.id) return false;
-    const previous = { ...task };
+
+    const patchFields = Object.keys(
+      patch
+    ) as Array<keyof TaskData>;
+
+    const operationScope = patchFields
+      .map(String)
+      .sort()
+      .join(',');
+
+    const operationId =
+      globalThis.crypto.randomUUID();
+
+    const currentStoreTask =
+      useTaskStore
+        .getState()
+        .tasks
+        .find((candidate) => candidate.id === task.id)
+      ?? task;
+
+    const previousPatch = pickTaskFields(
+      currentStoreTask,
+      patchFields,
+    );
+
+    beginTaskOperation(
+      task.id,
+      operationScope,
+      operationId,
+    );
+
     updateTaskInStore(task.id, patch);
     setTaskSaving(task.id, true);
+
     try {
       const response = await TaskAPI.updateTask(
         task.slug ?? task.id,
-        requestData as Partial<TaskData>
+        requestData as Partial<TaskData>,
+        operationId,
       );
-      resolveTaskFromServer(task.id, response.data as TaskData);
-      markRecentlyUpdated([task.id]);
-      if (resolveTaskSlug(task) === drawerTaskSlug) setDrawerRefreshKey((k) => k + 1);
-      return true;
-    } catch (err) {
-      updateTaskInStore(task.id, previous);
-      toast.error(parseApiError(err, fallbackError));
+
+      const serverTask = response.data as TaskData & {
+        operation_id?: string;
+      };
+
+      if (serverTask.operation_id !== operationId) {
+        throw new Error(
+          'Task update response did not return the matching operation ID.'
+        );
+      }
+
+      const serverPatch = pickTaskFields(
+        serverTask,
+        patchFields,
+      );
+
+      const applied = resolveTaskFromServer(
+        task.id,
+        serverPatch,
+        operationScope,
+        operationId,
+      );
+
+      if (applied) {
+        markRecentlyUpdated([task.id]);
+
+        if (
+          resolveTaskSlug(task) === drawerTaskSlug
+        ) {
+          setDrawerRefreshKey((key) => key + 1);
+        }
+      }
+
+      return applied;
+    } catch (error) {
+      const rollbackApplied = rollbackTaskOperation(
+        task.id,
+        previousPatch,
+        operationScope,
+        operationId,
+      );
+
+      if (rollbackApplied) {
+        toast.error(
+          parseApiError(error, fallbackError)
+        );
+      }
+
       return false;
     } finally {
       setTaskSaving(task.id, false);

@@ -215,6 +215,25 @@ test('two tabs preserve both summary edits and reconcile to server truth', async
       expect(patchAResponse.ok()).toBeTruthy();
       expect(patchBResponse.ok()).toBeTruthy();
 
+      for (const patchResponse of [
+        patchAResponse,
+        patchBResponse,
+      ]) {
+        const requestOperationId = new URL(
+          patchResponse.url()
+        ).searchParams.get('operation_id');
+
+        expect(requestOperationId).toBeTruthy();
+
+        const responseBody = await patchResponse.json() as {
+          operation_id?: string;
+        };
+
+        expect(responseBody.operation_id).toBe(
+          requestOperationId
+        );
+      }
+
       const token = await getAuthToken(pageA);
       expect(token).toBeTruthy();
 

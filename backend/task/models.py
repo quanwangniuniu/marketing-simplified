@@ -987,7 +987,16 @@ class TaskFieldHistory(models.Model):
 
     @classmethod
     def append_transitions(cls, *, task, transitions, changed_by):
+        """
+        Append every accepted field transition in deterministic order.
 
+        The pre-save signal locks the Task row before saving. For each field,
+        the latest persisted History new_value is used as the next row's
+        old_value. History rows are ordered by changed_at and primary key.
+
+        A rebased no-op such as B -> B is still inserted because it represents
+        an accepted write and must remain visible in the audit History.
+        """
         if not transitions:
             return []
 
@@ -1025,9 +1034,6 @@ class TaskFieldHistory(models.Model):
                 if previous_transition is not None
                 else transition['old_value']
             )
-
-            if old_value == new_value:
-                continue
 
             record = cls.objects.create(
                 task=task,

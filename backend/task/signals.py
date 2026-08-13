@@ -180,20 +180,33 @@ def capture_task_field_changes(
     **kwargs,
 ):
     """
-    Capture this save's transitions and author before the Task is written.
+    Lock the Task row and capture this accepted save's field transitions.
 
-    A stack is used instead of a single instance attribute so nested or
-    repeated saves in the same transaction cannot overwrite a pending batch.
+    Explicitly submitted fields are retained even when their effective value
+    is unchanged, allowing a rebased concurrent write such as B -> B to remain
+    visible in History.
     """
     if not instance.pk:
         return
 
+    queryset = Task.objects
+    using = kwargs.get('using')
+    if using:
+        queryset = queryset.using(using)
+
     try:
-        old = Task.objects.select_related('owner').get(pk=instance.pk)
+        old = queryset.select_for_update().get(pk=instance.pk)
     except Task.DoesNotExist:
         return
 
     tracked_fields = list(TaskFieldHistory.TRACKED_FIELDS)
+    explicitly_attempted_fields = set(
+        getattr(
+            instance,
+            '_attempted_task_field_history_fields',
+            (),
+        )
+    )
 
     if update_fields is not None:
         updated_names = set(update_fields)
@@ -206,12 +219,18 @@ def capture_task_field_changes(
             )
         ]
 
+        explicitly_attempted_fields.update(tracked_fields)
+
     try:
         transitions = []
 
         for field in tracked_fields:
             old_val, new_val = _field_value(old, instance, field)
-            if old_val != new_val:
+
+            if (
+                old_val != new_val
+                or field in explicitly_attempted_fields
+            ):
                 transitions.append({
                     'field_name': field,
                     'old_value': old_val,

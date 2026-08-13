@@ -89,28 +89,117 @@ function HistoryRow({ entry }: { entry: TaskFieldHistoryEntry }) {
   let valueNode: React.ReactNode;
 
   if (entry.field_name === 'task_created') {
-    actionText = <span className="text-gray-400">created this task</span>;
+    actionText = (
+      <span className="text-gray-400">
+        created this task
+      </span>
+    );
     valueNode = null;
+  } else if (entry.old_value === entry.new_value) {
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          submitted
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>{' '}
+        <span className="text-gray-400">
+          with no effective change
+        </span>
+      </>
+    );
+
+    valueNode = (
+      <ValueChip
+        value={entry.new_value}
+        empty={!entry.new_value}
+      />
+    );
   } else if (relInfo) {
     if (relInfo.isAdd) {
-      actionText = <span className="font-medium text-gray-600">{relInfo.verb}</span>;
-      valueNode = <ValueChip value={entry.new_value} />;
+      actionText = (
+        <span className="font-medium text-gray-600">
+          {relInfo.verb}
+        </span>
+      );
+      valueNode = (
+        <ValueChip value={entry.new_value} />
+      );
     } else {
-      actionText = <><span className="text-gray-400">removed</span> <span className="font-medium text-gray-600">{relInfo.verb}</span> <span className="text-gray-400">link</span></>;
-      valueNode = <ValueChip value={entry.old_value} />;
+      actionText = (
+        <>
+          <span className="text-gray-400">
+            removed
+          </span>{' '}
+          <span className="font-medium text-gray-600">
+            {relInfo.verb}
+          </span>{' '}
+          <span className="text-gray-400">
+            link
+          </span>
+        </>
+      );
+      valueNode = (
+        <ValueChip value={entry.old_value} />
+      );
     }
   } else if (isAddRemove) {
-    const label = FIELD_LABELS[entry.field_name] ?? entry.field_name;
-    actionText = <><span className="text-gray-400">{isAdd ? 'added' : 'removed'}</span> <span className="font-medium text-gray-600">{label}</span></>;
-    valueNode = <ValueChip value={isAdd ? entry.new_value : entry.old_value} />;
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          {isAdd ? 'added' : 'removed'}
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>
+      </>
+    );
+
+    valueNode = (
+      <ValueChip
+        value={
+          isAdd
+            ? entry.new_value
+            : entry.old_value
+        }
+      />
+    );
   } else {
-    const label = FIELD_LABELS[entry.field_name] ?? entry.field_name;
-    actionText = <><span className="text-gray-400">changed</span> <span className="font-medium text-gray-600">{label}</span></>;
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          changed
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>
+      </>
+    );
+
     valueNode = (
       <div className="flex flex-wrap items-center gap-1.5">
-        <ValueChip value={entry.old_value} empty={!entry.old_value} />
+        <ValueChip
+          value={entry.old_value}
+          empty={!entry.old_value}
+        />
         <ArrowRight className="h-3 w-3 flex-shrink-0 text-gray-400" />
-        <ValueChip value={entry.new_value} empty={!entry.new_value} />
+        <ValueChip
+          value={entry.new_value}
+          empty={!entry.new_value}
+        />
       </div>
     );
   }
