@@ -13,6 +13,7 @@ import type {
 import { CampaignAPI } from '@/lib/api/campaignApi';
 import { ProjectAPI } from '@/lib/api/projectApi';
 import { useProjectStore } from '@/lib/projectStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 import UserPicker, { User } from '@/people/UserPicker';
 import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export default function CreateCampaignFromTemplateDialog({
   template: providedTemplate,
 }: Props) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const activeProject = useProjectStore((s) => s.activeProject);
   const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -173,7 +175,7 @@ export default function CreateCampaignFromTemplateDialog({
       const res = await CampaignAPI.createCampaignFromTemplate(selected.id, payload);
       toast.success('Campaign created');
       handleClose(false);
-      router.push(`/campaigns/${res.data.slug}`);
+      router.push(buildUrl(`/campaigns/${res.data.slug}`));
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||

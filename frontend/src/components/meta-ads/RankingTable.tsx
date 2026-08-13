@@ -28,6 +28,7 @@ import {
   thumbnailOrFallback,
 } from "./metaAdsUtils";
 import { computeCompositeScores, type WeightSet } from "./rankingScoring";
+import { useBuildUrl } from "@/lib/buildUrl";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const LOW_CONFIDENCE_EVENTS_THRESHOLD = 50;
@@ -229,6 +230,7 @@ function Row({
   selection?: RankingTableSelection;
   atCap?: boolean;
 }) {
+  const buildUrl = useBuildUrl();
   const lowConfidence = row.total_events < LOW_CONFIDENCE_EVENTS_THRESHOLD;
   const isLearning = row.is_in_learning === true;
   const learningUnknown = row.is_in_learning === null;
@@ -305,7 +307,7 @@ function Row({
             <>
               <span>·</span>
               <Link
-                href={`/meta-ads/creatives/${row.creative.slug}`}
+                href={buildUrl(`/meta-ads/creatives/${row.creative.slug}`)}
                 className="font-mono hover:text-[#1a9ba3]"
               >
                 creative {row.creative.meta_creative_id}

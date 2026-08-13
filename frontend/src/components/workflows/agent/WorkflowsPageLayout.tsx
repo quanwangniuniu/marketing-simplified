@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { Plus } from "lucide-react"
 import { useAgentWorkflows } from "./hooks/useAgentWorkflows"
+import { useBuildUrl } from "@/lib/buildUrl"
 import WorkflowsTab from "./tabs/WorkflowsTab"
 import TemplatesTab from "./tabs/TemplatesTab"
 import toast from "react-hot-toast"
@@ -19,6 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function WorkflowsPageLayout() {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const searchParams = useSearchParams()
   const rawTab = searchParams.get("tab")
   const activeTab: Tab =
@@ -38,7 +40,7 @@ export default function WorkflowsPageLayout() {
     } else {
       params.set("tab", tab)
     }
-    router.push(`/workflows${params.size > 0 ? `?${params.toString()}` : ""}`)
+    router.push(buildUrl(`/workflows${params.size > 0 ? `?${params.toString()}` : ""}`))
   }
 
   const handleCreate = async () => {
@@ -47,7 +49,7 @@ export default function WorkflowsPageLayout() {
     try {
       const created = await createWorkflow({ name: "New workflow", status: "draft" })
       setRefreshKey((k) => k + 1)
-      router.push(`/workflows/${created.slug}?new=1`)
+      router.push(buildUrl(`/workflows/${created.slug}?new=1`))
     } catch (err: unknown) {
       const msg =
         (err as { message?: string })?.message || "Failed to create workflow"

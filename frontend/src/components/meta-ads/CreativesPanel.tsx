@@ -32,6 +32,7 @@ import {
 import ExportActionMenu from './ExportActionMenu';
 import SelectAllHeader from './SelectAllHeader';
 import VideoModal from './VideoModal';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
@@ -64,6 +65,7 @@ export default function CreativesPanel({
   const [previewTitle, setPreviewTitle] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const router = useRouter();
+  const buildUrl = useBuildUrl();
 
   const toggleSelected = (id: number) => {
     setSelectedIds((prev) => {
@@ -176,9 +178,9 @@ export default function CreativesPanel({
               if (selectedCreativeCount === 1) {
                 const onlyId = Array.from(selectedIds)[0];
                 const onlySlug = rows.find((r) => r.id === onlyId)?.slug;
-                router.push(`/variations-studio?creative=${onlySlug ?? onlyId}`);
+                router.push(buildUrl(`/variations-studio?creative=${onlySlug ?? onlyId}`));
               } else {
-                router.push('/variations-studio');
+                router.push(buildUrl('/variations-studio'));
               }
             }}
             className="inline-flex h-9 items-center gap-1 rounded-lg bg-white px-3 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:text-[#1a9ba3] hover:ring-[#3CCED7] focus:outline-none focus:ring-2 focus:ring-[#3CCED7]/30 disabled:cursor-not-allowed disabled:text-gray-400 disabled:ring-gray-200 disabled:hover:text-gray-400 disabled:hover:ring-gray-200"
@@ -293,9 +295,10 @@ function CreativeRow({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const buildUrl = useBuildUrl();
   const thumb = thumbnailOrFallback(c.thumbnail_url);
   const isVideo = c.object_type === 'VIDEO' || !!c.video_id;
-  const detailHref = `/meta-ads/creatives/${c.slug}`;
+  const detailHref = buildUrl(`/meta-ads/creatives/${c.slug}`);
   const display = c.title || c.name || c.meta_creative_id;
   return (
     <tr

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, Square, X, ArrowRight, ExternalLink } from 'lucide-react';
 import type { MeetingActionItem } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Props {
   item: MeetingActionItem;
@@ -26,6 +27,7 @@ export default function ActionItemRow({
   onConvert,
   projectId,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [title, setTitle] = useState(item.title);
   const [deleting, setDeleting] = useState(false);
 
@@ -110,7 +112,7 @@ export default function ActionItemRow({
         )}
         {isConverted && (
           <Link
-            href={`/tasks/${item.converted_task_slug ?? item.converted_task_id}`}
+            href={buildUrl(`/tasks/${item.converted_task_slug ?? item.converted_task_id}`)}
             className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
           >
             <span>Task: {item.converted_task_slug ?? `#${item.converted_task_id}`}</span>

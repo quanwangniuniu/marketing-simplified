@@ -74,7 +74,7 @@ export interface TaskData {
   linked_object?: unknown;
   is_subtask?: boolean;
   subtask_count?: number;
-  parent_relationship?: any; // Parent relationship if this is a subtask
+  parent_relationship?: TaskParentRelationshipEntry[] | null;
   order_in_project?: number; // Order of task within its project
   approval_chain_progress?: ApprovalChainProgress | null;
   can_lock?: boolean;
@@ -99,6 +99,49 @@ export interface TaskData {
   created_at?: string;
   /** ISO datetime of the last modification (auto-set by server). */
   updated_at?: string;
+}
+
+export interface TaskParentRelationshipEntry {
+  parent_task_id: number | string;
+  parent_task_slug?: string;
+  parent_task_summary?: string;
+}
+
+/** Resolve current parent task id from API ``parent_relationship`` payload. */
+export function getTaskParentId(
+  task: Pick<TaskData, 'parent_relationship'>,
+): number | null {
+  const rel = task.parent_relationship;
+  if (!rel || !Array.isArray(rel) || rel.length === 0) {
+    return null;
+  }
+  const id = rel[0]?.parent_task_id;
+  if (typeof id === 'number' && Number.isFinite(id)) {
+    return id;
+  }
+  if (typeof id === 'string' && id.trim() !== '') {
+    const parsed = Number(id);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/** Resolve parent slug for slug-only task detail URLs (never use numeric id in path). */
+export function getTaskParentSlug(
+  task: Pick<TaskData, 'parent_relationship'>,
+): string | null {
+  const rel = task.parent_relationship;
+  const slug = rel?.[0]?.parent_task_slug;
+  return typeof slug === 'string' && slug.trim() !== '' ? slug : null;
+}
+
+/** Resolve parent summary for immediate picker display. */
+export function getTaskParentSummary(
+  task: Pick<TaskData, 'parent_relationship'>,
+): string | null {
+  const rel = task.parent_relationship;
+  const summary = rel?.[0]?.parent_task_summary;
+  return typeof summary === 'string' && summary.trim() !== '' ? summary : null;
 }
 
 // Type for creating a new task (current_approver_id is user ID)
@@ -217,6 +260,8 @@ export interface TaskListFilters {
   include_subtasks?: boolean;
   all_projects?: boolean;
   tag_names?: string[];
+  search?: string;
+  page_size?: number;
 }
 
 /** GET /api/tasks/gantt/ — chart payload derived server-side from tasks + dates */

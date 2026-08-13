@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/adCopyVariationApi";
 import { facebookApi, type MetaCreativeDetail } from "@/lib/api/facebookApi";
 import { useProjectStore } from "@/lib/projectStore";
+import { useBuildUrl } from "@/lib/buildUrl";
 import type {
   AdCopyVariation,
   AdCopyVariationCopy,
@@ -129,6 +130,7 @@ export default function VariationsStudioPage() {
 
 function VariationsStudioContent() {
   const searchParams = useSearchParams();
+  const buildUrl = useBuildUrl();
   const activeProject = useProjectStore((state) => state.activeProject);
   const hasProjectStoreHydrated = useProjectStore((state) => state.hasHydrated);
   const initialCreativeIdParam = searchParams.get("creative");
@@ -361,7 +363,7 @@ function VariationsStudioContent() {
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1440px] flex-col px-6 py-4">
         {initialCreativeId !== null && (
           <Link
-            href="/meta-ads?tab=creatives"
+            href={buildUrl("/meta-ads?tab=creatives")}
             className="mb-4 inline-flex w-fit items-center gap-1 text-[14px] text-gray-500 transition-colors hover:text-gray-900"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -927,6 +929,7 @@ function AiDraftsTab({
   projectId: Id | null;
   initialCreativeId: string | null;
 }) {
+  const buildUrl = useBuildUrl();
   const [rows, setRows] = useState<AdCopyVariation[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<DraftStatusFilter>("all");
@@ -1332,7 +1335,7 @@ function AiDraftsTab({
                     )}
                     {creativeId !== null ? (
                       <Link
-                        href={`/meta-ads/creatives/${creativeId}`}
+                        href={buildUrl(`/meta-ads/creatives/${row.creative_slug ?? creativeId}`)}
                         className="rounded-lg px-3 py-1.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200 transition hover:text-[#1a9ba3] hover:ring-[#3CCED7]"
                       >
                         Creative detail

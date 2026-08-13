@@ -3,6 +3,7 @@
 export interface Organization {
   id: number;
   name: string;
+  slug: string;
   plan_id?: number | null;
 }
 
@@ -17,6 +18,7 @@ export interface User {
   is_org_admin?: boolean;
   is_csm_admin?: boolean;
   organization: Organization | null;
+  current_organization: Organization | null;
   roles: string[];
   team_id?: number;
   job?: string;

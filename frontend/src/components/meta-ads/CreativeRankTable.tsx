@@ -21,6 +21,7 @@ import {
   thumbnailOrFallback,
 } from "./metaAdsUtils";
 import { computeCompositeScores, type WeightSet } from "./rankingScoring";
+import { useBuildUrl } from "@/lib/buildUrl";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const LOW_CONFIDENCE_EVENTS_THRESHOLD = 50;
@@ -215,7 +216,8 @@ function Row({
   const learningUnknown = row.is_in_learning === null;
   const thumb = thumbnailOrFallback(row.thumbnail_url);
   const isVideo = row.object_type === "VIDEO" || !!row.video_id;
-  const detailHref = `/meta-ads/creatives/${row.slug}`;
+  const buildUrl = useBuildUrl();
+  const detailHref = buildUrl(`/meta-ads/creatives/${row.slug}`);
   const altText = row.name || row.title || "Creative thumbnail";
   const display = row.title || row.name || row.meta_creative_id;
   const isSelected = selection?.selectedIds.has(row.id) ?? false;

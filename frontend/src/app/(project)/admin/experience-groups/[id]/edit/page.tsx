@@ -8,11 +8,13 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ExperienceGroupAPI } from '@/lib/api/experienceGroupApi';
 import { ExperienceGroup } from '@/types/experienceGroup';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { AlertCircle, ArrowLeft, Eye, Send } from 'lucide-react';
 
 const EditExperienceGroupPage: React.FC = () => {
   const params = useParams();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const id = String(params.id);
   const projectId = useProjectStore((s) => s.activeProject)?.id ?? null;
 
@@ -105,7 +107,7 @@ const EditExperienceGroupPage: React.FC = () => {
   const handleBack = () => {
     if (isDirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
     const dest = projectId
-      ? `/admin/experience-groups`
+      ? buildUrl(`/admin/experience-groups`)
       : '/select-project';
     router.push(dest);
   };
@@ -227,7 +229,7 @@ const EditExperienceGroupPage: React.FC = () => {
             {/* Footer */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
               <a
-                href={`/admin/experience-groups/${id}/preview`}
+                href={buildUrl(`/admin/experience-groups/${id}/preview`)}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors"

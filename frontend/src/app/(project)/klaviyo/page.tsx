@@ -11,6 +11,7 @@ import {
   type EmailDraftRow,
 } from '@/components/email-draft';
 import { klaviyoApi } from '@/lib/api/klaviyoApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { KlaviyoDraft } from '@/hooks/useKlaviyoData';
 
 function toRow(draft: KlaviyoDraft): EmailDraftRow {
@@ -27,6 +28,7 @@ function toRow(draft: KlaviyoDraft): EmailDraftRow {
 
 export default function KlaviyoV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [drafts, setDrafts] = useState<EmailDraftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export default function KlaviyoV2Page() {
   }, [drafts, searchQuery]);
 
   const handleOpen = (row: EmailDraftRow) => {
-    router.push(`/klaviyo/${row.slug}`);
+    router.push(buildUrl(`/klaviyo/${row.slug}`));
   };
   const handleEdit = handleOpen;
 
@@ -95,7 +97,7 @@ export default function KlaviyoV2Page() {
         status: 'draft',
       });
       if (created?.id) {
-        router.push(`/klaviyo/${created.slug}`);
+        router.push(buildUrl(`/klaviyo/${created.slug}`));
       } else {
         void loadDrafts();
       }

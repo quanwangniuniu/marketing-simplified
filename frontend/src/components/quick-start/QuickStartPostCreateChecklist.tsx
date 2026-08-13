@@ -26,6 +26,7 @@ import {
   shouldShowQuickStartPostCreateGuide,
 } from '@/lib/quickStartPostCreate';
 import { useProjectStore } from '@/lib/projectStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 function stepItemClassName(isDone: boolean): string {
   const base =
@@ -38,6 +39,7 @@ function stepItemClassName(isDone: boolean): string {
 
 export default function QuickStartPostCreateChecklist() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const pathname = usePathname();
   const activeProjectId = useProjectStore((s) => s.activeProject?.id ?? null);
   const [guide, setGuide] = useState(() =>
@@ -108,7 +110,7 @@ export default function QuickStartPostCreateChecklist() {
         scrollOverviewMainToSectionWithRetry('project-team');
         return;
       }
-      router.push('/overview#project-team');
+      router.push(buildUrl('/overview#project-team'));
     },
     [markStepComplete, pathname, router]
   );
@@ -203,7 +205,7 @@ export default function QuickStartPostCreateChecklist() {
                 return (
                   <li key={item.id}>
                     <Link
-                      href={item.href}
+                      href={buildUrl(item.href)}
                       onClick={
                         item.id === 'team'
                           ? handleTeamInviteClick

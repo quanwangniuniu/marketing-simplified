@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { TaskData } from '@/types/task';
 
 interface DecisionExecutionSummaryPanelProps {
@@ -63,6 +64,7 @@ const DecisionExecutionSummaryPanel = ({
   decisionId,
   projectId,
 }: DecisionExecutionSummaryPanelProps) => {
+  const buildUrl = useBuildUrl();
   const [tasks, setTasks] = useState<TaskData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +130,7 @@ const DecisionExecutionSummaryPanel = ({
   const renderTaskRow = (task: TaskData) => (
     <Link
       key={task.id}
-      href={`/tasks/${task.slug}`}
+      href={buildUrl(`/tasks/${task.slug}`)}
       className="block rounded-md border border-gray-200 bg-white px-3 py-2 text-xs hover:bg-gray-50"
     >
       <div className="flex items-center justify-between gap-2">

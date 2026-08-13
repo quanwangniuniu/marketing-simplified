@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Plus, Pencil, Trash2, Send, Eye, AlertCircle, X, Users, FileText, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { PORTAL_SUBMIT_BUTTON_CLASS } from '@/components/ticket-form/constants';
 
 // ── Create Form ───────────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ interface EditFormProps {
 }
 
 const EditForm: React.FC<EditFormProps> = ({ groupId, projectId, onSaved, onClose }) => {
+  const buildUrl = useBuildUrl();
   const [group, setGroup] = useState<ExperienceGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -289,7 +291,7 @@ const EditForm: React.FC<EditFormProps> = ({ groupId, projectId, onSaved, onClos
               <span>Published: {new Date(group.published_at).toLocaleDateString()}</span>
             )}
             <a
-              href={`/admin/customers?group=${group.slug}`}
+              href={buildUrl(`/admin/customers?group=${group.slug}`)}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 text-indigo-500 hover:text-indigo-700 transition-colors"
@@ -341,6 +343,7 @@ const StatusBadge: React.FC<{ status: ExperienceGroupListItem['status'] }> = ({ 
 
 const ExperienceGroupsPage: React.FC = () => {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { activeProject } = useActiveProjectForFlatRoute();
   const projectId = Number(activeProject?.id ?? 0);
   const projectValid = projectId > 0;
@@ -448,14 +451,14 @@ const ExperienceGroupsPage: React.FC = () => {
               {projectValid && (
                 <>
                   <Link
-                    href={`/admin/csm/settings`}
+                    href={buildUrl(`/admin/csm/settings`)}
                     className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     <Settings className="h-4 w-4" aria-hidden />
                     CSM Settings
                   </Link>
                   <Link
-                    href={`/admin/ticket-forms`}
+                    href={buildUrl(`/admin/ticket-forms`)}
                     className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
                     <FileText className="h-4 w-4" />

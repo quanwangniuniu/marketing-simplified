@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Plus, Square } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { TaskData, userDisplayName } from '@/types/task';
 import SubtaskModal from './SubtaskModal';
 
@@ -15,6 +16,7 @@ interface SubtasksProps {
 
 export default function Subtasks({ taskId, taskProjectId, parentTaskIsSubtask }: SubtasksProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [subtasks, setSubtasks] = useState<TaskData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export default function Subtasks({ taskId, taskProjectId, parentTaskIsSubtask }:
   };
 
   const handleTaskClick = (subtaskKey: number | string) => {
-    router.push(`/tasks/${subtaskKey}`);
+    router.push(buildUrl(`/tasks/${subtaskKey}`));
   };
 
   return (

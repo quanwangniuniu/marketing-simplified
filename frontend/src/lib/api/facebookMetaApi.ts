@@ -77,6 +77,7 @@ export interface AdCreativeListResponse {
 export interface AdCreativeCreateResponse {
   data: {
     id: string;
+    slug?: string;
   };
 }
 

@@ -7,6 +7,7 @@ import { toast } from "react-hot-toast";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { miroApi, MiroBoard, BoardItem, UpdateBoardItemData } from "@/lib/api/miroApi";
+import { useBuildUrl } from "@/lib/buildUrl";
 import { useBoardViewport, Viewport } from "@/components/miro/hooks/useBoardViewport";
 import { useBoardItems } from "@/components/miro/hooks/useBoardItems";
 import { LineVariant, ToolOptions, ToolType } from "@/components/miro/hooks/useToolDnD";
@@ -29,6 +30,7 @@ const ERASE_CONNECTOR_LAYOUT_OPTIONS = { preserveOrphanConnectors: true as const
 function MiroBoardPage() {
   const params = useParams();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const boardId = params.boardId as string;
 
   const [board, setBoard] = useState<MiroBoard | null>(null);
@@ -372,13 +374,13 @@ function MiroBoardPage() {
         viewport: { x: 0, y: 0, zoom: 1 },
       });
       setIsCreateModalOpen(false);
-      router.push(`/miro/${created.slug}`);
+      router.push(buildUrl(`/miro/${created.slug}`));
     } catch (err) {
       console.error("Failed to create board:", err);
     } finally {
       setIsCreatingBoard(false);
     }
-  }, [board, router]);
+  }, [board, router, buildUrl]);
 
   const handleDeleteBoardFromSidebar = useCallback(
     async (targetBoardId: string) => {
@@ -412,9 +414,9 @@ function MiroBoardPage() {
         setProjectBoards(nextProjectBoards);
         if (targetBoardId === boardId) {
           if (nextProjectBoards.length > 0) {
-            router.push(`/miro/${nextProjectBoards[0].slug ?? nextProjectBoards[0].id}`);
+            router.push(buildUrl(`/miro/${nextProjectBoards[0].slug ?? nextProjectBoards[0].id}`));
           } else {
-            router.push("/miro");
+            router.push(buildUrl("/miro"));
           }
         }
       } catch (err: any) {
@@ -432,7 +434,7 @@ function MiroBoardPage() {
         setDeleteBoardLoadingId(null);
       }
     },
-    [board, boardId, projectBoards, router]
+    [board, boardId, projectBoards, router, buildUrl]
   );
 
   // Handle item selection
@@ -1131,7 +1133,7 @@ function MiroBoardPage() {
             {error || "Board not found"}
           </div>
           <button
-            onClick={() => router.push("/miro")}
+            onClick={() => router.push(buildUrl("/miro"))}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
           >
             Back to Boards
@@ -1161,7 +1163,7 @@ function MiroBoardPage() {
           canUndo={canUndo}
           canRedo={canRedo}
           onBoardsToggle={() => setIsBoardsSidebarOpen((prev) => !prev)}
-          onBack={() => router.push("/miro")}
+          onBack={() => router.push(buildUrl("/miro"))}
         />
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">

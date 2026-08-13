@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Network, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { TaskData, TaskRelationsResponse, TaskRelationItem } from '@/types/task';
 import AddRelationDialog from './AddRelationDialog';
 import ConfirmDialog from './ConfirmDialog';
@@ -67,6 +68,7 @@ function TreeNode({
   chainCache: Map<number, TaskRelationsResponse>;
   visited: Set<number>;
 }) {
+  const buildUrl = useBuildUrl();
   const [expanded, setExpanded] = useState(false);
   const [childRel, setChildRel] = useState<TaskRelationsResponse | null>(
     task.id != null ? chainCache.get(task.id) ?? null : null,
@@ -141,7 +143,7 @@ function TreeNode({
         <MiniPriority priority={(task as any).priority} />
 
         <Link
-          href={`/tasks/${task.slug}`}
+          href={buildUrl(`/tasks/${task.slug}`)}
           className="flex-1 truncate text-[12px] text-gray-800 hover:text-[#3CCED7] hover:underline"
         >
           {task.summary || `Task #${task.id}`}
@@ -192,6 +194,7 @@ export default function TaskRelationsBlock({
   loading?: boolean;
   onMutated?: () => void;
 }) {
+  const buildUrl = useBuildUrl();
   const [rel, setRel] = useState<TaskRelationsResponse | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [localKey, setLocalKey] = useState(0);
@@ -375,7 +378,7 @@ export default function TaskRelationsBlock({
                       <li key={item.relation_id} className={`flex items-center gap-2 py-1.5 ${isCircular ? 'bg-amber-50/40 -mx-1 rounded px-1' : ''}`}>
                         <MiniPriority priority={(item.task as any).priority} />
                         <Link
-                          href={`/tasks/${item.task.slug}`}
+                          href={buildUrl(`/tasks/${item.task.slug}`)}
                           className="flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
                         >
                           {item.task.summary}

@@ -19,6 +19,7 @@ import StatusReportsView from '@/components/tasks/StatusReportsView';
 import { Skeleton } from '@/components/ui/skeleton';
 import LinearImportModal from '@/components/linear/LinearImportModal';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const VALID_TABS: TasksTab[] = ['summary', 'tasks', 'board', 'gantt', 'insights', 'my-actions', 'planning', 'status-reports'];
 const SLIM_SCROLLBAR_TABS = new Set<TasksTab>(['insights', 'my-actions', 'planning', 'status-reports']);
@@ -26,6 +27,7 @@ const FLAT_TASKS_BASE = '/tasks';
 
 export default function TasksV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab') as TasksTab | null;
   const drawerTaskFromQuery = searchParams?.get('drawerTask')?.trim() || null;
@@ -82,9 +84,9 @@ export default function TasksV2Page() {
       if (next === 'tasks') params.delete('tab');
       else params.set('tab', next);
       const qs = params.toString();
-      router.replace(qs ? `${FLAT_TASKS_BASE}?${qs}` : FLAT_TASKS_BASE);
+      router.replace(qs ? buildUrl(`${FLAT_TASKS_BASE}?${qs}`) : buildUrl(FLAT_TASKS_BASE));
     },
-    [router, searchParams]
+    [router, searchParams, buildUrl]
   );
 
   const refreshTasks = async () => {
@@ -97,7 +99,7 @@ export default function TasksV2Page() {
   const headerActions = (
     <button
       type="button"
-      onClick={() => router.push(`${FLAT_TASKS_BASE}/new`)}
+      onClick={() => router.push(buildUrl(`${FLAT_TASKS_BASE}/new`))}
       className="inline-flex items-center gap-2 rounded-md bg-gradient-to-br from-[#3CCED7] to-[#A6E661] px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
     >
       <Plus className="h-4 w-4" />
@@ -150,7 +152,7 @@ export default function TasksV2Page() {
               loading={taskListLoading}
               error={error}
               projectId={projectId}
-              listBasePath={FLAT_TASKS_BASE}
+              listBasePath={buildUrl(FLAT_TASKS_BASE)}
               initialDrawerTaskSlug={drawerTaskFromQuery}
               onOpenLinearImport={() => setLinearImportOpen(true)}
               onLinearBulkSynced={refreshTasks}

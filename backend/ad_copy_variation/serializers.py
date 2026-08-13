@@ -4,10 +4,14 @@ from .models import AdCopyVariation
 
 
 class AdCopyVariationSerializer(serializers.ModelSerializer):
+    creative_slug = serializers.SlugRelatedField(
+        source='creative', slug_field='slug', read_only=True
+    )
+
     class Meta:
         model = AdCopyVariation
-        fields = ['slug', 
-            'id', 'project', 'creative', 'source_mode', 'source_ref',
+        fields = ['slug',
+            'id', 'project', 'creative', 'creative_slug', 'source_mode', 'source_ref',
             'hook', 'headline', 'description', 'cta',
             'instruction', 'model_name', 'prompt_version',
             'batch_id', 'batch_position', 'status',

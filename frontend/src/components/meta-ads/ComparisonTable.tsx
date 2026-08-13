@@ -17,6 +17,7 @@ import {
   COMPARISON_GROUP_ORDER,
   type ComparisonDimension,
 } from "./comparisonDimensions";
+import { useBuildUrl } from "@/lib/buildUrl";
 
 interface ComparisonTableProps {
   rows: MetaAdPerformanceRow[];
@@ -53,6 +54,7 @@ export default function ComparisonTable({
   rows,
   currency,
 }: ComparisonTableProps) {
+  const buildUrl = useBuildUrl();
   if (rows.length === 0) {
     return (
       <div className="px-5 py-6 text-center text-xs text-gray-400">
@@ -118,7 +120,7 @@ export default function ComparisonTable({
                         />
                         {row.creative?.id ? (
                           <Link
-                            href={`/meta-ads/creatives/${row.creative.slug}`}
+                            href={buildUrl(`/meta-ads/creatives/${row.creative.slug}`)}
                             className="truncate text-sm font-medium text-gray-900 hover:text-[#1a9ba3]"
                             title={row.name || row.meta_ad_id}
                           >

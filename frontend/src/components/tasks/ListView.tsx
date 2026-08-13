@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { useTaskStore } from '@/lib/taskStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import BulkActionToolbar, { type BulkField } from './BulkActionToolbar';
 import TaskListRowContextMenu, {
@@ -141,6 +142,7 @@ export default function ListView({
   listBasePath = '/tasks',
 }: ListViewProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const searchParams = useSearchParams();
   const projectKey = projectId != null && projectId !== '' ? String(projectId) : null;
   const drawerUsesNestedPath = listBasePath.startsWith('/projects/');
@@ -575,9 +577,9 @@ export default function ListView({
 
   const handleOpenDetail = useCallback(
     (taskKey: number | string) => {
-      router.push(`/tasks/${taskKey}`);
+      router.push(buildUrl(`/tasks/${taskKey}`));
     },
-    [router]
+    [router, buildUrl]
   );
 
   const handleTaskDeleted = useCallback(

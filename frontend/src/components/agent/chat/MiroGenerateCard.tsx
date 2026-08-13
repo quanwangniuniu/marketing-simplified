@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { MiroBoardCardStatus } from "@/lib/agentMiroBoardStatus"
 import { AgentMessageBoardText } from "./AgentMessageBoardText"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const TITLE = "Recommended Miro Board"
 const BODY =
@@ -34,6 +35,7 @@ export function MiroGenerateCard({
   disabled = false,
   disabledHint,
 }: MiroGenerateCardProps) {
+  const buildUrl = useBuildUrl();
   const statusChip = (() => {
     if (status === "waiting_tasks_generation") {
       return (
@@ -84,7 +86,7 @@ export function MiroGenerateCard({
       return
     }
     if (boardHref && typeof window !== "undefined") {
-      window.location.href = boardHref
+      window.location.href = buildUrl(boardHref)
     }
   }
 

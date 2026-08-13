@@ -63,6 +63,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useBuildUrl } from "@/lib/buildUrl";
 import LayoutBlock from "@/components/mailchimp/email-builder/LayoutBlock";
 import {
   BlockBoxStyles,
@@ -130,6 +131,7 @@ const isEditableElement = (target: EventTarget | null): boolean => {
 
 export default function MailchimpDetailV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams();
   const searchParams = useSearchParams();
   const draftIdParam = params?.draftId as string | undefined;
@@ -139,13 +141,13 @@ export default function MailchimpDetailV2Page() {
   const returnTo = searchParams.get('returnTo');
   const safeReturnTo = (() => {
     if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
-      return '/mailchimp';
+      return buildUrl('/mailchimp');
     }
     const pathname = returnTo.split(/[?#]/, 1)[0];
     if (/^\/mailchimp\/[^/]+$/.test(pathname)) {
-      return '/mailchimp';
+      return buildUrl('/mailchimp');
     }
-    return returnTo;
+    return buildUrl(returnTo);
   })();
 
   // Save state management
@@ -1793,9 +1795,11 @@ export default function MailchimpDetailV2Page() {
       setTimeout(() => {
         setSaveSuccess(false);
         router.push(
-          returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
-            ? returnTo
-            : '/mailchimp'
+          buildUrl(
+            returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+              ? returnTo
+              : '/mailchimp'
+          )
         );
       }, 2000);
     } catch (error) {

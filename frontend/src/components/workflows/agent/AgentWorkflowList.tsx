@@ -19,6 +19,7 @@ import { CreateWorkflowModal } from "@/components/agent/workflow/CreateWorkflowM
 import type { AgentWorkflowDefinition } from "@/types/agent"
 import { useAgentWorkflows } from "./hooks/useAgentWorkflows"
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 type StatusFilter = "all" | AgentWorkflowDefinition["status"]
 
@@ -109,6 +110,7 @@ function WorkflowCard({
 
 export default function AgentWorkflowList() {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const {
     activeProject,
     hasHydrated,
@@ -162,7 +164,7 @@ export default function AgentWorkflowList() {
     systemWorkflows.find((w) => w.is_default) || systemWorkflows[0]
   const needsProject = hasHydrated && !activeProject?.id
   const openEditor = (workflowId: string) => {
-    router.push(`/workflows/${workflowId}`)
+    router.push(buildUrl(`/workflows/${workflowId}`))
   }
 
   const handleCreate = async (data: { name: string; description?: string }) => {

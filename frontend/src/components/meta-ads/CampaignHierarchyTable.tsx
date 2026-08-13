@@ -31,6 +31,7 @@ import {
 } from './metaAdsUtils';
 import SelectAllHeader from './SelectAllHeader';
 import VideoModal from './VideoModal';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
@@ -74,6 +75,7 @@ export default function CampaignHierarchyTable({
   days: number;
   selection?: CampaignHierarchyTableSelection;
 }) {
+  const buildUrl = useBuildUrl();
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<number>>(new Set());
@@ -207,7 +209,7 @@ export default function CampaignHierarchyTable({
                       </td>
                       <td className="px-4 py-2.5">
                         <Link
-                          href={`/meta-ads/campaigns/${c.slug}`}
+                          href={buildUrl(`/meta-ads/campaigns/${c.slug}`)}
                           className="block max-w-[420px] truncate text-xs font-medium text-gray-900 hover:text-[#1a9ba3]"
                         >
                           {c.name || c.meta_campaign_id}
@@ -295,6 +297,7 @@ function AdSetInset({
   currency: string;
   days: number;
 }) {
+  const buildUrl = useBuildUrl();
   const [rows, setRows] = useState<MetaAdSetPerformanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedAdSets, setExpandedAdSets] = useState<Set<number>>(new Set());
@@ -377,7 +380,7 @@ function AdSetInset({
                     </td>
                     <td className="px-3 py-1.5">
                       <Link
-                        href={`/meta-ads/adsets/${a.slug}`}
+                        href={buildUrl(`/meta-ads/adsets/${a.slug}`)}
                         className="block max-w-[420px] truncate text-xs text-gray-900 hover:text-[#1a9ba3]"
                       >
                         {a.name || a.meta_adset_id}
@@ -455,6 +458,7 @@ function AdsInset({
   currency: string;
   days: number;
 }) {
+  const buildUrl = useBuildUrl();
   const [rows, setRows] = useState<MetaAdPerformanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewCreativeId, setPreviewCreativeId] = useState<number | null>(null);
@@ -562,7 +566,7 @@ function AdsInset({
                       </span>
                       {ad.creative?.meta_creative_id && (
                         <Link
-                          href={`/meta-ads/creatives/${ad.creative.slug}`}
+                          href={buildUrl(`/meta-ads/creatives/${ad.creative.slug}`)}
                           className="font-mono text-gray-400 hover:text-[#1a9ba3]"
                         >
                           creative {ad.creative.meta_creative_id}

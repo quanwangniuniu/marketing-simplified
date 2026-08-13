@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useCampaignData } from '@/hooks/useCampaignData';
 import CampaignListFilters from '@/components/campaigns/CampaignListFilters';
 import CampaignListTable from '@/components/campaigns/CampaignListTable';
@@ -15,6 +16,7 @@ import CreateCampaignFromTemplateDialog from '@/components/campaigns/modals/Crea
 
 export default function CampaignsV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { projectId, activeProject } = useActiveProjectForFlatRoute();
 
   const { campaigns, loading, error, fetchCampaigns } = useCampaignData();
@@ -101,7 +103,7 @@ export default function CampaignsV2Page() {
           campaigns={filtered}
           loading={loading}
           errorMessage={errorMessage}
-          onRowClick={(c) => router.push(`/campaigns/${c.slug}`)}
+          onRowClick={(c) => router.push(buildUrl(`/campaigns/${c.slug}`))}
         />
 
         <CreateCampaignDialog

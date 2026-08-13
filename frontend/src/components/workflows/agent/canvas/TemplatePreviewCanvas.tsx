@@ -15,6 +15,7 @@ import { ArrowLeft, PanelLeftOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AgentAPI } from "@/lib/api/agentApi";
+import { useBuildUrl } from "@/lib/buildUrl";
 import type { AgentWorkflowTemplate, AgentWorkflowStep } from "@/types/agent";
 import { useAgentWorkflowProjectParams } from "../hooks/useAgentWorkflows";
 import { getStepMeta } from "./canvasStepMeta";
@@ -167,6 +168,7 @@ interface TemplatePreviewCanvasProps {
 
 export default function TemplatePreviewCanvas({ template, onBack }: TemplatePreviewCanvasProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { projectParams } = useAgentWorkflowProjectParams();
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
@@ -215,7 +217,7 @@ export default function TemplatePreviewCanvas({ template, onBack }: TemplatePrev
       toast.success("Workflow created successfully");
 
       // Navigate to the new workflow canvas with new=1 parameter
-      const targetUrl = `/workflows/${newWorkflow.slug}?new=1`;
+      const targetUrl = buildUrl(`/workflows/${newWorkflow.slug}?new=1`);
       console.log("[CREATE] Navigating to:", targetUrl);
       router.push(targetUrl);
     } catch (err) {

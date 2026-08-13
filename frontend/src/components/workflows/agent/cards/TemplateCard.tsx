@@ -9,6 +9,7 @@ import StepIconStack from "./StepIconStack"
 import { useHoverCard } from "./useHoverCard"
 import HoverCardPortal from "./HoverCardPortal"
 import { TemplateHoverContent } from "./WorkflowHoverPreview"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const CATEGORY_CONFIG: Record<
   TemplateCategory,
@@ -74,6 +75,7 @@ export default function TemplateCard({
   isOwner,
 }: TemplateCardProps) {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const category = CATEGORY_CONFIG[template.category] ?? CATEGORY_CONFIG.other
@@ -81,7 +83,7 @@ export default function TemplateCard({
 
   const handleCardClick = () => {
     // Navigate to template preview page
-    router.push(`/workflows/templates/${template.slug}/preview`)
+    router.push(buildUrl(`/workflows/templates/${template.slug}/preview`))
   }
 
   const handleEdit = () => {

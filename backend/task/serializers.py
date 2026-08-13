@@ -466,10 +466,13 @@ class TaskSerializer(serializers.ModelSerializer):
         """Get parent relationship information for subtasks"""
         if not obj.is_subtask:
             return None
-        hierarchy = obj.parent_relationship.first()
+        hierarchy = obj.parent_relationship.select_related('parent_task').first()
         if hierarchy:
+            parent = hierarchy.parent_task
             return [{
                 'parent_task_id': hierarchy.parent_task_id,
+                'parent_task_slug': parent.slug,
+                'parent_task_summary': parent.summary,
             }]
         return None
 

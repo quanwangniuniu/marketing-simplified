@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTaskTracking } from '@/lib/tracking/useTaskTracking';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useParams, useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
@@ -30,6 +30,7 @@ import CommentSection from '@/components/comments/CommentSection';
 export default function TaskV2DetailPage() {
   const params = useParams();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const taskId = params?.taskId ? String(params.taskId) : null;
 
   const [task, setTask] = useState<TaskData | null>(null);
@@ -102,9 +103,7 @@ export default function TaskV2DetailPage() {
     if (!task?.id) return;
     try {
       await TaskAPI.deleteTask(task.slug ?? task.id);
-      const projectKey =
-        task?.project?.slug ?? task?.project?.id ?? task?.project_id ?? null;
-      router.push(nestedProjectPath(projectKey, '/tasks'));
+      router.push(buildUrl('/tasks'));
     } catch (e) {
       toast.error((e as any)?.response?.data?.detail || 'Delete failed');
     }

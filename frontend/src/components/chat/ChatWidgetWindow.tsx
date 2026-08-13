@@ -10,6 +10,7 @@ import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import CreateChatDialog from './CreateChatDialog';
 import { buildMessagesPath } from '@/lib/messages/messagesRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface ChatWidgetWindowProps {
   projectId?: string;
@@ -17,6 +18,7 @@ interface ChatWidgetWindowProps {
 
 export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   
   // Use selectors to get widget-specific state (independent from Messages page)
   const closeWidget = useChatStore(state => state.closeWidget);
@@ -101,7 +103,7 @@ export default function ChatWidgetWindow({ projectId }: ChatWidgetWindowProps) {
   const handleOpenMessagesPage = () => {
     closeWidget();
     setMessagePageOpen(true);
-    router.push(buildMessagesPath(widgetChat?.slug ?? null));
+    router.push(buildUrl(buildMessagesPath(widgetChat?.slug ?? null)));
   };
 
   const handleProjectSelect = (project: ProjectData) => {

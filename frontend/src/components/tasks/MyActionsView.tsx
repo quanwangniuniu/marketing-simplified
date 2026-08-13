@@ -7,6 +7,7 @@ import {
   ClipboardList, Hourglass, MessageCircle, ChevronDown, ChevronUp, LockOpen,
 } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { MyActionsPayload, MyActionsTaskStub } from '@/types/task';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -39,6 +40,7 @@ function formatDate(iso: string) {
 // ── Task row ──────────────────────────────────────────────────────────────────
 
 function ActionTaskRow({ task, onDismiss }: { task: MyActionsTaskStub; onDismiss?: () => void }) {
+  const buildUrl = useBuildUrl();
   const isOverdue = task.due_date && new Date(task.due_date + 'T00:00:00') < new Date(new Date().toDateString());
   return (
     <li className="flex min-w-0 items-center gap-2 py-1.5">
@@ -49,7 +51,7 @@ function ActionTaskRow({ task, onDismiss }: { task: MyActionsTaskStub; onDismiss
       )}
       <div className="min-w-0 flex-1 overflow-hidden">
         <Link
-          href={`/tasks/${task.slug}`}
+          href={buildUrl(`/tasks/${task.slug}`)}
           className="block truncate text-sm text-gray-800 hover:text-[#3CCED7] hover:underline"
         >
           {task.summary}

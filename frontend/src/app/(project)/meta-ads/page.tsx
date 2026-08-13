@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import toast from 'react-hot-toast';
 import {
   AlertCircle,
@@ -179,6 +180,7 @@ export default function MetaAdsPage() {
 
 function MetaAdsContent() {
   const searchParams = useSearchParams();
+  const buildUrl = useBuildUrl();
   const initialTab = useMemo<ViewKey>(() => {
     const raw = searchParams.get('tab');
     return VIEW_TABS.some((t) => t.key === raw) ? (raw as ViewKey) : 'overview';
@@ -590,7 +592,7 @@ function MetaAdsContent() {
           and insight data into MediaJira.
         </p>
         <Link
-          href="/integrations"
+          href={buildUrl("/integrations")}
           className="inline-flex rounded-lg bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-5 py-2 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-95"
         >
           Go to Integrations

@@ -11,6 +11,7 @@ import {
   type EmailDraftRow,
 } from '@/components/email-draft';
 import { mailchimpApi } from '@/lib/api/mailchimpApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { EmailDraft } from '@/hooks/useMailchimpData';
 
 function toRow(draft: EmailDraft): EmailDraftRow {
@@ -30,6 +31,7 @@ function toRow(draft: EmailDraft): EmailDraftRow {
 
 export default function MailchimpV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [drafts, setDrafts] = useState<EmailDraftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export default function MailchimpV2Page() {
   }, [drafts, searchQuery]);
 
   const handleOpen = (row: EmailDraftRow) => {
-    router.push(`/mailchimp/${row.slug}`);
+    router.push(buildUrl(`/mailchimp/${row.slug}`));
   };
   const handleEdit = handleOpen;
 
@@ -89,7 +91,7 @@ export default function MailchimpV2Page() {
   };
 
   const handleCreate = () => {
-    router.push('/mailchimp/new');
+    router.push(buildUrl('/mailchimp/new'));
   };
 
   return (

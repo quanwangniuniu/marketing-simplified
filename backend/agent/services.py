@@ -2351,18 +2351,45 @@ class AgentOrchestrator:
 
                 current_data = result.output_data or current_data
             else:
-                execution.status = 'failed'
-                execution.error_message = result.error
-                execution.completed_at = tz.now()
-                execution.save()
+                if result.skipped:
+                    execution.status = 'skipped'
+                    execution.completed_at = tz.now()
+                    execution.save(update_fields=['status', 'updated_at'])
 
-                workflow_run.status = 'failed'
-                workflow_run.error_message = result.error
-                workflow_run.save()
+                    logger.warning("Workflow step skipped after retries exhausted: run_id=%s, step=%s, step_type=%s", workflow_run.id, step.name, step.step_type)
+                    
+                    #Provide explanation for users to understand why this step didn't run
+                    yield {
+                        'type': 'text',
+                        'content': f'The "{step.name}" step was skipped after retries. Continuing with the remaining steps.',
+                    }
+                    yield {
+                        'type': 'step_progress',
+                        'data': {
+                            'step_order': step.order,
+                            'step_name': step.name,
+                            'step_type': step.step_type,
+                            'status': 'skipped',
+                            'total_steps': total_steps,
+                        },
+                    }
+                    workflow_run.current_step_order = step.order + 1
+                    workflow_run.save(update_fields=['current_step_order'])
+                    continue
+                else:
+                    execution.status = 'failed'
+                    execution.error_message = result.error
+                    execution.completed_at = tz.now()
+                    execution.save()
 
-                yield {'type': 'error', 'content': result.error}
-                return
+                    workflow_run.status = 'failed'
+                    workflow_run.error_message = result.error
+                    workflow_run.save()
 
+                    yield {'type': 'error', 'content': result.error}
+                    return
+            
+               
         workflow_run.status = 'completed'
         workflow_run.save(update_fields=['status', 'updated_at'])
         yield {

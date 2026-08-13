@@ -348,8 +348,18 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'chat_message_write': config('CHAT_MESSAGE_WRITE_THROTTLE_RATE', default='60/minute'),
         'chat_reaction': config('CHAT_REACTION_THROTTLE_RATE', default='120/minute'),
+        'spreadsheet_ws_ticket': config(
+            'SPREADSHEET_WS_TICKET_THROTTLE_RATE',
+            default='60/minute',
+        ),
     },
 }
+
+SPREADSHEET_WS_CONNECTION_MAX_SECONDS = config(
+    'SPREADSHEET_WS_CONNECTION_MAX_SECONDS',
+    default=3600,
+    cast=int,
+)
 
 CHAT_REVOKE_WINDOW_MINUTES = config('CHAT_REVOKE_WINDOW_MINUTES', default=2, cast=int)
 
@@ -706,6 +716,11 @@ formatter = json_log_formatter.JSONFormatter()
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'redact_secrets': {
+            '()': 'agent.log_redaction.RedactSecretsFilter',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
@@ -718,21 +733,24 @@ LOGGING = {
         'json': {
             '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
             'format': '%(asctime)s %(name)s %(levelname)s %(message)s'
-        },        
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['redact_secrets'],
         },
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'json',
-        },        
+            'filters': ['redact_secrets'],
+        },
     },
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
+        'filters': ['redact_secrets'],
     },
     'loggers': {
         'django': {

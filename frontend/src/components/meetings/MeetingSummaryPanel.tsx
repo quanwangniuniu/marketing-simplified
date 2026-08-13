@@ -24,6 +24,7 @@ import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import { zoomApi } from '@/lib/api/zoomApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import {
   meetingDateToInput,
   meetingTimeToInput,
@@ -80,6 +81,7 @@ export function MeetingSummaryPanel({
   onMeetingUpdated,
   onMeetingDeleted,
 }: MeetingSummaryPanelProps) {
+  const buildUrl = useBuildUrl();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -517,7 +519,7 @@ export function MeetingSummaryPanel({
                 </Button>
                 {!zoomStatusLoading && !zoomConnected && (
                   <Link
-                    href="/integrations?open_zoom=1"
+                    href={buildUrl('/integrations?open_zoom=1')}
                     className="flex items-center justify-center gap-1 text-xs text-slate-500 transition-colors hover:text-[#3CCED7]"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
@@ -633,7 +635,7 @@ export function MeetingSummaryPanel({
                 </Button>
 
                 <Link
-                  href={`/projects/${projectId}/meetings/${meeting?.slug || meetingId}`}
+                  href={buildUrl(`/meetings/${meeting?.slug || meetingId}`)}
                   className="inline-flex w-full items-center justify-center rounded-lg border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-2.5 text-sm font-medium text-[#1a9ba3] transition hover:bg-[#3CCED7]/15"
                 >
                   Open full meeting workspace

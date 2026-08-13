@@ -11,6 +11,7 @@ import { useChatWebSocket, type ChatWsEvent } from '@/hooks/useChatWebSocket';
 import { useChatStore } from '@/lib/chatStore';
 import { editMessage, deleteMessage, addReaction, removeReaction, getMessage, getChat, pinMessage, unpinMessage, saveMessage, unsaveMessage, listPins, listSavedMessages, createScheduledMessage, listScheduledMessages, updateChatDetails, updateNotificationSettings } from '@/lib/api/chatApi';
 import { buildMessagesPath } from '@/lib/messages/messagesRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { limitName, MAX_CHANNEL_NAME_LENGTH } from '@/lib/messages/nameLimits';
 import type { Chat, Message } from '@/types/chat';
 import type { ScheduledMessageRow } from '@/lib/api/chatApi';
@@ -39,6 +40,7 @@ interface ChatWindowProps {
 
 export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDesktop, openDetailsSignal }: ChatWindowProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const searchParams = useSearchParams();
   // Use selector for stable reference
   const user = useAuthStore(state => state.user);
@@ -413,10 +415,10 @@ export default function ChatWindow({ chat, onBack, roleByUserId, hideBackOnDeskt
 
         if (target.parent_message_id) {
           router.replace(
-            buildMessagesPath(chat.slug, {
+            buildUrl(buildMessagesPath(chat.slug, {
               messageId: target.parent_message_id,
               threadMessageId: targetMessageId,
-            }),
+            })),
             { scroll: false },
           );
           return;

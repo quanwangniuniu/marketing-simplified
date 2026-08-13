@@ -5,6 +5,7 @@ import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import AdCreativeModal from '@/components/facebook_meta/AdCreativeModal';
 import AdCreativeTable from '@/components/facebook_meta/AdCreativeTable';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -13,6 +14,7 @@ import { useFacebookMetaData } from '@/hooks/useFacebookMetaData';
 function FacebookMetaPageContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [showModal, setShowModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -79,7 +81,8 @@ function FacebookMetaPageContent() {
   };
 
   const handleViewCreative = (id: string) => {
-    router.push(`/facebook_meta/${id}`);
+    const adCreative = adCreatives.find(creative => creative.id === id);
+    router.push(buildUrl(`/facebook-meta/${adCreative?.slug ?? id}`));
   };
 
   const handleEditCreative = (id: string) => {
