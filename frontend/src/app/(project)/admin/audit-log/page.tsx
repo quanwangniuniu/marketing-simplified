@@ -121,108 +121,92 @@ function labelFor(key: string): string {
   return KEY_LABEL[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-interface DiffLine {
-  type: 'added' | 'removed' | 'unchanged';
+interface ChangeItem {
   key: string;
-  value: unknown;
+  before: unknown;
+  after: unknown;
 }
 
-function buildDiff(
+function getChanges(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
-): DiffLine[] {
-  const lines: DiffLine[] = [];
+): ChangeItem[] {
   const allKeys = new Set([
     ...Object.keys(before ?? {}),
     ...Object.keys(after ?? {}),
   ]);
-
+  const changes: ChangeItem[] = [];
   for (const key of allKeys) {
     if (SKIP_FIELDS.has(key)) continue;
-
-    const bVal = before?.[key];
-    const aVal = after?.[key];
-    const bStr = JSON.stringify(bVal);
-    const aStr = JSON.stringify(aVal);
-
-    if (before && !(key in (after ?? {}))) {
-      lines.push({ type: 'removed', key, value: bVal });
-    } else if (after && !(key in (before ?? {}))) {
-      lines.push({ type: 'added', key, value: aVal });
-    } else if (bStr !== aStr) {
-      lines.push({ type: 'removed', key, value: bVal });
-      lines.push({ type: 'added', key, value: aVal });
-    } else {
-      lines.push({ type: 'unchanged', key, value: bVal });
+    const bVal = before?.[key] ?? null;
+    const aVal = after?.[key]  ?? null;
+    if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
+      changes.push({ key, before: bVal, after: aVal });
     }
   }
-
-  return lines;
+  // When nothing changed, surface all visible fields so the user can at least
+  // see what was recorded (e.g. permissions_updated with an empty list).
+  if (changes.length === 0) {
+    const data = after ?? before;
+    for (const key of Object.keys(data ?? {})) {
+      if (SKIP_FIELDS.has(key)) continue;
+      changes.push({ key, before: null, after: data![key] });
+    }
+  }
+  return changes;
 }
 
-function DiffView({ before, after }: { before: Record<string, unknown> | null; after: Record<string, unknown> | null }) {
+function DiffView({ before, after, action }: { before: Record<string, unknown> | null; after: Record<string, unknown> | null; action?: string }) {
   if (!before && !after) {
     return <p className="text-xs text-gray-400 italic">No change data recorded.</p>;
   }
 
-  const lines = buildDiff(before, after);
-
-  // If only one side exists (pure create or pure delete), show it simply
-  if (!before || !after) {
-    const data = before ?? after;
-    const isCreate = !before;
-    const visibleEntries = Object.entries(data!).filter(([key]) => !SKIP_FIELDS.has(key));
+  // Special rendering for permissions_copied
+  if (action === 'role.permissions_copied') {
+    const perms: string[] = (after as any)?.permissions ?? (before as any)?.permissions ?? [];
     return (
-      <div className="font-mono text-xs rounded-md overflow-hidden border border-gray-200">
-        <div className={`px-2 py-1 text-[10px] font-semibold ${isCreate ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {isCreate ? '+ Created' : '- Deleted'}
-        </div>
-        {visibleEntries.map(([key, value]) => (
-          <div
-            key={key}
-            className={`flex gap-2 px-3 py-0.5 ${isCreate ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}
-          >
-            <span className="select-none w-3">{isCreate ? '+' : '-'}</span>
-            <span className="text-gray-500 shrink-0">{labelFor(key)}:</span>
-            <span className="break-all">{formatValue(value)}</span>
-          </div>
-        ))}
-      </div>
+      <p className="text-xs text-gray-600 leading-relaxed flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <span className="font-medium text-gray-800 rounded px-1.5 py-0.5 bg-gray-100">Copied Permissions</span>
+        <span>:</span>
+        {perms.length > 0
+          ? perms.map((p: string) => (
+              <span key={p} className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-medium">{p}</span>
+            ))
+          : <span className="text-gray-400 italic">(none)</span>
+        }
+      </p>
     );
   }
 
+  const changes = getChanges(before, after);
+
   return (
-    <div className="font-mono text-xs rounded-md overflow-hidden border border-gray-200">
-      <div className="flex text-[10px] font-semibold">
-        <div className="flex-1 px-3 py-1 bg-red-100 text-red-700">− Before</div>
-        <div className="flex-1 px-3 py-1 bg-green-100 text-green-700">+ After</div>
-      </div>
-      {lines.map((line, i) => {
-        if (line.type === 'unchanged') {
-          return (
-            <div key={i} className="flex gap-2 px-3 py-0.5 bg-white text-gray-500">
-              <span className="select-none w-3 text-gray-300"> </span>
-              <span className="shrink-0">{labelFor(line.key)}:</span>
-              <span className="break-all">{formatValue(line.value)}</span>
-            </div>
-          );
-        }
-        if (line.type === 'removed') {
-          return (
-            <div key={i} className="flex gap-2 px-3 py-0.5 bg-red-50 text-red-800">
-              <span className="select-none w-3 text-red-400">-</span>
-              <span className="shrink-0">{labelFor(line.key)}:</span>
-              <span className="break-all">{formatValue(line.value)}</span>
-            </div>
-          );
-        }
-        // added
+    <div className="space-y-1.5">
+      {changes.map(({ key, before: bVal, after: aVal }) => {
+        const label = labelFor(key);
+        const hasBefore = before !== null && bVal !== null;
+        const hasAfter  = after  !== null && aVal !== null;
         return (
-          <div key={i} className="flex gap-2 px-3 py-0.5 bg-green-50 text-green-800">
-            <span className="select-none w-3 text-green-500">+</span>
-            <span className="shrink-0">{labelFor(line.key)}:</span>
-            <span className="break-all">{formatValue(line.value)}</span>
-          </div>
+          <p key={key} className="text-xs text-gray-600 leading-relaxed flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            {hasBefore && hasAfter ? (
+              <>
+                <span>Changed <span className="font-medium text-gray-800 rounded px-1.5 py-0.5 bg-gray-100">{label}</span> from</span>
+                <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600">{formatValue(bVal)}</span>
+                <span>to</span>
+                <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-medium">{formatValue(aVal)}</span>
+              </>
+            ) : hasAfter ? (
+              <>
+                <span>Set <span className="font-medium text-gray-800 rounded px-1.5 py-0.5 bg-gray-100">{label}</span> to</span>
+                <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-medium">{formatValue(aVal)}</span>
+              </>
+            ) : (
+              <>
+                <span>Removed <span className="font-medium text-gray-800 rounded px-1.5 py-0.5 bg-gray-100">{label}</span></span>
+                <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-600">{formatValue(bVal)}</span>
+              </>
+            )}
+          </p>
         );
       })}
     </div>
@@ -285,7 +269,7 @@ function EventRow({ event }: { event: AdminAuditEvent }) {
       {expanded && hasDiff && (
         <tr className="bg-gray-50 border-b border-gray-100">
           <td colSpan={4} className="px-6 py-4">
-            <DiffView before={event.before} after={event.after} />
+            <DiffView before={event.before} after={event.after} action={event.action} />
           </td>
         </tr>
       )}
