@@ -28,9 +28,15 @@ WEBSOCKET_CONSUMERS = [
 # RetrospectiveConsumer is deliberately absent from backend/asgi.py. Its
 # connect() never rejects an unauthenticated user -- the check is commented out
 # -- so routing it would publish retrospective broadcasts to anyone who can
-# guess an id. It is instrumented already and will be picked up automatically
-# once its authentication is implemented and the route registered; remove it
-# from here at that point.
+# guess an id.
+#
+# Whoever fixes that consumer needs to change one thing and one thing only:
+# register its route in backend/asgi.py. The consumer already inherits the
+# instrumented base and declares its channel, so the series appears on /metrics
+# as soon as the module is imported, and the dashboard discovers channels with
+# label_values() rather than a hardcoded list, so it needs no edit either. This
+# test will then fail and tell them to remove the entry below, which is the
+# intended handover: the exemption cannot outlive the fix unnoticed.
 KNOWN_UNROUTED_CHANNELS = {'retrospective'}
 
 
@@ -229,6 +235,23 @@ def test_every_routed_consumer_exports_its_channel_series():
         assert active_sessions(consumer.ws_channel) is not None, (
             f'{consumer.ws_channel} is routed but has no registered series'
         )
+
+
+def test_unrouted_consumers_are_already_wired_for_when_they_are_routed():
+    """An unrouted consumer must still be metric-ready, so routing is the only fix.
+
+    The point of instrumenting a consumer that cannot currently be reached is
+    that whoever makes it reachable does not also have to come back through the
+    metrics and the dashboard. Registering the route must be sufficient.
+    """
+    routed = {consumer.ws_channel for consumer in routed_consumer_classes()}
+    unrouted = [c for c in WEBSOCKET_CONSUMERS if c.ws_channel not in routed]
+
+    for consumer in unrouted:
+        assert issubclass(consumer, InstrumentedAsyncWebsocketConsumer), (
+            f'{consumer.__name__} would still need instrumenting after routing'
+        )
+        assert consumer.ws_channel, f'{consumer.__name__} declares no channel label'
 
 
 def test_no_consumer_is_silently_left_out_of_the_asgi_router():
