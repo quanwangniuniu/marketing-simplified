@@ -47,6 +47,25 @@ class CrashingConsumer(InstrumentedAsyncWebsocketConsumer):
         raise RuntimeError('post-accept initialization blew up')
 
 
+class DoubleAcceptConsumer(InstrumentedAsyncWebsocketConsumer):
+    ws_channel = 'test_double_accept'
+
+    async def connect(self):
+        await self.accept()
+        await self.accept()
+
+
+class DoubleCloseConsumer(InstrumentedAsyncWebsocketConsumer):
+    """chat closes in 6 places and spreadsheet in 7; some paths can overlap."""
+
+    ws_channel = 'test_double_close'
+
+    async def connect(self):
+        await self.accept()
+        await self.close(code=1011)
+        await self.close(code=1011)
+
+
 @pytest.fixture(autouse=True)
 def in_memory_channel_layer(settings):
     """Keep the consumers off the Redis layer these tests do not need."""
@@ -113,6 +132,44 @@ async def test_session_is_released_when_the_consumer_crashes_after_accepting():
         await communicator.wait(timeout=5)
 
     assert active_sessions('test_crashing') == 0
+
+
+async def test_accepting_twice_counts_one_session():
+    communicator = WebsocketCommunicator(DoubleAcceptConsumer.as_asgi(), '/ws/test/')
+
+    await communicator.connect()
+    assert active_sessions('test_double_accept') == 1
+
+    await communicator.disconnect()
+    assert active_sessions('test_double_accept') == 0
+
+
+async def test_closing_twice_releases_one_session():
+    communicator = WebsocketCommunicator(DoubleCloseConsumer.as_asgi(), '/ws/test/')
+
+    await communicator.connect()
+    await communicator.disconnect()
+
+    # A second release would show up as -1, not 0.
+    assert active_sessions('test_double_close') == 0
+
+
+async def test_repeated_connect_disconnect_cycles_leave_no_drift():
+    """The integrity guard: churn must not accumulate phantom sessions.
+
+    A gauge that drifts up by a fraction of a session per cycle looks fine for
+    an hour and is badly wrong by the next day, which is exactly the failure
+    mode that makes a capacity dashboard untrustworthy.
+    """
+    baseline = active_sessions('test_accepting')
+
+    for _ in range(25):
+        communicator = WebsocketCommunicator(AcceptingConsumer.as_asgi(), '/ws/test/')
+        connected, _ = await communicator.connect()
+        assert connected
+        await communicator.disconnect()
+
+    assert active_sessions('test_accepting') == baseline
 
 
 def test_every_websocket_consumer_exports_its_own_channel_series():

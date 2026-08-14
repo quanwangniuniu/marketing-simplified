@@ -49,7 +49,7 @@
   ],
   "title": "WebSocket Sessions",
   "uid": "ws-sessions",
-  "description": "Live WebSocket session counts per Channels consumer, from ws_sessions_active. The gauge is per backend process, so every panel sums across instances; a restart resets it to 0.",
+  "description": "Live WebSocket session counts per Channels consumer, from ws_sessions_active. Counts SESSIONS, not users: one person with three tabs is three sessions, and one person in both chat and spreadsheet appears once per channel. Rejected handshakes are never counted. The gauge is per backend process, so every panel sums across instances; a restart resets it to 0.",
   "tags": ["websocket", "channels", "django"],
   "schemaVersion": 39,
   "version": 1,
@@ -86,7 +86,7 @@
     {
       "type": "stat",
       "title": "Active sessions now",
-      "description": "Sum across all backend instances of the selected channels.",
+      "description": "Sum across all backend instances of the selected channels. This is a session count, not a user count: one user with several tabs contributes several sessions. A client that reconnects before the server has noticed the dead socket is briefly counted twice; the duplicate clears when the old connection times out.",
       "id": 1,
       "datasource": "${DS_PROMETHEUS}",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
