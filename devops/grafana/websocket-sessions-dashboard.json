@@ -49,7 +49,7 @@
   ],
   "title": "WebSocket Sessions",
   "uid": "ws-sessions",
-  "description": "Live WebSocket session counts per Channels consumer, from ws_sessions_active. Counts SESSIONS, not users: one person with three tabs is three sessions, and one person in both chat and spreadsheet appears once per channel. Rejected handshakes are never counted. The gauge is per backend process, so every panel sums across instances; a restart resets it to 0.",
+  "description": "Live WebSocket session counts per Channels consumer, from ws_sessions_active. Counts SESSIONS, not users: one person with three tabs is three sessions, and one person in both chat and spreadsheet appears once per channel. Rejected handshakes are never counted. The gauge is per backend process, so every panel sums across instances; a restart resets it to 0. COVERAGE: six channels appear here - asset, chat, csm, meetings, portal, spreadsheet. The retrospective consumer is instrumented but has no route in backend/asgi.py, so its module is never imported and no series exists; its absence from this board means unreachable, NOT idle. Tracked as a separate follow-up (routing it as-is would expose an unauthenticated endpoint). No panel hardcodes a channel name, so it will appear on its own once routed.",
   "tags": ["websocket", "channels", "django"],
   "schemaVersion": 39,
   "version": 1,

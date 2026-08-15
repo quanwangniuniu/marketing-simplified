@@ -1,5 +1,8 @@
 """Tests for the ws_sessions_active gauge on the instrumented consumer base."""
 
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+
 import pytest
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
@@ -38,6 +41,20 @@ WEBSOCKET_CONSUMERS = [
 # test will then fail and tell them to remove the entry below, which is the
 # intended handover: the exemption cannot outlive the fix unnoticed.
 KNOWN_UNROUTED_CHANNELS = {'retrospective'}
+
+# Every value the ``channel`` label is allowed to take. The point of pinning it
+# here is cardinality: a label whose values track connections rather than code
+# is how a gauge turns into a series explosion, so a new value has to be added
+# deliberately in this list rather than appearing at runtime.
+EXPECTED_CHANNELS = frozenset({
+    'asset',
+    'chat',
+    'csm',
+    'meetings',
+    'portal',
+    'retrospective',
+    'spreadsheet',
+})
 
 
 class AcceptingConsumer(InstrumentedAsyncWebsocketConsumer):
@@ -92,6 +109,63 @@ def in_memory_channel_layer(settings):
 
 def active_sessions(channel):
     return REGISTRY.get_sample_value('ws_sessions_active', {'channel': channel})
+
+
+def channel_label_values():
+    """Every ``channel`` value currently present as a series in the registry."""
+    return {
+        sample.labels['channel']
+        for metric in REGISTRY.collect()
+        if metric.name == 'ws_sessions_active'
+        for sample in metric.samples
+    }
+
+
+def _sessions_in_a_separate_process(session_count):
+    """Open ``session_count`` sessions in a fresh process, return its exposition.
+
+    Runs as the entry point of a spawned process, so it must stay importable at
+    module level and must not rely on anything the parent set up: a new process
+    gets a new prometheus registry, which is the whole point of the exercise.
+    """
+    import asyncio
+    import os
+
+    import django
+
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+    django.setup()
+
+    from channels.testing import WebsocketCommunicator
+    from prometheus_client import REGISTRY as CHILD_REGISTRY
+
+    from core.consumers import InstrumentedAsyncWebsocketConsumer
+
+    class _WorkerConsumer(InstrumentedAsyncWebsocketConsumer):
+        ws_channel = 'chat'
+
+        async def connect(self):
+            await self.accept()
+
+    async def hold_sessions():
+        communicators = []
+        for _ in range(session_count):
+            communicator = WebsocketCommunicator(_WorkerConsumer.as_asgi(), '/ws/test/')
+            connected, _ = await communicator.connect()
+            assert connected
+            communicators.append(communicator)
+
+        # Read while they are all still open: this is the process' own view,
+        # which is exactly what a Prometheus scrape of this instance would get.
+        value = CHILD_REGISTRY.get_sample_value(
+            'ws_sessions_active', {'channel': 'chat'}
+        )
+
+        for communicator in communicators:
+            await communicator.disconnect()
+        return value
+
+    return asyncio.run(hold_sessions())
 
 
 def routed_consumer_classes():
@@ -277,3 +351,66 @@ def test_consumer_without_a_channel_label_is_rejected():
 
         class UnlabelledConsumer(InstrumentedAsyncWebsocketConsumer):
             pass
+
+
+def test_channel_label_set_is_bounded_and_declared():
+    """Cardinality guard: ``channel`` is fixed by the code, not by traffic.
+
+    The failure this prevents is a label that takes a per-user, per-room or
+    per-sheet value, which grows the series count with usage until Prometheus
+    struggles. ``ws_channel`` is a class constant, so the ceiling is the number
+    of consumer classes -- but only for as long as nobody makes it dynamic.
+    """
+    assert {c.ws_channel for c in WEBSOCKET_CONSUMERS} == EXPECTED_CHANNELS
+
+    for consumer in WEBSOCKET_CONSUMERS:
+        declared = vars(consumer).get('ws_channel')
+        assert isinstance(declared, str) and declared, (
+            f'{consumer.__name__}.ws_channel must be a class-level string constant; '
+            f'a value computed per connection would be unbounded'
+        )
+
+    # Nothing outside the declared set may have reached the registry. The test
+    # consumers in this module are namespaced 'test_*' and excluded.
+    live = {value for value in channel_label_values() if not value.startswith('test_')}
+    assert live <= EXPECTED_CHANNELS, f'undeclared channel series: {live - EXPECTED_CHANNELS}'
+
+
+async def test_sessions_do_not_create_new_label_values():
+    """Connections must reuse one series per channel, never mint their own."""
+    before = channel_label_values()
+
+    for path in ('/ws/test/1/', '/ws/test/2/', '/ws/test/3/'):
+        communicator = WebsocketCommunicator(AcceptingConsumer.as_asgi(), path)
+        connected, _ = await communicator.connect()
+        assert connected
+        await communicator.disconnect()
+
+    assert channel_label_values() == before
+
+
+def test_two_processes_aggregate_to_the_global_total():
+    """Each process reports only its own sessions; summing them is the total.
+
+    This is the multi-instance question made concrete. An in-process gauge is
+    not a bug to be replaced with a shared counter in Redis -- it is the shape
+    Prometheus expects, because each process is scraped as its own instance and
+    the aggregation happens at query time. What has to hold is that the parts
+    sum to the whole, which is what the dashboard's ``sum by (channel)`` does.
+
+    Two spawned processes each hold a different number of sessions, so a result
+    that accidentally reflected one process' view would not equal the total.
+    """
+    context = multiprocessing.get_context('spawn')
+    with ProcessPoolExecutor(max_workers=2, mp_context=context) as pool:
+        first = pool.submit(_sessions_in_a_separate_process, 3)
+        second = pool.submit(_sessions_in_a_separate_process, 5)
+        first_value = first.result(timeout=120)
+        second_value = second.result(timeout=120)
+
+    # Each instance sees its own sessions and nobody else's.
+    assert first_value == 3
+    assert second_value == 5
+
+    # sum(ws_sessions_active{channel="chat"}) across instances.
+    assert first_value + second_value == 8
