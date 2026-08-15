@@ -301,6 +301,8 @@ def test_chat_tasks_are_routed_to_dedicated_queues():
         'chat.tasks.notify_message_recipients': 'chat.notifications',
         'chat.tasks.deliver_message_task': 'chat.delivery',
         'chat.tasks.send_scheduled_message': 'chat.delivery',
+        # A preview waits on an external site; it must not sit behind delivery.
+        'chat.tasks.fetch_link_preview_task': 'celery',
     }
 
     assert {

@@ -498,6 +498,12 @@ CELERY_TASK_ROUTES = {
     'chat.tasks.notify_message_recipients': {'queue': 'chat.notifications'},
     'chat.tasks.deliver_message_task': {'queue': 'chat.delivery'},
     'chat.tasks.send_scheduled_message': {'queue': 'chat.delivery'},
+    # A link preview waits on a third-party site, so it is pinned to the default
+    # queue rather than either chat queue: one slow host must never sit in front
+    # of message delivery. A dedicated queue was avoided on purpose — every
+    # deployment file would have to grow a consumer for it, and a queue nobody
+    # consumes would silently pile up previews.
+    'chat.tasks.fetch_link_preview_task': {'queue': 'celery'},
 }
 
 # Bound concurrent Channels publications inside one Celery/ASGI process so a

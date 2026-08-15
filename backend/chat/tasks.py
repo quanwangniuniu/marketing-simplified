@@ -1120,7 +1120,8 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
     if not cache_key:
         return
 
-    if not Message.objects.filter(id=message_id, is_deleted=False).exists():
+    message = Message.objects.filter(id=message_id, is_deleted=False).first()
+    if message is None:
         return  # message deleted mid-flight; nothing left to decorate
 
     preview, _ = LinkPreview.objects.get_or_create(
@@ -1141,6 +1142,55 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
 
     metadata = parse_opengraph(html)
     _store_preview_outcome(preview, LinkPreview.STATUS_READY, **metadata)
+
+    if metadata['title'] or metadata['image_url']:
+        _broadcast_link_preview(message, preview)
+
+
+def _broadcast_link_preview(message: Message, preview: LinkPreview) -> None:
+    """Push a finished preview to everyone currently watching the conversation.
+
+    Clients that are offline are unaffected: they pick the same preview up from
+    the cache when the conversation loads. The row is already committed, so a
+    channel-layer outage must never undo it — hence the broad except.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        participant_ids = list(
+            ChatParticipant.objects
+            .filter(chat_id=message.chat_id, is_active=True)
+            .values_list('user_id', flat=True)
+        )
+        if not participant_ids:
+            return
+
+        succeeded, failed = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            participant_ids,
+            {
+                'type': 'link_preview',
+                'chat_id': message.chat_id,
+                'message_id': message.id,
+                'preview': {
+                    'url': preview.url,
+                    'title': preview.title,
+                    'description': preview.description,
+                    'image_url': preview.image_url,
+                },
+            },
+        )
+        if failed:
+            chat_broadcast_publish_failures_total.labels(event='link_preview').inc(len(failed))
+        logger.info(
+            'link preview broadcast: message=%s recipients=%s sent=%s failed=%s',
+            message.id, len(participant_ids), len(succeeded), len(failed),
+        )
+    except Exception:
+        chat_broadcast_publish_failures_total.labels(event='link_preview').inc()
+        logger.exception('Failed to broadcast link preview for message %s', message.id)
 
 
 def _store_preview_outcome(

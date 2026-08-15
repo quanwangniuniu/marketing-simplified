@@ -91,6 +91,14 @@ class LinkPreviewTestCase(TestCase):
             sender=self.user,
             content='have a look at https://example.com/story',
         )
+        # A successful fetch now broadcasts the preview (MED-279 ticket 03). Stub
+        # the channel layer for every test here so none of them opens a real Redis
+        # connection — tests that assert on the broadcast re-patch it themselves.
+        broadcast_patcher = patch(
+            'chat.tasks.broadcast_event_to_user_groups_sync', return_value=([], [])
+        )
+        broadcast_patcher.start()
+        self.addCleanup(broadcast_patcher.stop)
 
 
 class TestFetchLinkPreviewTask(LinkPreviewTestCase):
@@ -231,3 +239,60 @@ class TestLegacyEndpointIsGuarded(LinkPreviewTestCase):
             )
         assert response.status_code == 200
         assert response.data['title'] == 'A great article'
+
+
+class TestLivePreviewBroadcast(LinkPreviewTestCase):
+    """A finished fetch reaches everyone currently watching the conversation."""
+
+    def _broadcast_calls(self, mock_broadcast):
+        return [call.args for call in mock_broadcast.call_args_list]
+
+    def test_ready_preview_is_broadcast_to_participants(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML), \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync', return_value=([1], [])) as broadcast:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        assert broadcast.call_count == 1
+        _channel_layer, recipient_ids, event = broadcast.call_args.args
+        assert list(recipient_ids) == [self.user.id]
+        assert event['type'] == 'link_preview'
+        assert event['message_id'] == self.message.id
+        assert event['chat_id'] == self.chat.id
+        assert event['preview'] == {
+            'url': 'https://example.com/story',
+            'title': 'A great article',
+            'description': 'Why it matters',
+            'image_url': 'https://cdn.example.com/cover.jpg',
+        }
+
+    def test_blocked_url_is_not_broadcast(self):
+        with patch('chat.tasks.fetch_url_safely', side_effect=UnsafeUrlError('nope')), \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync') as broadcast:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        broadcast.assert_not_called()
+
+    def test_failed_fetch_is_not_broadcast(self):
+        with patch('chat.tasks.fetch_url_safely', side_effect=LinkPreviewFetchError('500')), \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync') as broadcast:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        broadcast.assert_not_called()
+
+    def test_page_without_metadata_is_not_broadcast(self):
+        """Ready but empty: nothing to draw, so nothing to push."""
+        with patch('chat.tasks.fetch_url_safely', return_value='<html><head></head></html>'), \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync') as broadcast:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        broadcast.assert_not_called()
+
+    def test_a_broadcast_failure_does_not_lose_the_cached_preview(self):
+        """The row is already committed; a channel-layer outage must not undo it."""
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML), \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync', side_effect=RuntimeError('layer down')):
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        preview = LinkPreview.objects.get(url='https://example.com/story')
+        assert preview.status == LinkPreview.STATUS_READY
+        assert preview.title == 'A great article'

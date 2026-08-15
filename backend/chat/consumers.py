@@ -686,6 +686,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'pin': event.get('pin'),
         }))
 
+    async def link_preview(self, event):
+        """Send a finished link preview so the card appears without a reload."""
+        await self.send(text_data=json.dumps({
+            'type': 'link_preview',
+            'chat_id': event['chat_id'],
+            'message_id': event['message_id'],
+            'preview': event['preview'],
+        }))
+
     async def presence_update(self, event):
         """Send user online/offline status changes to WebSocket"""
         # A chat-group publish reaches every member including the one whose
