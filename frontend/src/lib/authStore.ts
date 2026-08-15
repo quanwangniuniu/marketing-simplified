@@ -65,7 +65,7 @@ interface AuthState {
 // don't each fire their own /auth/token/refresh/ request.
 let sharedInitAuthRefreshPromise: Promise<string | null> | null = null;
 
-function getSharedRefreshedToken(refreshToken: string): Promise<string | null> {
+function getSharedInitAuthRefreshedToken(refreshToken: string): Promise<string | null> {
   if (!sharedInitAuthRefreshPromise) {
     sharedInitAuthRefreshPromise = authAPI.refreshToken(refreshToken);
   }
@@ -315,7 +315,7 @@ export const useAuthStore = create<AuthState>()(
  
         try {
           if (refreshToken) {
-            const refreshedToken = await getSharedRefreshedToken(refreshToken);
+            const refreshedToken = await getSharedInitAuthRefreshedToken(refreshToken);
             if (refreshedToken) {
               token = refreshedToken;
               set({
@@ -333,7 +333,7 @@ export const useAuthStore = create<AuthState>()(
           let userResult = await get().getCurrentUser();
 
           if (!userResult.success && refreshToken && !userResult.retryable) {
-            const refreshedToken = await getSharedRefreshedToken(refreshToken);
+            const refreshedToken = await getSharedInitAuthRefreshedToken(refreshToken);
             if (refreshedToken) {
               token = refreshedToken;
               set({ token: refreshedToken });
