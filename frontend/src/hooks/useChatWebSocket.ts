@@ -11,6 +11,7 @@ export type ChatWsEventType =
   | 'typing_indicator'
   | 'message_status_update'
   | 'reaction_update'
+  | 'pin_update'
   | 'presence_update'
   | 'presence_snapshot'
   | 'in_app_notification'
@@ -32,6 +33,8 @@ export interface ChatWsEvent<T = any> {
   message_id?: number;
   status?: string;
   reaction?: any;
+  action?: 'pinned' | 'unpinned';
+  pin?: any;
   notification?: any;
   timestamp?: string;
   version?: number | null;
@@ -44,6 +47,7 @@ export interface UseChatWebSocketHandlers {
   onTypingIndicator?: (e: ChatWsEvent) => void;
   onMessageStatusUpdate?: (e: ChatWsEvent) => void;
   onReactionUpdate?: (e: ChatWsEvent) => void;
+  onPinUpdate?: (e: ChatWsEvent) => void;
   onPresenceUpdate?: (e: ChatWsEvent) => void;
   onPresenceSnapshot?: (e: ChatWsEvent) => void;
   onInAppNotification?: (e: ChatWsEvent) => void;
@@ -120,6 +124,15 @@ export function useChatWebSocket(
               break;
             case 'reaction_update':
               handlersRef.current.onReactionUpdate?.(data);
+              break;
+            case 'pin_update':
+              if (data.action === 'pinned') {
+                const chatId = Number(data.chat_id);
+                if (Number.isFinite(chatId)) {
+                  useChatStore.getState().markChatPinUnseen(chatId);
+                }
+              }
+              handlersRef.current.onPinUpdate?.(data);
               break;
             case 'presence_update':
               handlersRef.current.onPresenceUpdate?.(data);

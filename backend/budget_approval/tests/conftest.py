@@ -255,6 +255,27 @@ def superuser(db):
 
 
 @pytest.fixture
+def org_admin(organization, tenant_schema):
+    """Org admin in the same org, but NOT the chain approver (MED-240).
+
+    Uses assign_org_admin() so is_org_admin() returns True. Sets
+    current_organization because is_org_admin checks that field first.
+    """
+    from core.admin_utils import assign_org_admin
+
+    uid = uuid.uuid4().hex[:8]
+    user = User.objects.create_user(
+        username=f'orgadmin_{uid}',
+        email=f'orgadmin_{uid}@test.com',
+        password='testpass123',
+        organization=organization,
+        current_organization=organization,
+    )
+    assign_org_admin(user, organization)
+    return user
+
+
+@pytest.fixture
 def different_organization(db):
     """Create a different organization for cross-org testing"""
     return Organization.objects.create(

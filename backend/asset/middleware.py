@@ -9,6 +9,7 @@ import re
 from asgiref.sync import sync_to_async
 
 from spreadsheet.ws_tickets import consume_websocket_ticket
+from core.services.tenant import slug_to_schema_name
 
 User = get_user_model()
 
@@ -69,6 +70,7 @@ class JWTAuthMiddleware(BaseMiddleware):
         if auth_header.startswith('Bearer '):
             token = auth_header.split(' ')[1]
             scope['user'] = await self.get_user_from_token(token)
+            scope['tenant_schema'] = await self.get_tenant_schema(scope['user'])
             scope['jwt_exp'] = self.get_token_exp(token)
             scope['auth_source'] = 'jwt_header'
         else:
@@ -87,10 +89,12 @@ class JWTAuthMiddleware(BaseMiddleware):
 
             if token_from_query:
                 scope['user'] = await self.get_user_from_token(token_from_query)
+                scope['tenant_schema'] = await self.get_tenant_schema(scope['user'])
                 scope['jwt_exp'] = self.get_token_exp(token_from_query)
                 scope['auth_source'] = 'jwt_query'
             else:
                 scope['user'] = AnonymousUser()
+                scope['tenant_schema'] = 'public'
         
         return await super().__call__(scope, receive, send)
     
@@ -117,6 +121,29 @@ class JWTAuthMiddleware(BaseMiddleware):
             return User.objects.get(id=user_id)
         except ObjectDoesNotExist:
             return AnonymousUser()
+
+    @database_sync_to_async
+    def get_tenant_schema(self, user):
+        """Resolve the same active organization used by HTTP tenant middleware."""
+        if not user or not user.is_authenticated:
+            return 'public'
+
+        organization_id = (
+            getattr(user, 'current_organization_id', None)
+            or getattr(user, 'organization_id', None)
+        )
+        if not organization_id:
+            return 'public'
+
+        from core.models import Organization
+
+        slug = (
+            Organization.objects
+            .filter(id=organization_id, is_active=True)
+            .values_list('slug', flat=True)
+            .first()
+        )
+        return slug_to_schema_name(slug) if slug else 'public'
 
     @staticmethod
     def get_spreadsheet_sheet_id(path):

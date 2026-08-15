@@ -172,7 +172,16 @@ async function setupMessagesPage(page: Page, options: SetupMessagesPageOptions =
 			return;
 		}
 
-		if (/\/pins$/.test(pathname) || /\/files$/.test(pathname) || /\/scheduled$/.test(pathname)) {
+		if (/\/pins$/.test(pathname)) {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify([]),
+			});
+			return;
+		}
+
+		if (/\/files$/.test(pathname) || /\/scheduled$/.test(pathname)) {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',

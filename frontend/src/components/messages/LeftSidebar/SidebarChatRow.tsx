@@ -1,10 +1,11 @@
 'use client';
 
 import type { DragEvent, MouseEvent, ReactNode } from 'react';
-import { Bot, Hash, Star, User, Users } from 'lucide-react';
+import { Bot, Hash, Pin, Star, User, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Chat } from '@/types/chat';
 import { isParticipantCurrentlyMuted } from '@/lib/chatMute';
+import { useChatStore } from '@/lib/chatStore';
 
 interface SidebarChatRowProps {
   chat: Chat;
@@ -116,6 +117,7 @@ export default function SidebarChatRow({
   // Grey badge: muted OR set to mentions-only (non-mention unreads are low-priority)
   const isQuiet = isMuted || notificationLevel === 'mentions' || notificationLevel === 'none';
   const hasMention = (chat.mention_unread_count ?? 0) > 0;
+  const hasUnseenPin = useChatStore((state) => Boolean(state.unseenPinChatIds?.[chat.id]));
 
   const Icon = chat.type === 'group' ? Hash : isBot ? Bot : Users;
 
@@ -232,6 +234,16 @@ export default function SidebarChatRow({
               {buildPreview(chat, currentUserId)}
             </p>
             <div className="flex flex-shrink-0 items-center gap-1">
+              {chat.type === 'group' && hasUnseenPin && (
+                <span
+                  className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full bg-teal-500 text-white shadow-sm"
+                  data-testid="messages-pin-badge"
+                  aria-label="New pinned message"
+                  title="New pinned message"
+                >
+                  <Pin className="h-2.5 w-2.5 fill-current" />
+                </span>
+              )}
               {hasMention && (
                 <span
                   className={`flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm ${isMuted ? 'bg-gray-400' : 'bg-rose-500'}`}

@@ -1,7 +1,9 @@
 import logging
 import os
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+from channels.layers import get_channel_layer
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files import File
 from django.db import IntegrityError, transaction
@@ -9,8 +11,10 @@ from django.db.models import Count, Q, Prefetch, Max
 from django.core.cache import cache
 from django.utils import timezone
 from django_redis import get_redis_connection
-from .models import Chat, ChatParticipant, ChatStar, Message, MessageAttachment, MessageMention, MessageStatus, ChatType, ChannelVisibility, ThreadReadStatus
+from .models import Chat, ChatOutboxEvent, ChatParticipant, ChatStar, Message, MessageAttachment, MessageMention, MessageStatus, ChatType, ChannelVisibility, ThreadReadStatus
 from core.models import ProjectMember
+from core.tenant_context import current_tenant_schema
+from .realtime import broadcast_event_to_user_groups_sync
 
 User = get_user_model()
 
@@ -30,6 +34,8 @@ class _OutboxAckSerializerRequest:
 
     def build_absolute_uri(self, url):
         return url
+
+
 logger = logging.getLogger(__name__)
 
 ALLOWED_ATTACHMENT_IMAGE_MIME_PREFIX = "image/"
@@ -108,6 +114,110 @@ def sync_message_mentions(message: Message, mention_ids: list[int]) -> None:
             ignore_conflicts=True,
         )
     return list(new_ids)
+
+
+def claim_recipients_for_delivery(message_id: int, user_ids: List[int]) -> List[int]:
+    """Take ownership of a message's delivery to these users, and return who we won.
+
+    The single claim mechanism for all three delivery paths — the realtime
+    fan-out, the offline delivery task, and reconnect recovery. Winning the
+    ``sent -> delivered`` transition *is* the claim: whichever path moves the
+    row publishes, and the others find nothing left to take. The alternative,
+    a lock keyed per recipient, costs a round-trip each on the hot path.
+
+    ``skip_locked`` so a concurrent claimer takes the rows it can and leaves
+    the rest rather than blocking on them.
+
+    Callers must publish only to the returned users, and hand back anything
+    they failed to publish with ``release_unpublished_recipients`` — claiming
+    before publishing trades a duplicate delivery for a possible lost one.
+    """
+    if not user_ids:
+        return []
+
+    delivered_at = timezone.now()
+    with transaction.atomic():
+        claimed = list(
+            MessageStatus.objects
+            .select_for_update(skip_locked=True)
+            .filter(message_id=message_id, user_id__in=user_ids, status='sent')
+            .values_list('user_id', flat=True)
+        )
+        if claimed:
+            MessageStatus.objects.filter(
+                message_id=message_id,
+                user_id__in=claimed,
+            ).update(
+                status='delivered',
+                delivered_at=delivered_at,
+                updated_at=delivered_at,
+            )
+    return claimed
+
+
+def chat_group_name(chat_id: int) -> str:
+    """Channel-layer group carrying events for one chat."""
+    return f'chat_{int(chat_id)}'
+
+
+def get_joinable_chat_ids(user_id: int) -> List[int]:
+    """Chats this user is entitled to receive events for, straight from the database.
+
+    Deliberately not cached and never derived from anything the client sends:
+    this is the authorisation decision behind chat-group membership, so a stale
+    or forged answer means someone receives a channel they are not in.
+    """
+    return list(
+        ChatParticipant.objects
+        .filter(user_id=user_id, is_active=True)
+        .values_list('chat_id', flat=True)
+    )
+
+
+def notify_chat_membership_changed(chat_id: int, user_ids: Iterable[int]) -> None:
+    """Tell affected users' live connections to re-sync their chat groups.
+
+    Sent to each user's personal group, which they are always entitled to, so
+    the consumer can re-read its entitlements from the database rather than
+    trusting anything in the event. Best effort: a connection that misses this
+    still re-syncs on its next connect, and the message path is unaffected when
+    chat groups are disabled.
+    """
+    user_ids = [int(user_id) for user_id in user_ids]
+    if not user_ids or not getattr(settings, 'CHAT_CHANNEL_GROUPS_ENABLED', False):
+        return
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
+        broadcast_event_to_user_groups_sync(
+            channel_layer,
+            user_ids,
+            {'type': 'chat_membership_changed', 'chat_id': int(chat_id)},
+        )
+    except Exception:
+        # Never let a revocation broadcast undo a committed membership change.
+        # The connection re-syncs on reconnect; surface it so a persistent
+        # failure is visible rather than silently leaving stale memberships.
+        logger.exception(
+            'Failed to broadcast chat membership change for chat %s', chat_id
+        )
+
+
+def release_unpublished_recipients(message_id: int, user_ids: Iterable[int]) -> int:
+    """Return claimed rows whose publish did not happen, so a retry can take them."""
+    user_ids = list(user_ids)
+    if not user_ids:
+        return 0
+    return MessageStatus.objects.filter(
+        message_id=message_id,
+        user_id__in=user_ids,
+        status='delivered',
+    ).update(
+        status='sent',
+        delivered_at=None,
+        updated_at=timezone.now(),
+    )
 
 
 class OnlineStatusService:
@@ -426,20 +536,37 @@ class OnlineStatusService:
 
     @classmethod
     def presence_snapshot(cls, user_ids: List[int]) -> List[Dict[str, Any]]:
-        """Return current presence for a batch of users."""
-        keys_by_user_id = {
+        """Return current presence for a batch of users.
+
+        Both lookups are batched. The online flags always were, but the
+        versions were fetched one user at a time inside the comprehension, so a
+        snapshot for a 99-member channel cost 99 sequential cache round-trips
+        on the connect path — measured at 14.5 ms against 0.79 ms for the same
+        output once batched.
+        """
+        online_keys = {
             user_id: cls._online_key(user_id)
             for user_id in user_ids
         }
+        version_keys = {
+            user_id: cls._presence_version_key(user_id)
+            for user_id in user_ids
+        }
         try:
-            values_by_key = cache.get_many(keys_by_user_id.values())
+            online_values = cache.get_many(online_keys.values())
         except Exception:
-            values_by_key = {}
+            online_values = {}
+        try:
+            version_values = cache.get_many(version_keys.values())
+        except Exception:
+            version_values = {}
         return [
             {
                 'user_id': user_id,
-                'is_online': bool(values_by_key.get(keys_by_user_id[user_id], False)),
-                'version': cls.get_presence_version(user_id),
+                'is_online': bool(online_values.get(online_keys[user_id], False)),
+                # Same coercion get_presence_version applies: a missing or
+                # unparseable value reads as version 0.
+                'version': int(version_values.get(version_keys[user_id], 0) or 0),
             }
             for user_id in user_ids
         ]
@@ -500,6 +627,18 @@ class ChatService:
         affected_ids.update(extra_user_ids)
         if not affected_ids:
             return
+        # Membership just changed, so any live connection's chat-group
+        # membership is now stale. This runs for every membership mutator in
+        # the codebase, which makes it the one place revocation has to be
+        # correct: a connection that keeps a group it is no longer entitled to
+        # goes on receiving that channel's messages for as long as it stays
+        # open, which can be hours. Told before the cache invalidation below so
+        # a removal is acted on even if that part is skipped for size.
+        chat_id = chat.id
+        transaction.on_commit(
+            lambda: notify_chat_membership_changed(chat_id, affected_ids)
+        )
+
         limit = OnlineStatusService.PRESENCE_RECIPIENTS_INVALIDATION_LIMIT
         if len(affected_ids) > limit:
             logger.info(
@@ -905,30 +1044,58 @@ class MessageService:
             message.save(update_fields=['has_attachments', 'updated_at'])
 
     @staticmethod
-    def _create_recipient_statuses(message: Message, sender: User) -> None:
-        recipients = ChatParticipant.objects.filter(
+    def _create_recipient_statuses(
+        message: Message,
+        sender: User,
+        *,
+        ignore_conflicts: bool = False,
+    ) -> None:
+        recipient_ids = ChatParticipant.objects.filter(
             chat=message.chat,
             is_active=True,
-        ).exclude(user=sender).select_related('user')
+        ).exclude(user=sender).values_list('user_id', flat=True)
         MessageStatus.objects.bulk_create([
             MessageStatus(
-                message=message,
-                user=recipient.user,
+                message_id=message.id,
+                user_id=recipient_id,
                 status='sent',
             )
-            for recipient in recipients
-        ])
+            for recipient_id in recipient_ids
+        ], batch_size=1000, ignore_conflicts=ignore_conflicts)
 
     @staticmethod
-    def _schedule_new_message_side_effects(message: Message, sender: User) -> None:
+    def _schedule_new_message_side_effects(
+        message: Message,
+        sender: User,
+        *,
+        include_notifications: bool = True,
+        route_agent: bool = True,
+    ) -> None:
         message_id = message.id
+        tenant_schema = current_tenant_schema()
 
-        def schedule_delivery() -> None:
-            from .tasks import notify_message_recipients, notify_new_message
-            notify_message_recipients.delay(message_id)
-            notify_new_message.delay(message_id)
+        # These rows are written in the same PostgreSQL transaction as Message
+        # and MessageStatus. A broker outage therefore cannot lose the hand-off:
+        # the public dispatcher will publish every still-pending row later.
+        outbox_events = [
+            ChatOutboxEvent(
+                tenant_schema=tenant_schema,
+                event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME,
+                aggregate_id=message_id,
+            ),
+        ]
+        if include_notifications:
+            outbox_events.append(
+                ChatOutboxEvent(
+                    tenant_schema=tenant_schema,
+                    event_type=ChatOutboxEvent.EVENT_MESSAGE_NOTIFICATIONS,
+                    aggregate_id=message_id,
+                )
+            )
+        ChatOutboxEvent.objects.bulk_create(outbox_events, ignore_conflicts=True)
 
-        transaction.on_commit(schedule_delivery)
+        if not route_agent:
+            return
 
         def route_agent_bot() -> None:
             try:
@@ -942,7 +1109,10 @@ class MessageService:
                 ).first()
                 if bot_participant:
                     from agent.tasks import handle_chat_message_for_agent
-                    handle_chat_message_for_agent.delay(message_id)
+                    handle_chat_message_for_agent.delay(
+                        message_id,
+                        tenant_schema=tenant_schema,
+                    )
             except Exception:
                 logger.exception(
                     'Failed to route message to agent bot for message %s',
@@ -986,7 +1156,10 @@ class MessageService:
             )
 
         MessageService._link_attachments_to_message(message, sender, attachment_ids)
-        MessageService._create_recipient_statuses(message, sender)
+        # Recipient status fan-out is intentionally deferred to the durable
+        # realtime outbox task. Writing O(channel members) rows in each HTTP
+        # thread made 100 concurrent sends exhaust PostgreSQL connections and
+        # kept requests open for tens of seconds.
         MessageService._schedule_new_message_side_effects(message, sender)
 
         logger.info(
@@ -1176,6 +1349,16 @@ class MessageService:
             )
             for recipient in recipients
         ])
+
+        # Forwarding and other legacy service callers use this method too. Keep
+        # their realtime hand-off durable, while avoiding duplicate persisted
+        # notifications and agent routing already performed below.
+        MessageService._schedule_new_message_side_effects(
+            message,
+            sender,
+            include_notifications=False,
+            route_agent=False,
+        )
         
         logger.info(f"Created message {message.id} in chat {chat.id} by user {sender.id}")
 
@@ -1183,7 +1366,7 @@ class MessageService:
             from notifications.services import create_or_update_chat_notification
 
             for recipient in recipients:
-                if recipient.is_currently_muted() or recipient.notification_level == 'mentions':
+                if recipient.is_currently_muted() or recipient.notification_level != 'all':
                     continue
                 create_or_update_chat_notification(
                     recipient_id=recipient.user_id,
@@ -1209,7 +1392,10 @@ class MessageService:
                 ).first()
                 if bot_participant:
                     from agent.tasks import handle_chat_message_for_agent
-                    handle_chat_message_for_agent.delay(message.id)
+                    handle_chat_message_for_agent.delay(
+                        message.id,
+                        tenant_schema=current_tenant_schema(),
+                    )
         except Exception:
             logger.exception("Failed to route message to agent bot for message %s", message.id)
 
@@ -1708,8 +1894,7 @@ class MessageService:
                             uploader=user
                         )
 
-                    from .tasks import notify_new_message, build_realtime_message_payload
-                    notify_new_message.delay(new_message.id)
+                    from .tasks import build_realtime_message_payload
                     created_messages.append(build_realtime_message_payload(new_message))
                     succeeded_sends += 1
                 except MessageService.SourceAttachmentMissingError:

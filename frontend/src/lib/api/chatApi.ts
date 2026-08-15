@@ -224,7 +224,9 @@ export interface PinnedMessageRow {
   chat: number;
   pinned_by: { id: number; username: string; email: string } | null;
   created_at: string;
-  message: Message;
+  message: Pick<Message, 'id' | 'sender' | 'content' | 'created_at' | 'parent_message_id'> & {
+    chat: number;
+  };
 }
 
 export const listPins = async (chatSlug: string): Promise<PinnedMessageRow[]> => {
@@ -248,13 +250,13 @@ export const listChatFiles = async (chatId: number, page = 1): Promise<{ results
   return response.data;
 };
 
-export const pinMessage = async (chatId: number, messageId: number): Promise<PinnedMessageRow> => {
-  const response = await api.post(`/api/chat/chats/${chatId}/pin/`, { message_id: messageId });
+export const pinMessage = async (chatSlug: string, messageId: number): Promise<PinnedMessageRow> => {
+  const response = await api.post(`/api/chat/chats/${chatSlug}/pin/`, { message_id: messageId });
   return response.data;
 };
 
-export const unpinMessage = async (chatId: number, messageId: number): Promise<void> => {
-  await api.delete(`/api/chat/chats/${chatId}/pin/${messageId}/`);
+export const unpinMessage = async (chatSlug: string, messageId: number): Promise<void> => {
+  await api.delete(`/api/chat/chats/${chatSlug}/pin/${messageId}/`);
 };
 
 // ==================== Browse channels ====================

@@ -21,6 +21,7 @@ from .permissions import (
     EscalationPermission
 )
 from .services import BudgetRequestService, BudgetPoolService
+from .exceptions import ApprovalConflict
 
 
 class BudgetRequestViewSet(viewsets.ModelViewSet):
@@ -123,6 +124,11 @@ class BudgetRequestDecisionView(generics.UpdateAPIView):
                     'budget_request': budget_request_serializer.data
                 }, status=status.HTTP_200_OK)
                 
+            except ApprovalConflict as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_409_CONFLICT,
+                )
             except Exception as e:
                 return Response({
                     'error': str(e)

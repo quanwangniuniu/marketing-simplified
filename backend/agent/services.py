@@ -876,7 +876,6 @@ def _forward_to_users(forwards, sender, project):
     sender==target bug when forwarding to oneself.
     """
     from chat.services import MessageService
-    from chat.tasks import notify_new_message
     from core.models import ProjectMember
     from core.utils.bot_user import get_agent_bot_user
 
@@ -920,7 +919,6 @@ def _forward_to_users(forwards, sender, project):
         try:
             chat, _ = _get_or_create_bot_private_chat(bot, target_user, project)
             message = MessageService.create_message(chat=chat, sender=bot, content=prefixed_content)
-            notify_new_message.delay(message.id)
             logger.info(
                 "Agent forwarded message for project=%s sender=%s target_user=%s username=%s chat=%s message=%s",
                 project.id,
