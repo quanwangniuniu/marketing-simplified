@@ -47,6 +47,11 @@ def tenant_schema_task(task_function):
     return wrapped
 
 
+# A URL's answer is reused for a day; a pending row older than the claim TTL is
+# treated as abandoned so one dead worker cannot wedge a link forever.
+LINK_PREVIEW_CACHE_TTL = timedelta(hours=24)
+LINK_PREVIEW_CLAIM_TTL = timedelta(minutes=5)
+
 CHAT_OUTBOX_BATCH_SIZE = getattr(settings, 'CHAT_OUTBOX_BATCH_SIZE', 200)
 CHAT_OUTBOX_CLAIM_TTL_SECONDS = getattr(settings, 'CHAT_OUTBOX_CLAIM_TTL_SECONDS', 300)
 
@@ -1110,8 +1115,11 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
 
     Runs off the hot path: the message is already sent and shown by the time this
     starts. Every outcome — success, upstream failure, or a URL the safety guard
-    refuses — is written to the cache, so a bad link is not re-fetched on every
-    mention.
+    refuses — is cached for 24h, so a link costs one fetch a day however often it
+    is posted, and a dead or unsafe one costs no more than a good one.
+
+    Concurrency is handled by the unique URL key: the first task to create the
+    row fetches, everyone else reuses the answer.
 
     Retries are deliberately disabled: a link preview is cosmetic, and retrying a
     fetch that a user can trigger at will would turn this into an amplifier.
@@ -1124,10 +1132,19 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
     if message is None:
         return  # message deleted mid-flight; nothing left to decorate
 
-    preview, _ = LinkPreview.objects.get_or_create(
+    # The unique URL key is what makes this single-flight: when several people
+    # post the same new link at once, exactly one task creates the row and
+    # fetches; the rest find it and stop.
+    preview, created = LinkPreview.objects.get_or_create(
         url=cache_key,
         defaults={'status': LinkPreview.STATUS_PENDING},
     )
+    if not created and not _claim_stale_preview(preview):
+        # Someone already answered this URL recently, or is answering it now.
+        # Reusing the answer still means telling *this* message about it.
+        if preview.status == LinkPreview.STATUS_READY and (preview.title or preview.image_url):
+            _broadcast_link_preview(message, preview)
+        return
 
     try:
         html = fetch_url_safely(cache_key)
@@ -1145,6 +1162,32 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
 
     if metadata['title'] or metadata['image_url']:
         _broadcast_link_preview(message, preview)
+
+
+def _claim_stale_preview(preview: LinkPreview) -> bool:
+    """True when this task should (re)fetch an existing cache row.
+
+    A row is left alone while it is fresh — and that covers failures and refusals
+    too, so a dead or unsafe link costs one fetch per day rather than one per
+    mention. A row still marked pending belongs to another task, unless that
+    task has been gone long enough to count as dead.
+    """
+    now = timezone.now()
+
+    if preview.status == LinkPreview.STATUS_PENDING:
+        if now - preview.updated_at < LINK_PREVIEW_CLAIM_TTL:
+            return False  # another task holds the claim
+    elif preview.fetched_at and now - preview.fetched_at < LINK_PREVIEW_CACHE_TTL:
+        return False  # fresh answer, whatever the outcome was
+
+    # Stale answer or abandoned claim: take it over, and re-stamp updated_at so
+    # a concurrent task sees the claim as live.
+    LinkPreview.objects.filter(pk=preview.pk).update(
+        status=LinkPreview.STATUS_PENDING, updated_at=now
+    )
+    preview.status = LinkPreview.STATUS_PENDING
+    preview.updated_at = now
+    return True
 
 
 def _broadcast_link_preview(message: Message, preview: LinkPreview) -> None:

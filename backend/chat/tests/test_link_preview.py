@@ -3,6 +3,7 @@
 The network is always mocked: `fetch_url_safely` is the seam, so these tests never
 touch DNS or HTTP and never depend on a third-party site staying up.
 """
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -296,3 +297,87 @@ class TestLivePreviewBroadcast(LinkPreviewTestCase):
         preview = LinkPreview.objects.get(url='https://example.com/story')
         assert preview.status == LinkPreview.STATUS_READY
         assert preview.title == 'A great article'
+
+
+class TestCacheReuseAndSingleFlight(LinkPreviewTestCase):
+    """A URL is fetched once per 24h, and once at a time (MED-279, ticket 04)."""
+
+    def _second_message(self):
+        return Message.objects.create(
+            chat=self.chat,
+            sender=self.user,
+            content='someone else shares https://example.com/story',
+        )
+
+    def _aged(self, preview, **ago):
+        """Move a cache row's timestamps back in time."""
+        moment = timezone.now() - timedelta(**ago)
+        LinkPreview.objects.filter(pk=preview.pk).update(fetched_at=moment, updated_at=moment)
+        preview.refresh_from_db()
+        return preview
+
+    def test_a_second_mention_reuses_the_cache(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+            fetch_link_preview_task(self._second_message().id, 'https://example.com/story')
+
+        assert fetch.call_count == 1
+
+    def test_a_reused_cache_still_reaches_the_new_message(self):
+        """No re-fetch, but the second poster must still see their card appear."""
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML):
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        second = self._second_message()
+        with patch('chat.tasks.fetch_url_safely') as fetch, \
+             patch('chat.tasks.broadcast_event_to_user_groups_sync', return_value=([1], [])) as broadcast:
+            fetch_link_preview_task(second.id, 'https://example.com/story')
+
+        fetch.assert_not_called()
+        assert broadcast.call_count == 1
+        assert broadcast.call_args.args[2]['message_id'] == second.id
+
+    def test_a_failed_url_is_not_retried_within_the_window(self):
+        with patch('chat.tasks.fetch_url_safely', side_effect=LinkPreviewFetchError('500')) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+            fetch_link_preview_task(self._second_message().id, 'https://example.com/story')
+
+        assert fetch.call_count == 1
+
+    def test_a_blocked_url_is_not_retried_within_the_window(self):
+        """The important one: a refused URL must not become an amplifier."""
+        with patch('chat.tasks.fetch_url_safely', side_effect=UnsafeUrlError('internal')) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+            fetch_link_preview_task(self._second_message().id, 'https://example.com/story')
+
+        assert fetch.call_count == 1
+
+    def test_a_stale_entry_is_refreshed(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+            self._aged(LinkPreview.objects.get(url='https://example.com/story'), hours=25)
+            fetch_link_preview_task(self._second_message().id, 'https://example.com/story')
+
+        assert fetch.call_count == 2
+
+    def test_a_claim_in_flight_stops_a_second_task(self):
+        """Single-flight: the row exists as pending, so nobody else fetches."""
+        LinkPreview.objects.create(url='https://example.com/story', status=LinkPreview.STATUS_PENDING)
+
+        with patch('chat.tasks.fetch_url_safely') as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        fetch.assert_not_called()
+
+    def test_an_abandoned_claim_is_taken_over(self):
+        """A worker that died mid-fetch must not wedge the URL forever."""
+        stuck = LinkPreview.objects.create(
+            url='https://example.com/story', status=LinkPreview.STATUS_PENDING
+        )
+        self._aged(stuck, hours=1)
+
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        assert fetch.call_count == 1
+        assert LinkPreview.objects.get(url='https://example.com/story').status == LinkPreview.STATUS_READY
