@@ -205,6 +205,7 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
     thread_last_reply_at = serializers.SerializerMethodField()
     thread_participants = serializers.SerializerMethodField()
     has_unread_thread_replies = serializers.SerializerMethodField()
+    link_preview = serializers.SerializerMethodField()
     parent_message_id = serializers.IntegerField(read_only=True, allow_null=True)
 
     def __init__(self, *args, **kwargs):
@@ -239,6 +240,7 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
             'parent_message_id',
             'thread_reply_count', 'thread_last_reply_at', 'thread_participants',
             'has_unread_thread_replies',
+            'link_preview',
         ]
         read_only_fields = ['id', 'sender', 'created_at', 'updated_at']
 
@@ -349,6 +351,11 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
         if mentions is not None:
             return [mention.mentioned_user_id for mention in mentions]
         return list(obj.mentions.values_list('mentioned_user_id', flat=True))
+
+    def get_link_preview(self, obj):
+        """Cached OpenGraph card for this message's first URL, or None (MED-279)."""
+        from .services import build_message_link_preview
+        return build_message_link_preview(obj)
 
     def get_missing_forwarded_attachments(self, obj):
         """Tombstones for forwarded attachments whose original message is gone."""

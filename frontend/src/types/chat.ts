@@ -186,6 +186,8 @@ export interface Message {
   thread_participants?: Array<{ id: number; username: string; email: string; avatar?: string | null }>;
   /** True when there are thread replies the current user has not seen. */
   has_unread_thread_replies?: boolean;
+  /** Server-resolved OpenGraph card for the message's first URL (MED-279). */
+  link_preview?: MessageLinkPreview | null;
   /** Client idempotency key while a send is still in the outbox. */
   client_message_id?: string;
   /** Local delivery state for optimistic / retried sends. */
@@ -658,6 +660,18 @@ export interface ProjectMember {
 }
 
 // ==================== Link Preview Types ====================
+
+/**
+ * Preview served on the message payload — resolved server-side, cached per URL.
+ * Distinct from `LinkPreview` below, which is the shape of the on-demand
+ * /api/chat/link-preview/ endpoint still used by comments.
+ */
+export interface MessageLinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image_url: string | null;
+}
 
 export interface LinkPreview {
   url: string;

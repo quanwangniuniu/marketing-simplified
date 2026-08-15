@@ -1,7 +1,14 @@
+import ipaddress
 import logging
 import os
+import re
+import socket
 import uuid
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urljoin, urlparse, urlunparse
+
+import requests
+from bs4 import BeautifulSoup
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -11,7 +18,7 @@ from django.db.models import Count, Q, Prefetch, Max
 from django.core.cache import cache
 from django.utils import timezone
 from django_redis import get_redis_connection
-from .models import Chat, ChatOutboxEvent, ChatParticipant, ChatStar, Message, MessageAttachment, MessageMention, MessageStatus, ChatType, ChannelVisibility, ThreadReadStatus
+from .models import Chat, ChatOutboxEvent, ChatParticipant, ChatStar, LinkPreview, Message, MessageAttachment, MessageMention, MessageStatus, ChatType, ChannelVisibility, ThreadReadStatus
 from core.models import ProjectMember
 from core.tenant_context import current_tenant_schema
 from .realtime import broadcast_event_to_user_groups_sync
@@ -69,6 +76,218 @@ def validate_attachment_mime_type(mime_type: str) -> None:
         raise UnsupportedAttachmentMimeType(
             f'Unsupported MIME type: {mime_type or "<empty>"}'
         )
+
+
+# --- Link preview URL safety (MED-279) ---------------------------------------
+# A chat message can contain any URL, and the server fetches it to build a preview.
+# That makes this an SSRF surface: an attacker can point us at an address our
+# server can reach but they cannot (cloud metadata, internal admin pages).
+# Safety is therefore decided by the *resolved IP*, never by matching the URL
+# string — DNS can point an ordinary-looking domain at 127.0.0.1.
+ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
+LINK_PREVIEW_TIMEOUT_SECONDS = 5
+LINK_PREVIEW_MAX_BYTES = 1024 * 1024      # 1 MiB — plenty to reach <head>
+LINK_PREVIEW_MAX_REDIRECTS = 3
+LINK_PREVIEW_HTML_CONTENT_TYPE = "text/html"
+LINK_PREVIEW_USER_AGENT = "MediaJira-LinkPreview/1.0"
+_REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
+
+_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+
+class UnsafeUrlError(ValueError):
+    """Raised when a URL must not be fetched by the server (SSRF guard)."""
+
+
+class LinkPreviewFetchError(ValueError):
+    """Raised when a safe URL could not be fetched (upstream error)."""
+
+
+def extract_first_url(content: Optional[str]) -> Optional[str]:
+    """First http(s) URL in a message body, or None. Only the first gets a preview."""
+    if not content:
+        return None
+    match = _URL_RE.search(content)
+    return match.group(0) if match else None
+
+
+def normalize_preview_url(url: Optional[str]) -> str:
+    """Canonical cache key for a URL: fragment dropped, host lowercased.
+
+    The path stays case-sensitive on purpose — only the host is case-insensitive.
+    Normalizing means the same link written slightly differently is fetched once.
+    """
+    parsed = urlparse((url or "").strip())
+    return urlunparse(parsed._replace(netloc=parsed.netloc.lower(), fragment=""))
+
+
+def _is_public_ip(ip: Any) -> bool:
+    """True only for globally routable addresses."""
+    # An IPv4-mapped IPv6 address (::ffff:127.0.0.1) must be judged by its IPv4 form.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _assert_host_is_public(host: str) -> None:
+    """Resolve a host and reject it if ANY answer is not publicly routable.
+
+    Checking every answer matters: multi-record DNS must not let one public
+    address launder a private one.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise UnsafeUrlError(f"Cannot resolve host: {host}") from exc
+
+    addresses = [info[4][0] for info in infos]
+    if not addresses:
+        raise UnsafeUrlError(f"Host resolved to no address: {host}")
+
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address.split("%")[0])  # drop IPv6 zone id
+        except ValueError as exc:
+            raise UnsafeUrlError(f"Unparseable address for host {host}: {address}") from exc
+        if not _is_public_ip(ip):
+            raise UnsafeUrlError(f"URL resolves to a non-public address: {address}")
+
+
+def validate_public_url(url: Optional[str]) -> str:
+    """Raise UnsafeUrlError unless the server may fetch this URL; return its cache key."""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+        raise UnsafeUrlError(f'Unsupported URL scheme: {parsed.scheme or "<none>"}')
+    if not parsed.hostname:
+        raise UnsafeUrlError("URL has no host")
+    _assert_host_is_public(parsed.hostname)
+    return normalize_preview_url(url)
+
+
+def _read_capped_body(response: Any) -> str:
+    """Read at most LINK_PREVIEW_MAX_BYTES so a huge page cannot exhaust memory."""
+    chunks: List[bytes] = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=8192):
+        if not chunk:
+            continue
+        remaining = LINK_PREVIEW_MAX_BYTES - total
+        if remaining <= 0:
+            break
+        chunks.append(chunk[:remaining])
+        total += len(chunk[:remaining])
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def fetch_url_safely(url: str) -> str:
+    """Fetch a URL's HTML under the SSRF guard, re-validating every redirect hop.
+
+    Redirects are followed manually — a public URL is allowed to 302 towards an
+    internal address, so the HTTP client must never follow them for us.
+    """
+    current = validate_public_url(url)
+
+    for _ in range(LINK_PREVIEW_MAX_REDIRECTS + 1):
+        response = requests.get(
+            current,
+            timeout=LINK_PREVIEW_TIMEOUT_SECONDS,
+            allow_redirects=False,
+            stream=True,
+            headers={"User-Agent": LINK_PREVIEW_USER_AGENT},
+        )
+        try:
+            if response.status_code in _REDIRECT_STATUS_CODES:
+                location = response.headers.get("Location")
+                if not location:
+                    raise UnsafeUrlError("Redirect without a Location header")
+                current = validate_public_url(urljoin(current, location))
+                continue
+
+            if response.status_code >= 400:
+                raise LinkPreviewFetchError(f"Upstream returned {response.status_code}")
+
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if not content_type.startswith(LINK_PREVIEW_HTML_CONTENT_TYPE):
+                raise UnsafeUrlError(f"Refusing non-HTML content type: {content_type or '<none>'}")
+
+            return _read_capped_body(response)
+        finally:
+            response.close()
+
+    raise UnsafeUrlError(f"Too many redirects (max {LINK_PREVIEW_MAX_REDIRECTS})")
+
+
+_OG_FIELD_BY_PROPERTY = {
+    "og:title": "title",
+    "og:description": "description",
+    "og:image": "image_url",
+}
+
+
+def parse_opengraph(html: Optional[str]) -> Dict[str, Optional[str]]:
+    """Pull og:title / og:description / og:image out of a page's HTML.
+
+    Falls back to the <title> tag when og:title is absent. Every field is optional —
+    a page with no metadata yields all None rather than an error, because "this link
+    has no preview" is a normal outcome, not a failure.
+    """
+    parsed: Dict[str, Optional[str]] = {"title": None, "description": None, "image_url": None}
+    if not html:
+        return parsed
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup.find_all("meta"):
+        # Some sites write name="og:title" instead of the spec's property=
+        key = (tag.get("property") or tag.get("name") or "").strip().lower()
+        field = _OG_FIELD_BY_PROPERTY.get(key)
+        if field and parsed[field] is None:
+            content = (tag.get("content") or "").strip()
+            if content:
+                parsed[field] = content
+
+    if parsed["title"] is None and soup.title and soup.title.string:
+        parsed["title"] = soup.title.string.strip() or None
+
+    # The image URL is handed straight to the browser, so only ever emit http(s):
+    # a javascript:/data: value here would become an injection vector in the card.
+    image_url = parsed["image_url"]
+    if image_url and urlparse(image_url).scheme.lower() not in ALLOWED_URL_SCHEMES:
+        parsed["image_url"] = None
+
+    return parsed
+
+
+def build_message_link_preview(message: "Message") -> Optional[Dict[str, Any]]:
+    """Read-through lookup: the preview payload for a message, or None.
+
+    Returns None unless the message's first URL has a *ready* cache entry with
+    something worth drawing — pending, failed, blocked, and empty-but-ready
+    entries all render as a plain message.
+    """
+    url = extract_first_url(message.content)
+    if not url:
+        return None
+
+    preview = LinkPreview.objects.filter(
+        url=normalize_preview_url(url), status=LinkPreview.STATUS_READY
+    ).first()
+    if preview is None or not (preview.title or preview.image_url):
+        return None
+
+    return {
+        "url": preview.url,
+        "title": preview.title,
+        "description": preview.description,
+        "image_url": preview.image_url,
+    }
 
 
 def extract_message_plain_text(rich_body) -> str:
@@ -1093,6 +1312,25 @@ class MessageService:
                 )
             )
         ChatOutboxEvent.objects.bulk_create(outbox_events, ignore_conflicts=True)
+
+        # Link preview: cosmetic and slow (an external site has to answer), so it
+        # is queued after commit and never blocks the send.
+        preview_url = extract_first_url(message.content)
+        if preview_url:
+            def enqueue_link_preview() -> None:
+                try:
+                    from .tasks import fetch_link_preview_task
+                    fetch_link_preview_task.delay(
+                        message_id,
+                        preview_url,
+                        tenant_schema=tenant_schema,
+                    )
+                except Exception:
+                    logger.exception(
+                        'Failed to enqueue link preview for message %s', message_id
+                    )
+
+            transaction.on_commit(enqueue_link_preview)
 
         if not route_agent:
             return

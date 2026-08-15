@@ -3,6 +3,8 @@ import asyncio
 from functools import wraps
 from datetime import timedelta
 from typing import Any, Dict, Optional
+
+import requests
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -13,15 +15,20 @@ from django.utils import timezone
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from core.tenant_context import tenant_schema_context
-from .models import ChatOutboxEvent, Message, MessageStatus, ChatParticipant, ScheduledMessage, MessageAttachment
+from .models import ChatOutboxEvent, LinkPreview, Message, MessageStatus, ChatParticipant, ScheduledMessage, MessageAttachment
 from .metrics import chat_broadcast_publish_failures_total
 from .realtime import broadcast_event_to_user_groups_sync
 from .services import (
     ChatService,
+    LinkPreviewFetchError,
     MessageService,
     OnlineStatusService,
+    UnsafeUrlError,
     chat_group_name,
     claim_recipients_for_delivery,
+    fetch_url_safely,
+    normalize_preview_url,
+    parse_opengraph,
     release_unpublished_recipients,
 )
 from .url_helpers import build_messages_action_url
@@ -1094,3 +1101,59 @@ def send_scheduled_message(
         if isinstance(exc, ValueError):
             return
         raise self.retry(exc=exc)
+
+
+@shared_task
+@tenant_schema_task
+def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'public'):
+    """Fetch a URL's OpenGraph metadata and cache it (MED-279).
+
+    Runs off the hot path: the message is already sent and shown by the time this
+    starts. Every outcome — success, upstream failure, or a URL the safety guard
+    refuses — is written to the cache, so a bad link is not re-fetched on every
+    mention.
+
+    Retries are deliberately disabled: a link preview is cosmetic, and retrying a
+    fetch that a user can trigger at will would turn this into an amplifier.
+    """
+    cache_key = normalize_preview_url(url)
+    if not cache_key:
+        return
+
+    if not Message.objects.filter(id=message_id, is_deleted=False).exists():
+        return  # message deleted mid-flight; nothing left to decorate
+
+    preview, _ = LinkPreview.objects.get_or_create(
+        url=cache_key,
+        defaults={'status': LinkPreview.STATUS_PENDING},
+    )
+
+    try:
+        html = fetch_url_safely(cache_key)
+    except UnsafeUrlError:
+        logger.warning('Link preview refused by URL guard: %s', cache_key)
+        _store_preview_outcome(preview, LinkPreview.STATUS_BLOCKED)
+        return
+    except (LinkPreviewFetchError, requests.RequestException) as exc:
+        logger.info('Link preview fetch failed for %s: %s', cache_key, exc)
+        _store_preview_outcome(preview, LinkPreview.STATUS_FAILED)
+        return
+
+    metadata = parse_opengraph(html)
+    _store_preview_outcome(preview, LinkPreview.STATUS_READY, **metadata)
+
+
+def _store_preview_outcome(
+    preview: LinkPreview,
+    status: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    image_url: Optional[str] = None,
+) -> None:
+    """Record the result of one fetch attempt, successful or not."""
+    preview.status = status
+    preview.title = title
+    preview.description = description
+    preview.image_url = image_url
+    preview.fetched_at = timezone.now()
+    preview.save(update_fields=['status', 'title', 'description', 'image_url', 'fetched_at', 'updated_at'])

@@ -1048,3 +1048,54 @@ class ScheduledMessage(TimeStampedModel):
 
     def __str__(self):
         return f"ScheduledMessage by {self.sender_id} in chat {self.chat_id} at {self.scheduled_at} [{self.status}]"
+
+
+class LinkPreview(TimeStampedModel):
+    """Cached OpenGraph metadata for a URL posted in chat (MED-279).
+
+    Keyed by the *normalized* URL and shared across every message that mentions
+    it, so a link posted a hundred times is fetched once. Messages do not own a
+    preview; they look one up by their URL at render time (read-through).
+
+    Outcomes are stored as well as successes: a URL that failed or was refused by
+    the SSRF guard is remembered too, so a bad link costs one fetch rather than
+    one per mention.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_READY = 'ready'
+    STATUS_FAILED = 'failed'
+    STATUS_BLOCKED = 'blocked'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Fetch in progress'),
+        (STATUS_READY, 'Fetched'),
+        (STATUS_FAILED, 'Upstream fetch failed'),
+        (STATUS_BLOCKED, 'Refused by the URL safety guard'),
+    ]
+
+    url = models.TextField(
+        unique=True,
+        help_text="Normalized URL (fragment stripped, host lowercased) — the cache key",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        help_text="Outcome of the last fetch attempt",
+    )
+    title = models.TextField(null=True, blank=True, help_text="og:title, or the <title> tag")
+    description = models.TextField(null=True, blank=True, help_text="og:description")
+    image_url = models.TextField(null=True, blank=True, help_text="og:image — hotlinked by the client")
+    fetched_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the last attempt finished; basis for the 24h freshness window",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'fetched_at']),
+        ]
+
+    def __str__(self):
+        return f"LinkPreview({self.url}) [{self.status}]"

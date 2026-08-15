@@ -48,10 +48,14 @@ from .serializers import (
 from .services import (
     ChatService,
     ChatStarService,
+    LinkPreviewFetchError,
     MessageService,
     OnlineStatusService,
+    UnsafeUrlError,
     UnsupportedAttachmentMimeType,
+    fetch_url_safely,
     validate_attachment_mime_type,
+    validate_public_url,
 )
 from .metrics import chat_broadcast_enqueue_failures_total
 from .tasks import notify_pin_update, send_scheduled_message
@@ -2051,37 +2055,33 @@ def fetch_link_preview(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Validate URL
+    # SSRF guard (MED-279): the server is about to fetch a URL a user supplied, so
+    # safety is decided by the *resolved IP*, not by the URL string, and redirects
+    # are re-validated hop by hop inside fetch_url_safely.
     try:
-        parsed = urlparse(url)
-        if not parsed.scheme or not parsed.netloc:
-            return Response(
-                {'error': 'Invalid URL format'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    except Exception:
+        safe_url = validate_public_url(url)
+    except UnsafeUrlError as exc:
+        logger.warning('Refused link preview for %s: %s', url, exc)
         return Response(
-            {'error': 'Invalid URL format'},
+            {'error': 'Invalid or disallowed URL'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
+    parsed = urlparse(safe_url)
+
     # Check cache first
-    cache_key = f"link_preview:{url}"
+    cache_key = f"link_preview:{safe_url}"
     cached_data = cache.get(cache_key)
     if cached_data:
         return Response(cached_data)
-    
+
     try:
-        # Fetch the page with timeout
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        response.raise_for_status()
-        
+        html = fetch_url_safely(safe_url)
+
         # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
+        soup = BeautifulSoup(html, 'html.parser')
+        url = safe_url  # relative og:image URLs resolve against the validated URL
+
         # Extract metadata
         preview_data = {
             'url': url,
@@ -2157,6 +2157,19 @@ def fetch_link_preview(request):
         
         return Response(preview_data)
         
+    except UnsafeUrlError as exc:
+        # A redirect hop pointed somewhere internal, or the response was not HTML.
+        logger.warning('Refused link preview mid-fetch for %s: %s', url, exc)
+        return Response(
+            {'error': 'Invalid or disallowed URL'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except LinkPreviewFetchError as exc:
+        logger.warning('Upstream error fetching link preview for %s: %s', url, exc)
+        return Response(
+            {'error': 'Failed to fetch URL'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
     except requests.exceptions.Timeout:
         logger.warning(f"Timeout fetching link preview for {url}")
         return Response(

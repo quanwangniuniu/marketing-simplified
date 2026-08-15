@@ -13,7 +13,6 @@ import LinkPreview from './LinkPreview';
 import TaskSharePreview from './TaskSharePreview';
 import ReactionsDisplay from './ReactionsDisplay';
 import MessageHoverActions from './MessageHoverActions';
-import { extractUrls } from '@/lib/api/linkPreviewApi';
 import ChatRichTextRenderer from './ChatRichTextRenderer';
 import { buildMessagesPath, parseChatSlugFromPathname } from '@/lib/messages/messagesRoutes';
 
@@ -205,17 +204,11 @@ export default function MessageItem({
   const hasReactions = !isDeleted && Boolean(message.reactions && message.reactions.length > 0);
   const hasThreadReplies = !isDeleted && (message.thread_reply_count ?? 0) > 0;
 
-  let hasUrls = false;
-  try {
-    hasUrls = hasContent && extractUrls(messageContent).length > 0;
-  } catch {
-    // ignore malformed content
-  }
-
   const taskIds = extractTaskIds(messageContent);
   const taskPreviewId = taskIds[0];
   const showTaskPreview = !isDeleted && Boolean(taskPreviewId);
-  const showLinkPreview = !isDeleted && hasUrls && !showTaskPreview;
+  const linkPreview = message.link_preview ?? null;
+  const showLinkPreview = !isDeleted && Boolean(linkPreview) && !showTaskPreview;
   const bot = isAgentBot(message.sender);
   const time = formatTime(message.created_at);
   const initials = bot ? 'AI' : (message.sender.username[0] ?? '?').toUpperCase();
@@ -473,7 +466,7 @@ export default function MessageItem({
                     <TaskSharePreview taskId={taskPreviewId} className="mt-2" />
                   ) : null}
 
-                  {showLinkPreview && <LinkPreview content={messageContent} />}
+                  {showLinkPreview && linkPreview && <LinkPreview preview={linkPreview} />}
 
                   {hasAttachments && (
                     <AttachmentDisplay
