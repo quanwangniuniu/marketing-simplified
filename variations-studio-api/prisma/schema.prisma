@@ -1,0 +1,54 @@
+// Maps existing Django tables. Do NOT run `prisma migrate` against this database.
+// Generate the client only: `npx prisma generate`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdCopyVariation {
+  id            BigInt    @id @default(autoincrement())
+  createdAt     DateTime  @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @map("updated_at") @db.Timestamptz(6)
+  isDeleted     Boolean   @map("is_deleted")
+  sourceMode    String    @map("source_mode") @db.VarChar(32)
+  sourceRef     String    @map("source_ref")
+  hook          String
+  headline      String
+  description   String
+  cta           String    @db.VarChar(64)
+  instruction   String
+  modelName     String    @map("model_name") @db.VarChar(64)
+  promptVersion String    @map("prompt_version") @db.VarChar(32)
+  batchId       String?   @map("batch_id") @db.Uuid
+  batchPosition Int?      @map("batch_position")
+  status        String    @db.VarChar(20)
+  createdById   BigInt?   @map("created_by_id")
+  creativeId    BigInt?   @map("creative_id")
+  projectId     BigInt?   @map("project_id")
+  slug          String    @unique @db.VarChar(255)
+
+  @@map("ad_copy_variation_adcopyvariation")
+}
+
+model Project {
+  id        BigInt  @id
+  slug      String  @db.VarChar(200)
+  isDeleted Boolean @map("is_deleted")
+
+  @@map("core_project")
+}
+
+model ProjectMember {
+  id        BigInt  @id
+  userId    BigInt  @map("user_id")
+  projectId BigInt  @map("project_id")
+  isActive  Boolean @map("is_active")
+  isDeleted Boolean @map("is_deleted")
+
+  @@map("core_projectmember")
+}
