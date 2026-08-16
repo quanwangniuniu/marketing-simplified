@@ -1,6 +1,7 @@
 """Unit and concurrency tests for the chat subscription registry."""
 
 import asyncio
+import threading
 from collections import defaultdict
 from typing import Any
 
@@ -21,9 +22,11 @@ class FakeChannelLayer:
         self.fail_add: set[str] = set()
         self.fail_discard: set[str] = set()
         self.fail_send: set[str] = set()
+        self.operation_loops: list[asyncio.AbstractEventLoop] = []
 
     async def group_add(self, group: str, channel: str) -> None:
         await asyncio.sleep(0)
+        self.operation_loops.append(asyncio.get_running_loop())
         self.calls.append(('add', group, channel))
         if group in self.fail_add:
             raise RuntimeError(f'add failed: {group}')
@@ -31,6 +34,7 @@ class FakeChannelLayer:
 
     async def group_discard(self, group: str, channel: str) -> None:
         await asyncio.sleep(0)
+        self.operation_loops.append(asyncio.get_running_loop())
         self.calls.append(('discard', group, channel))
         if group in self.fail_discard:
             raise RuntimeError(f'discard failed: {group}')
@@ -38,6 +42,7 @@ class FakeChannelLayer:
 
     async def group_send(self, group: str, message: dict[str, Any]) -> None:
         await asyncio.sleep(0)
+        self.operation_loops.append(asyncio.get_running_loop())
         self.calls.append(('send', group, dict(message)))
         if group in self.fail_send:
             raise RuntimeError(f'send failed: {group}')
@@ -177,6 +182,60 @@ async def test_concurrent_syncs_finish_as_one_complete_target_state():
     snapshot = await registry.snapshot()
     assert snapshot in {frozenset(target) for target in targets}
     assert layer.subscriptions_for('channel-1') == snapshot
+
+    await registry.clear()
+
+
+@pytest.mark.asyncio
+async def test_calls_from_os_threads_are_marshaled_to_the_owner_event_loop():
+    owner_loop = asyncio.get_running_loop()
+    layer = FakeChannelLayer()
+    registry = SubscriptionRegistry(layer, 'channel-1')
+    barrier = threading.Barrier(8)
+
+    def add_from_thread(index: int) -> tuple[int, bool]:
+        barrier.wait(timeout=5)
+        added = asyncio.run(registry.add(f'chat_{index}'))
+        return threading.get_ident(), added
+
+    results = await asyncio.gather(
+        *(asyncio.to_thread(add_from_thread, index) for index in range(8))
+    )
+
+    assert all(added for _, added in results)
+    assert len({thread_id for thread_id, _ in results}) > 1
+    assert await registry.snapshot() == frozenset(
+        f'chat_{index}' for index in range(8)
+    )
+    assert set(layer.operation_loops) == {owner_loop}
+
+    remove_barrier = threading.Barrier(8)
+
+    def dispatch_and_remove_from_thread(index: int) -> tuple[int, bool]:
+        remove_barrier.wait(timeout=5)
+
+        async def operate() -> bool:
+            await registry.dispatch(
+                {'type': 'thread_test', 'index': index},
+                groups={f'chat_{index}'},
+            )
+            return await registry.remove(f'chat_{index}')
+
+        removed = asyncio.run(operate())
+        return threading.get_ident(), removed
+
+    results = await asyncio.gather(
+        *(
+            asyncio.to_thread(dispatch_and_remove_from_thread, index)
+            for index in range(8)
+        )
+    )
+
+    assert all(removed for _, removed in results)
+    assert len({thread_id for thread_id, _ in results}) > 1
+    assert await registry.snapshot() == frozenset()
+    assert layer.subscriptions_for('channel-1') == frozenset()
+    assert set(layer.operation_loops) == {owner_loop}
 
     await registry.clear()
 
