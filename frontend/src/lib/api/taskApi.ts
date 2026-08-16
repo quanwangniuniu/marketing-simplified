@@ -106,8 +106,16 @@ export const TaskAPI = {
     }),
 
   // Update a task
-  updateTask: (taskId: number | string, data: Partial<TaskData>) =>
-    api.patch(`/api/tasks/${taskId}/`, data),
+  updateTask: (
+    taskId: number | string,
+    data: Partial<TaskData>,
+    operationId?: string,
+  ) =>
+    api.patch(`/api/tasks/${taskId}/`, data, {
+      params: operationId
+        ? { operation_id: operationId }
+        : undefined,
+    }),
 
   // Project-scoped tag catalog (aggregated from all tasks in the project)
   getTagCatalog: async (projectId: number | string): Promise<{ name: string; color: string }[]> => {

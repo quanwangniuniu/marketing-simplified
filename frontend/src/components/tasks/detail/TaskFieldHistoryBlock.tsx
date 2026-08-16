@@ -89,34 +89,127 @@ function HistoryRow({ entry }: { entry: TaskFieldHistoryEntry }) {
   let valueNode: React.ReactNode;
 
   if (entry.field_name === 'task_created') {
-    actionText = <span className="text-gray-400">created this task</span>;
+    actionText = (
+      <span className="text-gray-400">
+        created this task
+      </span>
+    );
     valueNode = null;
+  } else if (entry.old_value === entry.new_value) {
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          submitted
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>{' '}
+        <span className="text-gray-400">
+          with no effective change
+        </span>
+      </>
+    );
+
+    valueNode = (
+      <ValueChip
+        value={entry.new_value}
+        empty={!entry.new_value}
+      />
+    );
   } else if (relInfo) {
     if (relInfo.isAdd) {
-      actionText = <span className="font-medium text-gray-600">{relInfo.verb}</span>;
-      valueNode = <ValueChip value={entry.new_value} />;
+      actionText = (
+        <span className="font-medium text-gray-600">
+          {relInfo.verb}
+        </span>
+      );
+      valueNode = (
+        <ValueChip value={entry.new_value} />
+      );
     } else {
-      actionText = <><span className="text-gray-400">removed</span> <span className="font-medium text-gray-600">{relInfo.verb}</span> <span className="text-gray-400">link</span></>;
-      valueNode = <ValueChip value={entry.old_value} />;
+      actionText = (
+        <>
+          <span className="text-gray-400">
+            removed
+          </span>{' '}
+          <span className="font-medium text-gray-600">
+            {relInfo.verb}
+          </span>{' '}
+          <span className="text-gray-400">
+            link
+          </span>
+        </>
+      );
+      valueNode = (
+        <ValueChip value={entry.old_value} />
+      );
     }
   } else if (isAddRemove) {
-    const label = FIELD_LABELS[entry.field_name] ?? entry.field_name;
-    actionText = <><span className="text-gray-400">{isAdd ? 'added' : 'removed'}</span> <span className="font-medium text-gray-600">{label}</span></>;
-    valueNode = <ValueChip value={isAdd ? entry.new_value : entry.old_value} />;
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          {isAdd ? 'added' : 'removed'}
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>
+      </>
+    );
+
+    valueNode = (
+      <ValueChip
+        value={
+          isAdd
+            ? entry.new_value
+            : entry.old_value
+        }
+      />
+    );
   } else {
-    const label = FIELD_LABELS[entry.field_name] ?? entry.field_name;
-    actionText = <><span className="text-gray-400">changed</span> <span className="font-medium text-gray-600">{label}</span></>;
+    const label =
+      FIELD_LABELS[entry.field_name]
+      ?? entry.field_name;
+
+    actionText = (
+      <>
+        <span className="text-gray-400">
+          changed
+        </span>{' '}
+        <span className="font-medium text-gray-600">
+          {label}
+        </span>
+      </>
+    );
+
     valueNode = (
       <div className="flex flex-wrap items-center gap-1.5">
-        <ValueChip value={entry.old_value} empty={!entry.old_value} />
+        <ValueChip
+          value={entry.old_value}
+          empty={!entry.old_value}
+        />
         <ArrowRight className="h-3 w-3 flex-shrink-0 text-gray-400" />
-        <ValueChip value={entry.new_value} empty={!entry.new_value} />
+        <ValueChip
+          value={entry.new_value}
+          empty={!entry.new_value}
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex items-start gap-3 py-3">
+    <div
+      data-testid="task-history-row"
+      data-history-entry-id={entry.id}
+      className="flex items-start gap-3 py-3"
+    >
       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7ee3e8] to-[#b9ee98] text-[10px] font-bold text-white">
         {entry.changed_by_avatar ? (
           <img src={entry.changed_by_avatar} alt={actor} className="h-7 w-7 rounded-full object-cover" />
