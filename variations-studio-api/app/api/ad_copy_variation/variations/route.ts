@@ -7,8 +7,8 @@ import {
   activeProjectIdsForUser,
   isActiveProjectMember,
   resolveProjectId,
-  toJsonSafe,
 } from '@/lib/projects';
+import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,26 +80,6 @@ export async function GET(request: Request) {
     count,
     page,
     page_size: pageSize,
-    results: rows.map((row) => ({
-      id: toJsonSafe(row.id),
-      slug: row.slug,
-      project: toJsonSafe(row.projectId),
-      creative: toJsonSafe(row.creativeId),
-      source_mode: row.sourceMode,
-      source_ref: row.sourceRef,
-      hook: row.hook,
-      headline: row.headline,
-      description: row.description,
-      cta: row.cta,
-      instruction: row.instruction,
-      model_name: row.modelName,
-      prompt_version: row.promptVersion,
-      batch_id: row.batchId,
-      batch_position: row.batchPosition,
-      status: row.status,
-      created_by: toJsonSafe(row.createdById),
-      created_at: row.createdAt.toISOString(),
-      updated_at: row.updatedAt.toISOString(),
-    })),
+    results: rows.map(serializeVariation),
   });
 }
