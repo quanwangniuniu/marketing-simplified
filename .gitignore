@@ -8,6 +8,9 @@ dev.sh
 DOCKER_README.md
 env.example
 setup_local_db.sh
+fetch-secrets.sh
+recompose.sh
+ops/webhook/deploy_listener.py
 mediaJira/
 *test*.sh
 /node_modules/

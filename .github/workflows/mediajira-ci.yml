@@ -505,9 +505,11 @@ jobs:
       - name: Trigger deploy (main)
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.MEDIAJIRA_DEPLOY_WEBHOOK_URL_MAIN }}
+          DEPLOY_TOKEN: ${{ secrets.MEDIAJIRA_DEPLOY_TOKEN }}
         run: |
           curl -fsSL -X POST "$DEPLOY_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
+            -H "X-Deploy-Token: $DEPLOY_TOKEN" \
             -d '{"action": "deploy", "source": "github"}'
 
       - name: Verify production health after deploy
