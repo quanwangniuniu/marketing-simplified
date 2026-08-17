@@ -5,11 +5,13 @@ import { requireProjectForUser } from '@/lib/projects';
 
 export class ApiError extends Error {
   status: number;
+  field: 'error' | 'detail';
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, field: 'error' | 'detail' = 'error') {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.field = field;
   }
 }
 
@@ -19,7 +21,7 @@ export function jsonError(error: string, status: number) {
 
 export function responseFromUnknown(err: unknown) {
   if (err instanceof ApiError) {
-    return jsonError(err.message, err.status);
+    return NextResponse.json({ [err.field]: err.message }, { status: err.status });
   }
   throw err;
 }
@@ -54,7 +56,7 @@ export function parseSelectedIds(
   return { ok: true, ids: [...new Set(ids)] };
 }
 
-async function readJsonBody(
+export async function readJsonBody(
   request: Request
 ): Promise<
   | { ok: true; body: Record<string, unknown> }

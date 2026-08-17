@@ -52,3 +52,20 @@ model ProjectMember {
 
   @@map("core_projectmember")
 }
+
+model MetaAdAccount {
+  id        BigInt  @id
+  projectId BigInt? @map("project_id")
+
+  @@map("meta_ad_accounts")
+}
+
+model MetaAdCreative {
+  id                 BigInt @id
+  adAccountId        BigInt @map("ad_account_id")
+  title              String
+  body               String
+  callToActionType   String @map("call_to_action_type") @db.VarChar(64)
+
+  @@map("meta_ad_creatives")
+}
