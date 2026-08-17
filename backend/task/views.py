@@ -146,7 +146,32 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         task = serializer.save()
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
+    def update(self, request, *args, **kwargs):
+        """
+        Echo the client-generated operation ID after a successful update.
+
+        The ID is request metadata only. It is not persisted and therefore
+        requires no model or migration change.
+        """
+        operation_id = request.query_params.get('operation_id')
+
+        if operation_id is not None:
+            operation_id = operation_id.strip()
+            if not operation_id or len(operation_id) > 128:
+                raise DRFValidationError({
+                    'operation_id': (
+                        'Operation ID must contain between 1 and 128 characters.'
+                    ),
+                })
+
+        response = super().update(request, *args, **kwargs)
+
+        if operation_id and isinstance(response.data, dict):
+            response.data['operation_id'] = operation_id
+
+        return response
+
     def get_queryset(self):
         """Filter queryset based on user permissions and query parameters"""
         # region agent log
@@ -927,7 +952,29 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         old_summary    = task.summary
         old_priority   = task.priority
 
-        serializer.save()
+        validated_field_names = set(serializer.validated_data.keys())
+        attempted_history_fields = {
+            field_name
+            for field_name in TaskFieldHistory.TRACKED_FIELDS
+            if (
+                field_name in validated_field_names
+                or Task._meta.get_field(field_name).attname
+                in validated_field_names
+            )
+        }
+
+        task._attempted_task_field_history_fields = (
+            attempted_history_fields
+        )
+
+        try:
+            serializer.save()
+        finally:
+            if hasattr(
+                task,
+                '_attempted_task_field_history_fields',
+            ):
+                del task._attempted_task_field_history_fields
 
         from meetings.models import MeetingTaskOrigin
         from meetings.services import record_task_updated
@@ -1133,7 +1180,12 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     def field_history(self, request, pk=None):
         """Get field change history for a task."""
         task = self.get_object()
-        qs = TaskFieldHistory.objects.filter(task=task).select_related('changed_by').order_by('-changed_at')
+        qs = (
+            TaskFieldHistory.objects
+            .filter(task=task)
+            .select_related('changed_by')
+            .order_by('-changed_at', '-pk')
+        )
         try:
             page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
             page = max(1, int(request.query_params.get('page', 1)))

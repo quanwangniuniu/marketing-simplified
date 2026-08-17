@@ -1,12 +1,13 @@
 import json
 import logging
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 
 logger = logging.getLogger(__name__)
 
 
-class CsmConversationConsumer(AsyncWebsocketConsumer):
+class CsmConversationConsumer(InstrumentedAsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time CSM conversation updates.
 
@@ -24,6 +25,8 @@ class CsmConversationConsumer(AsyncWebsocketConsumer):
     - typing_indicator: Someone is typing
     - error: Error message
     """
+
+    ws_channel = 'csm'
 
     async def connect(self):
         self.user_id = self.scope['url_route']['kwargs']['user_id']
