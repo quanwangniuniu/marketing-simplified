@@ -9,6 +9,8 @@ from typing import Any
 from uuid import UUID
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
 from django.utils import timezone
 
 
@@ -33,6 +35,19 @@ def _canonical_json(payload: dict[str, Any]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    try:
+        return json.loads(json.dumps(value, cls=DjangoJSONEncoder, default=_json_default))
+    except TypeError:
+        return str(value)
 
 
 def _signature_payload(event) -> dict[str, Any]:
@@ -125,9 +140,9 @@ def emit_audit_event(
         project=project,
         target_type=target_type,
         target_id=str(target_id) if target_id is not None else "",
-        before=before,
-        after=after,
-        context=merged_context,
+        before=_json_safe(before),
+        after=_json_safe(after),
+        context=_json_safe(merged_context),
         request_id=request_id,
         ip_address=_request_ip(request),
         user_agent=user_agent,
@@ -137,7 +152,8 @@ def emit_audit_event(
 
 def safe_emit_audit_event(**kwargs):
     try:
-        return emit_audit_event(**kwargs)
+        with transaction.atomic(savepoint=True):
+            return emit_audit_event(**kwargs)
     except Exception:  # pragma: no cover - audit must never break primary flow
         logger.exception("Failed to emit audit event %s", kwargs.get("event_type"))
         return None
