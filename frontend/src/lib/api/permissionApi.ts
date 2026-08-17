@@ -61,7 +61,6 @@ class ApiClient {
     });
     
     const defaultOptions: RequestInit = {
-      headers,
       credentials: 'include', 
       ...options,
       headers,
