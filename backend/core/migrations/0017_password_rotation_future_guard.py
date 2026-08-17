@@ -15,7 +15,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS customuser_password_last_changed_not_future ON core_customuser;
 CREATE TRIGGER customuser_password_last_changed_not_future
-BEFORE INSERT OR UPDATE OF password_last_changed_at ON core_customuser
+BEFORE UPDATE OF password_last_changed_at ON core_customuser
 FOR EACH ROW
 EXECUTE FUNCTION prevent_future_password_last_changed_at();
 """
