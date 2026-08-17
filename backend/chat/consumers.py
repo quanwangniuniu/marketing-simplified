@@ -7,7 +7,6 @@ from collections import OrderedDict
 from contextlib import suppress
 from datetime import timedelta
 from functools import wraps
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
@@ -16,6 +15,7 @@ from django.core.cache import cache
 from .models import Chat, ChatParticipant, Message, MessageStatus
 from .realtime import broadcast_event_to_user_groups
 from django.conf import settings
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 from core.tenant_context import tenant_schema_context, validate_tenant_schema
 from .services import (
     ChatService,
@@ -65,7 +65,7 @@ def tenant_db_method(method):
     return wrapped
 
 
-class ChatConsumer(AsyncWebsocketConsumer):
+class ChatConsumer(InstrumentedAsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time chat functionality.
     
@@ -85,7 +85,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     - typing_indicator: Someone is typing
     - error: Error occurred
     """
-    
+
+    ws_channel = 'chat'
+
     async def connect(self):
         """Handle WebSocket connection"""
         self.user_id = self.scope['url_route']['kwargs']['user_id']

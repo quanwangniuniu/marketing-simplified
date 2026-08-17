@@ -6,9 +6,9 @@ from urllib.parse import parse_qs
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
-from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 from spreadsheet.presence import get_presence_store
 from spreadsheet.services import sheet_room_group_name, user_has_sheet_access
 from spreadsheet.tenant import tenant_schema_context, validate_tenant_schema
@@ -72,13 +72,15 @@ def _optional_int_from_json(value, field_name: str):
     raise ValueError(f"{field_name} must be an integer")
 
 
-class SheetConsumer(AsyncWebsocketConsumer):
+class SheetConsumer(InstrumentedAsyncWebsocketConsumer):
     """Sheet-room WebSocket: join/leave, presence list, cursor + committed cell broadcasts.
 
     Cell edits are written over HTTP (CellBatchUpdateView -> CellService.batch_update_cells,
     the single write path incl. formula recalc); the service queues a cells_updated
     group broadcast on commit, which this consumer relays. LWW = DB commit order.
     """
+
+    ws_channel = 'spreadsheet'
 
     async def connect(self):
         self.sheet_id = int(self.scope["url_route"]["kwargs"]["sheet_id"])

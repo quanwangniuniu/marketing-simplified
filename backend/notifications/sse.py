@@ -28,10 +28,20 @@ import logging
 import time
 
 from django.conf import settings
+from prometheus_client import Counter, Gauge
 from django.db import connections
 
 logger = logging.getLogger(__name__)
 
+sse_connection_drops_total = Counter(
+    "sse_connection_drops_total",
+    "Total number of dropped SSE connections",
+)
+
+sse_active_connections = Gauge(
+    "sse_active_connections",
+    "Number of currently active SSE connections",
+)
 HEARTBEAT_INTERVAL = 25  # seconds – below Nginx proxy_read_timeout (60 s typical)
 _REDIS_DB = 0  # same DB as Celery broker; Pub/Sub is namespace-isolated by channel name
 
@@ -182,6 +192,7 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
     pubsub = r.pubsub()
     channel = f"user_{user_id}_events"
     await pubsub.subscribe(channel)
+    sse_active_connections.inc()
     logger.info("SSE: user_id=%s subscribed to channel=%s", user_id, channel)
 
     last_heartbeat = time.monotonic()
@@ -218,10 +229,13 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
 
     except asyncio.CancelledError:
         # Normal path: client closed the tab / navigated away.
+        sse_connection_drops_total.inc()
         logger.info("SSE: stream cancelled for user_id=%s", user_id)
     except Exception:
+        sse_connection_drops_total.inc()
         logger.exception("SSE: generator error for user_id=%s", user_id)
     finally:
+        sse_active_connections.dec()
         try:
             await pubsub.unsubscribe(channel)
             await r.aclose()

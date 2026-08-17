@@ -18,7 +18,7 @@ Strategy
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-
+from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 from django.test import AsyncRequestFactory, TestCase
 from django.urls import reverse
 from rest_framework_simplejwt.tokens import AccessToken
@@ -443,6 +443,39 @@ class SSEGeneratorReplayTests(TestCase):
         ]
         self.assertNotIn("_fetch_missed", wrapped)
 
+
+class SSEMetricsTests(TestCase):
+    def test_metrics_emitted_when_connection_drops(self):
+        registry = CollectorRegistry()
+
+        active = Gauge(
+            "sse_active_connections",
+            "Number of currently active SSE connections",
+            registry=registry,
+        )
+        drops = Counter(
+            "sse_connection_drops_total",
+            "Total number of dropped SSE connections",
+            registry=registry,
+        )
+
+        mock_pubsub = _make_mock_pubsub(stop_after=1)
+        mock_redis = _make_mock_redis(pubsub=mock_pubsub)
+
+        async def run():
+            await _collect(sse_event_generator(1, None))
+
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("notifications.sse.sse_active_connections", active),
+            patch("notifications.sse.sse_connection_drops_total", drops),
+        ):
+            asyncio.run(run())
+
+        metrics = generate_latest(registry).decode()
+
+        self.assertIn("sse_active_connections 0.0", metrics)
+        self.assertIn("sse_connection_drops_total 1.0", metrics)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Generator – heartbeat tests
