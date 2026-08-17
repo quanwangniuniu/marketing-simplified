@@ -13,11 +13,13 @@ from django.core.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserProfileSerializer, OrganizationTokenRefreshSerializer
 from .login_security import LoginSecurityService
+from .password_rotation import get_password_rotation_status
 from .services import refresh_organization_access_token
 from .throttles import LoginIPThrottle, LoginUsernameThrottle
 from core.admin_utils import assign_org_admin
 from core.models import Team, Organization, Role
 from core.services.oauth_state import OAuthStateExpired, OAuthStateInvalid, create_oauth_state, validate_oauth_state
+from core.services.audit_events import safe_emit_audit_event
 from access_control.models import UserRole
 from stripe_meta.permissions import generate_organization_access_token
 from django.conf import settings
@@ -879,7 +881,7 @@ class GoogleSetPasswordView(APIView):
             user.set_password(password)
             user.password_set = True
             user.verification_token = None  # Clear the token
-            user.save()
+            user.save(update_fields=['password', 'password_set', 'password_last_changed_at', 'verification_token'])
             
             print(f"[GOOGLE OAUTH] Password set successfully for user: {user.email}")
             
@@ -935,6 +937,60 @@ class MeView(APIView):
             return Response(profile_data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get("current_password")
+        new_password = request.data.get("new_password")
+
+        if not current_password or not new_password:
+            return Response(
+                {"error": "Current password and new password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not request.user.check_password(current_password):
+            return Response(
+                {"error": "Current password is incorrect.", "errorCode": "INVALID_CURRENT_PASSWORD"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user=request.user)
+        except ValidationError as e:
+            return Response(
+                {"error": "Password validation failed", "details": list(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.set_password(new_password)
+        request.user.password_set = True
+        request.user.save(update_fields=["password", "password_set", "password_last_changed_at"])
+
+        safe_emit_audit_event(
+            event_type="authentication.password_rotation.password_changed",
+            actor=request.user,
+            organization=getattr(request.user, "current_organization", None),
+            project=getattr(request.user, "active_project", None),
+            target_type="user",
+            target_id=request.user.id,
+            after={"password_last_changed_at": request.user.password_last_changed_at},
+            context={"source": "change_password"},
+            request=request,
+        )
+        profile_data = UserProfileSerializer(request.user, context={"request": request}).data
+
+        return Response(
+            {
+                "message": "Password changed successfully.",
+                "user": profile_data,
+                "password_rotation": get_password_rotation_status(request.user).as_dict(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class MeProjectsView(APIView):
@@ -1058,7 +1114,8 @@ class ResetPasswordView(APIView):
         user.set_password(new_password)
         user.password_reset_token = None
         user.password_reset_token_expires_at = None
-        user.save()
+        user.password_set = True
+        user.save(update_fields=['password', 'password_set', 'password_last_changed_at', 'password_reset_token', 'password_reset_token_expires_at'])
         
         return Response({"message":"Password reset successfully"}, status=status.HTTP_200_OK)
 
@@ -1104,6 +1161,13 @@ class DeleteAccountView(APIView):
 
     def delete(self, request):
         user = request.user
+        audit_context = {
+            "user_id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "current_organization_id": user.current_organization_id,
+            "active_project_id": user.active_project_id,
+        }
 
         # Require the user to confirm deletion by typing the exact phrase below.
         confirm = request.data.get('confirm', '')
@@ -1117,6 +1181,19 @@ class DeleteAccountView(APIView):
             from core.models import TeamMember, ProjectMember, Project
             from access_control.models import UserRole, ModuleApprover
             from task.models import Task
+
+            safe_emit_audit_event(
+                event_type="authentication.account_deleted",
+                actor=user,
+                organization=getattr(user, "current_organization", None),
+                project=getattr(user, "active_project", None),
+                target_type="user",
+                target_id=user.id,
+                before=audit_context,
+                after={"is_active": False, "is_deleted": True},
+                context={"confirm": "DELETE MY ACCOUNT"},
+                request=request,
+            )
 
             # 1. Remove user from all teams
             TeamMember.objects.filter(user=user).delete()
