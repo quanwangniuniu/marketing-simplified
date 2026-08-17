@@ -17,6 +17,28 @@ export async function resolveProjectId(raw: string | null): Promise<bigint | nul
   return project?.id ?? null;
 }
 
+export async function requireProjectForUser(
+  userId: number,
+  rawProjectId: string | null
+): Promise<
+  | { ok: true; projectId: bigint }
+  | { ok: false; status: 400 | 403; error: string }
+> {
+  const projectId = await resolveProjectId(rawProjectId);
+  if (!projectId) {
+    return { ok: false, status: 400, error: 'project_id is required' };
+  }
+  const allowed = await isActiveProjectMember(userId, projectId);
+  if (!allowed) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'You are not a member of this project.',
+    };
+  }
+  return { ok: true, projectId };
+}
+
 export async function isActiveProjectMember(
   userId: number,
   projectId: bigint
