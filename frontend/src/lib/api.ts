@@ -17,6 +17,9 @@ const API_BASE_URL =
   (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.trim()) ||
   DEFAULT_API_BASE_URL;
 
+// Backing state for getSharedRefreshedToken — do not read/write directly elsewhere.
+let sharedRefreshPromise: Promise<string | null> | null = null;
+
 /** Resolved API origin for browser and server; respects `NEXT_PUBLIC_API_URL` when set. */
 export function resolveApiBaseUrl(): string {
   return API_BASE_URL;
@@ -327,6 +330,17 @@ export async function refreshAccessToken(refreshToken: string): Promise<string |
   }
 }
 
+// Shared across every caller (this file's interceptor, other axios instances
+// like preferencesApi.ts) so concurrent 401s trigger exactly one refresh call.
+export function getSharedRefreshedToken(refreshToken: string): Promise<string | null> {
+  if (!sharedRefreshPromise) {
+    sharedRefreshPromise = refreshAccessToken(refreshToken);
+  }
+  return sharedRefreshPromise.finally(() => {
+    sharedRefreshPromise = null;
+  });
+}
+
 // Request interceptor to add auth token to requests
 api.interceptors.request.use(
   (config) => {
@@ -399,13 +413,13 @@ api.interceptors.response.use(
       if (typeof window !== 'undefined' && config && !config._retry) {
         const authData = readPersistedAuthState();
         const refreshToken = authData?.state?.refreshToken;
-        if (refreshToken) {
-          config._retry = true;
-          const accessToken = await refreshAccessToken(refreshToken);
-          if (accessToken) {
-            config.headers.Authorization = `Bearer ${accessToken}`;
-            return api(config);
-          }
+        const accessToken = refreshToken ? await getSharedRefreshedToken(refreshToken) : null;
+
+        // Mark the request as retried so we don't end up in an infinite loop.
+        config._retry = true;
+        if (accessToken) {
+          config.headers.Authorization = `Bearer ${accessToken}`;
+          return api(config);
         }
       }
     }

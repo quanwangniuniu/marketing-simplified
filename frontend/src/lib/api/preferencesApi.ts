@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { readPersistedAuthState, refreshAccessToken, resolveApiBaseUrl } from '../api';
+import { getSharedRefreshedToken, readPersistedAuthState, resolveApiBaseUrl } from '../api';
 import {
   UserPreferences,
   UserPreferencesUpdate,
@@ -13,7 +13,9 @@ const API_BASE_URL = resolveApiBaseUrl();
 
 type RetriableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-const api = axios.create({
+// Exported so tests can override `defaults.adapter` to drive this instance's
+// interceptor logic without a real network call.
+export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
@@ -47,13 +49,12 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && typeof window !== 'undefined' && config && !config._retry) {
       const refreshToken = readPersistedAuthState()?.state?.refreshToken;
-      if (refreshToken) {
-        config._retry = true;
-        const accessToken = await refreshAccessToken(refreshToken);
-        if (accessToken) {
-          config.headers.Authorization = `Bearer ${accessToken}`;
-          return api(config);
-        }
+      const accessToken = refreshToken ? await getSharedRefreshedToken(refreshToken) : null;
+
+      config._retry = true;
+      if (accessToken) {
+        config.headers.Authorization = `Bearer ${accessToken}`;
+        return api(config);
       }
     }
     return Promise.reject(error);
