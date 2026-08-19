@@ -66,7 +66,12 @@ export function useNotificationSSE(): void {
   }, []);
 
   useEffect(() => {
-    if (!token) return;
+    const setConnectionStatus = useNotificationStore.getState().setConnectionStatus;
+
+    if (!token) {
+      setConnectionStatus('disconnected');
+      return;
+    }
     if (typeof window === 'undefined') return;
 
     stoppedRef.current = false;
@@ -81,9 +86,15 @@ export function useNotificationSSE(): void {
     const connect = () => {
       if (stoppedRef.current) return;
       const currentToken = tokenRef.current;
-      if (!currentToken) return;
+      if (!currentToken) {
+        setConnectionStatus('disconnected');
+        return;
+      }
 
       close(); // ensure no stale connection
+      setConnectionStatus(
+        retryMsRef.current === MIN_RETRY_MS ? 'connecting' : 'reconnecting',
+      );
 
       // Build URL – token goes in the query string because the native
       // EventSource API cannot set custom headers.
@@ -98,6 +109,7 @@ export function useNotificationSSE(): void {
 
       es.onopen = () => {
         retryMsRef.current = MIN_RETRY_MS; // reset back-off on success
+        setConnectionStatus('connected');
       };
 
       es.onmessage = (event: MessageEvent<string>) => {
@@ -147,6 +159,7 @@ export function useNotificationSSE(): void {
       es.onerror = () => {
         if (stoppedRef.current) return;
         close();
+        setConnectionStatus('reconnecting');
 
         if (process.env.NODE_ENV === 'development') {
           console.warn(
@@ -175,6 +188,7 @@ export function useNotificationSSE(): void {
           retryTimerRef.current = null;
         }
         close();
+        setConnectionStatus('disconnected');
       } else {
         // visible – reconnect and pick up any missed events
         connect();
@@ -194,6 +208,7 @@ export function useNotificationSSE(): void {
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       close();
+      setConnectionStatus('disconnected');
     };
   }, [token, refreshUnreadCount]);
 }

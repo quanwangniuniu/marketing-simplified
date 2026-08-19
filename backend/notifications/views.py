@@ -469,9 +469,10 @@ async def stream_notifications(request):
     Reconnect / Last-Event-ID
     -------------------------
     The browser automatically sends a ``Last-Event-ID`` header on reconnect.
-    The view replays up to 50 missed notifications from the DB before resuming
-    the live Redis Pub/Sub stream.  The query param ``?lastEventId=`` serves
-    as a fallback for polyfill clients.
+    It contains the UUID of the last received Notification, allowing the view
+    to replay later database rows before resuming the live Redis Pub/Sub
+    stream. The query param ``?lastEventId=`` serves as a fallback for manual
+    reconnects and polyfill clients.
 
     Nginx integration
     -----------------

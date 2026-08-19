@@ -91,6 +91,7 @@ describe('useNotificationSSE', () => {
   // Per-test mock action references configured in beforeEach.
   let mockTriggerRefresh: jest.Mock;
   let mockSetUnreadCount: jest.Mock;
+  let mockSetConnectionStatus: jest.Mock;
   let mockTriggerChatActivity: jest.Mock;
   let mockIncrementGlobalUnreadCount: jest.Mock;
 
@@ -112,9 +113,11 @@ describe('useNotificationSSE', () => {
     // Notification store
     mockTriggerRefresh = jest.fn();
     mockSetUnreadCount = jest.fn();
+    mockSetConnectionStatus = jest.fn();
     (useNotificationStore.getState as jest.Mock).mockReturnValue({
       triggerRefresh: mockTriggerRefresh,
       setUnreadCount: mockSetUnreadCount,
+      setConnectionStatus: mockSetConnectionStatus,
     });
 
     // Chat store
@@ -173,7 +176,7 @@ describe('useNotificationSSE', () => {
       // Simulate an event that carries a Last-Event-ID.
       fireMessage(
         { type: 'notification', data: { event_type: 'task_assigned' } },
-        '2024-01-15T10:00:00Z', // lastEventId
+        'aaaabbbb-0000-0000-0000-aabbccddeeff',
       );
 
       // Trigger a reconnect via visibility change (hidden → visible).
@@ -183,9 +186,26 @@ describe('useNotificationSSE', () => {
 
       expect(MockEventSource).toHaveBeenCalledTimes(1);
       const reconnectUrl: string = MockEventSource.mock.calls[0][0];
-      // The timestamp must be URL-encoded in the query string.
       expect(reconnectUrl).toContain('lastEventId=');
-      expect(reconnectUrl).toContain('2024-01-15');
+      expect(reconnectUrl).toContain('aaaabbbb-0000-0000-0000-aabbccddeeff');
+    });
+
+    it('tracks connecting and connected health states', () => {
+      renderHook(() => useNotificationSSE());
+
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('connecting');
+      act(() => latestES?.onopen?.(new Event('open')));
+      expect(mockSetConnectionStatus).toHaveBeenLastCalledWith('connected');
+    });
+
+    it('sets disconnected health when no token is available', () => {
+      (useAuthStore as unknown as jest.Mock).mockImplementation(
+        (selector: (s: { token: string | null }) => unknown) => selector({ token: null }),
+      );
+
+      renderHook(() => useNotificationSSE());
+
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('disconnected');
     });
   });
 
@@ -301,6 +321,7 @@ describe('useNotificationSSE', () => {
       act(() => setVisibility('hidden'));
 
       expect(closeMock).toHaveBeenCalled();
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('disconnected');
     });
 
     it('creates a new EventSource when the tab becomes visible again', () => {
@@ -339,6 +360,7 @@ describe('useNotificationSSE', () => {
       });
 
       expect(closeMock).toHaveBeenCalled();
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('reconnecting');
     });
 
     it('does not reconnect synchronously – waits for the back-off timer', () => {

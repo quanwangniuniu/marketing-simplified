@@ -23,9 +23,17 @@ from django.test import AsyncRequestFactory, TestCase
 from django.urls import reverse
 from rest_framework_simplejwt.tokens import AccessToken
 
-from notifications.models import NotificationCategory, NotificationEventType
+from notifications.models import (
+    Notification,
+    NotificationCategory,
+    NotificationEventType,
+)
 from notifications.services import create_notification
-from notifications.sse import publish_notification_to_redis, sse_event_generator
+from notifications.sse import (
+    _serialize_missed_notifications,
+    publish_notification_to_redis,
+    sse_event_generator,
+)
 
 User = None  # lazily resolved in setUpClass to avoid import-time issues
 
@@ -372,9 +380,7 @@ class SSEGeneratorReplayTests(TestCase):
         Drive sse_event_generator with mocked DB data and a mock pubsub
         that stops iteration via CancelledError right after the replay phase.
         """
-        mock_pubsub = AsyncMock()
-        mock_pubsub.subscribe = AsyncMock(side_effect=asyncio.CancelledError)
-        mock_pubsub.unsubscribe = AsyncMock()
+        mock_pubsub = _make_mock_pubsub(stop_after=1)
         mock_redis = _make_mock_redis(pubsub=mock_pubsub)
 
         # async_replay_mock is what sync_to_async(fn) returns: a coroutine func.
@@ -395,7 +401,7 @@ class SSEGeneratorReplayTests(TestCase):
         yielded as an SSE data: line whose payload contains the notification.
         """
         events = self._run_replay(
-            last_event_id="2024-01-15T09:59:00Z",
+            last_event_id="11111111-1111-1111-1111-111111111111",
             fake_data=self._FAKE_MISSED,
         )
 
@@ -406,14 +412,51 @@ class SSEGeneratorReplayTests(TestCase):
         self.assertIn("Missed notification", combined)
 
     def test_replay_event_includes_id_field(self):
-        """Each replayed event must carry an SSE id: line (from created_at)."""
+        """Each replayed event must carry the Notification UUID as its SSE id."""
         events = self._run_replay(
-            last_event_id="2024-01-15T09:59:00Z",
+            last_event_id="11111111-1111-1111-1111-111111111111",
             fake_data=self._FAKE_MISSED,
         )
         combined = "".join(events)
-        self.assertIn("id:", combined)
-        self.assertIn("2024-01-15T10:00:00", combined)
+        self.assertIn("id: aaaabbbb-0000-0000-0000-aabbccddeeff", combined)
+
+    def test_live_copy_of_replayed_event_is_not_delivered_twice(self):
+        raw = json.dumps({"type": "notification", "data": self._FAKE_MISSED[0]})
+        calls = 0
+
+        async def _get_message(*_, **__):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {"type": "message", "data": raw}
+            raise asyncio.CancelledError
+
+        mock_pubsub = AsyncMock()
+        mock_pubsub.subscribe = AsyncMock()
+        mock_pubsub.unsubscribe = AsyncMock()
+        mock_pubsub.get_message = _get_message
+        mock_redis = _make_mock_redis(pubsub=mock_pubsub)
+
+        def _sync_to_async(func):
+            if getattr(func, "__name__", "") == "_serialize_missed_notifications":
+                return AsyncMock(return_value=self._FAKE_MISSED)
+            return AsyncMock(return_value=None)
+
+        async def run():
+            return await _collect(
+                sse_event_generator(
+                    1,
+                    "11111111-1111-1111-1111-111111111111",
+                )
+            )
+
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("asgiref.sync.sync_to_async", side_effect=_sync_to_async),
+        ):
+            events = asyncio.run(run())
+
+        self.assertEqual("".join(events).count("Missed notification"), 1)
 
     def test_no_replay_when_last_event_id_is_absent(self):
         """
@@ -441,7 +484,47 @@ class SSEGeneratorReplayTests(TestCase):
             for call in mock_s2a.call_args_list
             if call.args
         ]
-        self.assertNotIn("_fetch_missed", wrapped)
+        self.assertNotIn("_serialize_missed_notifications", wrapped)
+
+
+class SSEReplayQueryTests(TestCase):
+    def setUp(self):
+        User = _get_user_model()
+        self.recipient = User.objects.create_user(
+            username="replay_recipient",
+            email="replay_recipient@example.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="replay_other",
+            email="replay_other@example.com",
+        )
+
+    def _notification(self, recipient, title):
+        return Notification.objects.create(
+            recipient=recipient,
+            category=NotificationCategory.TASKS,
+            event_type=NotificationEventType.TASK_ASSIGNED,
+            title=title,
+        )
+
+    def test_replay_uses_unique_id_cursor_and_excludes_other_users(self):
+        cursor = self._notification(self.recipient, "Already received")
+        missed = self._notification(self.recipient, "Missed")
+        self._notification(self.other_user, "Private to another user")
+
+        replay = _serialize_missed_notifications(self.recipient.id, str(cursor.id))
+
+        self.assertEqual([str(item["id"]) for item in replay], [str(missed.id)])
+
+    def test_unknown_cursor_does_not_replay_history(self):
+        self._notification(self.recipient, "Existing")
+
+        replay = _serialize_missed_notifications(
+            self.recipient.id,
+            "11111111-1111-1111-1111-111111111111",
+        )
+
+        self.assertEqual(replay, [])
 
 
 class SSEMetricsTests(TestCase):

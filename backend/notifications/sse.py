@@ -15,9 +15,8 @@ Architecture
   seconds so that Nginx's proxy_read_timeout doesn't kill the connection.
 
 * Last-Event-ID reconnect: if the browser reconnects with a Last-Event-ID
-  header (set to the created_at ISO timestamp of the last received event)
-  we replay at most 50 missed notifications from the database before
-  resuming live streaming.
+  header (set to the UUID of the last received Notification), we replay all
+  later notifications from the database before resuming live streaming.
 """
 
 from __future__ import annotations
@@ -28,8 +27,9 @@ import logging
 import time
 
 from django.conf import settings
-from prometheus_client import Counter, Gauge
 from django.db import connections
+from django.db.models import Q
+from prometheus_client import Counter, Gauge
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,26 @@ def _redis_host_port() -> tuple[str, int]:
         return str(host), int(port)
     except Exception:
         return "redis", 6379
+
+
+def _serialize_missed_notifications(user_id: int, last_event_id: str):
+    """Return notifications after the user's UUID cursor in stable order."""
+    from .models import Notification  # noqa: PLC0415
+    from .serializers import NotificationSerializer  # noqa: PLC0415
+
+    cursor = (
+        Notification.objects.filter(recipient_id=user_id, pk=last_event_id)
+        .only("id", "created_at")
+        .first()
+    )
+    if cursor is None:
+        return []
+
+    qs = Notification.objects.filter(recipient_id=user_id).filter(
+        Q(created_at__gt=cursor.created_at)
+        | Q(created_at=cursor.created_at, id__gt=cursor.id)
+    ).order_by("created_at", "id")
+    return NotificationSerializer(qs, many=True).data
 
 
 # ── sync publisher (called from create_notification) ─────────────────────────
@@ -117,87 +137,69 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
 
     Lifecycle
     ---------
-    1. If *last_event_id* is given (ISO-8601 timestamp of the last event the
-       browser received), replay up to 50 missed Notifications from the DB.
-    2. Subscribe to Redis channel ``user_{user_id}_events``.
+    1. Subscribe to Redis channel ``user_{user_id}_events`` so notifications
+       created during replay are queued rather than lost.
+    2. If *last_event_id* is given (the UUID of the last event the browser
+       received), replay all later Notifications from the DB.
     3. Forward every published JSON payload as an SSE ``data:`` line, using
-       the Notification's ``created_at`` as the event id.
+       the Notification's UUID as the event id.
     4. Emit a comment heartbeat every HEARTBEAT_INTERVAL seconds.
     5. On disconnect (CancelledError) or error: unsubscribe and close Redis.
     """
     import redis.asyncio as aioredis  # noqa: PLC0415
     from asgiref.sync import sync_to_async  # noqa: PLC0415
 
-    from .models import Notification  # noqa: PLC0415
-    from .serializers import NotificationSerializer  # noqa: PLC0415
-
-    # ── 1. Replay missed notifications on reconnect ───────────────────────
-    if last_event_id:
-        try:
-            from datetime import datetime  # noqa: PLC0415
-
-            since_dt = datetime.fromisoformat(last_event_id.replace("Z", "+00:00"))
-
-            def _fetch_missed():
-                qs = (
-                    Notification.objects.filter(
-                        recipient_id=user_id,
-                        created_at__gt=since_dt,
-                    )
-                    .order_by("created_at")[:50]
-                )
-                return NotificationSerializer(qs, many=True).data
-
-            missed = await sync_to_async(_fetch_missed)()
-            for item in missed:
-                payload = json.dumps(
-                    {"type": "notification", "data": dict(item)},
-                    default=str,
-                )
-                event_id = item.get("created_at", "")
-                yield f"id: {event_id}\ndata: {payload}\n\n"
-
-            logger.debug(
-                "SSE: replayed %d missed notification(s) for user_id=%s since %s",
-                len(missed),
-                user_id,
-                since_dt,
-            )
-        except Exception:
-            logger.exception("SSE: replay failed for user_id=%s", user_id)
-
-    # ── 1b. Release the database connection before going long-lived ───────
-    #
-    # Everything from here on is Redis pub/sub and needs no database access,
-    # but the connection opened for this request (by TenantSchemaMiddleware and
-    # by the view's auth lookup) is thread-local and is only returned when the
-    # request finishes — and a streaming response does not finish until the
-    # client disconnects. Left alone, each open stream pins one PostgreSQL
-    # connection: 30 streams measured 30 extra connections, so ~100 browser
-    # tabs exhaust max_connections=100 on their own and the stack freezes until
-    # the backend is restarted.
-    #
-    # This has to happen here rather than in the view: the middleware resets
-    # search_path in a finally block that runs the moment the view returns the
-    # response object, re-opening anything the view closed. The generator body
-    # does not run until the response is actually being streamed, which is
-    # after that. close_all() rather than close_old_connections() because the
-    # latter spares connections still within CONN_MAX_AGE.
-    await sync_to_async(connections.close_all)()
-
-    # ── 2. Open Redis Pub/Sub connection ──────────────────────────────────
+    # Subscribe before replaying so an event created between the database
+    # query and subscription cannot fall through the gap.
     host, port = _redis_host_port()
     redis_url = f"redis://{host}:{port}/{_REDIS_DB}"
     r = aioredis.from_url(redis_url, decode_responses=True)
     pubsub = r.pubsub()
     channel = f"user_{user_id}_events"
-    await pubsub.subscribe(channel)
-    sse_active_connections.inc()
-    logger.info("SSE: user_id=%s subscribed to channel=%s", user_id, channel)
-
-    last_heartbeat = time.monotonic()
-
+    subscribed = False
+    active_connection_counted = False
+    replayed_ids: set[str] = set()
     try:
+        await pubsub.subscribe(channel)
+        subscribed = True
+        sse_active_connections.inc()
+        active_connection_counted = True
+        logger.info("SSE: user_id=%s subscribed to channel=%s", user_id, channel)
+
+        if last_event_id:
+            try:
+                missed = await sync_to_async(_serialize_missed_notifications)(
+                    user_id,
+                    last_event_id,
+                )
+                for item in missed:
+                    event_id = str(item.get("id", ""))
+                    if not event_id:
+                        continue
+                    replayed_ids.add(event_id)
+                    payload = json.dumps(
+                        {"type": "notification", "data": dict(item)},
+                        default=str,
+                    )
+                    yield f"id: {event_id}\ndata: {payload}\n\n"
+
+                logger.debug(
+                    "SSE: replayed %d missed notification(s) for user_id=%s after id=%s",
+                    len(missed),
+                    user_id,
+                    last_event_id,
+                )
+            except Exception:
+                logger.exception(
+                    "SSE: replay failed for user_id=%s last_event_id=%s",
+                    user_id,
+                    last_event_id,
+                )
+
+        # Release the request's database connection before going long-lived.
+        await sync_to_async(connections.close_all)()
+        last_heartbeat = time.monotonic()
+
         while True:
             # Block up to 1 s waiting for the next message, then fall through
             # to the heartbeat check so we never stall longer than ~1 s.
@@ -210,9 +212,9 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
                 try:
                     raw = message["data"]
                     parsed = json.loads(raw)
-                    # Use the notification's created_at as the SSE event id so
-                    # the browser can send Last-Event-ID on reconnect.
-                    event_id = parsed.get("data", {}).get("created_at", "")
+                    event_id = str(parsed.get("data", {}).get("id", ""))
+                    if not event_id or event_id in replayed_ids:
+                        continue
                     sse_line = f"id: {event_id}\ndata: {raw}\n\n"
                     yield sse_line
                 except Exception:
@@ -235,9 +237,11 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
         sse_connection_drops_total.inc()
         logger.exception("SSE: generator error for user_id=%s", user_id)
     finally:
-        sse_active_connections.dec()
+        if active_connection_counted:
+            sse_active_connections.dec()
         try:
-            await pubsub.unsubscribe(channel)
+            if subscribed:
+                await pubsub.unsubscribe(channel)
             await r.aclose()
         except Exception:
             pass
