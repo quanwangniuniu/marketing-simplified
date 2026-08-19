@@ -431,6 +431,7 @@ export interface ChatState {
   clearPendingAttachments: (chatId: number) => void;
   applyReactionUpdate: (messageId: number, emoji: string, action: 'added' | 'removed', user: ReactionUser, currentUserId: number | null) => void;
   applyLinkPreview: (messageId: number, preview: MessageLinkPreview) => void;
+  clearLinkPreview: (messageId: number) => void;
   updateUserPresence: (userId: number, isOnline: boolean, version?: number | null) => void;
   setPresenceSnapshot: (users: Array<{ user_id: number; is_online: boolean; version?: number | null }>) => void;
   

@@ -855,6 +855,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def _message_queryset(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
         thread_replies_for_summary = (
             Message.objects
             .select_related('sender')
@@ -889,12 +892,19 @@ class MessageViewSet(viewsets.ModelViewSet):
                 queryset=thread_replies_for_summary,
                 to_attr='_thread_replies_for_summary',
             ),
+            # Only the viewer's own row matters, so fetch just that one and let the
+            # serializer read it off the instance instead of asking per message.
+            Prefetch(
+                'link_preview_hidden_by',
+                queryset=User.objects.filter(id=self.request.user.id).only('id'),
+                to_attr='_link_preview_hidden_for_viewer',
+            ),
         )
     
     def get_queryset(self):
         """Get messages for a specific chat"""
         # For retrieve/detail actions, return all messages (permission checked in retrieve method)
-        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
+        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'hide_link_preview', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
             return self._message_queryset()
 
         # For list action, require chat_id
@@ -1709,6 +1719,38 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Return the updated message
         serializer = self.get_serializer(message)
         return Response({'status': 'hidden', 'message': serializer.data}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def hide_link_preview(self, request, pk=None):
+        """Dismiss this message's link preview card, for the current user only.
+
+        A view preference, not an edit: the message stays, other participants keep
+        their card, and the URL-keyed preview cache is untouched — the same link
+        still previews in other messages and is never re-fetched because of this.
+        """
+        message = self.get_object()
+
+        if not ChatParticipant.objects.filter(
+            chat=message.chat,
+            user=request.user,
+            is_active=True
+        ).exists():
+            return Response(
+                {'error': 'You are not a participant in this chat'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # add() is idempotent, so dismissing twice is harmless.
+        message.link_preview_hidden_by.add(request.user)
+
+        logger.info(
+            'User %s dismissed the link preview on message %s', request.user.id, message.id
+        )
+        serializer = self.get_serializer(message)
+        return Response(
+            {'status': 'link_preview_hidden', 'message': serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AttachmentViewSet(viewsets.GenericViewSet):

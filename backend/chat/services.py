@@ -265,29 +265,89 @@ def parse_opengraph(html: Optional[str]) -> Dict[str, Optional[str]]:
     return parsed
 
 
-def build_message_link_preview(message: "Message") -> Optional[Dict[str, Any]]:
-    """Read-through lookup: the preview payload for a message, or None.
-
-    Returns None unless the message's first URL has a *ready* cache entry with
-    something worth drawing — pending, failed, blocked, and empty-but-ready
-    entries all render as a plain message.
-    """
-    url = extract_first_url(message.content)
-    if not url:
+def _link_preview_payload(preview: "LinkPreview") -> Optional[Dict[str, Any]]:
+    """The client-facing shape, or None when there is nothing worth drawing."""
+    if not (preview.title or preview.image_url):
         return None
-
-    preview = LinkPreview.objects.filter(
-        url=normalize_preview_url(url), status=LinkPreview.STATUS_READY
-    ).first()
-    if preview is None or not (preview.title or preview.image_url):
-        return None
-
     return {
         "url": preview.url,
         "title": preview.title,
         "description": preview.description,
         "image_url": preview.image_url,
     }
+
+
+def build_link_preview_map(messages: Iterable["Message"]) -> Dict[str, Dict[str, Any]]:
+    """Resolve every URL on a page of messages in one query.
+
+    Serializing a page one message at a time costs a lookup per message; a page of
+    50 is 50 queries for what is really one `url IN (...)`. Callers that serialize
+    many messages build this once and hand it to build_message_link_preview.
+    """
+    urls = set()
+    for message in messages:
+        url = extract_first_url(getattr(message, "content", None))
+        if url:
+            urls.add(normalize_preview_url(url))
+    if not urls:
+        return {}
+
+    rows = LinkPreview.objects.filter(url__in=urls, status=LinkPreview.STATUS_READY)
+    resolved: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        payload = _link_preview_payload(row)
+        if payload is not None:
+            resolved[row.url] = payload
+    return resolved
+
+
+def _viewer_dismissed_preview(message: "Message", viewer) -> bool:
+    """True when this viewer hid the card, preferring a prefetched answer.
+
+    The queryset can prefetch the current user's row into
+    `_link_preview_hidden_for_viewer`; without it we fall back to one query, which
+    is correct but only acceptable for a single message.
+    """
+    prefetched = getattr(message, "_link_preview_hidden_for_viewer", None)
+    if prefetched is not None:
+        return bool(prefetched)
+    return message.link_preview_hidden_by.filter(id=viewer.id).exists()
+
+
+def build_message_link_preview(
+    message: "Message",
+    viewer=None,
+    preview_map: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Read-through lookup: the preview payload for a message, or None.
+
+    Returns None unless the message's first URL has a *ready* cache entry with
+    something worth drawing — pending, failed, blocked, and empty-but-ready
+    entries all render as a plain message.
+
+    A viewer who dismissed this card sees None. That is a per-message, per-user
+    view preference: the message and the URL-keyed cache are left alone, so the
+    same link still previews elsewhere and nothing is re-fetched.
+
+    `preview_map` comes from build_link_preview_map when a whole page is being
+    serialized, so the lookup costs no query at all.
+    """
+    url = extract_first_url(message.content)
+    if not url:
+        return None
+
+    if viewer is not None and getattr(viewer, "is_authenticated", False):
+        if _viewer_dismissed_preview(message, viewer):
+            return None
+
+    cache_key = normalize_preview_url(url)
+    if preview_map is not None:
+        return preview_map.get(cache_key)
+
+    preview = LinkPreview.objects.filter(
+        url=cache_key, status=LinkPreview.STATUS_READY
+    ).first()
+    return _link_preview_payload(preview) if preview is not None else None
 
 
 def extract_message_plain_text(rich_body) -> str:

@@ -186,6 +186,22 @@ class AddReactionSerializer(serializers.Serializer):
         return value.strip()
 
 
+class MessageListSerializer(serializers.ListSerializer):
+    """Resolves link previews for a whole page in one query (MED-279).
+
+    Without this, every message looks its own preview up, so a page of 50 costs 50
+    queries for what is really one `url IN (...)`.
+    """
+
+    def to_representation(self, data):
+        from django.db import models as django_models
+        from .services import build_link_preview_map
+
+        messages = list(data.all() if isinstance(data, django_models.Manager) else data)
+        self.context['link_preview_map'] = build_link_preview_map(messages)
+        return super().to_representation(messages)
+
+
 class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializer):
     """Serializer for chat messages"""
     sender = UserSimpleSerializer(read_only=True)
@@ -243,6 +259,7 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
             'link_preview',
         ]
         read_only_fields = ['id', 'sender', 'created_at', 'updated_at']
+        list_serializer_class = MessageListSerializer
 
     DELETED_MESSAGE_PRESERVED_FIELDS = frozenset({
         'id',
@@ -353,9 +370,17 @@ class MessageSerializer(MessageContentValidationMixin, serializers.ModelSerializ
         return list(obj.mentions.values_list('mentioned_user_id', flat=True))
 
     def get_link_preview(self, obj):
-        """Cached OpenGraph card for this message's first URL, or None (MED-279)."""
+        """Cached OpenGraph card for this message's first URL, or None (MED-279).
+
+        Scoped to the viewer: a user who dismissed this card gets None.
+        """
         from .services import build_message_link_preview
-        return build_message_link_preview(obj)
+        request = self.context.get('request')
+        return build_message_link_preview(
+            obj,
+            getattr(request, 'user', None),
+            preview_map=self.context.get('link_preview_map'),
+        )
 
     def get_missing_forwarded_attachments(self, obj):
         """Tombstones for forwarded attachments whose original message is gone."""

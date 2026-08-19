@@ -761,6 +761,32 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      clearLinkPreview: (messageId) => {
+        set(state => {
+          // Dismissing is a view preference; the message and its text are untouched.
+          const drop = (msg: Message): Message =>
+            msg.id === messageId ? { ...msg, link_preview: null } : msg;
+
+          const newMessages = { ...state.messages };
+          Object.keys(newMessages).forEach(chatIdStr => {
+            const chatId = parseInt(chatIdStr);
+            if (newMessages[chatId].some(m => m.id === messageId)) {
+              newMessages[chatId] = newMessages[chatId].map(drop);
+            }
+          });
+
+          const newThreadReplies = { ...state.threadReplies };
+          Object.keys(newThreadReplies).forEach(rootIdStr => {
+            const rootId = parseInt(rootIdStr);
+            if (newThreadReplies[rootId].some(r => r.id === messageId)) {
+              newThreadReplies[rootId] = newThreadReplies[rootId].map(drop);
+            }
+          });
+
+          return { messages: newMessages, threadReplies: newThreadReplies };
+        });
+      },
+
       updateUserPresence: (userId: number, isOnline: boolean, version: number | null = null) => {
         const numericUserId = Number(userId);
         if (!Number.isFinite(numericUserId)) return;

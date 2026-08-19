@@ -54,3 +54,40 @@ describe('applyLinkPreview', () => {
     expect(useChatStore.getState().messages[1][0]).not.toBe(original);
   });
 });
+
+describe('clearLinkPreview', () => {
+  beforeEach(() => {
+    useChatStore.setState({ messages: {}, threadReplies: {} });
+  });
+
+  const withPreview = (id: number): Message =>
+    ({ id, chat: 1, content: 'see https://example.com/story', link_preview: PREVIEW } as unknown as Message);
+
+  it('drops the preview from the matching message only', () => {
+    useChatStore.setState({ messages: { 1: [withPreview(10), withPreview(11)] } });
+
+    useChatStore.getState().clearLinkPreview(10);
+
+    const [first, second] = useChatStore.getState().messages[1];
+    expect(first.link_preview).toBeNull();
+    expect(second.link_preview).toEqual(PREVIEW);
+  });
+
+  it('leaves the message text and id intact', () => {
+    useChatStore.setState({ messages: { 1: [withPreview(10)] } });
+
+    useChatStore.getState().clearLinkPreview(10);
+
+    const message = useChatStore.getState().messages[1][0];
+    expect(message.id).toBe(10);
+    expect(message.content).toContain('https://example.com/story');
+  });
+
+  it('drops it from a thread reply too', () => {
+    useChatStore.setState({ threadReplies: { 99: [withPreview(20)] } });
+
+    useChatStore.getState().clearLinkPreview(20);
+
+    expect(useChatStore.getState().threadReplies[99][0].link_preview).toBeNull();
+  });
+});

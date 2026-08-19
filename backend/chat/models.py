@@ -410,6 +410,15 @@ class Message(TimeStampedModel):
         blank=True,
         help_text="Users who have hidden this message (personal hide, not affecting others)"
     )
+    link_preview_hidden_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='hidden_link_previews',
+        blank=True,
+        help_text=(
+            "Users who dismissed this message's link preview card. Personal view "
+            "preference: the message and the shared LinkPreview cache are untouched."
+        )
+    )
     # Full-text search vector — kept up-to-date via post_save signal in chat/signals.py
     search_vector = SearchVectorField(null=True, blank=True)
 

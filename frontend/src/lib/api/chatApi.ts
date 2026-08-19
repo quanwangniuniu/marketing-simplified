@@ -657,6 +657,17 @@ export const hideMessage = async (
 };
 
 /**
+ * Dismiss a message's link preview card for the current user only (MED-279).
+ * POST /api/chat/messages/{messageId}/hide_link_preview/
+ */
+export const hideMessageLinkPreview = async (
+  messageId: number
+): Promise<{ status: 'link_preview_hidden'; message: Message }> => {
+  const response = await api.post(`/api/chat/messages/${messageId}/hide_link_preview/`);
+  return response.data;
+};
+
+/**
  * Forward multiple messages to multiple chats/users in batch.
  * POST /api/chat/messages/forward_batch/
  */

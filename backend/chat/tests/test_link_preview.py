@@ -15,6 +15,7 @@ from core.models import Organization, Project
 from chat.services import (
     LinkPreviewFetchError,
     UnsafeUrlError,
+    build_link_preview_map,
     build_message_link_preview,
     parse_opengraph,
 )
@@ -381,3 +382,172 @@ class TestCacheReuseAndSingleFlight(LinkPreviewTestCase):
 
         assert fetch.call_count == 1
         assert LinkPreview.objects.get(url='https://example.com/story').status == LinkPreview.STATUS_READY
+
+
+class TestDismissPreview(LinkPreviewTestCase):
+    """Hiding a card is a personal view preference (MED-279, ticket 05)."""
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        self.other = User.objects.create_user(
+            username='preview-other', email='other@example.com', password='pw12345!'
+        )
+        ChatParticipant.objects.create(chat=self.chat, user=self.other, is_active=True)
+        self.preview = LinkPreview.objects.create(
+            url='https://example.com/story',
+            status=LinkPreview.STATUS_READY,
+            title='A great article',
+            description='Why it matters',
+            image_url='https://cdn.example.com/cover.jpg',
+            fetched_at=timezone.now(),
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.url = f'/api/chat/messages/{self.message.id}/hide_link_preview/'
+
+    def test_dismissing_hides_the_card_for_that_user(self):
+        assert build_message_link_preview(self.message, self.user) is not None
+
+        response = self.client.post(self.url)
+
+        assert response.status_code == 200
+        self.message.refresh_from_db()
+        assert build_message_link_preview(self.message, self.user) is None
+
+    def test_other_participants_still_see_the_card(self):
+        self.client.post(self.url)
+
+        assert build_message_link_preview(self.message, self.other) is not None
+
+    def test_dismissing_leaves_the_message_itself_alone(self):
+        self.client.post(self.url)
+
+        self.message.refresh_from_db()
+        assert self.message.is_deleted is False
+        assert 'https://example.com/story' in self.message.content
+        assert not self.message.hidden_by_users.filter(id=self.user.id).exists()
+
+    def test_the_same_link_in_another_message_is_unaffected(self):
+        """Dismissal is per message; the shared cache is keyed by URL."""
+        another = Message.objects.create(
+            chat=self.chat, sender=self.user, content='again https://example.com/story'
+        )
+
+        self.client.post(self.url)
+
+        assert build_message_link_preview(another, self.user) is not None
+
+    def test_the_shared_cache_row_is_untouched(self):
+        self.client.post(self.url)
+
+        preview = LinkPreview.objects.get(url='https://example.com/story')
+        assert preview.status == LinkPreview.STATUS_READY
+        assert preview.title == 'A great article'
+
+    def test_dismissing_twice_is_harmless(self):
+        assert self.client.post(self.url).status_code == 200
+        assert self.client.post(self.url).status_code == 200
+        assert build_message_link_preview(self.message, self.user) is None
+
+    def test_a_non_participant_cannot_dismiss(self):
+        from django.contrib.auth import get_user_model
+
+        outsider = get_user_model().objects.create_user(
+            username='preview-outsider', email='outsider@example.com', password='pw12345!'
+        )
+        client = self.client.__class__()
+        client.force_authenticate(user=outsider)
+
+        response = client.post(self.url)
+
+        assert response.status_code in (403, 404)
+        assert build_message_link_preview(self.message, self.user) is not None
+
+
+class TestPreviewQueryCount(LinkPreviewTestCase):
+    """Resolving previews must cost one query for a page, not one per message.
+
+    Measured on the preview path alone. MessageSerializer has other per-message
+    lookups (statuses, reactions, mentions, thread summaries) that the list
+    endpoint solves with prefetching; counting the whole serializer here would
+    drown the thing this ticket is about.
+    """
+
+    def setUp(self):
+        super().setUp()
+        LinkPreview.objects.create(
+            url='https://example.com/story',
+            status=LinkPreview.STATUS_READY,
+            title='A great article',
+            description='Why it matters',
+            image_url='https://cdn.example.com/cover.jpg',
+            fetched_at=timezone.now(),
+        )
+
+    def _messages_with_links(self, count):
+        return [
+            Message.objects.create(
+                chat=self.chat,
+                sender=self.user,
+                content=f'number {i} https://example.com/story',
+            )
+            for i in range(count)
+        ]
+
+    def test_a_whole_page_of_urls_costs_one_query(self):
+        messages = self._messages_with_links(25)
+
+        with self.assertNumQueries(1):
+            preview_map = build_link_preview_map(messages)
+
+        assert preview_map['https://example.com/story']['title'] == 'A great article'
+
+    def test_the_cost_does_not_grow_with_the_page(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        # Create outside the capture: the INSERTs are not what we are measuring.
+        few = self._messages_with_links(5)
+        many = self._messages_with_links(50)
+
+        with CaptureQueriesContext(connection) as small:
+            build_link_preview_map(few)
+        with CaptureQueriesContext(connection) as large:
+            build_link_preview_map(many)
+
+        assert len(small.captured_queries) == len(large.captured_queries) == 1
+
+    def test_reading_from_the_map_costs_nothing(self):
+        """With the map primed, each message resolves without touching the DB."""
+        messages = self._messages_with_links(25)
+        preview_map = build_link_preview_map(messages)
+
+        with self.assertNumQueries(0):
+            payloads = [
+                build_message_link_preview(message, None, preview_map=preview_map)
+                for message in messages
+            ]
+
+        assert all(payload['title'] == 'A great article' for payload in payloads)
+
+    def test_a_dismissed_card_is_read_from_the_prefetch(self):
+        """The viewer check reads the prefetched row instead of querying."""
+        message = self._messages_with_links(1)[0]
+        message._link_preview_hidden_for_viewer = [self.user]
+        preview_map = build_link_preview_map([message])
+
+        with self.assertNumQueries(0):
+            assert build_message_link_preview(message, self.user, preview_map=preview_map) is None
+
+    def test_an_empty_page_asks_nothing(self):
+        plain = [
+            Message.objects.create(chat=self.chat, sender=self.user, content=f'no links {i}')
+            for i in range(5)
+        ]
+
+        with self.assertNumQueries(0):
+            assert build_link_preview_map(plain) == {}

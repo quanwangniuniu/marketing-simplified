@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { FileX2, Film, Forward, ImageOff, MicOff } from 'lucide-react';
 import MessageFlagChips from './MessageFlagChips';
@@ -15,6 +15,8 @@ import ReactionsDisplay from './ReactionsDisplay';
 import MessageHoverActions from './MessageHoverActions';
 import ChatRichTextRenderer from './ChatRichTextRenderer';
 import { buildMessagesPath, parseChatSlugFromPathname } from '@/lib/messages/messagesRoutes';
+import { hideMessageLinkPreview } from '@/lib/api/chatApi';
+import { useChatStore } from '@/lib/chatStore';
 
 const AGENT_BOT_EMAIL = 'agent-bot@system.local';
 const AGENT_BOT_USERNAME = 'agent-bot';
@@ -208,6 +210,13 @@ export default function MessageItem({
   const taskPreviewId = taskIds[0];
   const showTaskPreview = !isDeleted && Boolean(taskPreviewId);
   const linkPreview = message.link_preview ?? null;
+
+  // Dismissing is optimistic: the card is a view preference, so a failed request
+  // is not worth interrupting the conversation for — it comes back on reload.
+  const handleDismissLinkPreview = useCallback(() => {
+    useChatStore.getState().clearLinkPreview(message.id);
+    void hideMessageLinkPreview(message.id).catch(() => {});
+  }, [message.id]);
   const showLinkPreview = !isDeleted && Boolean(linkPreview) && !showTaskPreview;
   const bot = isAgentBot(message.sender);
   const time = formatTime(message.created_at);
@@ -466,7 +475,9 @@ export default function MessageItem({
                     <TaskSharePreview taskId={taskPreviewId} className="mt-2" />
                   ) : null}
 
-                  {showLinkPreview && linkPreview && <LinkPreview preview={linkPreview} />}
+                  {showLinkPreview && linkPreview && (
+                    <LinkPreview preview={linkPreview} onDismiss={handleDismissLinkPreview} />
+                  )}
 
                   {hasAttachments && (
                     <AttachmentDisplay
