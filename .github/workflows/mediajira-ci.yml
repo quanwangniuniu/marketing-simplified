@@ -468,6 +468,36 @@ jobs:
             npm test
           "
 
+      # The Studio service is a separate Next.js app that talks to the same
+      # Postgres. Its tests need one org whose tenant schema exists, because
+      # core_project / core_projectmember are per-org tables.
+      - name: Provision a tenant schema for variations-studio tests
+        run: |
+          docker compose exec -T backend python manage.py shell -c "
+          from core.models import Organization
+          from core.services.tenant import provision_tenant_schema
+          org, created = Organization.objects.get_or_create(
+              slug='ci-studio-org',
+              defaults={'name': 'CI Studio Org', 'is_active': True},
+          )
+          provision_tenant_schema(org.slug)
+          print('tenant schema ready for', org.slug)
+          "
+
+      - name: Run variations-studio tests
+        run: |
+          set -a; . ./.env; set +a
+          docker run --rm --network host \
+            -v "$PWD/variations-studio-api:/app" -w /app \
+            -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}" \
+            -e SECRET_KEY="${SECRET_KEY}" \
+            node:20-alpine sh -c "
+              npm ci &&
+              npx prisma generate &&
+              npx tsc --noEmit &&
+              npm test
+            "
+
       # Cleanup containers and volumes
       - name: Cleanup containers
         if: always()
