@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBuildUrl } from "@/lib/buildUrl";
 import { addDays, format, startOfWeek } from "date-fns";
 import toast from "react-hot-toast";
 import { CalendarAPI, extractNavigationMetadata } from "@/lib/api/calendarApi";
@@ -57,6 +58,7 @@ function loadActivityFilter(): Set<string> {
 
 export default function CalendarPageContent() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const activeProject = useProjectStore((state) => state.activeProject);
   const projectId = activeProject?.id ?? null;
   const [currentView, setCurrentView] = useState<CalendarViewType>("week");
@@ -499,7 +501,7 @@ export default function CalendarPageContent() {
           </span>
           <button
             type="button"
-            onClick={() => router.push("/integrations")}
+            onClick={() => router.push(buildUrl("/integrations"))}
             className="shrink-0 rounded-md bg-amber-700 px-3 py-1 text-xs font-medium text-white hover:bg-amber-800"
           >
             Open Integrations
@@ -564,11 +566,11 @@ export default function CalendarPageContent() {
               const meta = extractNavigationMetadata(event.description || "");
               if (meta && meta.isDerived) {
                 if (meta.decision_slug || meta.decision_id) {
-                  router.push(`/decisions/${meta.decision_slug ?? meta.decision_id}`);
+                  router.push(buildUrl(`/decisions/${meta.decision_slug ?? meta.decision_id}`));
                   return;
                 }
                 if (meta.task_slug || meta.task_id) {
-                  router.push(`/tasks/${meta.task_slug ?? meta.task_id}`);
+                  router.push(buildUrl(`/tasks/${meta.task_slug ?? meta.task_id}`));
                   return;
                 }
               }

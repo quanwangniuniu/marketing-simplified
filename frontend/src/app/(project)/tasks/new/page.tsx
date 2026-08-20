@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskTag } from '@/types/task';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
@@ -104,6 +105,7 @@ function normalizeDraftTags(value: unknown): TaskTag[] {
 
 export default function CreateTaskPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const searchParams = useSearchParams();
   const linkDecisionIdParam = searchParams?.get('link_decision') ?? searchParams?.get('link_decision_id');
   const { projectId, activeProject } = useActiveProjectForFlatRoute();
@@ -347,7 +349,7 @@ export default function CreateTaskPage() {
           const missing = getUnfilledRequiredKeys(schema, typeFormState);
           if (missing.length > 0) {
             toast.success('Saved as draft');
-            router.push('/tasks');
+            router.push(buildUrl('/tasks'));
             return;
           }
         } else {
@@ -395,9 +397,9 @@ export default function CreateTaskPage() {
       // Fire-and-forget: draft is superseded; TTL cleans up any orphan in 7 days.
       void clear().catch(() => {});
       if (linkDecisionId) {
-        router.push(`/decisions/${linkDecisionId}`);
+        router.push(buildUrl(`/decisions/${linkDecisionId}`));
       } else {
-        router.push('/tasks');
+        router.push(buildUrl('/tasks'));
       }
     } catch (err: unknown) {
       const e = err as {
@@ -429,9 +431,9 @@ export default function CreateTaskPage() {
           type="button"
           onClick={() => {
             if (linkDecisionId) {
-              router.push(`/decisions/${linkDecisionId}`);
+              router.push(buildUrl(`/decisions/${linkDecisionId}`));
             } else {
-              router.push('/tasks');
+              router.push(buildUrl('/tasks'));
             }
           }}
           className="mb-4 inline-flex items-center gap-1.5 text-xs text-gray-500 transition hover:text-gray-900"
@@ -622,9 +624,9 @@ export default function CreateTaskPage() {
                     try { await clear(); } catch { /* best-effort */ }
                   }
                   if (linkDecisionId) {
-                    router.push(`/decisions/${linkDecisionId}`);
+                    router.push(buildUrl(`/decisions/${linkDecisionId}`));
                   } else {
-                    router.push('/tasks');
+                    router.push(buildUrl('/tasks'));
                   }
                 }}
                 disabled={submitting !== null}

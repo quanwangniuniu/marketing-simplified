@@ -25,6 +25,7 @@ import {
   formatPercent,
   formatRatio,
 } from '@/components/meta-ads/metaAdsUtils';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const DAY_OPTIONS = [1, 2, 3, 7, 14, 28, 30] as const;
 
@@ -82,6 +83,7 @@ export default function CampaignDetailPage({
 
 function CampaignDetailContent({ campaignId }: { campaignId: string }) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [days, setDays] = useState<number>(28);
   const [detail, setDetail] = useState<MetaCampaignDetail | null>(null);
   const [series, setSeries] = useState<MetaCampaignTimeseries | null>(null);
@@ -159,7 +161,7 @@ function CampaignDetailContent({ campaignId }: { campaignId: string }) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-gray-500">
-        <Link href="/meta-ads" className="hover:text-[#1a9ba3]">
+        <Link href={buildUrl("/meta-ads")} className="hover:text-[#1a9ba3]">
           Meta Ads
         </Link>
         <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
@@ -295,7 +297,7 @@ function CampaignDetailContent({ campaignId }: { campaignId: string }) {
                       >
                         <td className="px-4 py-2">
                           <Link
-                            href={`/meta-ads/adsets/${a.slug}`}
+                            href={buildUrl(`/meta-ads/adsets/${a.slug}`)}
                             className="block max-w-[420px] truncate text-xs font-medium text-gray-900 hover:text-[#1a9ba3]"
                           >
                             {a.name || a.meta_adset_id}

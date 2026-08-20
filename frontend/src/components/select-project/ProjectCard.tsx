@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { buildUrl } from '@/lib/buildUrl';
 import { useProjectStore } from '@/lib/projectStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -119,7 +120,13 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
     if (menuOpen) return;
     const didUpdate = await onSelect(project.id);
     if (didUpdate !== false) {
-      router.push('/overview');
+      const orgSlug = project.organization?.slug;
+      const projSlug = project.slug;
+      if (orgSlug && projSlug) {
+        router.push(`/${orgSlug}/${projSlug}/overview`);
+      } else {
+        router.push(buildUrl('/overview'));
+      }
     }
   };
 
@@ -226,13 +233,25 @@ export default function ProjectCard({ project, isDefault, onSetDefault, onSelect
          <DropdownMenuContent side="bottom" align="start" sideOffset={4} className="w-48 p-1">
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => { setActiveProject(project); setTimeout(() => router.push('/admin/experience-groups'), 0); }}
+            onSelect={() => {
+              setActiveProject(project);
+              const orgSlug = project.organization?.slug;
+              const projSlug = project.slug;
+              const url = orgSlug && projSlug ? `/${orgSlug}/${projSlug}/admin/experience-groups` : buildUrl('/admin/experience-groups');
+              setTimeout(() => router.push(url), 0);
+            }}
           >
             <span>Experience Groups</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-[13px] px-2 py-1.5 gap-2 [&>svg]:size-3.5"
-            onSelect={() => { setActiveProject(project); setTimeout(() => router.push('/admin/customers'), 0); }}
+            onSelect={() => {
+              setActiveProject(project);
+              const orgSlug = project.organization?.slug;
+              const projSlug = project.slug;
+              const url = orgSlug && projSlug ? `/${orgSlug}/${projSlug}/admin/customers` : buildUrl('/admin/customers');
+              setTimeout(() => router.push(url), 0);
+            }}
           >
             <span>Customers</span>
           </DropdownMenuItem>

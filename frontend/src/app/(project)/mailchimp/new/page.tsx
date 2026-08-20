@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { mailchimpApi, type MailchimpTemplate } from '@/lib/api/mailchimpApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export default function MailchimpNewPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [templates, setTemplates] = useState<MailchimpTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [templateError, setTemplateError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export default function MailchimpNewPage() {
   }, [selectedTemplateId, subject, fromName, replyTo]);
 
   const handleCancel = () => {
-    router.push('/mailchimp');
+    router.push(buildUrl('/mailchimp'));
   };
 
   const handleSubmit = async () => {
@@ -84,9 +86,9 @@ export default function MailchimpNewPage() {
       });
       toast.success('Draft created');
       if (created?.id) {
-        router.push(`/mailchimp/${created.slug}`);
+        router.push(buildUrl(`/mailchimp/${created.slug}`));
       } else {
-        router.push('/mailchimp');
+        router.push(buildUrl('/mailchimp'));
       }
     } catch (err) {
       setSubmitError(

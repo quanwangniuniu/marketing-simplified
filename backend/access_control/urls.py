@@ -2,13 +2,13 @@ from django.urls import path
 from .views import (
     # original test views
     AssetListView, CampaignEditView,
-    
+
     # simplified views
     organizations_list, teams_list, roles_list, role_detail, permissions_list,
     role_permissions_list, update_role_permissions, copy_role_permissions,
     user_permissions, check_permission, approver_list, approver_detail, approver_remove,
     module_approver_detail, module_approver_remove, assign_user_role, remove_user_role,
-    project_permission_matrix
+    project_permission_matrix, admin_override_audit_list
 )
 
 urlpatterns = [
@@ -41,4 +41,7 @@ urlpatterns = [
     # path('approvers/<str:permission_id>/<int:user_id>/', approver_remove, name='approver-remove'),
     path('approvers/<str:module>/', module_approver_detail, name='module-approver-detail'),
     path('approvers/<str:module>/<int:user_id>/', module_approver_remove, name='module-approver-remove'),
+
+    # override audit log
+    path('admin-override-audits/', admin_override_audit_list, name='admin-override-audit-list'),
 ]

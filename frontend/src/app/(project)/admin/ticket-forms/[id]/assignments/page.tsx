@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Users } from 'lucide-react';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -17,6 +18,7 @@ const OUTLINE_BUTTON_CLASS =
 
 export default function TicketFormAssignmentsPage() {
   const params = useParams();
+  const buildUrl = useBuildUrl();
   const { activeProject } = useActiveProjectForFlatRoute();
   const formId = String(params.id);
   const projectId = Number(activeProject?.id ?? 0);
@@ -51,14 +53,14 @@ export default function TicketFormAssignmentsPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                href={`/admin/experience-groups`}
+                href={buildUrl(`/admin/experience-groups`)}
                 className={OUTLINE_BUTTON_CLASS}
               >
                 <Users className="h-4 w-4 shrink-0" aria-hidden />
                 Experience Groups
               </Link>
               <Link
-                href={`/admin/ticket-forms`}
+                href={buildUrl(`/admin/ticket-forms`)}
                 className={OUTLINE_BUTTON_CLASS}
               >
                 <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />

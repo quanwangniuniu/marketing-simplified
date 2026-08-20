@@ -96,12 +96,12 @@ class SheetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sheet
         fields = [
-            'id', 'spreadsheet', 'name', 'position', 'kind',
+            'id', 'spreadsheet', 'name', 'position', 'revision', 'kind',
             'frozen_row_count', 'frozen_column_count',
             'pivot_config',
             'created_at', 'updated_at', 'is_deleted'
         ]
-        read_only_fields = ['id', 'spreadsheet', 'position', 'kind', 'created_at', 'updated_at', 'is_deleted']
+        read_only_fields = ['id', 'spreadsheet', 'position', 'revision', 'kind', 'created_at', 'updated_at', 'is_deleted']
 
     def get_pivot_config(self, obj):
         try:
@@ -237,6 +237,7 @@ class SheetResizeSerializer(serializers.Serializer):
     """Serializer for sheet resize operation"""
     row_count = serializers.IntegerField(min_value=0)
     column_count = serializers.IntegerField(min_value=0)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
     
     def validate_row_count(self, value):
         """Validate row_count is non-negative"""
@@ -257,6 +258,7 @@ class SheetResizeResponseSerializer(serializers.Serializer):
     columns_created = serializers.IntegerField()
     total_rows = serializers.IntegerField()
     total_columns = serializers.IntegerField()
+    revision = serializers.IntegerField()
 
 
 class CellRangeReadSerializer(serializers.Serializer):
@@ -289,18 +291,21 @@ class CellRangeResponseSerializer(serializers.Serializer):
     cells = CellSerializer(many=True)
     row_count = serializers.IntegerField()
     column_count = serializers.IntegerField()
+    revision = serializers.IntegerField()
 
 
 class SheetInsertSerializer(serializers.Serializer):
     """Serializer for row/column insert operations"""
     position = serializers.IntegerField(min_value=0)
     count = serializers.IntegerField(min_value=1, required=False, default=1)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
 
 
 class SheetDeleteSerializer(serializers.Serializer):
     """Serializer for row/column delete operations"""
     position = serializers.IntegerField(min_value=0)
     count = serializers.IntegerField(min_value=1, required=False, default=1)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
 
 
 class CellOperationSerializer(serializers.Serializer):
@@ -381,6 +386,10 @@ class CellBatchUpdateSerializer(serializers.Serializer):
     import_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=64)
     chunk_index = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     import_mode = serializers.BooleanField(default=False)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
+    # Realtime collab: WebSocket client id of the tab that made this edit, echoed
+    # back in the cells_updated broadcast so the origin tab can drop its own echo.
+    client_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=64)
 
     def validate_operations(self, value):
         """Validate operations array"""
@@ -398,6 +407,7 @@ class CellBatchUpdateResponseSerializer(serializers.Serializer):
     rows_expanded = serializers.IntegerField(default=0)
     columns_expanded = serializers.IntegerField(default=0)
     cells = CellSerializer(many=True, required=False)
+    revision = serializers.IntegerField()
 
 
 class SheetSortSerializer(serializers.Serializer):
@@ -405,6 +415,7 @@ class SheetSortSerializer(serializers.Serializer):
     column_position = serializers.IntegerField(min_value=0)
     direction = serializers.ChoiceField(choices=['asc', 'desc'])
     has_header = serializers.BooleanField(default=True)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
     previous_sort_columns = serializers.ListField(
         required=False,
         default=list
@@ -443,6 +454,7 @@ class SheetSortSerializer(serializers.Serializer):
 class SheetReorderSerializer(serializers.Serializer):
     """Serializer for row reorder (undo/redo)"""
     order = serializers.ListField(min_length=1)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
 
     def validate_order(self, value):
         for item in value:
@@ -496,6 +508,7 @@ class SpreadsheetHighlightOpSerializer(serializers.Serializer):
 
 class SpreadsheetHighlightBatchSerializer(serializers.Serializer):
     ops = SpreadsheetHighlightOpSerializer(many=True, min_length=1, max_length=2000)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
 
 
 class SpreadsheetCellFormatSerializer(serializers.ModelSerializer):
@@ -540,6 +553,7 @@ class SpreadsheetCellFormatOpSerializer(serializers.Serializer):
 
 class SpreadsheetCellFormatBatchSerializer(serializers.Serializer):
     ops = SpreadsheetCellFormatOpSerializer(many=True, min_length=1, max_length=2000)
+    base_revision = serializers.IntegerField(min_value=0, required=False)
 
 
 class WorkflowPatternListSerializer(serializers.ModelSerializer):
@@ -647,4 +661,3 @@ class PatternJobStatusSerializer(serializers.ModelSerializer):
             'startedAt',
             'finishedAt',
         ]
-

@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DecisionsPageCard from '@/components/decisions/DecisionsPageCard';
 import { useAuthStore } from '@/lib/authStore';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const ROLE_LEVELS: Record<string, number> = {
   owner: 1,
@@ -36,6 +37,7 @@ function resolveRoleLevel(role?: string | null): number {
 
 function DecisionsV2Content() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { projectId } = useActiveProjectForFlatRoute();
   const user = useAuthStore((s) => s.user);
 
@@ -54,7 +56,7 @@ function DecisionsV2Content() {
   const canDelete = roleLevel <= EDIT_MAX_LEVEL;
 
   const navigateToDecision = (id: string | number) => {
-    router.push(`/decisions/${id}`);
+    router.push(buildUrl(`/decisions/${id}`));
   };
 
   return (

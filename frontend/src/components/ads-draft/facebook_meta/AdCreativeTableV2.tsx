@@ -6,6 +6,7 @@ import type { FacebookStatus } from '../types';
 
 export interface AdCreativeRow {
   id: string;
+  slug?: string;
   name: string;
   status: FacebookStatus | string | null;
   call_to_action_type?: string | null;
@@ -69,7 +70,7 @@ export default function AdCreativeTableV2({ creatives, loading, onRowClick, onDe
           {creatives.map((creative) => (
             <tr
               key={creative.id}
-              onClick={() => onRowClick(creative.id)}
+              onClick={() => onRowClick(creative.slug ?? creative.id)}
               className="group cursor-pointer transition hover:bg-gray-50"
             >
               <td className="px-4 py-3 text-sm font-medium text-gray-900">

@@ -13,7 +13,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Organization
-        fields = ['id', 'name', 'plan_id']
+        fields = ['id', 'name', 'slug', 'plan_id']
     
     def get_plan_id(self, obj):
         """Get the plan_id from the active subscription"""
@@ -28,6 +28,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
+    current_organization = OrganizationSerializer(read_only=True)
     roles = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
     is_org_admin = serializers.SerializerMethodField()
@@ -37,7 +38,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'is_verified', 'is_staff',
-            'organization', 'roles', 'first_name', 'last_name',
+            'organization', 'current_organization', 'roles', 'first_name', 'last_name',
             'avatar', 'job', 'department', 'location',
             'is_org_admin', 'is_csm_admin',
         ]

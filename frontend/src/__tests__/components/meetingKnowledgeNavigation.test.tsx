@@ -76,7 +76,7 @@ describe('Meeting knowledge navigation (discovery + summary + detail hooks)', ()
     );
     expect(screen.getByRole('link', { name: /Full meeting workspace/i })).toHaveAttribute(
       'href',
-      '/projects/2/meetings/weekly-sync#contextual-knowledge',
+      '/meetings/weekly-sync#contextual-knowledge',
     );
   });
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { FileSearch, Plus, ExternalLink, Loader2 } from 'lucide-react';
 import AddArtifactDialog from './AddArtifactDialog';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import api, { decisionCaptureAPI } from '@/lib/api';
 import type { KnowledgeNavigationLink } from '@/types/meeting';
 
@@ -19,12 +19,9 @@ interface Props {
   onMutated: () => void;
 }
 
-function rewriteToV2(link: KnowledgeNavigationLink, kind: 'decision' | 'task', projectId: number | string): string {
+function rewriteToV2(link: KnowledgeNavigationLink, kind: 'decision' | 'task'): string {
   const key = link.slug ?? link.id;
-  if (kind === 'decision') {
-    return nestedProjectPath(projectId, `/decisions/${key}`);
-  }
-  return `/tasks/${key}`;
+  return kind === 'decision' ? `/decisions/${key}` : `/tasks/${key}`;
 }
 
 export default function ContextualKnowledgeSection({
@@ -36,6 +33,7 @@ export default function ContextualKnowledgeSection({
   readOnly = false,
   onMutated,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [creatingDecision, setCreatingDecision] = useState(false);
   const [decisionCaptureOpen, setDecisionCaptureOpen] = useState(false);
   const [decisionTitle, setDecisionTitle] = useState('');
@@ -107,7 +105,7 @@ export default function ContextualKnowledgeSection({
       if (newSlug || newId) {
         toast.success('Task draft created');
         onMutated();
-        window.location.href = `/tasks/${newSlug ?? newId}`;
+        window.location.href = buildUrl(`/tasks/${newSlug ?? newId}`);
       } else {
         toast.error('Task created but no id returned.');
       }
@@ -212,7 +210,7 @@ export default function ContextualKnowledgeSection({
               {generatedDecisions.map((link) => (
                 <li key={`dec-${link.id}`}>
                   <Link
-                    href={rewriteToV2(link, 'decision', projectId)}
+                    href={buildUrl(rewriteToV2(link, 'decision'))}
                     className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-gray-800 transition hover:bg-gray-50"
                   >
                     <span className="truncate">{link.title}</span>
@@ -251,7 +249,7 @@ export default function ContextualKnowledgeSection({
               {generatedTasks.map((link) => (
                 <li key={`task-${link.id}`}>
                   <Link
-                    href={rewriteToV2(link, 'task', projectId)}
+                    href={buildUrl(rewriteToV2(link, 'task'))}
                     className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-gray-800 transition hover:bg-gray-50"
                   >
                     <span className="truncate">{link.title}</span>

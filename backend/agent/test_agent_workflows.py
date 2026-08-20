@@ -631,8 +631,7 @@ class OrchestratorTests(TestCase):
         )
         mock_call_gemini_chat.assert_not_called()
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_to_users_does_not_match_first_name(self, mock_notify_delay):
+    def test_forward_to_users_does_not_match_first_name(self):
         teammate = CustomUser.objects.create_user(
             email='alice-fn@test.com',
             username='alice-ops',
@@ -656,11 +655,9 @@ class OrchestratorTests(TestCase):
         )
 
         self.assertEqual(results[0]['status'], 'not_found')
-        mock_notify_delay.assert_not_called()
 
-    @patch('chat.tasks.notify_new_message.delay')
-    def test_forward_to_users_reactivates_existing_private_chat(self, mock_notify_delay):
-        from chat.models import Chat, ChatParticipant, ChatType
+    def test_forward_to_users_reactivates_existing_private_chat(self):
+        from chat.models import Chat, ChatOutboxEvent, ChatParticipant, ChatType
         from core.utils.bot_user import get_agent_bot_user
 
         teammate = CustomUser.objects.create_user(
@@ -691,7 +688,12 @@ class OrchestratorTests(TestCase):
         participant.refresh_from_db()
         self.assertTrue(participant.is_active)
         self.assertEqual(results[0]['status'], 'sent')
-        mock_notify_delay.assert_called_once()
+        self.assertEqual(
+            ChatOutboxEvent.objects.filter(
+                event_type=ChatOutboxEvent.EVENT_MESSAGE_REALTIME
+            ).count(),
+            1,
+        )
 
 
 class AnomalyIdAssignmentTests(TestCase):

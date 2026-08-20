@@ -1,12 +1,13 @@
 import json
 import logging
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 
 logger = logging.getLogger(__name__)
 
 
-class PortalConversationConsumer(AsyncWebsocketConsumer):
+class PortalConversationConsumer(InstrumentedAsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time updates in the customer portal.
 
@@ -15,6 +16,8 @@ class PortalConversationConsumer(AsyncWebsocketConsumer):
     Server → Client events:
     - new_message: An agent or system has sent a message in this conversation
     """
+
+    ws_channel = 'portal'
 
     async def connect(self):
         self.conversation_id = int(self.scope['url_route']['kwargs']['conversation_id'])

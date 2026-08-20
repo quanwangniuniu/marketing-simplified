@@ -1,16 +1,18 @@
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 from .models import RetrospectiveTask, Insight, CampaignMetric
 
 
-class RetrospectiveConsumer(AsyncWebsocketConsumer):
+class RetrospectiveConsumer(InstrumentedAsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time retrospective updates.
     Handles connections to retrospective-specific groups for live updates.
     """
-    
+
+    ws_channel = 'retrospective'
+
     async def connect(self):
         """Handle WebSocket connection"""
         # Handle both URL route and direct path scenarios

@@ -1,6 +1,14 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction, OperationalError
+from django.db.models import Max
 from .models import BudgetRequest, BudgetPool, BudgetEscalationRule, BudgetRequestStatus
+from .exceptions import ApprovalConflict
+from .approver_access import (
+    format_org_admin_override_marker,
+    infer_replaced_step,
+    is_org_admin_override_action,
+    user_may_process_budget_approval,
+)
 from .tasks import trigger_escalation
 from . import notifications as budget_notifications
 from core.models import AdChannel
@@ -38,6 +46,79 @@ class BudgetRequestService:
         """Check if budget pool has sufficient available amount"""
         return budget_pool.available_amount >= amount
     
+    @staticmethod
+    def _write_org_admin_override_audit(
+        budget_request, approver, is_approved, comment, replaced_step=None
+    ):
+        """Persist override audit without a new migration (ApprovalRecord + notes marker)."""
+        from django.utils import timezone
+        from task.models import ApprovalRecord
+
+        decision = 'approve' if is_approved else 'reject'
+        if replaced_step is None:
+            replaced_step = infer_replaced_step(budget_request)
+        timestamp = timezone.now().isoformat()
+        marker = format_org_admin_override_marker(
+            user_id=approver.id,
+            decision=decision,
+            replaced_step=replaced_step,
+            timestamp=timestamp,
+        )
+
+        user_comment = (comment or "").strip()
+        audit_comment = f"{marker} {user_comment}".strip() if user_comment else marker
+
+        task = budget_request.task
+        if task is not None:
+            last_step = task.approval_records.aggregate(m=Max('step_number'))['m'] or 0
+            ApprovalRecord.objects.create(
+                task=task,
+                approved_by=approver,
+                is_approved=is_approved,
+                comment=audit_comment,
+                step_number=last_step + 1,
+                revision_round=getattr(task, 'revision_round', 0) or 0,
+            )
+
+        # Notes marker keeps override discoverable on BudgetRequest itself (and
+        # covers requests with no linked task). Includes replaced_step so GET
+        # can return structured audit without a new column.
+        existing = (budget_request.notes or "").strip()
+        budget_request.notes = f"{existing}\n{marker}".strip() if existing else marker
+        budget_request.save(update_fields=['notes'])
+
+    @staticmethod
+    def _resolve_next_from_approval_chain(budget_request):
+        """Next chain step after the task's current step, or None (legacy / last step).
+
+        Org-admin override must continue the *original* ApprovalChain — the admin
+        does not pick the next approver. Returns (approver_user, next_step_number).
+        """
+        task = getattr(budget_request, 'task', None)
+        if task is None or not getattr(task, 'approval_chain_id', None):
+            return None, None
+
+        chain = task.approval_chain
+        if chain is None:
+            return None, None
+
+        current_step = task.current_approval_step or 1
+        next_step_num = current_step + 1
+        next_step = chain.get_step(next_step_num)
+        if next_step is None:
+            return None, None
+        return next_step.approver, next_step_num
+
+    @staticmethod
+    def _sync_task_chain_advance(budget_request, next_approver, next_step_num):
+        """Keep linked Task chain pointer in sync when BudgetRequest advances."""
+        task = getattr(budget_request, 'task', None)
+        if task is None or next_approver is None or next_step_num is None:
+            return
+        task.current_approver = next_approver
+        task.current_approval_step = next_step_num
+        task.save(update_fields=['current_approver', 'current_approval_step'])
+
     @staticmethod
     def check_escalation_rules(budget_request):
         """Check if budget request should be escalated based on rules"""
@@ -108,7 +189,39 @@ class BudgetRequestService:
                 trigger_escalation.delay(budget_request.id)
             
             return budget_request
-    
+
+    _DECIDED_STATUSES = (
+        BudgetRequestStatus.APPROVED,
+        BudgetRequestStatus.REJECTED,
+        BudgetRequestStatus.LOCKED,
+        BudgetRequestStatus.CANCELLED,
+    )
+
+    @staticmethod
+    def _raise_if_not_processable(budget_request):
+        """409 if another actor already decided; 400 if the status is not reviewable."""
+        if budget_request.status in BudgetRequestService._DECIDED_STATUSES:
+            raise ApprovalConflict()
+        if not budget_request.can_approve() and not budget_request.can_reject():
+            raise ValidationError("Budget request cannot be processed in current status")
+
+    @staticmethod
+    def _raise_if_step_moved(locked_request, approver, *, is_override, expected_approver_id):
+        """Under lock: this actor must still be acting on the same chain step.
+
+        After an override (or chain approve) forwards to the next person, status
+        is UNDER_REVIEW again. Without this check the loser of the race would
+        approve the *next* step.
+        """
+        if getattr(approver, 'is_superuser', False):
+            return
+        if is_override:
+            if locked_request.current_approver_id != expected_approver_id:
+                raise ApprovalConflict()
+            return
+        if locked_request.current_approver_id != approver.id:
+            raise ApprovalConflict()
+
     @staticmethod
     def process_approval(budget_request, approver, is_approved, comment, next_approver=None):
         """Process approval or rejection of a budget request
@@ -130,20 +243,42 @@ class BudgetRequestService:
             to ensure consistency with the database state after the atomic transaction.
             The original object's ID remains unchanged - only the Python object reference changes.
         """
-        # Check if current approver matches (super admin can bypass this check)
-        if not approver.is_superuser and budget_request.current_approver != approver:
+        # Backend is the only enforcement (UI buttons are not authorization).
+        # Chain approver, superuser, or same-org org-admin override (MED-240).
+        if not user_may_process_budget_approval(approver, budget_request):
             raise ValidationError("Only the assigned approver can process this request")
-        
-        if not budget_request.can_approve() and not budget_request.can_reject():
-            raise ValidationError("Budget request cannot be processed in current status")
+
+        BudgetRequestService._raise_if_not_processable(budget_request)
+
+        # Capture before mutation: override = org-admin acting outside the chain.
+        # These snapshots are what the actor intended to act on; re-checked under lock.
+        is_override = is_org_admin_override_action(approver, budget_request)
+        expected_approver_id = budget_request.current_approver_id
+        replaced_step = infer_replaced_step(budget_request) if is_override else None
+
+        # MED-240: org-admin replaces the current step only. Next person comes from
+        # the original ApprovalChain (not a client-supplied next_approver).
+        # Legacy / no remaining steps → finalize (effective_next stays None).
+        if is_override and is_approved:
+            effective_next, next_step_num = (
+                BudgetRequestService._resolve_next_from_approval_chain(budget_request)
+            )
+        else:
+            effective_next = next_approver
+            next_step_num = None
         
         with transaction.atomic():
             # Lock the budget request for update to ensure atomic state transition
             locked_request = BudgetRequest.objects.select_for_update().get(id=budget_request.id)
-            
-            # Re-check if the request can still be processed (status might have changed)
-            if not locked_request.can_approve() and not locked_request.can_reject():
-                raise ValidationError("Budget request cannot be processed in current status")
+
+            # Re-read under lock: status and current step may have changed while we waited.
+            BudgetRequestService._raise_if_not_processable(locked_request)
+            BudgetRequestService._raise_if_step_moved(
+                locked_request,
+                approver,
+                is_override=is_override,
+                expected_approver_id=expected_approver_id,
+            )
             
             
             # status: UNDER_REVIEW --> APPROVED
@@ -152,14 +287,18 @@ class BudgetRequestService:
                 locked_request.save()
 
                 # status: APPROVED --> UNDER_REVIEW (multi-step chain)
-                if next_approver:
+                if effective_next:
                     locked_request.forward_to_next()
-                    locked_request.current_approver = next_approver
+                    locked_request.current_approver = effective_next
                     locked_request.save()
+                    if is_override and next_step_num is not None:
+                        BudgetRequestService._sync_task_chain_advance(
+                            locked_request, effective_next, next_step_num
+                        )
                     budget_notifications.notify_budget_forwarded(
                         locked_request,
                         actor_id=approver.id if approver else None,
-                        next_approver_id=next_approver.id,
+                        next_approver_id=effective_next.id,
                     )
                 else:
                     budget_notifications.notify_budget_approved(
@@ -180,13 +319,22 @@ class BudgetRequestService:
                     comment=comment or "",
                 )
 
+            if is_override:
+                BudgetRequestService._write_org_admin_override_audit(
+                    locked_request,
+                    approver=approver,
+                    is_approved=is_approved,
+                    comment=comment,
+                    replaced_step=replaced_step,
+                )
+
             return locked_request
 
     @staticmethod
     def revise_rejected_request(budget_request, revised_data):
-        """Revise a rejected budget request by modifying existing data, and save it as a draft"""
+        """Revise a rejected or cancelled budget request by modifying existing data, and save it as a draft"""
         if not budget_request.can_revise():
-            raise ValidationError("Only rejected budget requests can be revised")
+            raise ValidationError("Only rejected or cancelled budget requests can be revised")
     
         with transaction.atomic():
             # Update budget request data
@@ -233,7 +381,7 @@ class BudgetRequestService:
                         _insufficient_request = locked_request
                         raise ValidationError("Insufficient budget available for locking")
 
-                    # status: APPROVED --> LOCKED or REJECTED --> LOCKED
+                    # status: APPROVED --> LOCKED (the only legal source state)
                     # The lock() method in the model will automatically deduct from budget pool
                     locked_request.lock()
                     locked_request.save()

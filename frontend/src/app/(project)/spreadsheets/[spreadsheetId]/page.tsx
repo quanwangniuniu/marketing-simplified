@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ProjectAPI } from '@/lib/api/projectApi';
 import { SpreadsheetAPI } from '@/lib/api/spreadsheetApi';
 import { PatternAPI } from '@/lib/api/patternApi';
@@ -65,6 +66,8 @@ import {
 import SpreadsheetDetailHeader from '@/components/spreadsheets/detail/SpreadsheetDetailHeader';
 import SheetTabBarBottom from '@/components/spreadsheets/detail/SheetTabBarBottom';
 import CreateSheetDialog from '@/components/spreadsheets/CreateSheetDialog';
+import PresenceAvatars from '@/components/spreadsheets/presence/PresenceAvatars';
+import { useSheetPresenceBridge } from '@/components/spreadsheets/presence/useSheetPresenceBridge';
 
 function getNextSheetName(existingSheets: SheetData[]): string {
   const re = /^sheet(\d+)$/i;
@@ -98,14 +101,49 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   );
 }
 
+function extractSpreadsheetLoadError(err: unknown): string {
+  const anyErr = err as {
+    response?: { status?: number; data?: { error?: string } };
+    message?: string;
+  };
+  const status = anyErr?.response?.status;
+  if (status === 404) return 'Spreadsheet not found.';
+  if (status === 403) return 'You do not have access to this spreadsheet.';
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  return (
+    anyErr?.response?.data?.error ||
+    anyErr?.message ||
+    'Failed to load spreadsheet.'
+  );
+}
+
 export default function SpreadsheetsV2DetailPage() {
   const params = useParams();
   const spreadsheetId = params?.spreadsheetId as string;
   const { projectId } = useActiveProjectForFlatRoute();
+  const buildUrl = useBuildUrl();
 
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetId, setActiveSheetId] = useState<number | null>(null);
+  const refreshSheetListRef = useRef<() => Promise<void>>(async () => {});
+  const sheetListRefreshGenerationRef = useRef(0);
+  const { remoteUsers, onSelectionChange, clientId: collabClientId } = useSheetPresenceBridge(
+    activeSheetId,
+    {
+      onCellsUpdated: (cells) => gridRef.current?.applyRemoteCells(cells),
+      onRefreshRequired: (reason) => {
+        if (reason === 'sheet_created' || reason === 'sheet_updated' || reason === 'sheet_deleted') {
+          void refreshSheetListRef.current();
+          return;
+        }
+        if (reason === 'reconnected') {
+          void refreshSheetListRef.current();
+        }
+        gridRef.current?.refresh();
+      },
+    }
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
@@ -147,6 +185,24 @@ export default function SpreadsheetsV2DetailPage() {
   const [agentStepsBySheet, setAgentStepsBySheet] = useState<Record<number, TimelineItem[]>>({});
 
   const gridRef = useRef<SpreadsheetGridHandle | null>(null);
+
+  refreshSheetListRef.current = async () => {
+    if (!spreadsheetId) return;
+    const generation = ++sheetListRefreshGenerationRef.current;
+    try {
+      const response = await SpreadsheetAPI.listSheets(String(spreadsheetId));
+      if (generation !== sheetListRefreshGenerationRef.current) return;
+      const list = response.results || [];
+      setSheets(list);
+      setCreateSheetDefaultName(getNextSheetName(list));
+      setActiveSheetId((current) => {
+        if (current != null && list.some((sheet) => sheet.id === current)) return current;
+        return list[0]?.id ?? null;
+      });
+    } catch (err) {
+      console.error('Failed to refresh sheet list after collaboration event:', err);
+    }
+  };
   const patternJobStartRef = useRef<number | null>(null);
   const renameDedupRef = useRef<Record<number, RenameDedupState>>({});
   const activeJobIdRef = useRef<string | null>(null);
@@ -329,7 +385,7 @@ export default function SpreadsheetsV2DetailPage() {
           if (list.length > 0 && activeSheetId == null) setActiveSheetId(list[0].id);
         }
       } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load spreadsheet'));
+        setError(extractSpreadsheetLoadError(err));
       } finally {
         setLoading(false);
       }
@@ -837,7 +893,7 @@ export default function SpreadsheetsV2DetailPage() {
               <p className="mt-3 text-sm font-semibold text-rose-700">Could not load spreadsheet</p>
               <p className="mt-1 text-xs text-rose-600">{error}</p>
               <Link
-                href="/spreadsheets"
+                href={buildUrl("/spreadsheets")}
                 className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
               >
                 Back to spreadsheets
@@ -859,7 +915,7 @@ export default function SpreadsheetsV2DetailPage() {
               <p className="mt-3 text-sm font-semibold text-gray-900">Spreadsheet not found</p>
               <p className="mt-1 text-xs text-gray-500">The spreadsheet you&apos;re looking for doesn&apos;t exist.</p>
               <Link
-                href="/spreadsheets"
+                href={buildUrl("/spreadsheets")}
                 className="mt-4 inline-flex h-9 items-center rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
               >
                 Back to spreadsheets
@@ -882,6 +938,7 @@ export default function SpreadsheetsV2DetailPage() {
             saving={renamingSpreadsheetSaving}
             onRename={handleRenameSpreadsheet}
             loading={loading}
+            presenceSlot={<PresenceAvatars users={remoteUsers} />}
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
@@ -897,6 +954,9 @@ export default function SpreadsheetsV2DetailPage() {
                       spreadsheetName={spreadsheet?.name ?? undefined}
                       sheetName={activeSheet?.name}
                       frozenRowCount={activeSheet?.frozen_row_count ?? 0}
+                      onSelectionChange={onSelectionChange}
+                      collabClientId={collabClientId}
+                      remotePresenceUsers={remoteUsers}
                       onFreezeHeaderChange={activeSheet ? ((val) => {
                         setSheets((prev) =>
                           prev.map((s) =>

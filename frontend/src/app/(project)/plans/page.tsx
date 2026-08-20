@@ -4,11 +4,12 @@ import Link from 'next/link';
 import PlansSection from '@/components/plans/PlansSection';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useProjectStore } from '@/lib/projectStore';
-import { nestedProjectPathFromProject } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 function PlansPageContent() {
   const activeProject = useProjectStore((s) => s.activeProject);
-  const campaignsHref = nestedProjectPathFromProject(activeProject, '/campaigns');
+  const buildUrl = useBuildUrl();
+  const campaignsHref = buildUrl('/campaigns');
   const renderLayout = (content: React.ReactNode) => (
     <div className="min-h-screen bg-gradient-to-br from-[#3CCED7]/5 via-white to-[#A6E661]/5 flex flex-col">
       <style jsx global>{`
@@ -35,7 +36,7 @@ function PlansPageContent() {
               <Link href="/api/docs" className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
                 API Docs
               </Link>
-              <Link href="/plans" className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
+              <Link href={buildUrl('/plans')} className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
                 Test Pages
               </Link>
             </nav>

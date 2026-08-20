@@ -26,6 +26,46 @@ services:
       timeout: 10s
       retries: 3
 
+  # Session pooling preserves tenant SET search_path state for each client.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    container_name: pgbouncer-prod
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${PGBOUNCER_DB_HOST:-host.docker.internal}
+      - DB_PORT=${PGBOUNCER_DB_PORT:-5432}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-}
+      # Wildcard keeps Django's postgres/test database management connections valid.
+      - DB_NAME=*
+      # PostgreSQL 14+ defaults to scram-sha-256. PgBouncer cannot derive a
+      # SCRAM secret from a stored md5 hash, so without this it fails every
+      # upstream login with "cannot do SCRAM authentication: wrong password
+      # type" and the pool never fills. Override only for an older server
+      # that still uses md5.
+      - AUTH_TYPE=${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
+      - POOL_MODE=session
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - MAX_CLIENT_CONN=300
+      - DEFAULT_POOL_SIZE=25
+      - MIN_POOL_SIZE=5
+      - RESERVE_POOL_SIZE=5
+      - RESERVE_POOL_TIMEOUT=3
+      - SERVER_IDLE_TIMEOUT=60
+      - ADMIN_USERS=${POSTGRES_USER:-postgres}
+      - STATS_USERS=${POSTGRES_USER:-postgres}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mediajira_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: 
       context: ./backend
@@ -37,7 +77,8 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=${DB_HOST}
+      - DB_HOST=pgbouncer
+      - POSTGRES_PORT=5432
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
@@ -51,6 +92,8 @@ services:
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
     depends_on:
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
       clamav:
@@ -112,21 +155,37 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: marketing-simplified-celery-worker-prod
     container_name: celery-worker-prod
     restart: always
     env_file:
       - .env
     environment:
-      - DB_HOST=${DB_HOST}
+      - DB_HOST=pgbouncer
+      - POSTGRES_PORT=5432
       - DEBUG=False
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
     depends_on:
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
       clamav:
         condition: service_healthy
-    command: celery -A backend worker --loglevel=info
+    command: celery -A backend worker --loglevel=info -Q celery
+
+  celery-chat-realtime:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-realtime-prod
+    command: celery -A backend worker --loglevel=info --concurrency=${CHAT_REALTIME_WORKER_CONCURRENCY:-4} -Q chat.realtime
+
+  celery-chat-background:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-background-prod
+    command: celery -A backend worker --loglevel=info --concurrency=${CHAT_BACKGROUND_WORKER_CONCURRENCY:-2} -Q chat.notifications,chat.delivery
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0

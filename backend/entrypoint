@@ -7,4 +7,8 @@ mkdir -p /app/static
 python manage.py collectstatic --noinput || true
 # Start Django
 export DJANGO_SETTINGS_MODULE=backend.settings
-exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+# --websocket_connect_timeout: daphne's default is 5s and maps to the handshake
+# timeout, so a burst of connections that queues longer than that is refused.
+# 30s makes a slow handshake slow rather than fatal. See CONN_MAX_AGE in
+# settings.py for the change that actually makes the handshake fast.
+exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT:-30}" backend.asgi:application

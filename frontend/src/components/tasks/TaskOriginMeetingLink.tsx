@@ -3,9 +3,11 @@
 import Link from 'next/link';
 
 import type { OriginMeetingPayload } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export function TaskOriginMeetingLink({ origin }: { origin: OriginMeetingPayload }) {
-  const href = origin.detail_url ?? origin.url;
+  const buildUrl = useBuildUrl();
+  const href = buildUrl(origin.detail_url ?? origin.url);
   return (
     <p className="mt-1 text-sm text-slate-500" data-testid="task-origin-meeting">
       Origin meeting{' '}

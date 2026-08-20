@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { ChevronDown, ExternalLink, Plus, Search, Settings2, Square, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useBuildUrl } from "@/lib/buildUrl";
 import { cn } from "@/lib/utils";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import JiraTicketTypeIcon from "./JiraTicketTypeIcon";
@@ -578,6 +579,7 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
   const activityCardRef = useRef<HTMLDivElement | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<JiraTaskItem | null>(null);
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { updateTask: updateTaskStore } = useTaskStore();
   const authUser = useAuthStore((state) => state.user);
 
@@ -1232,7 +1234,7 @@ const JiraTasksView: React.FC<JiraTasksViewProps> = ({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (subtask.id)
-                                    router.push(`/tasks/${subtask.slug}`);
+                                    router.push(buildUrl(`/tasks/${subtask.slug}`));
                                 }}
                                 className="text-xs text-slate-500 hover:text-indigo-600"
                               >

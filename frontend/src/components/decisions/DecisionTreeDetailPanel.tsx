@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Loader2, Pencil, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -77,6 +77,7 @@ export default function DecisionTreeDetailPanel({
   onOpenFullPage,
   onUpdated,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const decisionKey = decisionSlug ?? decisionId;
   const detail = useDecisionDetail(decisionKey, projectId);
   const { canEdit: roleCanEdit, members } = useProjectRole(projectId);
@@ -271,9 +272,7 @@ export default function DecisionTreeDetailPanel({
     }
   };
 
-  const fullPageHref = projectId
-    ? nestedProjectPath(projectId, `/decisions/${decisionKey}`)
-    : `/decisions/${decisionKey}`;
+  const fullPageHref = buildUrl(`/decisions/${decisionKey}`);
 
   return (
     <>
@@ -423,10 +422,7 @@ export default function DecisionTreeDetailPanel({
                 onCreateTask={() => {
                   const q = new URLSearchParams();
                   q.set('link_decision', String(decisionKey));
-                  const href = projectId
-                    ? nestedProjectPath(projectId, `/tasks/new?${q.toString()}`)
-                    : `/tasks/new?${q.toString()}`;
-                  window.open(href, '_blank');
+                  window.open(buildUrl(`/tasks/new?${q.toString()}`), '_blank');
                 }}
               />
             </div>

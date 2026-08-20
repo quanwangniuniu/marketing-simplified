@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useBuildUrl } from "@/lib/buildUrl";
 import { ArrowLeft } from "lucide-react";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -69,6 +70,7 @@ function parseParams(search: URLSearchParams): ParsedParams {
 
 function CompareAdsContent() {
   const searchParams = useSearchParams();
+  const buildUrl = useBuildUrl();
   const parsed = useMemo(
     () => parseParams(new URLSearchParams(searchParams.toString())),
     [searchParams]
@@ -90,7 +92,7 @@ function CompareAdsContent() {
       </h2>
       <p className="mt-1 text-sm text-rose-800">{parsed.message}</p>
       <Link
-        href="/meta-ads?tab=ranking"
+        href={buildUrl("/meta-ads?tab=ranking")}
         className="mt-4 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-rose-700 ring-1 ring-rose-200 transition-colors hover:bg-rose-100"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

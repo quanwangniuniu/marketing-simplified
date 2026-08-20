@@ -5,6 +5,7 @@ import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import useAuth from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import AdModal from '@/components/google_ads/AdModal';
 import AdTable from '@/components/google_ads/AdTable';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -16,6 +17,7 @@ import { toast } from 'react-hot-toast';
 function GoogleAdsPageContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [showModal, setShowModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -72,7 +74,7 @@ function GoogleAdsPageContent() {
     const createdAd = await createAd(formData);
     setShowModal(false);
     // Redirect to design page after creation
-    router.push(`/google_ads/${createdAd.slug ?? createdAd.id}/design`);
+    router.push(buildUrl(`/google-ads/${createdAd.slug ?? createdAd.id}/design`));
     return createdAd;
   };
 
@@ -87,7 +89,8 @@ function GoogleAdsPageContent() {
   };
 
   const handleViewAd = (id: number) => {
-    router.push(`/google_ads/${id}`);
+    const ad = ads.find((ad: GoogleAd) => ad.id === id);
+    router.push(buildUrl(`/google-ads/${ad?.slug ?? id}`));
   };
 
   const handleEditAd = (id: number) => {
@@ -96,8 +99,8 @@ function GoogleAdsPageContent() {
       // Check completeness on frontend
       const completeness = checkAdCompleteness(ad);
       if (!completeness.is_complete) {
-        // Redirect to design page if incomplete
-        router.push(`/google_ads/${id}/design`);
+        // Redirect to the ad detail page (design form is embedded there) if incomplete
+        router.push(buildUrl(`/google-ads/${ad.slug ?? id}`));
       } else {
         // Show update modal if complete
         setSelectedAd(ad);

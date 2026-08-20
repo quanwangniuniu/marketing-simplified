@@ -33,11 +33,13 @@ urlpatterns = [
     path('sheets/<int:sheet_id>/rows/delete/', views.SheetRowDeleteByIdView.as_view(), name='sheet-row-delete-by-id'),
     path('sheets/<int:sheet_id>/columns/delete/', views.SheetColumnDeleteByIdView.as_view(), name='sheet-column-delete-by-id'),
     path('sheets/<int:sheet_id>/operations/<int:operation_id>/revert/', views.SheetOperationRevertByIdView.as_view(), name='sheet-operation-revert-by-id'),
+    path('sheets/<int:sheet_id>/ws-ticket/', views.SheetWebSocketTicketView.as_view(), name='sheet-websocket-ticket'),
     
     # Cells
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/range/', views.CellRangeReadView.as_view(), name='cell-range-read'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/batch/', views.CellBatchUpdateView.as_view(), name='cell-batch-update'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/cells/import-finalize/', views.ImportFinalizeView.as_view(), name='cell-import-finalize'),
+    path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/export.xlsx', views.SheetXlsxExportView.as_view(), name='sheet-xlsx-export'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/pivot-config/', views.PivotConfigView.as_view(), name='pivot-config'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/pivot-recompute/', views.PivotRecomputeView.as_view(), name='pivot-recompute'),
     path('spreadsheets/<str:spreadsheet_id>/sheets/<int:sheet_id>/highlights/', views.SpreadsheetHighlightListView.as_view(), name='sheet-highlight-list'),
@@ -51,4 +53,3 @@ urlpatterns = [
     path('patterns/<uuid:id>/apply/', views.WorkflowPatternApplyView.as_view(), name='pattern-apply'),
     path('pattern-jobs/<uuid:job_id>/', views.PatternJobStatusView.as_view(), name='pattern-job-status'),
 ]
-

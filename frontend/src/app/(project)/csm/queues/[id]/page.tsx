@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import Modal from '@/components/ui/Modal';
 import TierBadge from '@/components/csm/TierBadge';
 import QueueForm from '@/components/csm/QueueForm';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { Queue, QueueAgent, QueueTeam, QueueTicketCounts } from '@/types/csm';
 import CsmAPI from '@/lib/api/csmApi';
 import { ArrowLeft, Plus, Trash2, Pencil, Users, AlertCircle } from 'lucide-react';
@@ -16,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const QueueDetailContent: React.FC = () => {
   const params = useParams();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const queueId = String(params.id);
 
   const [queue, setQueue] = useState<Queue | null>(null);
@@ -142,7 +144,7 @@ const QueueDetailContent: React.FC = () => {
         {/* Header */}
         <div>
           <button
-            onClick={() => router.push('/csm/queues')}
+            onClick={() => router.push(buildUrl('/csm/queues'))}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3"
           >
             <ArrowLeft size={14} />

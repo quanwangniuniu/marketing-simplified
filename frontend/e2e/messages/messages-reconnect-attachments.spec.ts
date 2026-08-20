@@ -69,15 +69,6 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.route('**/api/chat/chats/**', async (route) => {
-    const pathname = new URL(route.request().url()).pathname;
-    if (/\/api\/chat\/chats\/\d+\/pins\/?$/.test(pathname)) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      });
-      return;
-    }
     if (!isChatListEndpoint(route.request().url()) || route.request().method() !== 'GET') {
       await route.fallback();
       return;

@@ -118,8 +118,8 @@ function OrgDetailContent() {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = parseInt(params.orgId, 10);
-    if (isNaN(id)) {
+    const id = params.orgId;
+    if (!id) {
       setError('Invalid organization ID.');
       setLoading(false);
       return;

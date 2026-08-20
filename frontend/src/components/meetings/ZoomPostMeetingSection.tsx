@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 
 import type { ZoomPostMeeting } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 import {
   labelMeetingStatus,
@@ -38,6 +39,7 @@ export interface ZoomPostMeetingSectionProps {
 }
 
 export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSectionProps) {
+  const buildUrl = useBuildUrl();
   const linked = zoomPostMeeting != null;
   const top = resolveTopBanner(zoomPostMeeting ?? null, linked);
   const z = zoomPostMeeting;
@@ -52,7 +54,7 @@ export function ZoomPostMeetingSection({ zoomPostMeeting }: ZoomPostMeetingSecti
           {top.showSettingsLink ? (
             <>
               {' '}
-              <Link href="/integrations?open_zoom=1" className="font-medium text-[#1a9ba3] underline">
+              <Link href={buildUrl('/integrations?open_zoom=1')} className="font-medium text-[#1a9ba3] underline">
                 Integrations
               </Link>
             </>

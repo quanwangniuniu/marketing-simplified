@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import PriorityIcon, { type PriorityValue } from '@/priority/PriorityIcon';
 
 interface LinkedTask {
@@ -46,6 +47,7 @@ export default function DecisionLinkedTasksSection({
   onCreateTask,
   refreshKey,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [tasks, setTasks] = useState<LinkedTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +82,7 @@ export default function DecisionLinkedTasksSection({
     };
   }, [decisionId, refreshKey]);
 
-  const linkHref = (task: LinkedTask) => {
-    const key = task.slug ?? task.id;
-    return `/tasks/${key}`;
-  };
+  const linkHref = (task: LinkedTask) => buildUrl(`/tasks/${task.slug ?? task.id}`);
 
   return (
     <section

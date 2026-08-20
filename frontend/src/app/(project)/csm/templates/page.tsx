@@ -12,6 +12,7 @@ import api from '@/lib/api';
 import { QuickReplyTemplateAPI, TemplateTagAPI } from '@/lib/api/csmConversationApi';
 import type { QuickReplyTemplate, QuickReplyTemplateHistory, TemplateTag } from '@/types/csmConversation';
 import FilterDropdown from '@/components/ui/FilterDropdown';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface TeamOption { id: number; name: string; }
 import { Plus, Pencil, Trash2, Tag, Search, X, History, ChevronDown, ChevronUp, Bold, Italic, List, ListOrdered, Building2, LayoutTemplate, Users, Globe, Check, Settings2 } from 'lucide-react';
@@ -639,6 +640,7 @@ function TemplateModal({
 // Main page
 // ---------------------------------------------------------------------------
 function TemplatesPageContent() {
+  const buildUrl = useBuildUrl();
   const [adminOrgs, setAdminOrgs] = useState<{ id: number; name: string }[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
@@ -912,7 +914,7 @@ function TemplatesPageContent() {
                 administrator to add you to theirs — before you can add templates.
               </p>
               <a
-                href="/csm?tab=organisations"
+                href={buildUrl('/csm?tab=organisations')}
                 className="px-5 py-2.5 text-sm font-medium bg-[#1a9ba3] text-white rounded-lg hover:bg-[#15848b]"
               >
                 Go to Organisations

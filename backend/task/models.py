@@ -1,5 +1,7 @@
 from contextlib import nullcontext
-from django.db import models
+from datetime import timedelta
+from django.db import models, router, transaction
+from django.utils import timezone
 from core.slug_mixins import SluggedResourceModelMixin
 from django.contrib.auth import get_user_model
 from django_fsm import FSMField, transition
@@ -217,6 +219,15 @@ class Task(SluggedResourceModelMixin, models.Model):
 
     def __str__(self):
         return f"Task #{self.id} - {self.summary} ({self.status})"
+
+    def save(self, *args, **kwargs):
+
+        using = kwargs.get('using') or router.db_for_write(
+            self.__class__,
+            instance=self,
+        )
+        with transaction.atomic(using=using):
+            return super().save(*args, **kwargs)
 
     # --- FSM Transition ---
 
@@ -848,6 +859,67 @@ class TaskRelation(models.Model):
         super().save(*args, **kwargs)
 
 
+def _hierarchy_edges_queryset(*, excluding_edges=None):
+    """Return TaskHierarchy rows, optionally omitting specific parent→child edges."""
+    qs = TaskHierarchy.objects.all()
+    if not excluding_edges:
+        return qs
+    for parent_id, child_id in excluding_edges:
+        qs = qs.exclude(parent_task_id=parent_id, child_task_id=child_id)
+    return qs
+
+
+def would_create_task_hierarchy_cycle(
+    parent_task_id,
+    child_task_id,
+    *,
+    excluding_edges=None,
+) -> bool:
+    """
+    Return True if adding parent_task → child_task would create a cycle.
+
+    Adding edge P→C closes a loop when C can already reach P by following
+    existing parent→child edges (C is an ancestor of P in the tree/DAG).
+    """
+    if parent_task_id == child_task_id:
+        return True
+
+    qs = _hierarchy_edges_queryset(excluding_edges=excluding_edges)
+    visited = set()
+    stack = [child_task_id]
+
+    while stack:
+        current_id = stack.pop()
+        if current_id == parent_task_id:
+            return True
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+        stack.extend(
+            qs.filter(parent_task_id=current_id).values_list('child_task_id', flat=True)
+        )
+
+    return False
+
+
+def validate_task_hierarchy_no_cycle(
+    parent_task_id,
+    child_task_id,
+    *,
+    excluding_edges=None,
+):
+    """Raise ValidationError when the proposed parent→child edge would cycle."""
+    if would_create_task_hierarchy_cycle(
+        parent_task_id,
+        child_task_id,
+        excluding_edges=excluding_edges,
+    ):
+        raise ValidationError(
+            "Circular reference detected: this parent assignment would create "
+            "a cycle in the task hierarchy."
+        )
+
+
 class TaskHierarchy(models.Model):
     """
     Task hierarchy model for storing parent-subtask relationships.
@@ -893,10 +965,11 @@ class TaskHierarchy(models.Model):
             if existing_qs.filter(parent_task_id=self.child_task_id).exists():
                 raise ValidationError("A subtask cannot have subtasks. Only 1 level of nesting is allowed.")
             
-            # Prevent circular references
-            # Check if parent_task is a subtask of child_task
-            if existing_qs.filter(parent_task_id=self.child_task_id, child_task_id=self.parent_task_id).exists():
-                raise ValidationError("Circular reference detected: tasks cannot be subtasks of each other.")
+            # Prevent circular references (2-node and longer cycles)
+            validate_task_hierarchy_no_cycle(
+                self.parent_task_id,
+                self.child_task_id,
+            )
     
     def save(self, *args, **kwargs):
         """Override save to run validation"""
@@ -911,6 +984,74 @@ class TaskFieldHistory(models.Model):
         'summary', 'status', 'priority', 'type', 'owner',
         'due_date', 'planned_start_date', 'description', 'tags',
     ]
+
+    @classmethod
+    def append_transitions(cls, *, task, transitions, changed_by):
+        """
+        Append every accepted field transition in deterministic order.
+
+        The pre-save signal locks the Task row before saving. For each field,
+        the latest persisted History new_value is used as the next row's
+        old_value. History rows are ordered by changed_at and primary key.
+
+        A rebased no-op such as B -> B is still inserted because it represents
+        an accepted write and must remain visible in the audit History.
+        """
+        if not transitions:
+            return []
+
+        latest_changed_at = (
+            cls.objects
+            .filter(task_id=task.pk)
+            .order_by('-changed_at', '-pk')
+            .values_list('changed_at', flat=True)
+            .first()
+        )
+
+        next_changed_at = timezone.now()
+        if (
+            latest_changed_at is not None
+            and next_changed_at <= latest_changed_at
+        ):
+            next_changed_at = latest_changed_at + timedelta(microseconds=1)
+
+        created_records = []
+
+        for transition in transitions:
+            field_name = transition['field_name']
+            new_value = transition['new_value']
+
+            previous_transition = (
+                cls.objects
+                .filter(task_id=task.pk, field_name=field_name)
+                .order_by('-changed_at', '-pk')
+                .only('new_value')
+                .first()
+            )
+
+            old_value = (
+                previous_transition.new_value
+                if previous_transition is not None
+                else transition['old_value']
+            )
+
+            record = cls.objects.create(
+                task=task,
+                field_name=field_name,
+                old_value=old_value,
+                new_value=new_value,
+                changed_by=changed_by,
+            )
+
+            cls.objects.filter(pk=record.pk).update(
+                changed_at=next_changed_at,
+            )
+            record.changed_at = next_changed_at
+            created_records.append(record)
+
+            next_changed_at += timedelta(microseconds=1)
+
+        return created_records
 
     task = models.ForeignKey(
         Task,

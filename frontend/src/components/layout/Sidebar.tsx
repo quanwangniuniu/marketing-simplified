@@ -35,6 +35,7 @@ import {
   PiggyBank,
   Layers,
   ScrollText,
+  History,
 } from "lucide-react";
 import { AgentPanelToggleIcon } from "@/components/agent/AgentPanelToggleIcon";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -166,6 +167,11 @@ const getNavigationItems = (
           name: t ? t("sidebar.permissions") : "Permissions",
           href: "/admin/permissions",
           icon: Shield,
+        },
+        {
+          name: t ? t("sidebar.override_audit_log") : "Override Audit Log",
+          href: "/admin/override-audits",
+          icon: History,
         },
         // {
         //   name: t ? t("sidebar.system_settings") : "System Settings",

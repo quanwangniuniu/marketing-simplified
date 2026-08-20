@@ -45,6 +45,47 @@ export const TaskAPI = {
     return api.get("/api/tasks/", { params: queryParams });
   },
 
+  /** Walk paginated task list until all pages are loaded. */
+  getAllTasks: async (
+    params?: TaskListFilters & { content_type?: string; object_id?: string },
+  ): Promise<TaskData[]> => {
+    let allTasks: TaskData[] = [];
+    let nextUrl: string | null = null;
+    let page = 1;
+
+    do {
+      let response: { data: { results?: TaskData[]; next?: string | null } | TaskData[] };
+
+      try {
+        if (nextUrl) {
+          const parsed = new URL(nextUrl, window.location.origin);
+          response = await api.get(parsed.pathname + parsed.search);
+        } else {
+          response = await TaskAPI.getTasks({ ...params, page });
+        }
+      } catch (err) {
+        const apiData = (err as { response?: { data?: { detail?: string } } })?.response?.data;
+        const detail = typeof apiData?.detail === 'string' ? apiData.detail : '';
+        if (allTasks.length > 0 && /invalid page/i.test(detail)) {
+          break;
+        }
+        throw err;
+      }
+
+      const responseData = response.data;
+      const pageTasks = Array.isArray(responseData)
+        ? responseData
+        : (responseData.results ?? []);
+      allTasks = allTasks.concat(pageTasks);
+
+      nextUrl = Array.isArray(responseData) ? null : (responseData.next ?? null);
+      page += 1;
+      if (page > 100) break;
+    } while (nextUrl);
+
+    return allTasks;
+  },
+
   getTasksGantt: async (params?: { project_id?: number | string }): Promise<GanttChartPayload> => {
     const response = await api.get("/api/tasks/gantt/", { params });
     return response.data as GanttChartPayload;
@@ -65,8 +106,16 @@ export const TaskAPI = {
     }),
 
   // Update a task
-  updateTask: (taskId: number | string, data: Partial<TaskData>) =>
-    api.patch(`/api/tasks/${taskId}/`, data),
+  updateTask: (
+    taskId: number | string,
+    data: Partial<TaskData>,
+    operationId?: string,
+  ) =>
+    api.patch(`/api/tasks/${taskId}/`, data, {
+      params: operationId
+        ? { operation_id: operationId }
+        : undefined,
+    }),
 
   // Project-scoped tag catalog (aggregated from all tasks in the project)
   getTagCatalog: async (projectId: number | string): Promise<{ name: string; color: string }[]> => {
@@ -304,6 +353,35 @@ export const TaskAPI = {
     date_to?: string;
   }) => api.get('/api/tasks/status-report/', { params }),
 };
+
+export const TASK_HIERARCHY_CYCLE_CODE = 'task_hierarchy_cycle';
+
+type TaskHierarchyErrorBody = {
+  detail?: string;
+  code?: string;
+  error?: string;
+};
+
+/** Map move/add-subtask hierarchy failures; 422 + code indicate a cycle (MED-235). */
+export function parseTaskHierarchyApiError(error: unknown): {
+  message: string;
+  isHierarchyCycle: boolean;
+} {
+  const response = (error as { response?: { status?: number; data?: TaskHierarchyErrorBody } })
+    .response;
+  const data = response?.data;
+  const isHierarchyCycle =
+    response?.status === 422 || data?.code === TASK_HIERARCHY_CYCLE_CODE;
+  const message =
+    (typeof data === 'string' ? data : undefined) ||
+    data?.detail ||
+    data?.error ||
+    (response?.status === 404
+      ? 'Parent move API is unavailable. Restart the backend service and try again.'
+      : undefined) ||
+    'Failed to update parent task.';
+  return { message, isHierarchyCycle };
+}
 
 /**
  * True when a task action failed because another approver decided it first

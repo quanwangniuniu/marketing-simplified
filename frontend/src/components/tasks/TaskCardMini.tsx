@@ -5,6 +5,7 @@ import type { TaskData } from '@/types/task';
 import UserAvatar from '@/people/UserAvatar';
 import { getTaskStatusDefinition } from '@/lib/tasks/taskStatuses';
 import { getTaskStatusLucideIcon } from './taskStatusIcons';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface TaskCardMiniProps {
   task: TaskData;
@@ -14,6 +15,7 @@ interface TaskCardMiniProps {
 
 export default function TaskCardMini({ task, columnAccentHex }: TaskCardMiniProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const status = task.status ?? 'DRAFT';
   const statusMeta = getTaskStatusDefinition(status);
   const statusLabel = statusMeta.label || status;
@@ -23,7 +25,7 @@ export default function TaskCardMini({ task, columnAccentHex }: TaskCardMiniProp
   return (
     <button
       type="button"
-      onClick={() => router.push(`/tasks/${task.slug}`)}
+      onClick={() => router.push(buildUrl(`/tasks/${task.slug}`))}
       className={`group flex w-full flex-col rounded-md border-t-4 border-solid bg-white px-3 py-3 text-left shadow-sm ring-1 ring-gray-100 transition hover:shadow-md hover:ring-gray-200${columnAccentHex ? '' : ` ${statusMeta.cardTopBorder}`}`}
       style={columnAccentHex ? { borderTopColor: columnAccentHex } : undefined}
     >

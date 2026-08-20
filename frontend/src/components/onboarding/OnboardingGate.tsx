@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useAuthStore } from '@/lib/authStore';
 import OnboardingProjectChooser from './OnboardingProjectChooser';
@@ -12,6 +13,7 @@ type OnboardingOverlayMode = 'chooser' | 'classic';
 const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const isPublicAuthRoute =
     pathname?.startsWith('/login') ||
@@ -75,7 +77,7 @@ const OnboardingGate = ({ children }: { children: React.ReactNode }) => {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto px-4 py-8">
           {overlayMode === 'chooser' ? (
             <OnboardingProjectChooser
-              onQuickStart={() => router.push('/projects/quick-start')}
+              onQuickStart={() => router.push(buildUrl('/projects/quick-start'))}
               onClassic={() => setOverlayMode('classic')}
             />
           ) : (

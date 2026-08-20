@@ -24,6 +24,7 @@ import NotificationDrawer from '@/components/notifications/NotificationDrawer';
 import { useNotificationSSE } from '@/hooks/useNotificationSSE';
 import { useStripProjectIdFromUrl } from '@/lib/useStripProjectIdFromUrl';
 import { useGuardedRouterPush } from '@/contexts/UnsavedChangesGuardContext';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -129,6 +130,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const guardedPush = useGuardedRouterPush(router.push);
+  const buildUrl = useBuildUrl();
   const searchParams = useSearchParams();
   const breadcrumb = useMemo(() => getBreadcrumb(pathname), [pathname]);
   const showBack = !!pathname && !ROOT_PATHS.has(pathname);
@@ -139,9 +141,9 @@ export default function DashboardLayout({
     // /admin/csm/* maps back to the CSM page
     const safePath =
       parent === '/admin' ? '/select-project' :
-      parent === '/admin/csm' ? '/csm' :
+      parent === '/admin/csm' ? buildUrl('/csm') :
       parent === '/organizations' ? '/profile' :
-      parent;
+      buildUrl(parent);
     // Preserve existing query params (e.g. ?project=1) when navigating within admin settings
     const qs = searchParams.toString();
     guardedPush(qs ? `${safePath}?${qs}` : safePath);

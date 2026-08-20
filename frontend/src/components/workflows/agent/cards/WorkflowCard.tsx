@@ -10,6 +10,7 @@ import HoverCardPortal from "./HoverCardPortal"
 import { WorkflowHoverContent } from "./WorkflowHoverPreview"
 import { CreateTemplateModal } from "@/components/agent/templates/CreateTemplateModal"
 import { TriggerBadge, TriggerVisualizer } from "../triggers"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const STATUS_CONFIG: Record<
   AgentWorkflowDefinition["status"],
@@ -38,6 +39,7 @@ export default function WorkflowCard({
   needsProject,
 }: WorkflowCardProps) {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [localStatus, setLocalStatus] = useState(workflow.status)
@@ -56,7 +58,7 @@ export default function WorkflowCard({
     return () => document.removeEventListener("mousedown", handler)
   }, [menuOpen])
 
-  const openEditor = () => router.push(`/workflows/${workflow.slug}`)
+  const openEditor = () => router.push(buildUrl(`/workflows/${workflow.slug}`))
 
   const handleStatusChange = (id: string, newStatus: string) => {
     setLocalStatus(newStatus as AgentWorkflowDefinition["status"])

@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { AgentMessageBoardText } from "./AgentMessageBoardText"
 import type { RecommendedDecisionTreeNode } from "@/types/agent"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const riskColors = {
   HIGH: { bg: "bg-red-500/20", text: "text-red-400" },
@@ -74,6 +75,7 @@ export function DecisionTreeListCard({
   createButtonDisabled,
   generationStatus = "idle",
 }: DecisionTreeListCardProps) {
+  const buildUrl = useBuildUrl()
   const [expandedRef, setExpandedRef] = useState<string | null>(null)
   const titleTarget = `Recommended Decision Tree (${nodes.length})`
 
@@ -157,7 +159,7 @@ export function DecisionTreeListCard({
   const handleRowClick = (node: RecommendedDecisionTreeNode) => {
     const decisionId = createdDecisionByRef?.[node.ref]
     if (decisionId != null && Number.isFinite(decisionId)) {
-      window.location.href = `/decisions/${decisionId}`
+      window.location.href = buildUrl(`/decisions/${decisionId}`)
       return
     }
     setExpandedRef((prev) => (prev === node.ref ? null : node.ref))

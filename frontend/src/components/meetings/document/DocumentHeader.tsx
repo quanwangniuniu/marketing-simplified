@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ArrowLeft } from 'lucide-react';
 import MeetingStatusPill from '@/components/meetings/MeetingStatusPill';
 import type { Meeting } from '@/types/meeting';
@@ -68,10 +68,11 @@ export default function DocumentHeader({
   activeUsers,
   readOnly,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const status = formatStatus(wsState, closeCode, saving, lastSyncedAt);
   const archived = meeting.is_archived || meeting.status === 'archived';
   const noAccess = closeCode === 4003;
-  const detailHref = nestedProjectPath(projectId, `/meetings/${meeting.slug}`);
+  const detailHref = buildUrl(`/meetings/${meeting.slug}`);
 
   return (
     <header className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">

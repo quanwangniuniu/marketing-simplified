@@ -527,6 +527,50 @@ class MessageStatus(TimeStampedModel):
             self.save(update_fields=['status', 'delivered_at', 'read_at', 'updated_at'])
 
 
+class ChatOutboxEvent(models.Model):
+    """Durable hand-off between a committed tenant message and Celery.
+
+    The table deliberately lives in ``public`` (this model is not listed in
+    ``core.tenant_config``), allowing one dispatcher to serve every tenant.
+    """
+
+    EVENT_MESSAGE_REALTIME = 'message.realtime'
+    EVENT_MESSAGE_NOTIFICATIONS = 'message.notifications'
+    EVENT_CHOICES = [
+        (EVENT_MESSAGE_REALTIME, 'Message realtime delivery'),
+        (EVENT_MESSAGE_NOTIFICATIONS, 'Message persisted notifications'),
+    ]
+
+    tenant_schema = models.CharField(max_length=128)
+    event_type = models.CharField(max_length=64, choices=EVENT_CHOICES)
+    aggregate_id = models.PositiveBigIntegerField(help_text='Tenant Message primary key')
+    available_at = models.DateTimeField(default=timezone.now, db_index=True)
+    claimed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_schema', 'event_type', 'aggregate_id'],
+                name='chat_outbox_tenant_event_message_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['published_at', 'available_at', 'claimed_at'],
+                name='chat_outbox_pending_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.tenant_schema}:{self.event_type}:{self.aggregate_id}'
+
+
 class MessageMention(TimeStampedModel):
     """
     Structured mention relation for chat messages.
