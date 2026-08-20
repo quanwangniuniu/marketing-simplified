@@ -200,6 +200,8 @@ export async function createTestVariation(args: {
   userId: number;
   status: string;
   batchId?: string;
+  sourceMode?: string;
+  creativeId?: bigint;
 }): Promise<TestVariation> {
   const now = new Date();
   return prisma.adCopyVariation.create({
@@ -207,7 +209,7 @@ export async function createTestVariation(args: {
       createdAt: now,
       updatedAt: now,
       isDeleted: false,
-      sourceMode: 'custom',
+      sourceMode: args.sourceMode ?? 'custom',
       sourceRef: '',
       hook: 'Fixture hook',
       headline: 'Fixture headline',
@@ -220,6 +222,7 @@ export async function createTestVariation(args: {
       batchPosition: 0,
       status: args.status,
       createdById: BigInt(args.userId),
+      creativeId: args.creativeId ?? null,
       projectId: args.projectId,
       slug: `studio-test-${randomUUID()}`,
     },
