@@ -5,13 +5,14 @@ import { isAuthFailure } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isActiveProjectMember } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
-import { findVariationByIdOrSlug, serializeVariation } from '@/lib/variations';
+import { findVariationBySlug, serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
 
 const WRITABLE_STRING_FIELDS = ['hook', 'headline', 'description', 'cta'] as const;
 const WRITABLE_STATUSES = new Set(['draft', 'reviewed']);
 
+// The path segment is a slug; the param stays named `id` to keep the Django URL.
 type RouteContext = { params: { id: string } };
 
 type LoadedVariation =
@@ -30,7 +31,7 @@ async function loadOwnedVariation(
     };
   }
 
-  const row = await findVariationByIdOrSlug(idOrSlug);
+  const row = await findVariationBySlug(idOrSlug);
   if (!row) {
     return {
       ok: false,

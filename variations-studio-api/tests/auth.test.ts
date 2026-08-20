@@ -100,7 +100,7 @@ describe('write endpoints are guarded too', () => {
       studioRequest('/api/ad_copy_variation/variations/bulk_delete/', {
         body: {
           project_id: String(fixture.projectA),
-          selected_ids: [Number(fixture.draftA)],
+          selected_ids: [Number(fixture.draftA.id)],
           status: 'draft',
         },
       })

@@ -153,7 +153,7 @@ export async function runCustomGenerate(args: {
     projectIdParam(args.body.project_id)
   );
   if (!project.ok) {
-    throw new ApiError(project.status, project.error);
+    throw new ApiError(project.status, project.error, project.field);
   }
 
   const instruction =

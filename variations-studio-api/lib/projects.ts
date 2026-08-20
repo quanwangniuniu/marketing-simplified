@@ -26,24 +26,46 @@ export async function resolveProjectId(
   return rows[0]?.id ?? null;
 }
 
+export type ProjectFailure = {
+  ok: false;
+  status: 400 | 403 | 404;
+  error: string;
+  field: 'error' | 'detail';
+};
+
+/**
+ * Mirrors AdCopyVariationViewSet._require_project. Django resolves a numeric
+ * project_id straight to a pk and then runs get_object_or_404, so an unknown
+ * numeric id is a 404 while a blank or unresolvable slug is a 400.
+ */
 export async function requireProjectForUser(
   schema: string,
   userId: number,
   rawProjectId: string | null
-): Promise<
-  | { ok: true; projectId: bigint }
-  | { ok: false; status: 400 | 403; error: string }
-> {
-  const projectId = await resolveProjectId(schema, rawProjectId);
+): Promise<{ ok: true; projectId: bigint } | ProjectFailure> {
+  const value = rawProjectId?.trim() ?? '';
+  const missing: ProjectFailure = {
+    ok: false,
+    status: 400,
+    error: 'project_id is required',
+    field: 'error',
+  };
+  if (!value) return missing;
+
+  const projectId = await resolveProjectId(schema, value);
   if (!projectId) {
-    return { ok: false, status: 400, error: 'project_id is required' };
+    return /^\d+$/.test(value)
+      ? { ok: false, status: 404, error: 'Not found.', field: 'detail' }
+      : missing;
   }
+
   const allowed = await isActiveProjectMember(schema, userId, projectId);
   if (!allowed) {
     return {
       ok: false,
       status: 403,
       error: 'You are not a member of this project.',
+      field: 'error',
     };
   }
   return { ok: true, projectId };

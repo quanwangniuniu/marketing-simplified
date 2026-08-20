@@ -27,14 +27,14 @@ export function serializeVariation(row: AdCopyVariation) {
   };
 }
 
-export async function findVariationByIdOrSlug(idOrSlug: string) {
-  const value = idOrSlug.trim();
+/**
+ * Detail lookups are slug-only, matching core.slug_mixins.SlugLookupViewSetMixin:
+ * "Numeric identifiers are not resolved and yield 404." lib/slugs.ts already
+ * prefixes purely numeric slugs so the two halves cannot collide.
+ */
+export async function findVariationBySlug(slug: string) {
+  const value = slug.trim();
   if (!value) return null;
-  if (/^\d+$/.test(value)) {
-    return prisma.adCopyVariation.findFirst({
-      where: { id: BigInt(value) },
-    });
-  }
   return prisma.adCopyVariation.findFirst({
     where: { slug: value },
   });

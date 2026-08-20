@@ -147,12 +147,12 @@ describe('generate creative ownership', () => {
 describe('PATCH field validation', () => {
   function patch(body: Record<string, unknown>) {
     return patchVariation(
-      studioRequest(`/api/ad_copy_variation/variations/${fixture.draftA}/`, {
+      studioRequest(`/api/ad_copy_variation/variations/${fixture.draftA.slug}/`, {
         token,
         method: 'PATCH',
         body,
       }),
-      { params: { id: String(fixture.draftA) } }
+      { params: { id: fixture.draftA.slug } }
     );
   }
 
@@ -162,7 +162,7 @@ describe('PATCH field validation', () => {
     expect(response.status).toBe(400);
 
     const row = await prisma.adCopyVariation.findFirst({
-      where: { id: fixture.draftA },
+      where: { id: fixture.draftA.id },
       select: { projectId: true },
     });
     expect(row?.projectId).toBe(fixture.projectA);

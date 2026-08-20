@@ -35,23 +35,23 @@ afterAll(async () => {
 
 beforeEach(async () => {
   batchId = randomUUID();
-  mine = await createTestVariation({
+  mine = (await createTestVariation({
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     batchId,
-  });
-  alsoMine = await createTestVariation({
+  })).id;
+  alsoMine = (await createTestVariation({
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     batchId,
-  });
-  theirs = await createTestVariation({
+  })).id;
+  theirs = (await createTestVariation({
     projectId: fixture.projectB,
     userId: fixture.memberUserId,
     status: 'draft',
-  });
+  })).id;
 });
 
 afterEach(async () => {

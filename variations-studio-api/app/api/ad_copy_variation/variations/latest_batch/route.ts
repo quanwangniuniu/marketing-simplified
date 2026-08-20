@@ -21,7 +21,10 @@ export async function GET(request: Request) {
     projectParam
   );
   if (!project.ok) {
-    return NextResponse.json({ error: project.error }, { status: project.status });
+    return NextResponse.json(
+      { [project.field]: project.error },
+      { status: project.status }
+    );
   }
 
   const latest = await prisma.adCopyVariation.findFirst({

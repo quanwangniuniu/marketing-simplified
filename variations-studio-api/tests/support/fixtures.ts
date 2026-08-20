@@ -14,6 +14,8 @@ import { slugToSchemaName, tenantTable } from '@/lib/tenant';
  * fixtures a regression test for reading membership out of the wrong schema.
  */
 
+export type TestVariation = { id: bigint; slug: string };
+
 export type StudioFixture = {
   schema: string;
   organizationId: bigint;
@@ -23,9 +25,9 @@ export type StudioFixture = {
   inactiveUserId: number;
   projectA: bigint;
   projectB: bigint;
-  draftA: bigint;
-  reviewedA: bigint;
-  draftB: bigint;
+  draftA: TestVariation;
+  reviewedA: TestVariation;
+  draftB: TestVariation;
   connectionId: bigint;
   accountA: bigint;
   accountB: bigint;
@@ -198,9 +200,9 @@ export async function createTestVariation(args: {
   userId: number;
   status: string;
   batchId?: string;
-}): Promise<bigint> {
+}): Promise<TestVariation> {
   const now = new Date();
-  const row = await prisma.adCopyVariation.create({
+  return prisma.adCopyVariation.create({
     data: {
       createdAt: now,
       updatedAt: now,
@@ -221,9 +223,8 @@ export async function createTestVariation(args: {
       projectId: args.projectId,
       slug: `studio-test-${randomUUID()}`,
     },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
-  return row.id;
 }
 
 export async function setupStudioFixture(): Promise<StudioFixture> {

@@ -101,7 +101,13 @@ export async function startBulkPost(request: Request): Promise<
     projectIdParam(json.body.project_id)
   );
   if (!project.ok) {
-    return { ok: false, response: jsonError(project.error, project.status) };
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { [project.field]: project.error },
+        { status: project.status }
+      ),
+    };
   }
 
   const selected = parseSelectedIds(json.body.selected_ids);

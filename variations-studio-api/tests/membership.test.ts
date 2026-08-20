@@ -63,8 +63,18 @@ describe('project membership resolves against the tenant schema', () => {
     expect(response.status).toBe(400);
   });
 
-  it('rejects a project_id that does not exist', async () => {
+  // _require_project resolves a numeric project_id straight to a pk and then
+  // runs get_object_or_404, so an unknown number is a 404 while an unknown
+  // slug never resolves and falls through to the 400 above.
+  it('returns 404 for a numeric project_id that does not exist', async () => {
     const response = await latestBatchFor('999999999');
+
+    expect(response.status).toBe(404);
+    await expect(readJson(response)).resolves.toEqual({ detail: 'Not found.' });
+  });
+
+  it('returns 400 for a project slug that does not exist', async () => {
+    const response = await latestBatchFor('no-such-project');
 
     expect(response.status).toBe(400);
   });
@@ -89,33 +99,40 @@ describe('generate requires membership', () => {
 });
 
 describe('single variation access', () => {
-  it('returns a variation from a project the user belongs to', async () => {
-    const response = await getVariation(
-      studioRequest(`/api/ad_copy_variation/variations/${fixture.draftA}/`, { token }),
-      { params: { id: String(fixture.draftA) } }
+  function get(idOrSlug: string) {
+    return getVariation(
+      studioRequest(`/api/ad_copy_variation/variations/${idOrSlug}/`, { token }),
+      { params: { id: idOrSlug } }
     );
+  }
+
+  it('returns a variation from a project the user belongs to', async () => {
+    const response = await get(fixture.draftA.slug);
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toMatchObject({
-      id: Number(fixture.draftA),
+      id: Number(fixture.draftA.id),
+      slug: fixture.draftA.slug,
       project: Number(fixture.projectA),
     });
   });
 
   it('denies a variation belonging to another project', async () => {
-    const response = await getVariation(
-      studioRequest(`/api/ad_copy_variation/variations/${fixture.draftB}/`, { token }),
-      { params: { id: String(fixture.draftB) } }
-    );
+    const response = await get(fixture.draftB.slug);
 
     expect(response.status).toBe(403);
   });
 
-  it('returns 404 for an unknown variation', async () => {
-    const response = await getVariation(
-      studioRequest('/api/ad_copy_variation/variations/999999999/', { token }),
-      { params: { id: '999999999' } }
-    );
+  it('returns 404 for an unknown slug', async () => {
+    const response = await get('no-such-variation');
+
+    expect(response.status).toBe(404);
+  });
+
+  // core.slug_mixins.SlugLookupViewSetMixin: "Numeric identifiers are not
+  // resolved and yield 404." Resolving them would reopen enumeration by pk.
+  it('refuses to resolve a numeric id, even a real one', async () => {
+    const response = await get(String(fixture.draftA.id));
 
     expect(response.status).toBe(404);
   });
