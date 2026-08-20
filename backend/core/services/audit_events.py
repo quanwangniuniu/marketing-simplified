@@ -15,6 +15,23 @@ from django.utils import timezone
 
 
 AUDIT_SIGNATURE_SALT = "core.audit-event.signature.v1"
+AUDIT_SIGNATURE_ALGORITHM = "HMAC-SHA256"
+DEFAULT_AUDIT_SIGNATURE_KEY_ID = "default"
+REDACTED_VALUE = "[REDACTED]"
+SECRET_FIELD_MARKERS = (
+    "password",
+    "passcode",
+    "token",
+    "secret",
+    "credential",
+    "authorization",
+    "cookie",
+    "otp",
+    "api_key",
+    "apikey",
+    "refresh",
+    "access",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -50,8 +67,45 @@ def _json_safe(value: Any) -> Any:
         return str(value)
 
 
+def _is_secret_field(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(marker in normalized for marker in SECRET_FIELD_MARKERS)
+
+
+def redact_audit_payload(value: Any) -> Any:
+    """Return a JSON-safe payload with secrets removed before signing/storage."""
+
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_str = str(key)
+            redacted[key_str] = REDACTED_VALUE if _is_secret_field(key_str) else redact_audit_payload(item)
+        return redacted
+    if isinstance(value, (list, tuple, set)):
+        return [redact_audit_payload(item) for item in value]
+    return _json_safe(value)
+
+
+def _configured_signature_keys() -> dict[str, str]:
+    keys = getattr(settings, "AUDIT_EVENT_SIGNATURE_KEYS", None)
+    if isinstance(keys, dict) and keys:
+        return {str(key_id): str(secret) for key_id, secret in keys.items()}
+
+    active_key = getattr(settings, "AUDIT_EVENT_ACTIVE_KEY_ID", DEFAULT_AUDIT_SIGNATURE_KEY_ID)
+    return {str(active_key): f"{settings.SECRET_KEY}:{AUDIT_SIGNATURE_SALT}"}
+
+
+def active_audit_signature_key_id() -> str:
+    configured = getattr(settings, "AUDIT_EVENT_ACTIVE_KEY_ID", DEFAULT_AUDIT_SIGNATURE_KEY_ID)
+    return str(configured or DEFAULT_AUDIT_SIGNATURE_KEY_ID)
+
+
+def audit_signature_algorithm() -> str:
+    return AUDIT_SIGNATURE_ALGORITHM
+
+
 def _signature_payload(event) -> dict[str, Any]:
-    return {
+    payload = {
         "id": str(event.id),
         "occurred_at": event.occurred_at,
         "event_type": event.event_type,
@@ -69,16 +123,28 @@ def _signature_payload(event) -> dict[str, Any]:
         "user_agent": event.user_agent or "",
         "signature_version": event.signature_version,
     }
+    if event.signature_version != "v1":
+        payload["alg"] = event.signature_algorithm or AUDIT_SIGNATURE_ALGORITHM
+        payload["kid"] = event.signature_key_id or active_audit_signature_key_id()
+    return payload
 
 
 def sign_audit_event(event) -> str:
-    secret = f"{settings.SECRET_KEY}:{AUDIT_SIGNATURE_SALT}".encode("utf-8")
+    key_id = event.signature_key_id or active_audit_signature_key_id()
+    secret = _configured_signature_keys().get(key_id)
+    if secret is None:
+        raise ValueError(f"Unknown audit signature key id: {key_id}")
     message = _canonical_json(_signature_payload(event)).encode("utf-8")
-    return hmac.new(secret, message, hashlib.sha256).hexdigest()
+    return hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
 def verify_audit_event_signature(event) -> bool:
-    expected = sign_audit_event(event)
+    if event.signature_version != "v1" and event.signature_algorithm != AUDIT_SIGNATURE_ALGORITHM:
+        return False
+    try:
+        expected = sign_audit_event(event)
+    except ValueError:
+        return False
     return hmac.compare_digest(expected, event.signature or "")
 
 
@@ -140,9 +206,9 @@ def emit_audit_event(
         project=project,
         target_type=target_type,
         target_id=str(target_id) if target_id is not None else "",
-        before=_json_safe(before),
-        after=_json_safe(after),
-        context=_json_safe(merged_context),
+        before=redact_audit_payload(before),
+        after=redact_audit_payload(after),
+        context=redact_audit_payload(merged_context),
         request_id=request_id,
         ip_address=_request_ip(request),
         user_agent=user_agent,
@@ -150,10 +216,21 @@ def emit_audit_event(
     )
 
 
+def emit_audit_event_on_commit(**kwargs):
+    """Queue one audit event after the surrounding DB transaction commits."""
+
+    result = {"event": None}
+
+    def _emit():
+        result["event"] = emit_audit_event(**kwargs)
+
+    transaction.on_commit(_emit)
+    return result
+
+
 def safe_emit_audit_event(**kwargs):
     try:
-        with transaction.atomic(savepoint=True):
-            return emit_audit_event(**kwargs)
+        return emit_audit_event_on_commit(**kwargs)
     except Exception:  # pragma: no cover - audit must never break primary flow
         logger.exception("Failed to emit audit event %s", kwargs.get("event_type"))
         return None

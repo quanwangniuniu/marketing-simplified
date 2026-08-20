@@ -1431,9 +1431,9 @@ class AcceptInvitationView(APIView):
             )
 
             # Generate tokens for new users
-            from rest_framework_simplejwt.tokens import RefreshToken
+            from core.services.auth_tokens import build_user_refresh_token
 
-            refresh = RefreshToken.for_user(user)
+            refresh = build_user_refresh_token(user)
             from core.serializers import UserSummarySerializer
 
             user_data = UserSummarySerializer(user).data
@@ -2516,8 +2516,9 @@ class AcceptOrganizationInvitationView(APIView):
 
         if user_created:
             # Generate JWT tokens
-            from rest_framework_simplejwt.tokens import RefreshToken
-            refresh = RefreshToken.for_user(user)
+            from core.services.auth_tokens import build_user_refresh_token
+
+            refresh = build_user_refresh_token(user)
             response_data['tokens'] = {
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),

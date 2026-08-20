@@ -5,6 +5,7 @@ from django.db import DatabaseError, connection
 from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from authentication.middleware import PasswordRotationMiddleware
 from authentication.password_rotation import (
@@ -134,6 +135,7 @@ def test_org_admin_is_subject_to_password_rotation():
     PASSWORD_ROTATION_MAX_AGE_DAYS=90,
     PASSWORD_ROTATION_WARNING_DAYS=7,
 )
+@pytest.mark.django_db(transaction=True)
 def test_middleware_blocks_expired_elevated_user_and_allows_change_password():
     user = make_user(is_superuser=True)
     user.password_last_changed_at = timezone.now() - timedelta(days=91)
@@ -176,6 +178,40 @@ def test_middleware_blocks_expired_elevated_user_and_allows_change_password():
         target_type="user",
         target_id=str(user.id),
     ).exists()
+    assert change_response.data["reauthentication_required"] is True
+
+
+@override_settings(
+    PASSWORD_ROTATION_ENABLED=True,
+    PASSWORD_ROTATION_MAX_AGE_DAYS=90,
+    PASSWORD_ROTATION_WARNING_DAYS=7,
+)
+@pytest.mark.django_db(transaction=True)
+def test_change_password_revokes_previously_issued_jwt():
+    user = make_user(is_superuser=True)
+    old_refresh = RefreshToken.for_user(user)
+    old_refresh["auth_token_version"] = user.auth_token_version
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.post(
+        "/auth/change-password/",
+        {
+            "current_password": "CurrentPassword123!",
+            "new_password": "ChangedPassword123!",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.auth_token_version == 1
+
+    stale_client = APIClient()
+    stale_client.credentials(HTTP_AUTHORIZATION=f"Bearer {old_refresh.access_token}")
+    stale_response = stale_client.get("/auth/me/")
+
+    assert stale_response.status_code == 401
 
 
 @pytest.mark.django_db(transaction=True)

@@ -243,6 +243,10 @@ class CustomUser(AbstractUser):
         blank=True,
         help_text="Timestamp used by elevated-role password rotation policy.",
     )
+    auth_token_version = models.PositiveIntegerField(
+        default=0,
+        help_text="Incremented to invalidate previously issued JWTs after security-sensitive changes.",
+    )
 
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
 
@@ -573,7 +577,7 @@ class DataExportRequest(TimeStampedModel):
 class AuditEvent(models.Model):
     """Central append-only audit event with per-row HMAC tamper detection."""
 
-    SIGNATURE_VERSION = "v1"
+    SIGNATURE_VERSION = "v2"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
@@ -612,6 +616,8 @@ class AuditEvent(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, default="")
     signature_version = models.CharField(max_length=20, default=SIGNATURE_VERSION)
+    signature_key_id = models.CharField(max_length=80, blank=True, default="")
+    signature_algorithm = models.CharField(max_length=40, blank=True, default="")
     signature = models.CharField(max_length=128, editable=False)
 
     class Meta:
@@ -628,6 +634,14 @@ class AuditEvent(models.Model):
             raise ValueError("AuditEvent rows are append-only and cannot be updated.")
         if self.actor_id and not self.actor_email:
             self.actor_email = self.actor.email
+        if not self.signature_key_id:
+            from core.services.audit_events import active_audit_signature_key_id
+
+            self.signature_key_id = active_audit_signature_key_id()
+        if not self.signature_algorithm:
+            from core.services.audit_events import audit_signature_algorithm
+
+            self.signature_algorithm = audit_signature_algorithm()
         if not self.signature:
             from core.services.audit_events import sign_audit_event
 
