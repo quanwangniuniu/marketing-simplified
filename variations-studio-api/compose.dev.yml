@@ -28,6 +28,9 @@ services:
       - PORT=3010
       - HOSTNAME=0.0.0.0
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BROWSERLESS_API_KEY=${BROWSERLESS_API_KEY}
+      - BROWSERLESS_BASE=${BROWSERLESS_BASE:-https://chrome.browserless.io}
     healthcheck:
       test:
         [

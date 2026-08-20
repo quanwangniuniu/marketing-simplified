@@ -1,41 +1,149 @@
-import { lockCta, type CopyJson } from '@/lib/prompts';
+import { lockCta, MODEL_NAME, type CopyJson } from '@/lib/prompts';
 
-function clipChars(value: string, max: number): string {
-  return value.length <= max ? value : value.slice(0, max).trim();
+const VERTEX_BASE = 'https://aiplatform.googleapis.com/v1/publishers/google/models';
+const TIMEOUT_MS = 60_000;
+const RATE_LIMIT_BACKOFF_MS = [2000, 4000];
+
+export class GeminiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'GeminiError';
+    this.status = status;
+  }
 }
 
-function clipWords(value: string, maxWords: number): string {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return value.trim();
-  return words.slice(0, maxWords).join(' ');
+export function isGeminiQuotaError(err: unknown): boolean {
+  return err instanceof GeminiError && err.status === 429;
 }
 
-function hasCjk(value: string): boolean {
-  return /[\u4e00-\u9fff]/.test(value);
+function stripJsonFences(text: string): string {
+  let stripped = text.trim();
+  if (stripped.startsWith('```')) {
+    const firstNewline = stripped.indexOf('\n');
+    if (firstNewline !== -1) stripped = stripped.slice(firstNewline + 1);
+    if (stripped.endsWith('```')) stripped = stripped.slice(0, -3);
+  }
+  return stripped.trim();
 }
 
-function mockVariation(base: CopyJson, index: number): CopyJson {
-  const n = index + 1;
-  const cjk = hasCjk(`${base.hook}${base.headline}${base.description}`);
-  const hook = cjk ? `角度${n} ${base.hook}` : `Angle ${n}: ${base.hook}`;
-  const headline = cjk ? `写法${n} ${base.headline}` : `Alt ${n} ${base.headline}`;
-  const description = cjk
-    ? `变体${n}。${base.description}`
-    : `Variation ${n}. ${base.description}`;
+function asCopy(raw: unknown): CopyJson {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new GeminiError('Gemini returned non-object JSON');
+  }
+  const row = raw as Record<string, unknown>;
   return {
-    hook: clipChars(clipWords(hook, 10), 50),
-    headline: clipChars(headline, 40),
-    description: clipChars(description, 125),
-    cta: lockCta(base.cta),
+    hook: typeof row.hook === 'string' ? row.hook : '',
+    headline: typeof row.headline === 'string' ? row.headline : '',
+    description: typeof row.description === 'string' ? row.description : '',
+    cta: lockCta(typeof row.cta === 'string' ? row.cta : ''),
   };
 }
 
+function parseStreamPayload(raw: string): {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+} {
+  const trimmed = raw.trim();
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const chunks = Array.isArray(parsed) ? parsed : [parsed];
+    const text = chunks
+      .flatMap((chunk) => {
+        const candidates =
+          chunk && typeof chunk === 'object'
+            ? (chunk as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates
+            : undefined;
+        return (candidates ?? []).flatMap((candidate) =>
+          (candidate.content?.parts ?? []).map((part) => part.text ?? '')
+        );
+      })
+      .join('');
+    return { candidates: [{ content: { parts: [{ text }] } }] };
+  } catch {
+    const parts: string[] = [];
+    for (const line of trimmed.split('\n')) {
+      const data = line.trim().startsWith('data:') ? line.trim().slice(5).trim() : '';
+      if (!data) continue;
+      try {
+        const obj = JSON.parse(data) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        for (const candidate of obj.candidates ?? []) {
+          for (const part of candidate.content?.parts ?? []) {
+            if (part.text) parts.push(part.text);
+          }
+        }
+      } catch {
+        // skip malformed SSE line
+      }
+    }
+    return { candidates: [{ content: { parts: [{ text: parts.join('') }] } }] };
+  }
+}
+
+async function postVertex(systemPrompt: string, userPrompt: string): Promise<unknown> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new GeminiError('GEMINI_API_KEY is not configured');
+  }
+
+  const url = `${VERTEX_BASE}/${MODEL_NAME}:streamGenerateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  let lastStatus: number | undefined;
+  for (let attempt = 0; attempt <= RATE_LIMIT_BACKOFF_MS.length; attempt += 1) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    lastStatus = response.status;
+    if (response.status === 429 && attempt < RATE_LIMIT_BACKOFF_MS.length) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, RATE_LIMIT_BACKOFF_MS[attempt]);
+      });
+      continue;
+    }
+    if (!response.ok) {
+      const snippet = (await response.text()).slice(0, 200);
+      console.error('Vertex Gemini failed status=%s body=%s', response.status, snippet);
+      throw new GeminiError(`Gemini request failed with HTTP ${response.status}.`, response.status);
+    }
+    const raw = await response.text();
+    return parseStreamPayload(raw);
+  }
+  throw new GeminiError('Gemini rate limited (HTTP 429).', lastStatus);
+}
+
 export async function callGeminiJson(
-  _systemPrompt: string,
-  _userPrompt: string,
-  baseCopy: CopyJson,
-  index: number
+  systemPrompt: string,
+  userPrompt: string,
+  retryParse = true
 ): Promise<CopyJson> {
-  // Mock until GEMINI_API_KEY works against AI Studio. Swap this body later.
-  return mockVariation(baseCopy, index);
+  const data = (await postVertex(systemPrompt, userPrompt)) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  if (!data.candidates?.length) {
+    throw new GeminiError('Gemini returned no candidates');
+  }
+  const text = stripJsonFences(
+    (data.candidates?.[0]?.content?.parts ?? []).map((part) => part.text ?? '').join('')
+  );
+  try {
+    return asCopy(JSON.parse(text));
+  } catch (err) {
+    if (retryParse) {
+      return callGeminiJson(systemPrompt, userPrompt, false);
+    }
+    throw err;
+  }
 }

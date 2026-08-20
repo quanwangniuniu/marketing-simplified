@@ -1,6 +1,11 @@
 export const MAX_BATCH = 50;
+export const BATCH_CONCURRENCY = 5;
 export const MODEL_NAME = 'gemini-2.5-flash-lite';
 export const PROMPT_VERSION = 'v1';
+export const AI_QUOTA_MESSAGE =
+  'AI generation is temporarily rate-limited or quota-limited. Please wait '
+  + 'a minute before generating more variations, or reduce the number of '
+  + 'variations and try again.';
 
 export const CTA_ENUM_ALLOWLIST = (
   'OPEN_LINK, LIKE_PAGE, SHOP_NOW, PLAY_GAME, INSTALL_APP, USE_APP, CALL, '
@@ -75,6 +80,32 @@ export type CopyJson = {
   description: string;
   cta: string;
 };
+
+export function buildExternalUrlPrompt(pageText: string, instruction: string): string {
+  const focus = instruction.trim()
+    || 'Rewrite all four fields with fresh phrasing, exploring a different angle than a literal rewrite. Preserve the source language. Respect the length caps and the cta enum lock.';
+  return (
+    'Below is the rendered text content of a public ad page. The page may '
+    + 'contain navigation, ad library metadata, advertiser info, and unrelated '
+    + 'boilerplate. Identify the actual ad copy inside it (typically: a short '
+    + 'hook line, a headline, a body paragraph, and a call-to-action button '
+    + 'label), then produce a NEW VARIATION of that ad copy following the '
+    + "user's instruction.\n\n"
+    + 'LANGUAGE LOCK (CRITICAL)\n'
+    + 'Detect the language of the ad copy embedded in the page text below. '
+    + 'Output every text field in THAT SAME LANGUAGE. NEVER drift to English '
+    + 'unless the source ad copy is already English. If the page is in '
+    + 'Portuguese, the output must be in Portuguese. The cta field stays in '
+    + 'the English uppercase enum format regardless of source language.\n\n'
+    + 'Apply all length caps, the cta enum lock, and the diversity rule from '
+    + 'the system instructions to the new variation. Each value in the JSON '
+    + 'must be the NEW VARIATION, not the extracted source.\n\n'
+    + `Page text:\n---\n${pageText}\n---\n\n`
+    + `Instruction: ${focus}\n\n`
+    + 'Return strict JSON with keys: hook, headline, description, cta. '
+    + 'No prose, no fences.'
+  );
+}
 
 export function buildUserPrompt(template: CopyJson, instruction: string): string {
   const focus = instruction.trim()

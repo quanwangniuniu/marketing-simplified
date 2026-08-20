@@ -6,17 +6,21 @@ import {
   loadCreativeForProject,
   parseCreativeId,
 } from '@/lib/creatives';
-import { callGeminiJson } from '@/lib/gemini';
+import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
 import {
+  AI_QUOTA_MESSAGE,
+  BATCH_CONCURRENCY,
   MAX_BATCH,
   MODEL_NAME,
   PROMPT_VERSION,
   SYSTEM_PROMPT,
+  buildExternalUrlPrompt,
   buildUserPrompt,
   type CopyJson,
 } from '@/lib/prompts';
 import { allocateSlugs } from '@/lib/slugs';
+import { BrowserlessError, fetchUrlText, parseExternalUrl } from '@/lib/urlFetch';
 import { serializeVariation } from '@/lib/variations';
 
 const SOURCE_MODES = new Set(['existing', 'custom', 'external_url']);
@@ -28,6 +32,7 @@ export type GenerateBatchResponse = {
   count_failed: number;
   results: ReturnType<typeof serializeVariation>[];
   failed_indices: number[];
+  error?: string;
 };
 
 function parseCount(raw: unknown): number {
@@ -53,33 +58,36 @@ function parseBaseCopy(raw: unknown): CopyJson {
 }
 
 async function generateCopies(
-  baseCopy: CopyJson,
-  instruction: string,
+  userPrompt: string,
   count: number
-): Promise<{ copies: CopyJson[]; failedIndices: number[] }> {
-  const copies: CopyJson[] = [];
+): Promise<{ copies: CopyJson[]; failedIndices: number[]; quotaFailed: boolean }> {
+  const ordered: Array<CopyJson | null> = Array.from({ length: count }, () => null);
   const failedIndices: number[] = [];
-  const outcomes = await Promise.all(
-    Array.from({ length: count }, async (_, index) => {
+  let quotaFailed = false;
+  let next = 0;
+
+  async function worker() {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= count) return;
       try {
-        const copy = await callGeminiJson(
-          SYSTEM_PROMPT,
-          buildUserPrompt(baseCopy, instruction),
-          baseCopy,
-          index
-        );
-        return { index, copy };
-      } catch {
-        return { index, copy: null };
+        ordered[index] = await callGeminiJson(SYSTEM_PROMPT, userPrompt);
+      } catch (err) {
+        if (isGeminiQuotaError(err)) quotaFailed = true;
+        failedIndices.push(index);
       }
-    })
-  );
-  outcomes.sort((a, b) => a.index - b.index);
-  for (const outcome of outcomes) {
-    if (outcome.copy) copies.push(outcome.copy);
-    else failedIndices.push(outcome.index);
+    }
   }
-  return { copies, failedIndices };
+
+  const workers = Math.min(BATCH_CONCURRENCY, count);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  failedIndices.sort((a, b) => a - b);
+  return {
+    copies: ordered.filter((row): row is CopyJson => row !== null),
+    failedIndices,
+    quotaFailed,
+  };
 }
 
 async function persistBatch(args: {
@@ -137,30 +145,46 @@ export async function runCustomGenerate(args: {
   if (typeof sourceMode !== 'string' || !SOURCE_MODES.has(sourceMode)) {
     throw new ApiError(400, `unknown source_mode: ${sourceMode}`);
   }
-  if (sourceMode === 'external_url') {
-    throw new ApiError(400, 'external_url is not implemented yet');
-  }
 
   const instruction =
     typeof args.body.instruction === 'string' ? args.body.instruction : '';
 
-  let baseCopy: CopyJson;
+  let userPrompt: string;
   let creativeId: bigint | null = null;
+  let sourceRef = '';
   if (sourceMode === 'existing') {
     const loaded = await loadCreativeForProject(
       parseCreativeId(args.body.creative_id),
       args.projectId
     );
     creativeId = loaded.id;
-    baseCopy = creativeToTemplate(loaded);
+    userPrompt = buildUserPrompt(creativeToTemplate(loaded), instruction);
+  } else if (sourceMode === 'external_url') {
+    sourceRef = parseExternalUrl(args.body.url);
+    try {
+      userPrompt = buildExternalUrlPrompt(await fetchUrlText(sourceRef), instruction);
+    } catch (err) {
+      const message =
+        err instanceof BrowserlessError
+          ? err.message
+          : 'Browserless fetch failed';
+      return {
+        batch_id: randomUUID(),
+        count_requested: count,
+        count_succeeded: 0,
+        count_failed: count,
+        results: [],
+        failed_indices: Array.from({ length: count }, (_, index) => index),
+        error: message,
+      };
+    }
   } else {
-    baseCopy = parseBaseCopy(args.body.base_copy);
+    userPrompt = buildUserPrompt(parseBaseCopy(args.body.base_copy), instruction);
   }
 
   const batchId = randomUUID();
-  const { copies, failedIndices } = await generateCopies(
-    baseCopy,
-    instruction,
+  const { copies, failedIndices, quotaFailed } = await generateCopies(
+    userPrompt,
     count
   );
 
@@ -171,13 +195,13 @@ export async function runCustomGenerate(args: {
         projectId: args.projectId,
         userId: args.userId,
         sourceMode,
-        sourceRef: '',
+        sourceRef,
         instruction,
         creativeId,
       })
     : [];
 
-  return {
+  const payload: GenerateBatchResponse = {
     batch_id: batchId,
     count_requested: count,
     count_succeeded: copies.length,
@@ -185,4 +209,8 @@ export async function runCustomGenerate(args: {
     results: saved.map(serializeVariation),
     failed_indices: failedIndices,
   };
+  if (!copies.length && quotaFailed) {
+    payload.error = AI_QUOTA_MESSAGE;
+  }
+  return payload;
 }
