@@ -21,6 +21,19 @@ def capture_snapshot(instance) -> Dict[str, Any]:
 
     return data
 
+def _resolve_target_name(target) -> str:
+    # For User objects, prefer full name → username → email
+    if hasattr(target, 'get_full_name'):
+        full_name = target.get_full_name()
+        if full_name:
+            return full_name
+    if hasattr(target, 'username') and target.username:
+        return target.username
+    if hasattr(target, 'email') and target.email:
+        return target.email
+    return getattr(target, 'name', str(target.pk))
+
+
 def record_audit_entry(
         actor,
         action: str,
@@ -55,7 +68,7 @@ def record_audit_entry(
         project=project,
         target_type=target.__class__.__name__,
         target_id=str(target.pk),
-        target_name=getattr(target, 'name', str(target.pk)),
+        target_name=_resolve_target_name(target),
         before=before,
         after=after,
     )

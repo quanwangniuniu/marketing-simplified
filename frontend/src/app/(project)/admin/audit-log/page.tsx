@@ -7,10 +7,6 @@ import { AdminAuditLogAPI } from '@/lib/api/auditLogApi';
 import type { AdminAuditEvent, PaginatedAdminAuditEvents } from '@/types/audit';
 import {
   ShieldCheck,
-  UserCog,
-  Users,
-  FolderOpen,
-  Building2,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
@@ -19,20 +15,20 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ACTION_LABEL: Record<string, string> = {
-  'role.created':             'created role',
-  'role.updated':             'updated role',
-  'role.deleted':             'deleted role',
-  'role.permissions_updated': 'updated permissions for',
-  'role.permissions_copied':  'copied permissions to',
-  'user_role.assigned':       'assigned role to',
-  'user_role.removed':        'removed role from',
-  'project.updated':          'updated project',
-  'project.deleted':          'deleted project',
-  'project.labels_updated':   'updated labels for',
-  'org.slug_updated':         'updated org slug',
-  'org.deleted':              'deleted org',
-  'org.admin_assigned':       'assigned org admin',
-  'org.admin_removed':        'removed org admin',
+  'role.created':             'Created a new role',
+  'role.updated':             'Renamed a role',
+  'role.deleted':             'Deleted a role',
+  'role.permissions_updated': 'Changed role permissions',
+  'role.permissions_copied':  'Copied permissions to role',
+  'user_role.assigned':       'Assigned a role to member',
+  'user_role.removed':        'Removed a role from member',
+  'project.updated':          'Updated project settings',
+  'project.deleted':          'Deleted a project',
+  'project.labels_updated':   'Updated project labels',
+  'org.slug_updated':         'Changed organization URL',
+  'org.deleted':              'Deleted organization',
+  'org.admin_assigned':       'Granted admin access to member',
+  'org.admin_removed':        'Revoked admin access from member',
 };
 
 const ACTION_OPTIONS: { value: string; label: string }[] = [
@@ -56,14 +52,28 @@ const PAGE_SIZE = 20;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function actionIcon(action: string) {
-  if (action.startsWith('role.')) return { Icon: UserCog, colors: 'text-purple-500 bg-purple-50' };
-  if (action.startsWith('user_role.')) return { Icon: Users, colors: 'text-blue-500 bg-blue-50' };
-  if (action.startsWith('project.')) return { Icon: FolderOpen, colors: 'text-teal-500 bg-teal-50' };
-  return { Icon: Building2, colors: 'text-amber-500 bg-amber-50' };
+function actionBadge(action: string): { label: string; className: string } {
+  if (action.startsWith('role.')) return { label: 'Role', className: 'bg-blue-50 text-blue-600 border-blue-200' };
+  if (action.startsWith('user_role.')) return { label: 'Role', className: 'bg-blue-50 text-blue-600 border-blue-200' };
+  if (action.startsWith('project.')) return { label: 'Project', className: 'bg-teal-50 text-teal-600 border-teal-200' };
+  return { label: 'Org', className: 'bg-amber-50 text-amber-600 border-amber-200' };
 }
 
-function formatDateTime(iso: string): string {
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'Just now';
+  if (min < 60) return `${min}m ago`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+function formatFullDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -228,10 +238,10 @@ const NO_DIFF_ACTIONS = new Set([
 
 function EventRow({ event }: { event: AdminAuditEvent }) {
   const [expanded, setExpanded] = useState(false);
-  const { Icon, colors } = actionIcon(event.action);
   const label = ACTION_LABEL[event.action] ?? event.action;
   const actor = event.actor_name || event.actor_email || 'Unknown';
   const hasDiff = !NO_DIFF_ACTIONS.has(event.action) && (event.before !== null || event.after !== null);
+  const badge = actionBadge(event.action);
 
   return (
     <>
@@ -239,25 +249,24 @@ function EventRow({ event }: { event: AdminAuditEvent }) {
         className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${hasDiff ? 'cursor-pointer' : ''}`}
         onClick={() => hasDiff && setExpanded(v => !v)}
       >
-        <td className="px-4 py-3">
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${colors}`}>
-            <Icon className="w-3.5 h-3.5" />
-          </div>
+        <td className="px-4 py-3 w-20">
+          <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded border ${badge.className}`}>
+            {badge.label}
+          </span>
         </td>
-        <td className="px-4 py-3">
-          <p className="text-sm text-gray-800">
-            <span className="font-medium text-gray-900">{actor}</span>{' '}
-            {label}
-            {event.target_name && (
-              <span className="font-medium text-gray-900"> {event.target_name}</span>
-            )}
-          </p>
-          <p className="text-xs text-gray-400 mt-0.5">{event.action}</p>
+        <td className="px-4 py-3 text-sm text-gray-800 font-medium whitespace-nowrap">
+          {actor}
         </td>
-        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-          {formatDateTime(event.timestamp)}
+        <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+          {label}
         </td>
-        <td className="px-4 py-3 text-center">
+        <td className="px-4 py-3 text-sm text-gray-800 font-medium">
+          {event.target_name || '—'}
+        </td>
+        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap" title={formatFullDateTime(event.timestamp)}>
+          {formatRelativeTime(event.timestamp)}
+        </td>
+        <td className="px-4 py-3 text-center w-8">
           {hasDiff && (
             <span className="text-gray-400">
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -268,7 +277,7 @@ function EventRow({ event }: { event: AdminAuditEvent }) {
 
       {expanded && hasDiff && (
         <tr className="bg-gray-50 border-b border-gray-100">
-          <td colSpan={4} className="px-6 py-4">
+          <td colSpan={6} className="px-6 py-4">
             <DiffView before={event.before} after={event.after} action={event.action} />
           </td>
         </tr>
@@ -362,8 +371,10 @@ export default function AuditLogPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-3 w-10" />
+                    <th className="px-4 py-3 w-20" />
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Actor</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Action</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Target</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Time</th>
                     <th className="px-4 py-3 w-8" />
                   </tr>
