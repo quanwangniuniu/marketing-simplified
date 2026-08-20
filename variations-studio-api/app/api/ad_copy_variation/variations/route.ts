@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
 import { isAuthFailure } from '@/lib/auth';
+import { projectIdParam, readJsonBody, responseFromUnknown } from '@/lib/bulk';
 import { prisma } from '@/lib/prisma';
 import {
   activeProjectIdsForUser,
   isActiveProjectMember,
+  requireProjectForUser,
   resolveProjectId,
 } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
+import { createVariation } from '@/lib/variationCreate';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -85,3 +88,36 @@ export async function GET(request: Request) {
   });
 }
 
+export async function POST(request: Request) {
+  const auth = await requireStudioContext(request);
+  if (isAuthFailure(auth)) {
+    return NextResponse.json({ detail: auth.error }, { status: auth.status });
+  }
+
+  const json = await readJsonBody(request);
+  if (!json.ok) return json.response;
+
+  // Django reads the project from `project`, not `project_id`, on this endpoint.
+  const project = await requireProjectForUser(
+    auth.schema,
+    auth.userId,
+    projectIdParam(json.body.project)
+  );
+  if (!project.ok) {
+    return NextResponse.json(
+      { [project.field]: project.error },
+      { status: project.status }
+    );
+  }
+
+  try {
+    const row = await createVariation({
+      projectId: project.projectId,
+      userId: auth.userId,
+      body: json.body,
+    });
+    return NextResponse.json(serializeVariation(row), { status: 201 });
+  } catch (err) {
+    return responseFromUnknown(err);
+  }
+}

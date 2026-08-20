@@ -121,3 +121,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   return NextResponse.json(serializeVariation(updated));
 }
+
+export async function DELETE(request: Request, context: RouteContext) {
+  const loaded = await loadOwnedVariation(request, context.params.id);
+  if (!loaded.ok) return loaded.response;
+
+  await prisma.adCopyVariation.delete({ where: { id: loaded.row.id } });
+
+  return new NextResponse(null, { status: 204 });
+}
