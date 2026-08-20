@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { isAuthFailure, requireAccessUser } from '@/lib/auth';
+import { isAuthFailure } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isActiveProjectMember } from '@/lib/projects';
+import { requireStudioContext } from '@/lib/tenant';
 import { findVariationByIdOrSlug, serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ const WRITABLE_STATUSES = new Set(['draft', 'reviewed']);
 type RouteContext = { params: { id: string } };
 
 async function loadOwnedVariation(request: Request, idOrSlug: string) {
-  const auth = await requireAccessUser(request);
+  const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
     return { error: NextResponse.json({ detail: auth.error }, { status: auth.status }) };
   }
@@ -24,7 +25,11 @@ async function loadOwnedVariation(request: Request, idOrSlug: string) {
   }
 
   if (row.projectId) {
-    const allowed = await isActiveProjectMember(auth.userId, row.projectId);
+    const allowed = await isActiveProjectMember(
+      auth.schema,
+      auth.userId,
+      row.projectId
+    );
     if (!allowed) {
       return {
         error: NextResponse.json(

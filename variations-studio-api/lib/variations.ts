@@ -1,6 +1,7 @@
+import type { AdCopyVariation } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
 import { toJsonSafe } from '@/lib/projects';
-import type { AdCopyVariation } from '@prisma/client';
 
 export function serializeVariation(row: AdCopyVariation) {
   return {

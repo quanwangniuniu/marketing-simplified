@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { ApiError } from '@/lib/bulk';
+import { ApiError, projectIdParam } from '@/lib/bulk';
 import {
   creativeToTemplate,
   loadCreativeForProject,
@@ -8,6 +8,7 @@ import {
 } from '@/lib/creatives';
 import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
+import { requireProjectForUser } from '@/lib/projects';
 import {
   AI_QUOTA_MESSAGE,
   BATCH_CONCURRENCY,
@@ -132,8 +133,8 @@ async function persistBatch(args: {
 }
 
 export async function runCustomGenerate(args: {
+  schema: string;
   userId: number;
-  projectId: bigint;
   body: Record<string, unknown>;
 }): Promise<GenerateBatchResponse> {
   const count = parseCount(args.body.count);
@@ -146,6 +147,15 @@ export async function runCustomGenerate(args: {
     throw new ApiError(400, `unknown source_mode: ${sourceMode}`);
   }
 
+  const project = await requireProjectForUser(
+    args.schema,
+    args.userId,
+    projectIdParam(args.body.project_id)
+  );
+  if (!project.ok) {
+    throw new ApiError(project.status, project.error);
+  }
+
   const instruction =
     typeof args.body.instruction === 'string' ? args.body.instruction : '';
 
@@ -155,7 +165,7 @@ export async function runCustomGenerate(args: {
   if (sourceMode === 'existing') {
     const loaded = await loadCreativeForProject(
       parseCreativeId(args.body.creative_id),
-      args.projectId
+      project.projectId
     );
     creativeId = loaded.id;
     userPrompt = buildUserPrompt(creativeToTemplate(loaded), instruction);
@@ -192,7 +202,7 @@ export async function runCustomGenerate(args: {
     ? await persistBatch({
         copies,
         batchId,
-        projectId: args.projectId,
+        projectId: project.projectId,
         userId: args.userId,
         sourceMode,
         sourceRef,

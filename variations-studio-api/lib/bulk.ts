@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { isAuthFailure, requireAccessUser } from '@/lib/auth';
+import { isAuthFailure } from '@/lib/auth';
 import { requireProjectForUser } from '@/lib/projects';
+import { requireStudioContext } from '@/lib/tenant';
 
 export class ApiError extends Error {
   status: number;
@@ -83,7 +84,7 @@ export async function startBulkPost(request: Request): Promise<
       selectedBigIds: bigint[];
     }
 > {
-  const auth = await requireAccessUser(request);
+  const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
     return {
       ok: false,
@@ -95,6 +96,7 @@ export async function startBulkPost(request: Request): Promise<
   if (!json.ok) return json;
 
   const project = await requireProjectForUser(
+    auth.schema,
     auth.userId,
     projectIdParam(json.body.project_id)
   );

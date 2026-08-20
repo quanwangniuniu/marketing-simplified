@@ -35,23 +35,10 @@ model AdCopyVariation {
   @@map("ad_copy_variation_adcopyvariation")
 }
 
-model Project {
-  id        BigInt  @id
-  slug      String  @db.VarChar(200)
-  isDeleted Boolean @map("is_deleted")
-
-  @@map("core_project")
-}
-
-model ProjectMember {
-  id        BigInt  @id
-  userId    BigInt  @map("user_id")
-  projectId BigInt  @map("project_id")
-  isActive  Boolean @map("is_active")
-  isDeleted Boolean @map("is_deleted")
-
-  @@map("core_projectmember")
-}
+// core_project and core_projectmember are deliberately NOT modelled here.
+// They are tenant-scoped (one copy per org schema) and Prisma hardcodes the
+// datasource schema into its SQL, so a model here would always read `public`.
+// Reach them through lib/projects.ts raw SQL instead.
 
 model MetaAdAccount {
   id        BigInt  @id
@@ -68,4 +55,22 @@ model MetaAdCreative {
   callToActionType   String @map("call_to_action_type") @db.VarChar(64)
 
   @@map("meta_ad_creatives")
+}
+
+// Shared public-schema tables. Look these up BEFORE SET LOCAL search_path.
+model Organization {
+  id       BigInt  @id
+  slug     String  @db.VarChar(200)
+  isActive Boolean @map("is_active")
+
+  @@map("core_organization")
+}
+
+model CustomUser {
+  id                    BigInt  @id
+  isActive              Boolean @map("is_active")
+  currentOrganizationId BigInt? @map("current_organization_id")
+  organizationId        BigInt? @map("organization_id")
+
+  @@map("core_customuser")
 }

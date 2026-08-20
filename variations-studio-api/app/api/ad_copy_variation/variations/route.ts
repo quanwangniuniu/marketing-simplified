@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
-import { isAuthFailure, requireAccessUser } from '@/lib/auth';
+import { isAuthFailure } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
   activeProjectIdsForUser,
   isActiveProjectMember,
   resolveProjectId,
 } from '@/lib/projects';
+import { requireStudioContext } from '@/lib/tenant';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
 export async function GET(request: Request) {
-  const auth = await requireAccessUser(request);
+  const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
     return NextResponse.json({ detail: auth.error }, { status: auth.status });
   }
@@ -36,14 +37,14 @@ export async function GET(request: Request) {
   const where: Prisma.AdCopyVariationWhereInput = {};
 
   if (projectParam) {
-    const projectId = await resolveProjectId(projectParam);
+    const projectId = await resolveProjectId(auth.schema, projectParam);
     if (!projectId) {
       return NextResponse.json(
         { error: 'project_id is required' },
         { status: 400 }
       );
     }
-    const allowed = await isActiveProjectMember(auth.userId, projectId);
+    const allowed = await isActiveProjectMember(auth.schema, auth.userId, projectId);
     if (!allowed) {
       return NextResponse.json(
         { error: 'You are not a member of this project.' },
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     }
     where.projectId = projectId;
   } else {
-    const ids = await activeProjectIdsForUser(auth.userId);
+    const ids = await activeProjectIdsForUser(auth.schema, auth.userId);
     where.OR = [{ projectId: { in: ids } }, { projectId: null }];
   }
 

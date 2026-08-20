@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server';
 
-import { isAuthFailure, requireAccessUser } from '@/lib/auth';
-import {
-  jsonError,
-  projectIdParam,
-  readJsonBody,
-  responseFromUnknown,
-} from '@/lib/bulk';
+import { isAuthFailure } from '@/lib/auth';
+import { readJsonBody, responseFromUnknown } from '@/lib/bulk';
 import { runCustomGenerate } from '@/lib/generate';
-import { requireProjectForUser } from '@/lib/projects';
+import { requireStudioContext } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const auth = await requireAccessUser(request);
+  const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
     return NextResponse.json({ detail: auth.error }, { status: auth.status });
   }
@@ -21,18 +16,10 @@ export async function POST(request: Request) {
   const json = await readJsonBody(request);
   if (!json.ok) return json.response;
 
-  const project = await requireProjectForUser(
-    auth.userId,
-    projectIdParam(json.body.project_id)
-  );
-  if (!project.ok) {
-    return jsonError(project.error, project.status);
-  }
-
   try {
     const payload = await runCustomGenerate({
+      schema: auth.schema,
       userId: auth.userId,
-      projectId: project.projectId,
       body: json.body,
     });
     const status = payload.count_succeeded === 0 ? 502 : 200;

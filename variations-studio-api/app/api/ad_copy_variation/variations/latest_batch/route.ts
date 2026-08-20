@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 
-import { isAuthFailure, requireAccessUser } from '@/lib/auth';
+import { isAuthFailure } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requireProjectForUser } from '@/lib/projects';
+import { requireStudioContext } from '@/lib/tenant';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const auth = await requireAccessUser(request);
+  const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
     return NextResponse.json({ detail: auth.error }, { status: auth.status });
   }
 
   const projectParam = new URL(request.url).searchParams.get('project_id');
-  const project = await requireProjectForUser(auth.userId, projectParam);
+  const project = await requireProjectForUser(
+    auth.schema,
+    auth.userId,
+    projectParam
+  );
   if (!project.ok) {
     return NextResponse.json({ error: project.error }, { status: project.status });
   }
