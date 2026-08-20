@@ -1,3 +1,4 @@
+import type { AdCopyVariation } from '@prisma/client';
 import { NextResponse } from 'next/server';
 
 import { isAuthFailure } from '@/lib/auth';
@@ -13,15 +14,28 @@ const WRITABLE_STATUSES = new Set(['draft', 'reviewed']);
 
 type RouteContext = { params: { id: string } };
 
-async function loadOwnedVariation(request: Request, idOrSlug: string) {
+type LoadedVariation =
+  | { ok: false; response: NextResponse }
+  | { ok: true; row: AdCopyVariation };
+
+async function loadOwnedVariation(
+  request: Request,
+  idOrSlug: string
+): Promise<LoadedVariation> {
   const auth = await requireStudioContext(request);
   if (isAuthFailure(auth)) {
-    return { error: NextResponse.json({ detail: auth.error }, { status: auth.status }) };
+    return {
+      ok: false,
+      response: NextResponse.json({ detail: auth.error }, { status: auth.status }),
+    };
   }
 
   const row = await findVariationByIdOrSlug(idOrSlug);
   if (!row) {
-    return { error: NextResponse.json({ detail: 'Not found.' }, { status: 404 }) };
+    return {
+      ok: false,
+      response: NextResponse.json({ detail: 'Not found.' }, { status: 404 }),
+    };
   }
 
   if (row.projectId) {
@@ -32,7 +46,8 @@ async function loadOwnedVariation(request: Request, idOrSlug: string) {
     );
     if (!allowed) {
       return {
-        error: NextResponse.json(
+        ok: false,
+        response: NextResponse.json(
           { error: 'You are not a member of this project.' },
           { status: 403 }
         ),
@@ -40,18 +55,18 @@ async function loadOwnedVariation(request: Request, idOrSlug: string) {
     }
   }
 
-  return { auth, row };
+  return { ok: true, row };
 }
 
 export async function GET(request: Request, context: RouteContext) {
   const loaded = await loadOwnedVariation(request, context.params.id);
-  if ('error' in loaded) return loaded.error;
+  if (!loaded.ok) return loaded.response;
   return NextResponse.json(serializeVariation(loaded.row));
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const loaded = await loadOwnedVariation(request, context.params.id);
-  if ('error' in loaded) return loaded.error;
+  if (!loaded.ok) return loaded.response;
 
   let body: Record<string, unknown>;
   try {
