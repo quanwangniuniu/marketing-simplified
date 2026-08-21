@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { isAuthFailure } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { requireProjectForUser } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
+import { findBatchVariations, findLatestBatchRow } from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -27,19 +27,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const latest = await prisma.adCopyVariation.findFirst({
-    where: { projectId: project.projectId, batchId: { not: null } },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-  });
-
+  const latest = await findLatestBatchRow(auth.schema, project.projectId);
   if (!latest?.batchId) {
     return NextResponse.json({ batch_id: null, count: 0, results: [] });
   }
 
-  const rows = await prisma.adCopyVariation.findMany({
-    where: { projectId: project.projectId, batchId: latest.batchId },
-    orderBy: [{ batchPosition: 'asc' }, { id: 'asc' }],
-  });
+  const rows = await findBatchVariations(
+    auth.schema,
+    project.projectId,
+    latest.batchId
+  );
 
   return NextResponse.json({
     batch_id: latest.batchId,

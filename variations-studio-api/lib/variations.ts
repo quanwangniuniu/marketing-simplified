@@ -1,9 +1,8 @@
-import type { AdCopyVariation } from '@prisma/client';
-
-import { prisma } from '@/lib/prisma';
+import type { VariationRow } from '@/lib/variationStore';
+import { findVariationBySlug as findBySlug } from '@/lib/variationStore';
 import { toJsonSafe } from '@/lib/projects';
 
-export function serializeVariation(row: AdCopyVariation) {
+export function serializeVariation(row: VariationRow) {
   return {
     id: toJsonSafe(row.id),
     slug: row.slug,
@@ -32,10 +31,6 @@ export function serializeVariation(row: AdCopyVariation) {
  * "Numeric identifiers are not resolved and yield 404." lib/slugs.ts already
  * prefixes purely numeric slugs so the two halves cannot collide.
  */
-export async function findVariationBySlug(slug: string) {
-  const value = slug.trim();
-  if (!value) return null;
-  return prisma.adCopyVariation.findFirst({
-    where: { slug: value },
-  });
+export async function findVariationBySlug(schema: string, slug: string) {
+  return findBySlug(schema, slug);
 }

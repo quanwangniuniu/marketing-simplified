@@ -2,6 +2,7 @@ import { ApiError } from '@/lib/bulk';
 import { prisma } from '@/lib/prisma';
 import { MODEL_NAME, PROMPT_VERSION } from '@/lib/prompts';
 import { allocateSlugs } from '@/lib/slugs';
+import { insertVariation } from '@/lib/variationStore';
 
 // Field rules come from AdCopyVariationSerializer plus the model defaults:
 // source_mode is the only required field, project and created_by are set by the
@@ -86,6 +87,7 @@ async function resolveCreativeId(
 }
 
 export async function createVariation(args: {
+  schema: string;
   projectId: bigint;
   userId: number;
   body: Record<string, unknown>;
@@ -108,30 +110,24 @@ export async function createVariation(args: {
   ) as Record<(typeof TEXT_FIELDS)[number], string>;
 
   const creativeId = await resolveCreativeId(args.body.creative, args.projectId);
-  const now = new Date();
-  const [slug] = await allocateSlugs([text.headline]);
+  const [slug] = await allocateSlugs(args.schema, [text.headline]);
 
-  return prisma.adCopyVariation.create({
-    data: {
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
-      sourceMode,
-      sourceRef: text.source_ref,
-      hook: text.hook,
-      headline: text.headline,
-      description: text.description,
-      cta: text.cta,
-      instruction: optionalText(args.body, 'instruction'),
-      modelName: optionalText(args.body, 'model_name') || MODEL_NAME,
-      promptVersion: optionalText(args.body, 'prompt_version') || PROMPT_VERSION,
-      batchId: optionalBatchId(args.body.batch_id),
-      batchPosition: optionalBatchPosition(args.body.batch_position),
-      status,
-      createdById: BigInt(args.userId),
-      creativeId,
-      projectId: args.projectId,
-      slug,
-    },
+  return insertVariation(args.schema, {
+    sourceMode,
+    sourceRef: text.source_ref,
+    hook: text.hook,
+    headline: text.headline,
+    description: text.description,
+    cta: text.cta,
+    instruction: optionalText(args.body, 'instruction'),
+    modelName: optionalText(args.body, 'model_name') || MODEL_NAME,
+    promptVersion: optionalText(args.body, 'prompt_version') || PROMPT_VERSION,
+    batchId: optionalBatchId(args.body.batch_id),
+    batchPosition: optionalBatchPosition(args.body.batch_position),
+    status,
+    createdById: BigInt(args.userId),
+    creativeId,
+    projectId: args.projectId,
+    slug,
   });
 }

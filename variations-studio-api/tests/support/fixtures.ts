@@ -2,14 +2,19 @@ import { randomUUID } from 'crypto';
 
 import { prisma } from '@/lib/prisma';
 import { slugToSchemaName, tenantTable } from '@/lib/tenant';
+import {
+  deleteVariationsForProjects,
+  insertVariation,
+  VARIATION_TABLE,
+} from '@/lib/variationStore';
 
 /**
  * Fixtures for the shared dev/CI Postgres. Every row created here hangs off a
  * project this module just created, so teardown can never touch seed data.
  *
- * Projects are written to both `public` and the org schema on purpose:
- * core_project is tenant-scoped, but public.ad_copy_variation_adcopyvariation
- * has an FK to public.core_project, so a variation needs both rows to exist.
+ * Projects are written to both `public` and the org schema: meta_ad_accounts
+ * still lives in public and FKs to public.core_project. Variations themselves
+ * are tenant-scoped and are written to the org schema only.
  * Memberships are written to the org schema ONLY — that is what makes these
  * fixtures a regression test for reading membership out of the wrong schema.
  */
@@ -45,6 +50,16 @@ async function schemaExists(schema: string): Promise<boolean> {
   return rows[0]?.present ?? false;
 }
 
+async function tenantVariationTableExists(schema: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<{ present: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = ${schema}
+        AND table_name = ${VARIATION_TABLE}
+    ) AS present`;
+  return rows[0]?.present ?? false;
+}
+
 /**
  * Pick the first active org whose tenant schema has actually been provisioned.
  * A freshly migrated database can hold orgs with no schema yet, and those would
@@ -62,14 +77,14 @@ async function provisionedOrganization(): Promise<{
 
   for (const org of orgs) {
     const schema = slugToSchemaName(org.slug);
-    if (await schemaExists(schema)) {
+    if (await schemaExists(schema) && (await tenantVariationTableExists(schema))) {
       return { ...org, schema };
     }
   }
 
   throw new Error(
-    'No active organization has a provisioned tenant schema. ' +
-      'Run manage.py migrate_all_tenants against this database first.'
+    'No active organization has a provisioned tenant schema that includes ' +
+      `${VARIATION_TABLE}. Run manage.py migrate_all_tenants against this database first.`
   );
 }
 
@@ -196,6 +211,7 @@ async function createCreative(adAccountId: bigint): Promise<bigint> {
 }
 
 export async function createTestVariation(args: {
+  schema: string;
   projectId: bigint;
   userId: number;
   status: string;
@@ -203,31 +219,25 @@ export async function createTestVariation(args: {
   sourceMode?: string;
   creativeId?: bigint;
 }): Promise<TestVariation> {
-  const now = new Date();
-  return prisma.adCopyVariation.create({
-    data: {
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
-      sourceMode: args.sourceMode ?? 'custom',
-      sourceRef: '',
-      hook: 'Fixture hook',
-      headline: 'Fixture headline',
-      description: 'Fixture description',
-      cta: 'LEARN_MORE',
-      instruction: '',
-      modelName: 'fixture',
-      promptVersion: 'fixture',
-      batchId: args.batchId ?? randomUUID(),
-      batchPosition: 0,
-      status: args.status,
-      createdById: BigInt(args.userId),
-      creativeId: args.creativeId ?? null,
-      projectId: args.projectId,
-      slug: `studio-test-${randomUUID()}`,
-    },
-    select: { id: true, slug: true },
+  const row = await insertVariation(args.schema, {
+    sourceMode: args.sourceMode ?? 'custom',
+    sourceRef: '',
+    hook: 'Fixture hook',
+    headline: 'Fixture headline',
+    description: 'Fixture description',
+    cta: 'LEARN_MORE',
+    instruction: '',
+    modelName: 'fixture',
+    promptVersion: 'fixture',
+    batchId: args.batchId ?? randomUUID(),
+    batchPosition: 0,
+    status: args.status,
+    createdById: BigInt(args.userId),
+    creativeId: args.creativeId ?? null,
+    projectId: args.projectId,
+    slug: `studio-test-${randomUUID()}`,
   });
+  return { id: row.id, slug: row.slug };
 }
 
 export async function setupStudioFixture(): Promise<StudioFixture> {
@@ -271,16 +281,19 @@ export async function setupStudioFixture(): Promise<StudioFixture> {
     creativeA: await createCreative(accountA),
     creativeB: await createCreative(accountB),
     draftA: await createTestVariation({
+      schema,
       projectId: projectA,
       userId: memberUserId,
       status: 'draft',
     }),
     reviewedA: await createTestVariation({
+      schema,
       projectId: projectA,
       userId: memberUserId,
       status: 'reviewed',
     }),
     draftB: await createTestVariation({
+      schema,
       projectId: projectB,
       userId: memberUserId,
       status: 'draft',
@@ -291,9 +304,7 @@ export async function setupStudioFixture(): Promise<StudioFixture> {
 export async function teardownStudioFixture(fixture: StudioFixture): Promise<void> {
   const projectIds = [fixture.projectA, fixture.projectB];
 
-  await prisma.adCopyVariation.deleteMany({
-    where: { projectId: { in: projectIds } },
-  });
+  await deleteVariationsForProjects(fixture.schema, projectIds);
 
   for (const creativeId of [fixture.creativeA, fixture.creativeB]) {
     await prisma.$executeRaw`

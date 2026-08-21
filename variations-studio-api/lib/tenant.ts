@@ -36,7 +36,8 @@ function assertSchemaName(schema: string): string {
  * search_path, so per-request tenant tables cannot go through model queries.
  * Tenant-scoped tables (see backend/core/tenant_config.py) must be reached
  * with raw SQL qualified by this helper. Everything still declared in
- * schema.prisma lives in `public`.
+ * schema.prisma lives in `public`. AdCopyVariation, core_project and
+ * core_projectmember are tenant-scoped.
  */
 export function tenantTable(schema: string, table: string): Prisma.Sql {
   return Prisma.raw(`"${assertSchemaName(schema)}"."${table}"`);

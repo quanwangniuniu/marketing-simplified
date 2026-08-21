@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 
 import { isAuthFailure } from '@/lib/auth';
 import { projectIdParam, readJsonBody, responseFromUnknown } from '@/lib/bulk';
-import { prisma } from '@/lib/prisma';
 import {
   activeProjectIdsForUser,
   isActiveProjectMember,
@@ -12,6 +10,7 @@ import {
 } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
 import { createVariation } from '@/lib/variationCreate';
+import { countVariations, listVariations } from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +36,7 @@ export async function GET(request: Request) {
     Math.max(1, Number(url.searchParams.get('page_size') || DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE)
   );
 
-  const where: Prisma.AdCopyVariationWhereInput = {};
+  const filter: Parameters<typeof listVariations>[1] = {};
 
   if (projectParam) {
     const projectId = await resolveProjectId(auth.schema, projectParam);
@@ -54,30 +53,27 @@ export async function GET(request: Request) {
         { status: 403 }
       );
     }
-    where.projectId = projectId;
+    filter.projectId = projectId;
   } else {
-    const ids = await activeProjectIdsForUser(auth.schema, auth.userId);
-    where.OR = [{ projectId: { in: ids } }, { projectId: null }];
+    filter.accessibleProjectIds = await activeProjectIdsForUser(
+      auth.schema,
+      auth.userId
+    );
   }
 
   if (statusParam) {
     const statuses = statusParam.split(',').map((item) => item.trim()).filter(Boolean);
-    if (statuses.length) where.status = { in: statuses };
+    if (statuses.length) filter.statuses = statuses;
   }
-  if (sourceMode) where.sourceMode = sourceMode;
+  if (sourceMode) filter.sourceMode = sourceMode;
   if (creativeParam && /^\d+$/.test(creativeParam)) {
-    where.creativeId = BigInt(creativeParam);
+    filter.creativeId = BigInt(creativeParam);
   }
-  if (batchId) where.batchId = batchId;
+  if (batchId) filter.batchId = batchId;
 
   const [count, rows] = await Promise.all([
-    prisma.adCopyVariation.count({ where }),
-    prisma.adCopyVariation.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
+    countVariations(auth.schema, filter),
+    listVariations(auth.schema, filter, page, pageSize),
   ]);
 
   return NextResponse.json({
@@ -112,6 +108,7 @@ export async function POST(request: Request) {
 
   try {
     const row = await createVariation({
+      schema: auth.schema,
       projectId: project.projectId,
       userId: auth.userId,
       body: json.body,

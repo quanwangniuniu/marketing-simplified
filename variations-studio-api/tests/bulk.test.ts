@@ -4,6 +4,11 @@ import { POST as bulkDelete } from '@/app/api/ad_copy_variation/variations/bulk_
 import { POST as bulkReview } from '@/app/api/ad_copy_variation/variations/bulk_review/route';
 import { POST as reviewBatch } from '@/app/api/ad_copy_variation/variations/review_batch/route';
 import { prisma } from '@/lib/prisma';
+import {
+  deleteVariationsByIds,
+  findVariationsByIdsAnyProject,
+  setVariationStatus,
+} from '@/lib/variationStore';
 
 import {
   createTestVariation,
@@ -36,18 +41,21 @@ afterAll(async () => {
 beforeEach(async () => {
   batchId = randomUUID();
   mine = (await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     batchId,
   })).id;
   alsoMine = (await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     batchId,
   })).id;
   theirs = (await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectB,
     userId: fixture.memberUserId,
     status: 'draft',
@@ -55,9 +63,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await prisma.adCopyVariation.deleteMany({
-    where: { id: { in: [mine, alsoMine, theirs] } },
-  });
+  await deleteVariationsByIds(fixture.schema, [mine, alsoMine, theirs]);
 });
 
 function post(
@@ -69,10 +75,11 @@ function post(
 }
 
 async function survivingIds(): Promise<bigint[]> {
-  const rows = await prisma.adCopyVariation.findMany({
-    where: { id: { in: [mine, alsoMine, theirs] } },
-    select: { id: true },
-  });
+  const rows = await findVariationsByIdsAnyProject(fixture.schema, [
+    mine,
+    alsoMine,
+    theirs,
+  ]);
   return rows.map((row) => row.id).sort();
 }
 
@@ -96,10 +103,7 @@ describe('bulk_delete', () => {
   });
 
   it('refuses a selection whose status does not match and deletes nothing', async () => {
-    await prisma.adCopyVariation.update({
-      where: { id: alsoMine },
-      data: { status: 'reviewed' },
-    });
+    await setVariationStatus(fixture.schema, alsoMine, 'reviewed');
 
     const response = await post(
       bulkDelete,
@@ -174,10 +178,10 @@ describe('bulk_review', () => {
 
     expect(response.status).toBe(400);
 
-    const rows = await prisma.adCopyVariation.findMany({
-      where: { id: { in: [mine, theirs] } },
-      select: { status: true },
-    });
+    const rows = await findVariationsByIdsAnyProject(fixture.schema, [
+      mine,
+      theirs,
+    ]);
     expect(rows.every((row) => row.status === 'draft')).toBe(true);
   });
 

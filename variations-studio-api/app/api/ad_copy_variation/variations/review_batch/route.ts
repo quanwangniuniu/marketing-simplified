@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 
 import { ApiError, jsonError, responseFromUnknown, startBulkPost } from '@/lib/bulk';
 import { prisma } from '@/lib/prisma';
+import {
+  deleteUnselectedBatchDrafts,
+  findBatchVariations,
+  findVariationsByIds,
+  markBatchReviewed,
+} from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -18,49 +24,48 @@ export async function POST(request: Request) {
 
   try {
     const payload = await prisma.$transaction(async (tx) => {
-      const selectedRows = await tx.adCopyVariation.findMany({
-        where: {
-          projectId: ctx.projectId,
-          batchId,
-          id: { in: ctx.selectedBigIds },
-        },
-      });
-      if (selectedRows.length !== ctx.selectedIds.length) {
+      const selectedRows = await findVariationsByIds(
+        ctx.schema,
+        ctx.projectId,
+        ctx.selectedBigIds,
+        tx
+      );
+      const inBatch = selectedRows.filter((row) => row.batchId === batchId);
+      if (inBatch.length !== ctx.selectedIds.length) {
         throw new ApiError(
           400,
           'selected_ids must all belong to the current project and batch'
         );
       }
-      if (selectedRows.some((row) => row.status !== 'draft')) {
+      if (inBatch.some((row) => row.status !== 'draft')) {
         throw new ApiError(400, 'selected_ids must all be draft rows');
       }
 
-      const reviewed = await tx.adCopyVariation.updateMany({
-        where: {
-          projectId: ctx.projectId,
-          batchId,
-          status: 'draft',
-          id: { in: ctx.selectedBigIds },
-        },
-        data: { status: 'reviewed' },
-      });
-      const deleted = await tx.adCopyVariation.deleteMany({
-        where: {
-          projectId: ctx.projectId,
-          batchId,
-          status: 'draft',
-          id: { notIn: ctx.selectedBigIds },
-        },
-      });
-      const remaining = await tx.adCopyVariation.findMany({
-        where: { projectId: ctx.projectId, batchId },
-        orderBy: [{ batchPosition: 'asc' }, { id: 'asc' }],
-      });
+      const reviewedCount = await markBatchReviewed(
+        ctx.schema,
+        ctx.projectId,
+        batchId,
+        ctx.selectedBigIds,
+        tx
+      );
+      const deletedCount = await deleteUnselectedBatchDrafts(
+        ctx.schema,
+        ctx.projectId,
+        batchId,
+        ctx.selectedBigIds,
+        tx
+      );
+      const remaining = await findBatchVariations(
+        ctx.schema,
+        ctx.projectId,
+        batchId,
+        tx
+      );
 
       return {
         batch_id: batchId,
-        reviewed_count: reviewed.count,
-        deleted_count: deleted.count,
+        reviewed_count: reviewedCount,
+        deleted_count: deletedCount,
         results: remaining.map(serializeVariation),
       };
     });

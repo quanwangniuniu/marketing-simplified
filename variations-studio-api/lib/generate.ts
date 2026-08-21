@@ -7,7 +7,6 @@ import {
   parseCreativeId,
 } from '@/lib/creatives';
 import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
-import { prisma } from '@/lib/prisma';
 import { requireProjectForUser } from '@/lib/projects';
 import {
   AI_QUOTA_MESSAGE,
@@ -22,6 +21,7 @@ import {
 } from '@/lib/prompts';
 import { allocateSlugs } from '@/lib/slugs';
 import { BrowserlessError, fetchUrlText, parseExternalUrl } from '@/lib/urlFetch';
+import { insertVariations } from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
 
 const SOURCE_MODES = new Set(['existing', 'custom', 'external_url']);
@@ -92,6 +92,7 @@ async function generateCopies(
 }
 
 async function persistBatch(args: {
+  schema: string;
   copies: CopyJson[];
   batchId: string;
   projectId: bigint;
@@ -101,13 +102,13 @@ async function persistBatch(args: {
   instruction: string;
   creativeId: bigint | null;
 }) {
-  const now = new Date();
-  const slugs = await allocateSlugs(args.copies.map((copy) => copy.headline));
-  await prisma.adCopyVariation.createMany({
-    data: args.copies.map((copy, index) => ({
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
+  const slugs = await allocateSlugs(
+    args.schema,
+    args.copies.map((copy) => copy.headline)
+  );
+  return insertVariations(
+    args.schema,
+    args.copies.map((copy, index) => ({
       sourceMode: args.sourceMode,
       sourceRef: args.sourceRef,
       hook: copy.hook,
@@ -124,12 +125,8 @@ async function persistBatch(args: {
       creativeId: args.creativeId,
       projectId: args.projectId,
       slug: slugs[index],
-    })),
-  });
-  return prisma.adCopyVariation.findMany({
-    where: { projectId: args.projectId, batchId: args.batchId },
-    orderBy: [{ batchPosition: 'asc' }, { id: 'asc' }],
-  });
+    }))
+  );
 }
 
 export async function runCustomGenerate(args: {
@@ -200,6 +197,7 @@ export async function runCustomGenerate(args: {
 
   const saved = copies.length
     ? await persistBatch({
+        schema: args.schema,
         copies,
         batchId,
         projectId: project.projectId,

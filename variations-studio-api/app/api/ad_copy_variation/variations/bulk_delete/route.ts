@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { ApiError, jsonError, responseFromUnknown, startBulkPost } from '@/lib/bulk';
 import { prisma } from '@/lib/prisma';
+import { deleteVariationsByIds, findVariationsByIds } from '@/lib/variationStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +19,12 @@ export async function POST(request: Request) {
 
   try {
     const payload = await prisma.$transaction(async (tx) => {
-      const rows = await tx.adCopyVariation.findMany({
-        where: { projectId: ctx.projectId, id: { in: ctx.selectedBigIds } },
-      });
+      const rows = await findVariationsByIds(
+        ctx.schema,
+        ctx.projectId,
+        ctx.selectedBigIds,
+        tx
+      );
       if (rows.length !== ctx.selectedIds.length) {
         throw new ApiError(400, 'selected_ids must all belong to the current project');
       }
@@ -28,12 +32,14 @@ export async function POST(request: Request) {
         throw new ApiError(400, `selected_ids must all be ${expectedStatus} rows`);
       }
 
-      const deleted = await tx.adCopyVariation.deleteMany({
-        where: { projectId: ctx.projectId, id: { in: ctx.selectedBigIds } },
-      });
+      const deletedCount = await deleteVariationsByIds(
+        ctx.schema,
+        ctx.selectedBigIds,
+        tx
+      );
 
       return {
-        deleted_count: deleted.count,
+        deleted_count: deletedCount,
         deleted_ids: ctx.selectedIds,
       };
     });

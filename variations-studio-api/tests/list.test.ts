@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { GET as listVariations } from '@/app/api/ad_copy_variation/variations/route';
 import { prisma } from '@/lib/prisma';
+import { deleteVariationsByIds } from '@/lib/variationStore';
 
 import {
   createTestVariation,
@@ -28,29 +29,34 @@ beforeAll(async () => {
   batchId = randomUUID();
 
   draft = await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     batchId,
   });
   reviewed = await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'reviewed',
   });
   external = await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     sourceMode: 'external_url',
   });
   withCreative = await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectA,
     userId: fixture.memberUserId,
     status: 'draft',
     creativeId: fixture.creativeA,
   });
   inOtherProject = await createTestVariation({
+    schema: fixture.schema,
     projectId: fixture.projectB,
     userId: fixture.memberUserId,
     status: 'draft',
@@ -58,15 +64,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma.adCopyVariation.deleteMany({
-    where: {
-      id: {
-        in: [draft, reviewed, external, withCreative, inOtherProject].map(
-          (row) => row.id
-        ),
-      },
-    },
-  });
+  await deleteVariationsByIds(
+    fixture.schema,
+    [draft, reviewed, external, withCreative, inOtherProject].map((row) => row.id)
+  );
   await teardownStudioFixture(fixture);
   await prisma.$disconnect();
 });

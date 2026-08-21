@@ -2,6 +2,7 @@ import { POST as generate } from '@/app/api/ad_copy_variation/variations/generat
 import { callGeminiJson } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
 import { BrowserlessError, fetchUrlText } from '@/lib/urlFetch';
+import { findVariationById } from '@/lib/variationStore';
 
 import {
   setupStudioFixture,
@@ -75,9 +76,7 @@ describe('generate with source_mode=external_url', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://example.com/landing');
 
     const results = body.results as { id: number }[];
-    const row = await prisma.adCopyVariation.findFirst({
-      where: { id: BigInt(results[0].id) },
-    });
+    const row = await findVariationById(fixture.schema, BigInt(results[0].id));
     expect(row?.sourceMode).toBe('external_url');
     expect(row?.sourceRef).toBe('https://example.com/landing');
   });

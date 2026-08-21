@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { ApiError, responseFromUnknown, startBulkPost } from '@/lib/bulk';
 import { prisma } from '@/lib/prisma';
+import {
+  findVariationsByIds,
+  markReviewed,
+} from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -12,9 +16,12 @@ export async function POST(request: Request) {
 
   try {
     const payload = await prisma.$transaction(async (tx) => {
-      const rows = await tx.adCopyVariation.findMany({
-        where: { projectId: ctx.projectId, id: { in: ctx.selectedBigIds } },
-      });
+      const rows = await findVariationsByIds(
+        ctx.schema,
+        ctx.projectId,
+        ctx.selectedBigIds,
+        tx
+      );
       if (rows.length !== ctx.selectedIds.length) {
         throw new ApiError(400, 'selected_ids must all belong to the current project');
       }
@@ -22,17 +29,26 @@ export async function POST(request: Request) {
         throw new ApiError(400, 'selected_ids must all be draft rows');
       }
 
-      const updated = await tx.adCopyVariation.updateMany({
-        where: { projectId: ctx.projectId, id: { in: ctx.selectedBigIds } },
-        data: { status: 'reviewed' },
-      });
-      const updatedRows = await tx.adCopyVariation.findMany({
-        where: { projectId: ctx.projectId, id: { in: ctx.selectedBigIds } },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      const reviewedCount = await markReviewed(
+        ctx.schema,
+        ctx.projectId,
+        ctx.selectedBigIds,
+        tx
+      );
+      const updatedRows = await findVariationsByIds(
+        ctx.schema,
+        ctx.projectId,
+        ctx.selectedBigIds,
+        tx
+      );
+      updatedRows.sort((a, b) => {
+        const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+        if (byDate !== 0) return byDate;
+        return Number(b.id - a.id);
       });
 
       return {
-        reviewed_count: updated.count,
+        reviewed_count: reviewedCount,
         results: updatedRows.map(serializeVariation),
       };
     });

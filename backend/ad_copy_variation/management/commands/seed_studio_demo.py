@@ -6,9 +6,11 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
+from django.db import connection
 
 from ad_copy_variation.models import AdCopyVariation
 from core.models import Project, ProjectMember
+from core.services.tenant import slug_to_schema_name
 from meta_ads.models import MetaAdCreative
 
 SEED_INSTRUCTION = '[studio-demo-seed]'
@@ -36,19 +38,31 @@ class Command(BaseCommand):
         reset = options['reset']
 
         try:
-            project = Project.objects.get(pk=project_id, is_deleted=False)
-        except Project.DoesNotExist as exc:
-            raise CommandError(f'Project {project_id} not found.') from exc
-
-        try:
             user = User.objects.get(email=email)
         except User.DoesNotExist as exc:
             raise CommandError(f'User {email} not found.') from exc
 
+        org = getattr(user, 'current_organization', None) or getattr(user, 'organization', None)
+        schema = slug_to_schema_name(org.slug) if org else 'public'
+        with connection.cursor() as cursor:
+            cursor.execute('SET search_path TO %s, public', [schema])
+
+        try:
+            self._seed(project_id, user, reset)
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute('SET search_path TO public')
+
+    def _seed(self, project_id, user, reset):
+        try:
+            project = Project.objects.get(pk=project_id, is_deleted=False)
+        except Project.DoesNotExist as exc:
+            raise CommandError(f'Project {project_id} not found.') from exc
+
         if not ProjectMember.objects.filter(
             user=user, project=project, is_active=True
         ).exists():
-            raise CommandError(f'{email} is not an active member of project {project_id}.')
+            raise CommandError(f'{user.email} is not an active member of project {project_id}.')
 
         creative = (
             MetaAdCreative.objects.filter(ad_account__project=project)

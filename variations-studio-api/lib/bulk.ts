@@ -78,6 +78,7 @@ export async function startBulkPost(request: Request): Promise<
   | { ok: false; response: NextResponse }
   | {
       ok: true;
+      schema: string;
       projectId: bigint;
       body: Record<string, unknown>;
       selectedIds: number[];
@@ -117,6 +118,7 @@ export async function startBulkPost(request: Request): Promise<
 
   return {
     ok: true,
+    schema: auth.schema,
     projectId: project.projectId,
     body: json.body,
     selectedIds: selected.ids,

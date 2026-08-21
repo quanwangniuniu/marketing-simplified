@@ -1,6 +1,7 @@
 import { DELETE as deleteVariation } from '@/app/api/ad_copy_variation/variations/[id]/route';
 import { POST as createVariation } from '@/app/api/ad_copy_variation/variations/route';
 import { prisma } from '@/lib/prisma';
+import { findVariationById } from '@/lib/variationStore';
 
 import {
   createTestVariation,
@@ -57,9 +58,7 @@ describe('POST /variations/', () => {
     });
     expect(typeof body.slug).toBe('string');
 
-    const row = await prisma.adCopyVariation.findFirst({
-      where: { id: BigInt(body.id as number) },
-    });
+    const row = await findVariationById(fixture.schema, BigInt(body.id as number));
     expect(row?.createdById).toBe(BigInt(fixture.memberUserId));
     expect(row?.modelName).toBe('gemini-2.5-flash-lite');
   });
@@ -134,6 +133,7 @@ describe('DELETE /variations/{slug}/', () => {
 
   it('deletes a variation in the user\u2019s project', async () => {
     const row = await createTestVariation({
+      schema: fixture.schema,
       projectId: fixture.projectA,
       userId: fixture.memberUserId,
       status: 'draft',
@@ -142,7 +142,7 @@ describe('DELETE /variations/{slug}/', () => {
     const response = await remove(row.slug);
 
     expect(response.status).toBe(204);
-    const found = await prisma.adCopyVariation.findFirst({ where: { id: row.id } });
+    const found = await findVariationById(fixture.schema, row.id);
     expect(found).toBeNull();
   });
 
@@ -150,9 +150,7 @@ describe('DELETE /variations/{slug}/', () => {
     const response = await remove(fixture.draftB.slug);
 
     expect(response.status).toBe(403);
-    const found = await prisma.adCopyVariation.findFirst({
-      where: { id: fixture.draftB.id },
-    });
+    const found = await findVariationById(fixture.schema, fixture.draftB.id);
     expect(found).not.toBeNull();
   });
 
@@ -160,9 +158,7 @@ describe('DELETE /variations/{slug}/', () => {
     const response = await remove(String(fixture.draftA.id));
 
     expect(response.status).toBe(404);
-    const found = await prisma.adCopyVariation.findFirst({
-      where: { id: fixture.draftA.id },
-    });
+    const found = await findVariationById(fixture.schema, fixture.draftA.id);
     expect(found).not.toBeNull();
   });
 });

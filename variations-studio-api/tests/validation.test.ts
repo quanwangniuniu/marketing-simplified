@@ -2,6 +2,7 @@ import { PATCH as patchVariation } from '@/app/api/ad_copy_variation/variations/
 import { POST as generate } from '@/app/api/ad_copy_variation/variations/generate/route';
 import { prisma } from '@/lib/prisma';
 import { MAX_BATCH } from '@/lib/prompts';
+import { findVariationById, findVariationsByIdsAnyProject } from '@/lib/variationStore';
 
 import {
   setupStudioFixture,
@@ -135,9 +136,10 @@ describe('generate creative ownership', () => {
     const payload = await readJson(response);
     expect(payload).toMatchObject({ count_succeeded: 1, count_failed: 0 });
 
-    const saved = await prisma.adCopyVariation.findMany({
-      where: { projectId: fixture.projectA, batchId: payload.batch_id as string },
-    });
+    const results = payload.results as { id: number }[];
+    const saved = await findVariationsByIdsAnyProject(fixture.schema, [
+      BigInt(results[0].id),
+    ]);
     expect(saved).toHaveLength(1);
     expect(saved[0].createdById).toBe(BigInt(fixture.memberUserId));
     expect(saved[0].creativeId).toBe(fixture.creativeA);
@@ -161,10 +163,7 @@ describe('PATCH field validation', () => {
 
     expect(response.status).toBe(400);
 
-    const row = await prisma.adCopyVariation.findFirst({
-      where: { id: fixture.draftA.id },
-      select: { projectId: true },
-    });
+    const row = await findVariationById(fixture.schema, fixture.draftA.id);
     expect(row?.projectId).toBe(fixture.projectA);
   });
 

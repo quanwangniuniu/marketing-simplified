@@ -10,30 +10,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AdCopyVariation {
-  id            BigInt    @id @default(autoincrement())
-  createdAt     DateTime  @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @map("updated_at") @db.Timestamptz(6)
-  isDeleted     Boolean   @map("is_deleted")
-  sourceMode    String    @map("source_mode") @db.VarChar(32)
-  sourceRef     String    @map("source_ref")
-  hook          String
-  headline      String
-  description   String
-  cta           String    @db.VarChar(64)
-  instruction   String
-  modelName     String    @map("model_name") @db.VarChar(64)
-  promptVersion String    @map("prompt_version") @db.VarChar(32)
-  batchId       String?   @map("batch_id") @db.Uuid
-  batchPosition Int?      @map("batch_position")
-  status        String    @db.VarChar(20)
-  createdById   BigInt?   @map("created_by_id")
-  creativeId    BigInt?   @map("creative_id")
-  projectId     BigInt?   @map("project_id")
-  slug          String    @unique @db.VarChar(255)
-
-  @@map("ad_copy_variation_adcopyvariation")
-}
+// AdCopyVariation is tenant-scoped (see backend/core/tenant_config.py).
+// Prisma bakes `public` into generated SQL, so that table is reached through
+// lib/variationStore.ts raw SQL the same way core_project is.
 
 // core_project and core_projectmember are deliberately NOT modelled here.
 // They are tenant-scoped (one copy per org schema) and Prisma hardcodes the

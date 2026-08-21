@@ -1,10 +1,13 @@
-import type { AdCopyVariation } from '@prisma/client';
 import { NextResponse } from 'next/server';
 
 import { isAuthFailure } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { isActiveProjectMember } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
+import {
+  deleteVariationById,
+  updateVariationFields,
+  type VariationRow,
+} from '@/lib/variationStore';
 import { findVariationBySlug, serializeVariation } from '@/lib/variations';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +20,7 @@ type RouteContext = { params: { id: string } };
 
 type LoadedVariation =
   | { ok: false; response: NextResponse }
-  | { ok: true; row: AdCopyVariation };
+  | { ok: true; schema: string; row: VariationRow };
 
 async function loadOwnedVariation(
   request: Request,
@@ -31,7 +34,7 @@ async function loadOwnedVariation(
     };
   }
 
-  const row = await findVariationBySlug(idOrSlug);
+  const row = await findVariationBySlug(auth.schema, idOrSlug);
   if (!row) {
     return {
       ok: false,
@@ -56,7 +59,7 @@ async function loadOwnedVariation(
     }
   }
 
-  return { ok: true, row };
+  return { ok: true, schema: auth.schema, row };
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -89,8 +92,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     description?: string;
     cta?: string;
     status?: string;
-    updatedAt: Date;
-  } = { updatedAt: new Date() };
+  } = {};
 
   for (const field of WRITABLE_STRING_FIELDS) {
     if (field in body) {
@@ -114,11 +116,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     data.status = body.status;
   }
 
-  const updated = await prisma.adCopyVariation.update({
-    where: { id: loaded.row.id },
-    data,
-  });
-
+  const updated = await updateVariationFields(loaded.schema, loaded.row.id, data);
   return NextResponse.json(serializeVariation(updated));
 }
 
@@ -126,7 +124,6 @@ export async function DELETE(request: Request, context: RouteContext) {
   const loaded = await loadOwnedVariation(request, context.params.id);
   if (!loaded.ok) return loaded.response;
 
-  await prisma.adCopyVariation.delete({ where: { id: loaded.row.id } });
-
+  await deleteVariationById(loaded.schema, loaded.row.id);
   return new NextResponse(null, { status: 204 });
 }

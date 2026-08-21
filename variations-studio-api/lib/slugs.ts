@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { prisma } from '@/lib/prisma';
+import { listSlugs } from '@/lib/variationStore';
 
 function slugify(value: string): string {
   return value
@@ -32,8 +32,10 @@ export function makeSlug(sourceValue: string, used: Set<string>): string {
   return slug;
 }
 
-export async function allocateSlugs(headlines: string[]): Promise<string[]> {
-  const rows = await prisma.adCopyVariation.findMany({ select: { slug: true } });
-  const used = new Set(rows.map((row) => row.slug));
+export async function allocateSlugs(
+  schema: string,
+  headlines: string[]
+): Promise<string[]> {
+  const used = new Set(await listSlugs(schema));
   return headlines.map((headline) => makeSlug(headline, used));
 }

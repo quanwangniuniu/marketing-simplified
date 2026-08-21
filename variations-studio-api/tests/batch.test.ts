@@ -1,6 +1,10 @@
 import { POST as generate } from '@/app/api/ad_copy_variation/variations/generate/route';
 import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
+import {
+  countVariations,
+  findVariationsByIdsAnyProject,
+} from '@/lib/variationStore';
 
 import {
   setupStudioFixture,
@@ -85,16 +89,17 @@ describe('batch generate failure handling', () => {
     expect(body.failed_indices).toHaveLength(3);
 
     const results = body.results as { id: number }[];
-    const persisted = await prisma.adCopyVariation.count({
-      where: { id: { in: results.map((row) => BigInt(row.id)) } },
-    });
-    expect(persisted).toBe(1);
+    const persisted = await findVariationsByIdsAnyProject(
+      fixture.schema,
+      results.map((row) => BigInt(row.id))
+    );
+    expect(persisted).toHaveLength(1);
   });
 
   it('returns 502 and persists nothing when the whole batch fails', async () => {
     geminiMock.mockRejectedValue(new Error('model exploded'));
-    const before = await prisma.adCopyVariation.count({
-      where: { projectId: fixture.projectA },
+    const before = await countVariations(fixture.schema, {
+      projectId: fixture.projectA,
     });
 
     const response = await generateBatch(3);
@@ -107,8 +112,8 @@ describe('batch generate failure handling', () => {
       results: [],
     });
 
-    const after = await prisma.adCopyVariation.count({
-      where: { projectId: fixture.projectA },
+    const after = await countVariations(fixture.schema, {
+      projectId: fixture.projectA,
     });
     expect(after).toBe(before);
   });
@@ -134,10 +139,10 @@ describe('batch generate failure handling', () => {
     expect(response.status).toBe(200);
     const body = await readJson(response);
     const results = body.results as { id: number }[];
-    const rows = await prisma.adCopyVariation.findMany({
-      where: { id: { in: results.map((row) => BigInt(row.id)) } },
-      select: { batchId: true, batchPosition: true },
-    });
+    const rows = await findVariationsByIdsAnyProject(
+      fixture.schema,
+      results.map((row) => BigInt(row.id))
+    );
 
     expect(new Set(rows.map((row) => row.batchId)).size).toBe(1);
     expect(rows[0].batchId).toBe(body.batch_id);
