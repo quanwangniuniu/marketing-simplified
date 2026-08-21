@@ -3,12 +3,15 @@ import logging
 import os
 import re
 import socket
+import threading
 import uuid
+from contextlib import contextmanager
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
+from urllib3.util import connection as urllib3_connection
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -137,8 +140,8 @@ def _is_public_ip(ip: Any) -> bool:
     )
 
 
-def _assert_host_is_public(host: str) -> None:
-    """Resolve a host and reject it if ANY answer is not publicly routable.
+def _assert_host_is_public(host: str) -> str:
+    """Resolve a host, reject it if ANY answer is not public, and return one address.
 
     Checking every answer matters: multi-record DNS must not let one public
     address launder a private one.
@@ -160,16 +163,29 @@ def _assert_host_is_public(host: str) -> None:
         if not _is_public_ip(ip):
             raise UnsafeUrlError(f"URL resolves to a non-public address: {address}")
 
+    # Every answer passed, so any of them is safe to pin; take the first.
+    return addresses[0].split("%")[0]
 
-def validate_public_url(url: Optional[str]) -> str:
-    """Raise UnsafeUrlError unless the server may fetch this URL; return its cache key."""
+
+def resolve_public_url(url: Optional[str]) -> Tuple[str, str]:
+    """Validate a URL and return (normalized url, the address that passed).
+
+    Returning the address matters: validating a hostname and then letting the HTTP
+    client resolve it again leaves a TOCTOU window, because DNS can answer publicly
+    for the check and privately for the connection. The caller pins this address.
+    """
     parsed = urlparse((url or "").strip())
     if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
         raise UnsafeUrlError(f'Unsupported URL scheme: {parsed.scheme or "<none>"}')
     if not parsed.hostname:
         raise UnsafeUrlError("URL has no host")
-    _assert_host_is_public(parsed.hostname)
-    return normalize_preview_url(url)
+    address = _assert_host_is_public(parsed.hostname)
+    return normalize_preview_url(url), address
+
+
+def validate_public_url(url: Optional[str]) -> str:
+    """Raise UnsafeUrlError unless the server may fetch this URL; return its cache key."""
+    return resolve_public_url(url)[0]
 
 
 def _read_capped_body(response: Any) -> str:
@@ -187,28 +203,73 @@ def _read_capped_body(response: Any) -> str:
     return b"".join(chunks).decode("utf-8", errors="replace")
 
 
+_PINS = threading.local()
+
+
+@contextmanager
+def _pinned_address(host: str, address: str):
+    """Force connections to `host` to go to `address` for the duration of the block.
+
+    urllib3 funnels every connection through `create_connection`, which is patched
+    once at import to consult this thread-local map first. Thread-local because the
+    Celery workers here run a thread pool — a module-level dict would let one
+    thread's pin leak into another's request.
+    """
+    pins = getattr(_PINS, "map", None)
+    if pins is None:
+        pins = _PINS.map = {}
+    previous = pins.get(host)
+    pins[host] = address
+    try:
+        yield
+    finally:
+        if previous is None:
+            pins.pop(host, None)
+        else:
+            pins[host] = previous
+
+
+def _create_connection_with_pin(address, *args, **kwargs):
+    """urllib3 connection factory that honours a pinned address."""
+    host, port = address
+    pinned = getattr(_PINS, "map", {}).get(host)
+    if pinned:
+        address = (pinned, port)
+    return _ORIGINAL_CREATE_CONNECTION(address, *args, **kwargs)
+
+
+# Patched once, globally, but inert unless the calling thread has a pin set. TLS
+# still verifies against the hostname because only the address is substituted.
+_ORIGINAL_CREATE_CONNECTION = urllib3_connection.create_connection
+urllib3_connection.create_connection = _create_connection_with_pin
+
+
 def fetch_url_safely(url: str) -> str:
     """Fetch a URL's HTML under the SSRF guard, re-validating every redirect hop.
 
     Redirects are followed manually — a public URL is allowed to 302 towards an
-    internal address, so the HTTP client must never follow them for us.
+    internal address, so the HTTP client must never follow them for us. Each hop
+    connects to the address that just passed validation rather than resolving the
+    hostname again, which is what closes the DNS-rebinding window.
     """
-    current = validate_public_url(url)
+    current, address = resolve_public_url(url)
 
     for _ in range(LINK_PREVIEW_MAX_REDIRECTS + 1):
-        response = requests.get(
-            current,
-            timeout=LINK_PREVIEW_TIMEOUT_SECONDS,
-            allow_redirects=False,
-            stream=True,
-            headers={"User-Agent": LINK_PREVIEW_USER_AGENT},
-        )
+        host = urlparse(current).hostname
+        with _pinned_address(host, address):
+            response = requests.get(
+                current,
+                timeout=LINK_PREVIEW_TIMEOUT_SECONDS,
+                allow_redirects=False,
+                stream=True,
+                headers={"User-Agent": LINK_PREVIEW_USER_AGENT},
+            )
         try:
             if response.status_code in _REDIRECT_STATUS_CODES:
                 location = response.headers.get("Location")
                 if not location:
                     raise UnsafeUrlError("Redirect without a Location header")
-                current = validate_public_url(urljoin(current, location))
+                current, address = resolve_public_url(urljoin(current, location))
                 continue
 
             if response.status_code >= 400:
@@ -219,6 +280,81 @@ def fetch_url_safely(url: str) -> str:
                 raise UnsafeUrlError(f"Refusing non-HTML content type: {content_type or '<none>'}")
 
             return _read_capped_body(response)
+        finally:
+            response.close()
+
+    raise UnsafeUrlError(f"Too many redirects (max {LINK_PREVIEW_MAX_REDIRECTS})")
+
+
+# Magic bytes for the formats we are willing to re-serve. The declared
+# Content-Type is the remote host's claim; these are the file's own testimony, and
+# a proxy that trusted the claim would be a new hole rather than a fix for one.
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
+LINK_PREVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _sniff_image_type(data: bytes) -> Optional[str]:
+    """The real type of these bytes, or None if they are not an image we allow."""
+    for signature, content_type in _IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            return content_type
+    # WebP is RIFF....WEBP — the marker sits at offset 8, not at the start.
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def fetch_image_safely(url: str) -> Tuple[bytes, str]:
+    """Fetch a thumbnail under the same guard as a page, and verify it really is one.
+
+    Serving remote images from our own domain is what stops every viewer's browser
+    contacting the third-party host. It also means we vouch for the bytes, so the
+    content type is decided by sniffing rather than by what the host claims.
+    """
+    current, address = resolve_public_url(url)
+
+    for _ in range(LINK_PREVIEW_MAX_REDIRECTS + 1):
+        host = urlparse(current).hostname
+        with _pinned_address(host, address):
+            response = requests.get(
+                current,
+                timeout=LINK_PREVIEW_TIMEOUT_SECONDS,
+                allow_redirects=False,
+                stream=True,
+                headers={"User-Agent": LINK_PREVIEW_USER_AGENT},
+            )
+        try:
+            if response.status_code in _REDIRECT_STATUS_CODES:
+                location = response.headers.get("Location")
+                if not location:
+                    raise UnsafeUrlError("Redirect without a Location header")
+                current, address = resolve_public_url(urljoin(current, location))
+                continue
+
+            if response.status_code >= 400:
+                raise LinkPreviewFetchError(f"Upstream returned {response.status_code}")
+
+            chunks: List[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                remaining = LINK_PREVIEW_IMAGE_MAX_BYTES - total
+                if remaining <= 0:
+                    raise UnsafeUrlError("Image exceeds the size cap")
+                chunks.append(chunk[:remaining])
+                total += len(chunk[:remaining])
+
+            data = b"".join(chunks)
+            content_type = _sniff_image_type(data)
+            if content_type is None:
+                raise UnsafeUrlError("Content is not an image we will re-serve")
+            return data, content_type
         finally:
             response.close()
 
@@ -275,6 +411,34 @@ def _link_preview_payload(preview: "LinkPreview") -> Optional[Dict[str, Any]]:
         "description": preview.description,
         "image_url": preview.image_url,
     }
+
+
+def claim_link_preview_fetch_slot(user_id: int) -> bool:
+    """Reserve one new-URL fetch for this user, or return False if they are over.
+
+    Caching already stops the *same* URL being fetched twice; nothing stopped one
+    account posting many *different* URLs, which is how this could be turned into a
+    request amplifier. Cache hits never reach here, so ordinary use — where people
+    share links others have already posted — is unaffected.
+
+    A fixed window is deliberate: it is one Redis increment, and the worst case is
+    twice the limit across a window boundary, which is fine for a cosmetic feature.
+    """
+    limit = getattr(settings, "LINK_PREVIEW_RATE_LIMIT_PER_MINUTE", 5)
+    if limit <= 0:
+        return True
+
+    window = int(timezone.now().timestamp() // 60)
+    key = f"link_preview_rate:{user_id}:{window}"
+    try:
+        # add() only succeeds once, which is what creates the counter with a TTL.
+        cache.add(key, 0, timeout=120)
+        used = cache.incr(key)
+    except Exception:
+        # A cache outage must not silently disable the limit *or* break sending.
+        logger.exception("Link preview rate limit check failed for user %s", user_id)
+        return False
+    return used <= limit
 
 
 def build_link_preview_map(messages: Iterable["Message"]) -> Dict[str, Dict[str, Any]]:

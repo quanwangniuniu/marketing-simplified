@@ -7,7 +7,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from chat.models import Chat, ChatParticipant, ChatType, LinkPreview, Message
@@ -19,7 +19,7 @@ from chat.services import (
     build_message_link_preview,
     parse_opengraph,
 )
-from chat.tasks import fetch_link_preview_task
+from chat.tasks import fetch_link_preview_task, prune_link_previews
 
 OG_HTML = """
 <html><head>
@@ -551,3 +551,198 @@ class TestPreviewQueryCount(LinkPreviewTestCase):
 
         with self.assertNumQueries(0):
             assert build_link_preview_map(plain) == {}
+
+
+PNG_BYTES = (
+    b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+    b'\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01'
+    b'\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+)
+
+
+class TestImageProxy(LinkPreviewTestCase):
+    """Thumbnails are served from our domain, not hotlinked (MED-279).
+
+    Hotlinking leaked every viewer's IP to the third-party host. Proxying fixes
+    that, but a proxy that trusts the declared Content-Type would be a new hole
+    rather than a fix, so the bytes themselves are checked.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from rest_framework.test import APIClient
+
+        self.preview = LinkPreview.objects.create(
+            url='https://example.com/story',
+            status=LinkPreview.STATUS_READY,
+            title='A great article',
+            image_url='https://cdn.example.com/cover.png',
+            fetched_at=timezone.now(),
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.url = '/api/chat/link-preview-image/'
+
+    def _get(self, image_url='https://cdn.example.com/cover.png'):
+        return self.client.get(self.url, {'url': image_url})
+
+    def test_serves_an_image_recorded_in_the_cache(self):
+        with patch('chat.views.fetch_image_safely', return_value=(PNG_BYTES, 'image/png')):
+            response = self._get()
+
+        assert response.status_code == 200
+        assert response['Content-Type'] == 'image/png'
+        assert response.content == PNG_BYTES
+
+    def test_refuses_a_url_not_in_the_cache(self):
+        """The endpoint is not a general-purpose proxy — that would be the hole."""
+        with patch('chat.views.fetch_image_safely') as fetch:
+            response = self._get('https://attacker.example.com/anything.png')
+
+        assert response.status_code == 400
+        fetch.assert_not_called()
+
+    def test_refuses_an_internal_address_even_if_somehow_recorded(self):
+        LinkPreview.objects.create(
+            url='https://evil.example.com/x',
+            status=LinkPreview.STATUS_READY,
+            title='x',
+            image_url='http://169.254.169.254/latest/meta-data/',
+            fetched_at=timezone.now(),
+        )
+        response = self._get('http://169.254.169.254/latest/meta-data/')
+
+        assert response.status_code == 400
+
+    def test_refuses_content_that_is_not_really_an_image(self):
+        """Declared Content-Type is the attacker's claim; the bytes are the truth."""
+        html = b'<html><script>alert(1)</script></html>'
+        with patch('chat.views.fetch_image_safely', side_effect=UnsafeUrlError('not an image')):
+            response = self._get()
+
+        assert response.status_code == 400
+
+    def test_requires_authentication(self):
+        from rest_framework.test import APIClient
+
+        response = APIClient().get(self.url, {'url': 'https://cdn.example.com/cover.png'})
+
+        assert response.status_code in (401, 403)
+
+
+class TestRateLimit(LinkPreviewTestCase):
+    """One account cannot turn this into a request amplifier (MED-279)."""
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def _post_and_fetch(self, index, fetch):
+        message = Message.objects.create(
+            chat=self.chat, sender=self.user, content=f'link {index} https://example.com/{index}'
+        )
+        fetch_link_preview_task(message.id, f'https://example.com/{index}')
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=5)
+    def test_only_the_allowance_of_new_urls_is_fetched(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            for i in range(8):
+                self._post_and_fetch(i, fetch)
+
+        assert fetch.call_count == 5
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=2)
+    def test_a_refused_url_leaves_no_row_behind(self):
+        """It was never attempted, so it must not look like a cached failure."""
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML):
+            for i in range(4):
+                self._post_and_fetch(i, None)
+
+        assert LinkPreview.objects.count() == 2
+        assert not LinkPreview.objects.filter(status=LinkPreview.STATUS_PENDING).exists()
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=1)
+    def test_cache_hits_are_free(self):
+        """Sharing a link someone already posted must not consume the allowance."""
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            self._post_and_fetch(0, fetch)          # uses the single slot
+            for _ in range(5):                       # same URL again — all cache hits
+                again = Message.objects.create(
+                    chat=self.chat, sender=self.user, content='again https://example.com/0'
+                )
+                fetch_link_preview_task(again.id, 'https://example.com/0')
+
+        assert fetch.call_count == 1
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=0)
+    def test_a_zero_limit_disables_the_check(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            for i in range(3):
+                self._post_and_fetch(i, fetch)
+
+        assert fetch.call_count == 3
+
+
+class TestPruneLinkPreviews(LinkPreviewTestCase):
+    """The cache table is append-only without this (MED-279)."""
+
+    def _aged_preview(self, url, days):
+        preview = LinkPreview.objects.create(
+            url=url, status=LinkPreview.STATUS_READY, title='x', fetched_at=timezone.now()
+        )
+        LinkPreview.objects.filter(pk=preview.pk).update(
+            fetched_at=timezone.now() - timedelta(days=days)
+        )
+        return preview
+
+    @override_settings(LINK_PREVIEW_PRUNE_AFTER_DAYS=30)
+    def test_prunes_only_rows_past_the_cutoff(self):
+        self._aged_preview('https://example.com/old', days=40)
+        self._aged_preview('https://example.com/recent', days=5)
+
+        deleted = prune_link_previews()
+
+        assert deleted == 1
+        assert LinkPreview.objects.filter(url='https://example.com/recent').exists()
+        assert not LinkPreview.objects.filter(url='https://example.com/old').exists()
+
+    def test_a_never_fetched_row_is_left_alone(self):
+        """A pending row has no fetched_at; pruning must not race an in-flight claim."""
+        LinkPreview.objects.create(url='https://example.com/pending', status=LinkPreview.STATUS_PENDING)
+
+        prune_link_previews()
+
+        assert LinkPreview.objects.filter(url='https://example.com/pending').exists()
+
+
+class TestConfigurableTtl(LinkPreviewTestCase):
+    """Each outcome gets its own freshness window (MED-279)."""
+
+    def _aged(self, url, status, hours):
+        preview = LinkPreview.objects.create(url=url, status=status, title='x',
+                                             fetched_at=timezone.now())
+        moment = timezone.now() - timedelta(hours=hours)
+        LinkPreview.objects.filter(pk=preview.pk).update(fetched_at=moment, updated_at=moment)
+        return preview
+
+    @override_settings(LINK_PREVIEW_FAILURE_TTL_HOURS=1, LINK_PREVIEW_SUCCESS_TTL_HOURS=24)
+    def test_a_failure_is_retried_sooner_than_a_success_is_refreshed(self):
+        self._aged('https://example.com/story', LinkPreview.STATUS_FAILED, hours=2)
+
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        # Two hours old with a one-hour failure TTL: stale, so it is tried again.
+        assert fetch.call_count == 1
+
+    @override_settings(LINK_PREVIEW_SUCCESS_TTL_HOURS=24)
+    def test_a_fresh_success_is_still_reused(self):
+        self._aged('https://example.com/story', LinkPreview.STATUS_READY, hours=2)
+
+        with patch('chat.tasks.fetch_url_safely') as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        fetch.assert_not_called()

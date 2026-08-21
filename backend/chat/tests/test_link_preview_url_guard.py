@@ -16,6 +16,7 @@ from chat.services import (
     extract_first_url,
     fetch_url_safely,
     normalize_preview_url,
+    resolve_public_url,
     validate_public_url,
 )
 
@@ -208,3 +209,46 @@ class TestGuardedFetch:
         assert mock_get.call_args.kwargs.get('timeout') is not None
         # redirects must be handled by us, hop by hop — never by the HTTP client
         assert mock_get.call_args.kwargs.get('allow_redirects') is False
+
+
+class TestPinnedResolution:
+    """The address that passed validation is the address we connect to (MED-279).
+
+    Validating a hostname and then letting the HTTP client resolve it again leaves a
+    TOCTOU window: an attacker controlling DNS can answer publicly for the check and
+    privately for the connection (DNS rebinding). Pinning closes it.
+    """
+
+    def test_validation_reports_the_address_it_approved(self):
+        resolver = fake_getaddrinfo({'example.com': [PUBLIC_IP]})
+        with patch('chat.services.socket.getaddrinfo', resolver):
+            url, ip = resolve_public_url('https://EXAMPLE.com/story#top')
+
+        assert url == 'https://example.com/story'
+        assert ip == PUBLIC_IP
+
+    def test_the_fetch_pins_the_validated_address(self):
+        """The connection must be made to the checked IP, not to a fresh lookup."""
+        resolver = fake_getaddrinfo({'example.com': [PUBLIC_IP]})
+        with patch('chat.services.socket.getaddrinfo', resolver), \
+             patch('chat.services.requests.get', return_value=FakeResponse(body='<html></html>')), \
+             patch('chat.services._pinned_address') as pin:
+            fetch_url_safely('https://example.com/a')
+
+        pin.assert_called_once()
+        assert pin.call_args.args[1] == PUBLIC_IP
+
+    def test_each_redirect_hop_is_pinned_to_its_own_validated_address(self):
+        hop = FakeResponse(status_code=302, headers={'Location': 'https://second.example.com/x'})
+        final = FakeResponse(body='<html>done</html>')
+        resolver = fake_getaddrinfo({
+            'first.example.com': [PUBLIC_IP],
+            'second.example.com': ['93.184.216.35'],
+        })
+        with patch('chat.services.socket.getaddrinfo', resolver), \
+             patch('chat.services.requests.get', side_effect=[hop, final]), \
+             patch('chat.services._pinned_address') as pin:
+            fetch_url_safely('https://first.example.com/go')
+
+        pinned = [call.args[1] for call in pin.call_args_list]
+        assert pinned == [PUBLIC_IP, '93.184.216.35']

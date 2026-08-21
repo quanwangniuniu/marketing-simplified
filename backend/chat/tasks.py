@@ -16,7 +16,12 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from core.tenant_context import tenant_schema_context
 from .models import ChatOutboxEvent, LinkPreview, Message, MessageStatus, ChatParticipant, ScheduledMessage, MessageAttachment
-from .metrics import chat_broadcast_publish_failures_total
+from .metrics import (
+    chat_broadcast_publish_failures_total,
+    chat_link_preview_create_races_total,
+    chat_link_preview_fetch_outcomes_total,
+    chat_link_preview_refusals_total,
+)
 from .realtime import broadcast_event_to_user_groups_sync
 from .services import (
     ChatService,
@@ -25,6 +30,7 @@ from .services import (
     OnlineStatusService,
     UnsafeUrlError,
     chat_group_name,
+    claim_link_preview_fetch_slot,
     claim_recipients_for_delivery,
     fetch_url_safely,
     normalize_preview_url,
@@ -47,10 +53,21 @@ def tenant_schema_task(task_function):
     return wrapped
 
 
-# A URL's answer is reused for a day; a pending row older than the claim TTL is
-# treated as abandoned so one dead worker cannot wedge a link forever.
-LINK_PREVIEW_CACHE_TTL = timedelta(hours=24)
-LINK_PREVIEW_CLAIM_TTL = timedelta(minutes=5)
+# How long each outcome is reused before the URL is fetched again. Separating them
+# matters: a page that resolved fine is worth holding for a day, but a host that
+# timed out may be back within the hour.
+def _link_preview_ttl(status: str) -> timedelta:
+    if status == LinkPreview.STATUS_FAILED:
+        hours = getattr(settings, 'LINK_PREVIEW_FAILURE_TTL_HOURS', 1)
+    elif status == LinkPreview.STATUS_BLOCKED:
+        hours = getattr(settings, 'LINK_PREVIEW_BLOCKED_TTL_HOURS', 24)
+    else:
+        hours = getattr(settings, 'LINK_PREVIEW_SUCCESS_TTL_HOURS', 24)
+    return timedelta(hours=hours)
+
+
+def _link_preview_claim_ttl() -> timedelta:
+    return timedelta(minutes=getattr(settings, 'LINK_PREVIEW_CLAIM_TTL_MINUTES', 5))
 
 CHAT_OUTBOX_BATCH_SIZE = getattr(settings, 'CHAT_OUTBOX_BATCH_SIZE', 200)
 CHAT_OUTBOX_CLAIM_TTL_SECONDS = getattr(settings, 'CHAT_OUTBOX_CLAIM_TTL_SECONDS', 300)
@@ -1139,6 +1156,8 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
         url=cache_key,
         defaults={'status': LinkPreview.STATUS_PENDING},
     )
+    if not created:
+        chat_link_preview_create_races_total.inc()
     if not created and not _claim_stale_preview(preview):
         # Someone already answered this URL recently, or is answering it now.
         # Reusing the answer still means telling *this* message about it.
@@ -1146,13 +1165,27 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
             _broadcast_link_preview(message, preview)
         return
 
+    # Only fetches of *new* URLs are metered; a cache hit never reaches this point,
+    # so sharing links other people already posted stays free.
+    if not claim_link_preview_fetch_slot(message.sender_id):
+        chat_link_preview_refusals_total.labels(reason='rate_limit').inc()
+        logger.info('Link preview rate limit reached for user %s', message.sender_id)
+        # Leave no row behind: the URL was never attempted, so it must not look
+        # like a cached failure the next time somebody posts it.
+        if created:
+            LinkPreview.objects.filter(pk=preview.pk, status=LinkPreview.STATUS_PENDING).delete()
+        return
+
     try:
         html = fetch_url_safely(cache_key)
     except UnsafeUrlError:
+        chat_link_preview_refusals_total.labels(reason='guard').inc()
+        chat_link_preview_fetch_outcomes_total.labels(outcome='blocked').inc()
         logger.warning('Link preview refused by URL guard: %s', cache_key)
         _store_preview_outcome(preview, LinkPreview.STATUS_BLOCKED)
         return
     except (LinkPreviewFetchError, requests.RequestException) as exc:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='failed').inc()
         logger.info('Link preview fetch failed for %s: %s', cache_key, exc)
         _store_preview_outcome(preview, LinkPreview.STATUS_FAILED)
         return
@@ -1161,7 +1194,10 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
     _store_preview_outcome(preview, LinkPreview.STATUS_READY, **metadata)
 
     if metadata['title'] or metadata['image_url']:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='ready').inc()
         _broadcast_link_preview(message, preview)
+    else:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='empty').inc()
 
 
 def _claim_stale_preview(preview: LinkPreview) -> bool:
@@ -1175,10 +1211,10 @@ def _claim_stale_preview(preview: LinkPreview) -> bool:
     now = timezone.now()
 
     if preview.status == LinkPreview.STATUS_PENDING:
-        if now - preview.updated_at < LINK_PREVIEW_CLAIM_TTL:
+        if now - preview.updated_at < _link_preview_claim_ttl():
             return False  # another task holds the claim
-    elif preview.fetched_at and now - preview.fetched_at < LINK_PREVIEW_CACHE_TTL:
-        return False  # fresh answer, whatever the outcome was
+    elif preview.fetched_at and now - preview.fetched_at < _link_preview_ttl(preview.status):
+        return False  # fresh answer, and each outcome has its own freshness window
 
     # Stale answer or abandoned claim: take it over, and re-stamp updated_at so
     # a concurrent task sees the claim as live.
@@ -1250,3 +1286,21 @@ def _store_preview_outcome(
     preview.image_url = image_url
     preview.fetched_at = timezone.now()
     preview.save(update_fields=['status', 'title', 'description', 'image_url', 'fetched_at', 'updated_at'])
+
+
+@shared_task
+@tenant_schema_task
+def prune_link_previews(tenant_schema: str = 'public') -> int:
+    """Delete cache rows nobody has needed for a long time.
+
+    The table is append-only otherwise: every URL anyone ever posted keeps a row,
+    including one-off failures. Rows are only ever read through by URL, so deleting
+    an old one costs at most one re-fetch if that link resurfaces.
+    """
+    cutoff = timezone.now() - timedelta(
+        days=getattr(settings, 'LINK_PREVIEW_PRUNE_AFTER_DAYS', 30)
+    )
+    deleted, _ = LinkPreview.objects.filter(fetched_at__lt=cutoff).delete()
+    if deleted:
+        logger.info('Pruned %s link preview rows older than %s', deleted, cutoff)
+    return deleted

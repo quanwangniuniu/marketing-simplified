@@ -280,6 +280,33 @@ services:
       - ./backend:/app
     command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_BACKGROUND_WORKER_CONCURRENCY:-2} -Q chat.notifications,chat.delivery
 
+  # Link previews wait on third-party sites, so they get their own worker:
+  # a slow host must never occupy a slot that message delivery needs.
+  celery-chat-link-previews:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    image: marketing-simplified-celery-worker
+    container_name: celery-chat-link-previews-dev
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=pgbouncer
+      - POSTGRES_PORT=5432
+      - PG_APPLICATION_NAME=celery_chat_link_previews
+      - DEBUG=True
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_LINK_PREVIEW_WORKER_CONCURRENCY:-2} -Q chat.link_previews
+
   celery-beat:
     build:
       context: ./backend

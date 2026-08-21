@@ -16,9 +16,10 @@ from django.db.models import Q, Prefetch
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from django.http import HttpResponse
 from django.conf import settings
 from datetime import datetime
-from .models import Chat, ChatParticipant, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
+from .models import Chat, ChatParticipant, LinkPreview, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
 from .serializers import (
     ChatSerializer,
     ChatListSerializer,
@@ -53,11 +54,12 @@ from .services import (
     OnlineStatusService,
     UnsafeUrlError,
     UnsupportedAttachmentMimeType,
+    fetch_image_safely,
     fetch_url_safely,
     validate_attachment_mime_type,
     validate_public_url,
 )
-from .metrics import chat_broadcast_enqueue_failures_total
+from .metrics import chat_broadcast_enqueue_failures_total, chat_link_preview_refusals_total
 from .tasks import notify_pin_update, send_scheduled_message
 from core.models import ProjectMember
 from core.slug_mixins import resolve_project_pk, SlugLookupViewSetMixin
@@ -2230,6 +2232,46 @@ def fetch_link_preview(request):
             {'error': 'Internal server error'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def link_preview_image(request):
+    """Serve a preview thumbnail from our own domain (MED-279).
+
+    Hotlinking og:image meant every viewer's browser contacted the third-party
+    host, handing it their IP. Proxying removes that, but only for images we have
+    already recorded: an endpoint that fetched any URL a caller named would be a
+    general-purpose SSRF tool, which is a worse hole than the one being closed.
+    """
+    url = request.query_params.get('url')
+    if not url:
+        return Response({'error': 'url is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # The allowlist is the cache itself: only images a guarded fetch already found.
+    if not LinkPreview.objects.filter(
+        image_url=url, status=LinkPreview.STATUS_READY
+    ).exists():
+        logger.warning('Refused to proxy an image that is not in the preview cache')
+        return Response({'error': 'Unknown image'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        data, content_type = fetch_image_safely(url)
+    except UnsafeUrlError as exc:
+        chat_link_preview_refusals_total.labels(reason='image_guard').inc()
+        logger.warning('Refused to proxy image: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_400_BAD_REQUEST)
+    except (LinkPreviewFetchError, requests.RequestException) as exc:
+        logger.info('Image proxy upstream failure: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_502_BAD_GATEWAY)
+
+    response = HttpResponse(data, content_type=content_type)
+    # Served from our origin, so be explicit that it is only ever an image.
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    response['Referrer-Policy'] = 'no-referrer'
+    response['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 
 # ── Full-text message search ───────────────────────────────────────────────────
