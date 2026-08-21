@@ -338,6 +338,42 @@ async def test_clear_cancels_outstanding_foreign_thread_calls():
 
 
 @pytest.mark.asyncio
+async def test_foreign_thread_caller_cancellation_is_preserved():
+    layer = SlowAddChannelLayer()
+    registry = SubscriptionRegistry(
+        layer,
+        'channel-1',
+        thread_call_timeout=5,
+    )
+    foreign_task_ready = threading.Event()
+    foreign_call: dict[str, Any] = {}
+
+    def add_from_thread() -> bool:
+        async def add() -> bool:
+            foreign_call['loop'] = asyncio.get_running_loop()
+            foreign_call['task'] = asyncio.current_task()
+            foreign_task_ready.set()
+            try:
+                await registry.add('chat_slow')
+            except asyncio.CancelledError:
+                return True
+            return False
+
+        return asyncio.run(add())
+
+    worker = asyncio.create_task(asyncio.to_thread(add_from_thread))
+    await asyncio.wait_for(layer.add_started.wait(), timeout=1)
+    assert foreign_task_ready.is_set()
+
+    foreign_call['loop'].call_soon_threadsafe(foreign_call['task'].cancel)
+    assert await asyncio.wait_for(worker, timeout=1) is True
+
+    layer.release_add.set()
+    assert await registry.add('chat_after_cancel') is True
+    await registry.clear()
+
+
+@pytest.mark.asyncio
 async def test_clear_returns_previous_groups_and_does_not_report_normal_cleanup():
     layer = FakeChannelLayer()
     registry = SubscriptionRegistry(layer, 'channel-1')

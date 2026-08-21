@@ -372,10 +372,10 @@ class SubscriptionRegistry:
             wrapped = asyncio.wrap_future(future)
             try:
                 return await asyncio.wait_for(
-                    wrapped,
+                    asyncio.shield(wrapped),
                     timeout=self._thread_call_timeout,
                 )
-            except TimeoutError as exc:
+            except asyncio.TimeoutError as exc:
                 future.cancel()
                 self._begin_close()
                 logger.error(
@@ -389,13 +389,12 @@ class SubscriptionRegistry:
                     f'{operation_name}'
                 ) from exc
             except asyncio.CancelledError as exc:
+                owner_work_cancelled = future.cancelled()
                 future.cancel()
-                task = asyncio.current_task()
-                if task is not None and task.cancelling():
+                if not owner_work_cancelled:
                     # Preserve cooperative cancellation initiated by this
-                    # caller. A future cancelled by registry close has no
-                    # cancellation request on the caller task and becomes a
-                    # typed lifecycle error below.
+                    # caller. Shielding the owner-loop future keeps this case
+                    # distinguishable on Python versions before Task.cancelling().
                     raise
                 self._begin_close()
                 logger.error(
