@@ -50,6 +50,17 @@ describe('LinkPreview dismiss button', () => {
     expect(screen.getByTestId('dismiss-link-preview')).toBeVisible();
   });
 
+  it('loads the thumbnail through our own backend, not the remote host', () => {
+    // Hotlinking would hand every viewer's IP to the third party.
+    render(<LinkPreview preview={PREVIEW} onDismiss={jest.fn()} />);
+
+    const img = screen.getByRole('img');
+    expect(img.getAttribute('src')).toBe(
+      `/api/chat/link-preview-image/?url=${encodeURIComponent(PREVIEW.image_url!)}`,
+    );
+    expect(img.getAttribute('src')).not.toContain('cdn.example.com/cover.jpg');
+  });
+
   it('renders nothing when there is no metadata worth drawing', () => {
     const { container } = render(
       <LinkPreview

@@ -657,6 +657,16 @@ export const hideMessage = async (
 };
 
 /**
+ * Route a preview thumbnail through our own backend (MED-279).
+ *
+ * Loading og:image directly would hand every viewer's IP to the third-party host.
+ * The backend only proxies images a guarded fetch already recorded, and decides the
+ * content type by sniffing the bytes rather than trusting the remote host's claim.
+ */
+export const linkPreviewImageUrl = (imageUrl: string): string =>
+  `/api/chat/link-preview-image/?url=${encodeURIComponent(imageUrl)}`;
+
+/**
  * Dismiss a message's link preview card for the current user only (MED-279).
  * POST /api/chat/messages/{messageId}/hide_link_preview/
  */

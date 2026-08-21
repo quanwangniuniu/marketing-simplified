@@ -746,3 +746,54 @@ class TestConfigurableTtl(LinkPreviewTestCase):
             fetch_link_preview_task(self.message.id, 'https://example.com/story')
 
         fetch.assert_not_called()
+
+
+class TestRateLimitDoesNotHideReadyCards(LinkPreviewTestCase):
+    """A rate-limited refresh must not blank an existing card (MED-279).
+
+    Claiming a row flips it to pending, which hides it from every viewer until the
+    claim expires. So the limit has to be checked *before* anything is claimed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.preview = LinkPreview.objects.create(
+            url='https://example.com/story',
+            status=LinkPreview.STATUS_READY,
+            title='A great article',
+            image_url='https://cdn.example.com/cover.jpg',
+            fetched_at=timezone.now(),
+        )
+        # Age it past the success TTL so a refetch would otherwise be attempted.
+        moment = timezone.now() - timedelta(hours=48)
+        LinkPreview.objects.filter(pk=self.preview.pk).update(fetched_at=moment, updated_at=moment)
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=0)
+    def test_a_stale_row_is_refreshed_when_the_sender_has_allowance(self):
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML) as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        assert fetch.call_count == 1
+        assert LinkPreview.objects.get(pk=self.preview.pk).status == LinkPreview.STATUS_READY
+
+    @override_settings(LINK_PREVIEW_RATE_LIMIT_PER_MINUTE=1)
+    def test_a_rate_limited_refresh_leaves_the_card_visible(self):
+        # Burn the single slot on another URL first.
+        other = Message.objects.create(
+            chat=self.chat, sender=self.user, content='other https://example.com/other'
+        )
+        with patch('chat.tasks.fetch_url_safely', return_value=OG_HTML):
+            fetch_link_preview_task(other.id, 'https://example.com/other')
+
+        with patch('chat.tasks.fetch_url_safely') as fetch:
+            fetch_link_preview_task(self.message.id, 'https://example.com/story')
+
+        fetch.assert_not_called()
+        refreshed = LinkPreview.objects.get(pk=self.preview.pk)
+        assert refreshed.status == LinkPreview.STATUS_READY, 'the old card must stay visible'
+        assert refreshed.title == 'A great article'
+        assert build_message_link_preview(self.message, self.user) is not None

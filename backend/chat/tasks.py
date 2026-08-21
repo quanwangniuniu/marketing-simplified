@@ -1158,23 +1158,30 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
     )
     if not created:
         chat_link_preview_create_races_total.inc()
-    if not created and not _claim_stale_preview(preview):
+
+    if not created and not _preview_needs_refetch(preview):
         # Someone already answered this URL recently, or is answering it now.
         # Reusing the answer still means telling *this* message about it.
         if preview.status == LinkPreview.STATUS_READY and (preview.title or preview.image_url):
             _broadcast_link_preview(message, preview)
         return
 
-    # Only fetches of *new* URLs are metered; a cache hit never reaches this point,
-    # so sharing links other people already posted stays free.
+    # Metered before the row is claimed, not after: claiming flips a stale but
+    # still-usable READY row to PENDING, and a rate-limited sender bailing out
+    # after that would hide a good card from everyone until the claim expired.
     if not claim_link_preview_fetch_slot(message.sender_id):
         chat_link_preview_refusals_total.labels(reason='rate_limit').inc()
         logger.info('Link preview rate limit reached for user %s', message.sender_id)
-        # Leave no row behind: the URL was never attempted, so it must not look
-        # like a cached failure the next time somebody posts it.
+        # A brand-new row was never attempted, so it must not look like a cached
+        # failure to the next person; an existing row keeps whatever it had.
         if created:
             LinkPreview.objects.filter(pk=preview.pk, status=LinkPreview.STATUS_PENDING).delete()
+        elif preview.status == LinkPreview.STATUS_READY and (preview.title or preview.image_url):
+            _broadcast_link_preview(message, preview)
         return
+
+    if not created:
+        _claim_stale_preview(preview)
 
     try:
         html = fetch_url_safely(cache_key)
@@ -1200,30 +1207,38 @@ def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'pub
         chat_link_preview_fetch_outcomes_total.labels(outcome='empty').inc()
 
 
-def _claim_stale_preview(preview: LinkPreview) -> bool:
-    """True when this task should (re)fetch an existing cache row.
+def _preview_needs_refetch(preview: LinkPreview) -> bool:
+    """True when an existing row is stale enough to fetch again. Reads only.
+
+    Kept separate from the claim so callers can decide *whether* to fetch before
+    doing anything destructive: claiming flips the row to pending, which hides a
+    still-usable card from every viewer until the claim expires.
 
     A row is left alone while it is fresh — and that covers failures and refusals
-    too, so a dead or unsafe link costs one fetch per day rather than one per
-    mention. A row still marked pending belongs to another task, unless that
-    task has been gone long enough to count as dead.
+    too, so a dead or unsafe link costs one fetch per window rather than one per
+    mention. A row still marked pending belongs to another task, unless that task
+    has been gone long enough to count as dead.
     """
     now = timezone.now()
 
     if preview.status == LinkPreview.STATUS_PENDING:
-        if now - preview.updated_at < _link_preview_claim_ttl():
-            return False  # another task holds the claim
-    elif preview.fetched_at and now - preview.fetched_at < _link_preview_ttl(preview.status):
-        return False  # fresh answer, and each outcome has its own freshness window
+        return now - preview.updated_at >= _link_preview_claim_ttl()
+    if preview.fetched_at is None:
+        return True
+    return now - preview.fetched_at >= _link_preview_ttl(preview.status)
 
-    # Stale answer or abandoned claim: take it over, and re-stamp updated_at so
-    # a concurrent task sees the claim as live.
+
+def _claim_stale_preview(preview: LinkPreview) -> None:
+    """Take ownership of a row we have already decided to refetch.
+
+    Re-stamps updated_at so a concurrent task sees the claim as live.
+    """
+    now = timezone.now()
     LinkPreview.objects.filter(pk=preview.pk).update(
         status=LinkPreview.STATUS_PENDING, updated_at=now
     )
     preview.status = LinkPreview.STATUS_PENDING
     preview.updated_at = now
-    return True
 
 
 def _broadcast_link_preview(message: Message, preview: LinkPreview) -> None:

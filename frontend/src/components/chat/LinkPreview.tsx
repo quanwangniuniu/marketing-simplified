@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ExternalLink, Globe, X } from 'lucide-react';
+import { linkPreviewImageUrl } from '@/lib/api/chatApi';
 import type { MessageLinkPreview } from '@/types/chat';
 
 interface LinkPreviewProps {
@@ -26,6 +27,9 @@ function hostnameOf(url: string): string {
  * hot path behind an SSRF guard, caches it per URL, and hands it over on the
  * message payload. The client never fetches a user-supplied URL itself — doing so
  * once per viewer would bypass the shared cache and re-open the SSRF surface.
+ *
+ * The thumbnail is loaded through our own backend rather than straight from the
+ * remote host, so viewing a card does not hand a third party the viewer's IP.
  *
  * The close button dismisses the card for this viewer only; the message, the link,
  * and the shared cache are untouched.
@@ -56,7 +60,7 @@ export default function LinkPreview({ preview, className = '', onDismiss }: Link
           <div className="relative w-full h-32 overflow-hidden bg-gray-100">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={imageUrl}
+              src={linkPreviewImageUrl(imageUrl)}
               alt={title || 'Link preview'}
               className="w-full h-full object-cover"
               onError={(e) => {
