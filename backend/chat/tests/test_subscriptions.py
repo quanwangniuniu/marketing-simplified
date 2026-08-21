@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+import time
 from collections import defaultdict
 from typing import Any
 
@@ -10,7 +11,13 @@ from channels.testing import WebsocketCommunicator
 from prometheus_client import REGISTRY
 
 from chat.consumers import ChatConsumer
-from chat.subscriptions import SubscriptionRegistry
+from chat.subscriptions import (
+    RegistryCancelledError,
+    RegistryClosedError,
+    RegistryError,
+    RegistryTimeoutError,
+    SubscriptionRegistry,
+)
 
 
 class FakeChannelLayer:
@@ -51,6 +58,39 @@ class FakeChannelLayer:
         return frozenset(
             group for group, channels in self.groups.items() if channel in channels
         )
+
+
+class SlowAddChannelLayer(FakeChannelLayer):
+    """Hold one add open so foreign-thread timeout/cancellation is observable."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_started = asyncio.Event()
+        self.release_add = asyncio.Event()
+
+    async def group_add(self, group: str, channel: str) -> None:
+        self.add_started.set()
+        await self.release_add.wait()
+        await super().group_add(group, channel)
+
+
+class TrackingSendChannelLayer(FakeChannelLayer):
+    """Track in-flight sends while preserving injectable failures."""
+
+    def __init__(self, send_delay: float = 0.005) -> None:
+        super().__init__()
+        self.send_delay = send_delay
+        self.active_sends = 0
+        self.max_active_sends = 0
+
+    async def group_send(self, group: str, message: dict[str, Any]) -> None:
+        self.active_sends += 1
+        self.max_active_sends = max(self.max_active_sends, self.active_sends)
+        try:
+            await asyncio.sleep(self.send_delay)
+            await super().group_send(group, message)
+        finally:
+            self.active_sends -= 1
 
 
 class CrashingSubscriptionConsumer(ChatConsumer):
@@ -241,6 +281,63 @@ async def test_calls_from_os_threads_are_marshaled_to_the_owner_event_loop():
 
 
 @pytest.mark.asyncio
+async def test_foreign_thread_call_times_out_without_blocking_forever():
+    layer = SlowAddChannelLayer()
+    registry = SubscriptionRegistry(
+        layer,
+        'channel-1',
+        thread_call_timeout=0.05,
+    )
+
+    def add_from_thread() -> tuple[RegistryError, float]:
+        started_at = time.monotonic()
+        try:
+            asyncio.run(registry.add('chat_slow'))
+        except RegistryError as exc:
+            return exc, time.monotonic() - started_at
+        raise AssertionError('foreign-thread add unexpectedly succeeded')
+
+    worker = asyncio.create_task(asyncio.to_thread(add_from_thread))
+    await asyncio.wait_for(layer.add_started.wait(), timeout=1)
+    error, elapsed = await asyncio.wait_for(worker, timeout=1)
+
+    assert isinstance(error, RegistryTimeoutError)
+    assert elapsed < 0.5
+    assert await registry.snapshot() == frozenset()
+    with pytest.raises(RegistryClosedError, match='registry is closed'):
+        await registry.add('chat_after_timeout')
+
+    await registry.clear()
+
+
+@pytest.mark.asyncio
+async def test_clear_cancels_outstanding_foreign_thread_calls():
+    layer = SlowAddChannelLayer()
+    registry = SubscriptionRegistry(
+        layer,
+        'channel-1',
+        thread_call_timeout=5,
+    )
+
+    def add_from_thread() -> RegistryError:
+        try:
+            asyncio.run(registry.add('chat_slow'))
+        except RegistryError as exc:
+            return exc
+        raise AssertionError('foreign-thread add unexpectedly succeeded')
+
+    worker = asyncio.create_task(asyncio.to_thread(add_from_thread))
+    await asyncio.wait_for(layer.add_started.wait(), timeout=1)
+
+    cleanup = await asyncio.wait_for(registry.clear(), timeout=1)
+    error = await asyncio.wait_for(worker, timeout=1)
+
+    assert isinstance(error, RegistryCancelledError)
+    assert cleanup.subscriptions == frozenset()
+    assert await registry.snapshot() == frozenset()
+
+
+@pytest.mark.asyncio
 async def test_clear_returns_previous_groups_and_does_not_report_normal_cleanup():
     layer = FakeChannelLayer()
     registry = SubscriptionRegistry(layer, 'channel-1')
@@ -290,6 +387,54 @@ async def test_clear_reports_failed_discards_without_gauge_drift():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_reports_partial_failures_without_state_drift():
+    layer = TrackingSendChannelLayer()
+    registry = SubscriptionRegistry(
+        layer,
+        'channel-1',
+        dispatch_concurrency=2,
+    )
+    groups = {'chat_1', 'chat_2', 'chat_3'}
+    await registry.sync(groups)
+    layer.fail_send.add('chat_2')
+
+    result = await registry.dispatch({'type': 'presence_update'})
+
+    assert result.attempted == frozenset(groups)
+    assert result.sent == frozenset({'chat_1', 'chat_3'})
+    assert result.failed == frozenset({'chat_2'})
+    assert len(result.failures) == 1
+    assert isinstance(result.failures[0].error, RuntimeError)
+    assert await registry.snapshot() == frozenset(groups)
+    assert layer.subscriptions_for('channel-1') == frozenset(groups)
+    assert len([call for call in layer.calls if call[0] == 'send']) == 3
+
+    await registry.clear()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_bounds_concurrency_for_large_group_snapshots():
+    layer = TrackingSendChannelLayer()
+    registry = SubscriptionRegistry(
+        layer,
+        'channel-1',
+        dispatch_concurrency=5,
+    )
+    groups = {f'chat_{index}' for index in range(100)}
+    await registry.sync(groups)
+
+    result = await registry.dispatch({'type': 'presence_update'})
+
+    assert result.attempted == frozenset(groups)
+    assert result.sent == frozenset(groups)
+    assert result.failures == ()
+    assert 1 < layer.max_active_sends <= 5
+    assert await registry.snapshot() == frozenset(groups)
+
+    await registry.clear()
+
+
+@pytest.mark.asyncio
 async def test_dispatch_uses_snapshot_and_supports_post_clear_offline_broadcast():
     layer = FakeChannelLayer()
     registry = SubscriptionRegistry(layer, 'channel-1')
@@ -302,8 +447,10 @@ async def test_dispatch_uses_snapshot_and_supports_post_clear_offline_broadcast(
         groups=cleanup.subscriptions,
     )
 
-    assert sent == frozenset({'chat_1', 'chat_2'})
-    assert sent_after_clear == sent
+    assert sent.sent == frozenset({'chat_1', 'chat_2'})
+    assert sent.failures == ()
+    assert sent_after_clear.sent == sent.sent
+    assert sent_after_clear.failures == ()
     send_calls = [call for call in layer.calls if call[0] == 'send']
     assert len(send_calls) == 4
     assert {call[1] for call in send_calls} == {'chat_1', 'chat_2'}

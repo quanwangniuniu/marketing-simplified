@@ -144,6 +144,16 @@ class ChatConsumer(InstrumentedAsyncWebsocketConsumer):
         self.subscriptions = SubscriptionRegistry(
             self.channel_layer,
             self.channel_name,
+            thread_call_timeout=getattr(
+                settings,
+                'CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS',
+                5.0,
+            ),
+            dispatch_concurrency=getattr(
+                settings,
+                'CHAT_FANOUT_CONCURRENCY',
+                25,
+            ),
         )
         try:
             await self.sync_chat_groups()
@@ -879,10 +889,25 @@ class ChatConsumer(InstrumentedAsyncWebsocketConsumer):
             'version': version,
             'timestamp': timezone.now().isoformat(),
         }
-        sent_groups = await subscriptions.dispatch(event, groups=group_names)
+        dispatch_result = await subscriptions.dispatch(event, groups=group_names)
+        if dispatch_result.failures:
+            logger.warning(
+                "[WebSocket] Presence update for user %s failed for %s of %s "
+                "chat group(s): failures=%s",
+                self.user_id,
+                len(dispatch_result.failures),
+                len(dispatch_result.attempted),
+                [
+                    {
+                        'group': failure.group_name,
+                        'error': str(failure.error),
+                    }
+                    for failure in dispatch_result.failures
+                ],
+            )
         logger.debug(
             "[WebSocket] Presence update for user %s sent to %s chat group(s): is_online=%s",
-            self.user_id, len(sent_groups), is_online,
+            self.user_id, len(dispatch_result.sent), is_online,
         )
 
     async def broadcast_presence_update(
