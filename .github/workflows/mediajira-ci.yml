@@ -493,30 +493,28 @@ jobs:
       # core_project / core_projectmember are per-org tables.
       - name: Provision a tenant schema for variations-studio tests
         run: |
-          # stripe_meta must exist before Organization.create: post_save auto-subscribe
-          # queries stripe_meta_plan; a missing table aborts the PG transaction even
-          # though the signal catches the error in Python.
-          docker compose exec -T backend sh -c "
-            python manage.py migrate stripe_meta --noinput &&
-            python manage.py shell -c \"
-from django.db.models.signals import post_save
-from core.models import Organization
-from core.services.tenant import provision_tenant_schema
-from stripe_meta.signals import create_default_subscription
+          docker compose exec -T backend sh <<'EOS'
+          set -e
+          python manage.py migrate stripe_meta --noinput
+          python manage.py shell <<'PY'
+          from django.db.models.signals import post_save
+          from core.models import Organization
+          from core.services.tenant import provision_tenant_schema
+          from stripe_meta.signals import create_default_subscription
 
-post_save.disconnect(create_default_subscription, sender=Organization)
-try:
-    org, created = Organization.objects.get_or_create(
-        slug='ci-studio-org',
-        defaults={'name': 'CI Studio Org', 'is_active': True},
-    )
-    if not created:
-        provision_tenant_schema(org.slug)
-finally:
-    post_save.connect(create_default_subscription, sender=Organization)
-print('tenant schema ready for', org.slug)
-\"
-          "
+          post_save.disconnect(create_default_subscription, sender=Organization)
+          try:
+              org, created = Organization.objects.get_or_create(
+                  slug='ci-studio-org',
+                  defaults={'name': 'CI Studio Org', 'is_active': True},
+              )
+              if not created:
+                  provision_tenant_schema(org.slug)
+          finally:
+              post_save.connect(create_default_subscription, sender=Organization)
+          print('tenant schema ready for', org.slug)
+          PY
+          EOS
 
       - name: Run variations-studio tests
         run: |
