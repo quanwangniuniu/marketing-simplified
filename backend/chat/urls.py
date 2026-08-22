@@ -8,6 +8,7 @@ from .views import (
     SavedMessageViewSet,
     ScheduledMessageViewSet,
     fetch_link_preview,
+    link_preview_image,
     search_messages,
 )
 
@@ -24,5 +25,6 @@ router.register(r'attachments', AttachmentViewSet, basename='attachment')
 urlpatterns = [
     path('', include(router.urls)),
     path('link-preview/', fetch_link_preview, name='link-preview'),
+    path('link-preview-image/', link_preview_image, name='link-preview-image'),
     path('search/', search_messages, name='message-search'),
 ]

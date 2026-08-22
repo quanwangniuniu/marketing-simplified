@@ -122,6 +122,7 @@ export default defineConfig({
       testMatch: [
         /e2e[\\/]messages[\\/]messages-reconnect-attachments\.spec\.ts$/,
         /e2e[\\/]messages[\\/]messages-pinned\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-link-preview\.spec\.ts$/,
       ],
     },
     {

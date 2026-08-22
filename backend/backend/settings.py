@@ -498,7 +498,34 @@ CELERY_TASK_ROUTES = {
     'chat.tasks.notify_message_recipients': {'queue': 'chat.notifications'},
     'chat.tasks.deliver_message_task': {'queue': 'chat.delivery'},
     'chat.tasks.send_scheduled_message': {'queue': 'chat.delivery'},
+    # A link preview waits on a third-party site, so it gets its own low-priority
+    # queue with its own worker: one slow host must never sit in front of message
+    # delivery. Every deployment file consumes chat.link_previews — a queue nobody
+    # consumes would silently pile up previews, so they must stay in step.
+    'chat.tasks.fetch_link_preview_task': {'queue': 'chat.link_previews'},
+    'chat.tasks.prune_link_previews': {'queue': 'chat.link_previews'},
 }
+
+# --- Link previews (MED-279) -------------------------------------------------
+# How long an answer is reused before the URL is fetched again. Success and
+# failure are separate on purpose: a page that resolved fine is worth holding for
+# a day, but a host that timed out may well be back within the hour, and a URL the
+# safety guard refused is not going to become safe on its own.
+LINK_PREVIEW_SUCCESS_TTL_HOURS = config('LINK_PREVIEW_SUCCESS_TTL_HOURS', default=24, cast=int)
+LINK_PREVIEW_FAILURE_TTL_HOURS = config('LINK_PREVIEW_FAILURE_TTL_HOURS', default=1, cast=int)
+LINK_PREVIEW_BLOCKED_TTL_HOURS = config('LINK_PREVIEW_BLOCKED_TTL_HOURS', default=24, cast=int)
+
+# A pending row older than this is treated as abandoned, so a worker that died
+# mid-fetch cannot wedge a URL forever.
+LINK_PREVIEW_CLAIM_TTL_MINUTES = config('LINK_PREVIEW_CLAIM_TTL_MINUTES', default=5, cast=int)
+
+# Caching stops the same URL being fetched twice, but nothing stops one account
+# posting many *different* URLs, which is how this feature could be turned into a
+# request amplifier. Cache hits are free; only fetches of new URLs count.
+LINK_PREVIEW_RATE_LIMIT_PER_MINUTE = config('LINK_PREVIEW_RATE_LIMIT_PER_MINUTE', default=5, cast=int)
+
+# Rows older than this are pruned daily; without it the table only ever grows.
+LINK_PREVIEW_PRUNE_AFTER_DAYS = config('LINK_PREVIEW_PRUNE_AFTER_DAYS', default=30, cast=int)
 
 # Bound concurrent Channels publications inside one Celery/ASGI process so a
 # large group cannot create an unbounded Redis command burst.
@@ -627,6 +654,11 @@ CELERY_BEAT_SCHEDULE = {
     'cleanup-orphaned-chat-attachments': {
         'task': 'chat.tasks.cleanup_orphaned_attachments',
         'schedule': crontab(hour=4, minute=0),  # daily 04:00 UTC (low traffic period)
+        'options': {'timezone': 'UTC'},
+    },
+    'prune-link-previews': {
+        'task': 'chat.tasks.prune_link_previews',
+        'schedule': crontab(hour=4, minute=30),  # daily 04:30 UTC, after the sweep above
         'options': {'timezone': 'UTC'},
     },
     'google-calendar-import-every-15-min': {

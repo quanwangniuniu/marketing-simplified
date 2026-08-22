@@ -42,3 +42,28 @@ chat_subscription_leaks_total = Counter(
 # Export the bounded series at zero before the first failure, so dashboards and
 # alerts do not confuse an idle process with a missing metric.
 chat_subscription_leaks_total.labels(reason='discard_failed')
+
+# --- Link previews (MED-279) -------------------------------------------------
+# The guard refusing a URL is normally routine (someone pasted an intranet link),
+# but a sudden spike is what an SSRF probe looks like. Logs alone are not a signal
+# anyone watches, so every refusal is counted and labelled by reason.
+chat_link_preview_refusals_total = Counter(
+    'chat_link_preview_refusals_total',
+    'Link preview fetches refused before or during the request',
+    ['reason'],  # reason: guard | redirect | rate_limit | content_type | size
+)
+
+# A create race means two workers reached the same brand-new URL at once. It is
+# handled, but a rising count means the single-flight window is wider than assumed.
+chat_link_preview_create_races_total = Counter(
+    'chat_link_preview_create_races_total',
+    'Link preview rows that lost the create race and reused an existing row',
+)
+
+# Retries are deliberately disabled, so a spike in failures has no self-healing
+# behaviour behind it — this is the only thing that makes such a spike visible.
+chat_link_preview_fetch_outcomes_total = Counter(
+    'chat_link_preview_fetch_outcomes_total',
+    'Outcome of link preview fetch attempts',
+    ['outcome'],  # outcome: ready | failed | blocked | empty
+)

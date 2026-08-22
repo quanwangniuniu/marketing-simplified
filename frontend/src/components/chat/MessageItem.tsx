@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { FileX2, Film, Forward, ImageOff, MicOff } from 'lucide-react';
 import MessageFlagChips from './MessageFlagChips';
@@ -13,9 +13,10 @@ import LinkPreview from './LinkPreview';
 import TaskSharePreview from './TaskSharePreview';
 import ReactionsDisplay from './ReactionsDisplay';
 import MessageHoverActions from './MessageHoverActions';
-import { extractUrls } from '@/lib/api/linkPreviewApi';
 import ChatRichTextRenderer from './ChatRichTextRenderer';
 import { buildMessagesPath, parseChatSlugFromPathname } from '@/lib/messages/messagesRoutes';
+import { hideMessageLinkPreview } from '@/lib/api/chatApi';
+import { useChatStore } from '@/lib/chatStore';
 
 const AGENT_BOT_EMAIL = 'agent-bot@system.local';
 const AGENT_BOT_USERNAME = 'agent-bot';
@@ -205,17 +206,18 @@ export default function MessageItem({
   const hasReactions = !isDeleted && Boolean(message.reactions && message.reactions.length > 0);
   const hasThreadReplies = !isDeleted && (message.thread_reply_count ?? 0) > 0;
 
-  let hasUrls = false;
-  try {
-    hasUrls = hasContent && extractUrls(messageContent).length > 0;
-  } catch {
-    // ignore malformed content
-  }
-
   const taskIds = extractTaskIds(messageContent);
   const taskPreviewId = taskIds[0];
   const showTaskPreview = !isDeleted && Boolean(taskPreviewId);
-  const showLinkPreview = !isDeleted && hasUrls && !showTaskPreview;
+  const linkPreview = message.link_preview ?? null;
+
+  // Dismissing is optimistic: the card is a view preference, so a failed request
+  // is not worth interrupting the conversation for — it comes back on reload.
+  const handleDismissLinkPreview = useCallback(() => {
+    useChatStore.getState().clearLinkPreview(message.id);
+    void hideMessageLinkPreview(message.id).catch(() => {});
+  }, [message.id]);
+  const showLinkPreview = !isDeleted && Boolean(linkPreview) && !showTaskPreview;
   const bot = isAgentBot(message.sender);
   const time = formatTime(message.created_at);
   const initials = bot ? 'AI' : (message.sender.username[0] ?? '?').toUpperCase();
@@ -473,7 +475,9 @@ export default function MessageItem({
                     <TaskSharePreview taskId={taskPreviewId} className="mt-2" />
                   ) : null}
 
-                  {showLinkPreview && <LinkPreview content={messageContent} />}
+                  {showLinkPreview && linkPreview && (
+                    <LinkPreview preview={linkPreview} onDismiss={handleDismissLinkPreview} />
+                  )}
 
                   {hasAttachments && (
                     <AttachmentDisplay
