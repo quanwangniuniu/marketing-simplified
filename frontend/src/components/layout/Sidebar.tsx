@@ -184,7 +184,7 @@ const getNavigationItems = (
           icon: Bell,
         },
         {
-          name: "Audit Log",
+          name: "Admin Audit Log",
           href: "/admin/audit-log",
           icon: ScrollText,
         },
