@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from pathlib import Path
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 from celery.schedules import crontab
 
 
@@ -124,6 +125,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.tenant_schema.TenantSchemaMiddleware',
+    'authentication.middleware.PasswordRotationMiddleware',
     'core.middleware.project_access.CheckProjectAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -133,6 +135,23 @@ MIDDLEWARE = [
     'tracking.middleware.ServerSideTrackingMiddleware',
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
+
+APP_ENV = os.environ.get("APP_ENV") or os.environ.get("DJANGO_ENV") or os.environ.get("ENVIRONMENT") or "development"
+APP_ENV = APP_ENV.lower()
+
+PASSWORD_ROTATION_ENABLED = os.environ.get('PASSWORD_ROTATION_ENABLED', 'true').lower() != 'false'
+PASSWORD_ROTATION_MAX_ALLOWED_AGE_DAYS = 180
+PASSWORD_ROTATION_MAX_AGE_DAYS = min(
+    int(os.environ.get('PASSWORD_ROTATION_MAX_AGE_DAYS', '90')),
+    PASSWORD_ROTATION_MAX_ALLOWED_AGE_DAYS,
+)
+PASSWORD_ROTATION_WARNING_DAYS = min(
+    int(os.environ.get('PASSWORD_ROTATION_WARNING_DAYS', '7')),
+    PASSWORD_ROTATION_MAX_AGE_DAYS,
+)
+
+if APP_ENV in {"production", "prod", "staging", "stage"} and not PASSWORD_ROTATION_ENABLED:
+    raise ImproperlyConfigured("PASSWORD_ROTATION_ENABLED cannot be false in production or staging.")
 
 ROOT_URLCONF = 'backend.urls'
 
