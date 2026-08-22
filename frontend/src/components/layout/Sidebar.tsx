@@ -251,7 +251,7 @@ const Sidebar: FC<SidebarProps> = ({
       }
       return item;
     });
-  }, [userRole, userRoleLevel, t, globalUnreadCount, activeProject]);
+  }, [userRole, userRoleLevel, t, globalUnreadCount, activeProject, effectiveRoleLevel]);
 
   // Handle collapse state changes
   const handleCollapseToggle = () => {
