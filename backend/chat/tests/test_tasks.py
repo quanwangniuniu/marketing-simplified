@@ -301,6 +301,10 @@ def test_chat_tasks_are_routed_to_dedicated_queues():
         'chat.tasks.notify_message_recipients': 'chat.notifications',
         'chat.tasks.deliver_message_task': 'chat.delivery',
         'chat.tasks.send_scheduled_message': 'chat.delivery',
+        # Previews wait on external sites, so they get their own worker: a slow
+        # host must never occupy a slot that message delivery needs.
+        'chat.tasks.fetch_link_preview_task': 'chat.link_previews',
+        'chat.tasks.prune_link_previews': 'chat.link_previews',
     }
 
     assert {

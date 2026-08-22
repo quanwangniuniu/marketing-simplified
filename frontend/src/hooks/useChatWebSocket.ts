@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWsUrl } from '@/lib/ws';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
+import type { MessageLinkPreview } from '@/types/chat';
 
 // WebSocket message types (server -> client)
 export type ChatWsEventType =
@@ -12,6 +13,7 @@ export type ChatWsEventType =
   | 'message_status_update'
   | 'reaction_update'
   | 'pin_update'
+  | 'link_preview'
   | 'presence_update'
   | 'presence_snapshot'
   | 'in_app_notification'
@@ -34,6 +36,7 @@ export interface ChatWsEvent<T = any> {
   status?: string;
   reaction?: any;
   action?: 'pinned' | 'unpinned';
+  preview?: MessageLinkPreview | null;
   pin?: any;
   notification?: any;
   timestamp?: string;
@@ -48,6 +51,7 @@ export interface UseChatWebSocketHandlers {
   onMessageStatusUpdate?: (e: ChatWsEvent) => void;
   onReactionUpdate?: (e: ChatWsEvent) => void;
   onPinUpdate?: (e: ChatWsEvent) => void;
+  onLinkPreview?: (e: ChatWsEvent) => void;
   onPresenceUpdate?: (e: ChatWsEvent) => void;
   onPresenceSnapshot?: (e: ChatWsEvent) => void;
   onInAppNotification?: (e: ChatWsEvent) => void;
@@ -134,6 +138,16 @@ export function useChatWebSocket(
               }
               handlersRef.current.onPinUpdate?.(data);
               break;
+            case 'link_preview': {
+              // Attach centrally: a preview must land on the message whether or
+              // not the chat window that owns it is currently mounted.
+              const messageId = Number(data.message_id);
+              if (Number.isFinite(messageId) && data.preview) {
+                useChatStore.getState().applyLinkPreview(messageId, data.preview);
+              }
+              handlersRef.current.onLinkPreview?.(data);
+              break;
+            }
             case 'presence_update':
               handlersRef.current.onPresenceUpdate?.(data);
               break;

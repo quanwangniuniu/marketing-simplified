@@ -16,9 +16,10 @@ from django.db.models import Q, Prefetch
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from django.http import HttpResponse
 from django.conf import settings
 from datetime import datetime
-from .models import Chat, ChatParticipant, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
+from .models import Chat, ChatParticipant, LinkPreview, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
 from .serializers import (
     ChatSerializer,
     ChatListSerializer,
@@ -48,12 +49,17 @@ from .serializers import (
 from .services import (
     ChatService,
     ChatStarService,
+    LinkPreviewFetchError,
     MessageService,
     OnlineStatusService,
+    UnsafeUrlError,
     UnsupportedAttachmentMimeType,
+    fetch_image_safely,
+    fetch_url_safely,
     validate_attachment_mime_type,
+    validate_public_url,
 )
-from .metrics import chat_broadcast_enqueue_failures_total
+from .metrics import chat_broadcast_enqueue_failures_total, chat_link_preview_refusals_total
 from .tasks import notify_pin_update, send_scheduled_message
 from core.models import ProjectMember
 from core.slug_mixins import resolve_project_pk, SlugLookupViewSetMixin
@@ -851,6 +857,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def _message_queryset(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
         thread_replies_for_summary = (
             Message.objects
             .select_related('sender')
@@ -885,12 +894,19 @@ class MessageViewSet(viewsets.ModelViewSet):
                 queryset=thread_replies_for_summary,
                 to_attr='_thread_replies_for_summary',
             ),
+            # Only the viewer's own row matters, so fetch just that one and let the
+            # serializer read it off the instance instead of asking per message.
+            Prefetch(
+                'link_preview_hidden_by',
+                queryset=User.objects.filter(id=self.request.user.id).only('id'),
+                to_attr='_link_preview_hidden_for_viewer',
+            ),
         )
     
     def get_queryset(self):
         """Get messages for a specific chat"""
         # For retrieve/detail actions, return all messages (permission checked in retrieve method)
-        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
+        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'hide_link_preview', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
             return self._message_queryset()
 
         # For list action, require chat_id
@@ -1706,6 +1722,38 @@ class MessageViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(message)
         return Response({'status': 'hidden', 'message': serializer.data}, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'])
+    def hide_link_preview(self, request, pk=None):
+        """Dismiss this message's link preview card, for the current user only.
+
+        A view preference, not an edit: the message stays, other participants keep
+        their card, and the URL-keyed preview cache is untouched — the same link
+        still previews in other messages and is never re-fetched because of this.
+        """
+        message = self.get_object()
+
+        if not ChatParticipant.objects.filter(
+            chat=message.chat,
+            user=request.user,
+            is_active=True
+        ).exists():
+            return Response(
+                {'error': 'You are not a participant in this chat'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # add() is idempotent, so dismissing twice is harmless.
+        message.link_preview_hidden_by.add(request.user)
+
+        logger.info(
+            'User %s dismissed the link preview on message %s', request.user.id, message.id
+        )
+        serializer = self.get_serializer(message)
+        return Response(
+            {'status': 'link_preview_hidden', 'message': serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
 
 class AttachmentViewSet(viewsets.GenericViewSet):
     """
@@ -2051,37 +2099,33 @@ def fetch_link_preview(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Validate URL
+    # SSRF guard (MED-279): the server is about to fetch a URL a user supplied, so
+    # safety is decided by the *resolved IP*, not by the URL string, and redirects
+    # are re-validated hop by hop inside fetch_url_safely.
     try:
-        parsed = urlparse(url)
-        if not parsed.scheme or not parsed.netloc:
-            return Response(
-                {'error': 'Invalid URL format'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    except Exception:
+        safe_url = validate_public_url(url)
+    except UnsafeUrlError as exc:
+        logger.warning('Refused link preview for %s: %s', url, exc)
         return Response(
-            {'error': 'Invalid URL format'},
+            {'error': 'Invalid or disallowed URL'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
+    parsed = urlparse(safe_url)
+
     # Check cache first
-    cache_key = f"link_preview:{url}"
+    cache_key = f"link_preview:{safe_url}"
     cached_data = cache.get(cache_key)
     if cached_data:
         return Response(cached_data)
-    
+
     try:
-        # Fetch the page with timeout
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        response.raise_for_status()
-        
+        html = fetch_url_safely(safe_url)
+
         # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
+        soup = BeautifulSoup(html, 'html.parser')
+        url = safe_url  # relative og:image URLs resolve against the validated URL
+
         # Extract metadata
         preview_data = {
             'url': url,
@@ -2157,6 +2201,19 @@ def fetch_link_preview(request):
         
         return Response(preview_data)
         
+    except UnsafeUrlError as exc:
+        # A redirect hop pointed somewhere internal, or the response was not HTML.
+        logger.warning('Refused link preview mid-fetch for %s: %s', url, exc)
+        return Response(
+            {'error': 'Invalid or disallowed URL'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except LinkPreviewFetchError as exc:
+        logger.warning('Upstream error fetching link preview for %s: %s', url, exc)
+        return Response(
+            {'error': 'Failed to fetch URL'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
     except requests.exceptions.Timeout:
         logger.warning(f"Timeout fetching link preview for {url}")
         return Response(
@@ -2175,6 +2232,46 @@ def fetch_link_preview(request):
             {'error': 'Internal server error'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def link_preview_image(request):
+    """Serve a preview thumbnail from our own domain (MED-279).
+
+    Hotlinking og:image meant every viewer's browser contacted the third-party
+    host, handing it their IP. Proxying removes that, but only for images we have
+    already recorded: an endpoint that fetched any URL a caller named would be a
+    general-purpose SSRF tool, which is a worse hole than the one being closed.
+    """
+    url = request.query_params.get('url')
+    if not url:
+        return Response({'error': 'url is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # The allowlist is the cache itself: only images a guarded fetch already found.
+    if not LinkPreview.objects.filter(
+        image_url=url, status=LinkPreview.STATUS_READY
+    ).exists():
+        logger.warning('Refused to proxy an image that is not in the preview cache')
+        return Response({'error': 'Unknown image'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        data, content_type = fetch_image_safely(url)
+    except UnsafeUrlError as exc:
+        chat_link_preview_refusals_total.labels(reason='image_guard').inc()
+        logger.warning('Refused to proxy image: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_400_BAD_REQUEST)
+    except (LinkPreviewFetchError, requests.RequestException) as exc:
+        logger.info('Image proxy upstream failure: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_502_BAD_GATEWAY)
+
+    response = HttpResponse(data, content_type=content_type)
+    # Served from our origin, so be explicit that it is only ever an image.
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    response['Referrer-Policy'] = 'no-referrer'
+    response['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 
 # ── Full-text message search ───────────────────────────────────────────────────
