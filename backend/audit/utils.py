@@ -16,8 +16,14 @@ def capture_snapshot(instance) -> Dict[str, Any]:
     for field in ("id", "created_at", "updated_at"):
         if hasattr(instance, field):
             value = getattr(instance, field)
-            # convert some fields which can not be serlized
             data[field] = str(value) if value is not None else None
+
+    # Convert any remaining non-JSON-serializable values
+    for key, value in data.items():
+        if hasattr(value, 'isoformat'):  # datetime, date, time
+            data[key] = value.isoformat()
+        elif hasattr(value, 'hex'):  # UUID
+            data[key] = str(value)
 
     return data
 
