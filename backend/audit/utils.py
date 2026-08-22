@@ -61,6 +61,11 @@ def record_audit_entry(
     if action not in valid_actions:
         raise ValueError(f"Invalid action: '{action}'. Valid: {valid_actions}")
 
+    if project is not None:
+        from core.models import Project
+        if not Project.objects.filter(pk=project.pk).exists():
+            raise ValueError(f"Project {project.pk} does not exist")
+
     return AdminAuditEvent.objects.create(
         actor=actor,
         action=action,
