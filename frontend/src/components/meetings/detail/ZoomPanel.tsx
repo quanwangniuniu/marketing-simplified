@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Video, Settings as SettingsIcon } from 'lucide-react';
 import type { ZoomPostMeeting } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Props {
   zoomConnected: boolean;
@@ -25,6 +26,7 @@ export default function ZoomPanel({
   onCreateZoomMeeting,
   creatingZoom,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const hasZoomData = !!zoomPostMeeting;
 
   return (
@@ -41,7 +43,7 @@ export default function ZoomPanel({
           <p className="text-xs text-gray-500">
             Connect Zoom in{' '}
             <Link
-              href="/integrations"
+              href={buildUrl('/integrations')}
               className="inline-flex items-center gap-1 font-medium text-[#3CCED7] hover:underline"
             >
               Integrations

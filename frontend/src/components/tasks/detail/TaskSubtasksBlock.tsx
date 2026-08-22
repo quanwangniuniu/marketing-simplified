@@ -5,6 +5,7 @@ import { Plus, Unlink } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { TaskData } from '@/types/task';
 import AddSubtaskDialog from './AddSubtaskDialog';
 import StatusPill from './pills/StatusPill';
@@ -25,6 +26,7 @@ export default function TaskSubtasksBlock({
   loading = false,
   onMutated,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [items, setItems] = useState<TaskData[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [localKey, setLocalKey] = useState(0);
@@ -102,7 +104,7 @@ export default function TaskSubtasksBlock({
           {items.map((s) => (
             <li key={s.id} className="flex min-w-0 flex-wrap items-center gap-2 py-2 sm:flex-nowrap sm:gap-3">
               <Link
-                href={`/tasks/${s.slug}`}
+                href={buildUrl(`/tasks/${s.slug}`)}
                 className="min-w-0 flex-1 truncate text-sm text-gray-900 hover:text-[#3CCED7] hover:underline"
               >
                 {s.summary}

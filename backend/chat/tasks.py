@@ -1,21 +1,160 @@
 import logging
 import asyncio
+from functools import wraps
 from datetime import timedelta
 from typing import Any, Dict, Optional
+
+import requests
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import F, Q
 from django.utils import timezone
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from .models import Message, MessageStatus, ChatParticipant, ScheduledMessage, MessageAttachment
-from .services import ChatService, OnlineStatusService
+from core.tenant_context import tenant_schema_context
+from .models import ChatOutboxEvent, LinkPreview, Message, MessageStatus, ChatParticipant, ScheduledMessage, MessageAttachment
+from .metrics import (
+    chat_broadcast_publish_failures_total,
+    chat_link_preview_create_races_total,
+    chat_link_preview_fetch_outcomes_total,
+    chat_link_preview_refusals_total,
+)
+from .realtime import broadcast_event_to_user_groups_sync
+from .services import (
+    ChatService,
+    LinkPreviewFetchError,
+    MessageService,
+    OnlineStatusService,
+    UnsafeUrlError,
+    chat_group_name,
+    claim_link_preview_fetch_slot,
+    claim_recipients_for_delivery,
+    fetch_url_safely,
+    normalize_preview_url,
+    parse_opengraph,
+    release_unpublished_recipients,
+)
 from .url_helpers import build_messages_action_url
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def tenant_schema_task(task_function):
+    """Select the task's explicit tenant for all ORM work and always restore it."""
+    @wraps(task_function)
+    def wrapped(*args, **kwargs):
+        tenant_schema = kwargs.get('tenant_schema', 'public')
+        with tenant_schema_context(tenant_schema):
+            return task_function(*args, **kwargs)
+    return wrapped
+
+
+# How long each outcome is reused before the URL is fetched again. Separating them
+# matters: a page that resolved fine is worth holding for a day, but a host that
+# timed out may be back within the hour.
+def _link_preview_ttl(status: str) -> timedelta:
+    if status == LinkPreview.STATUS_FAILED:
+        hours = getattr(settings, 'LINK_PREVIEW_FAILURE_TTL_HOURS', 1)
+    elif status == LinkPreview.STATUS_BLOCKED:
+        hours = getattr(settings, 'LINK_PREVIEW_BLOCKED_TTL_HOURS', 24)
+    else:
+        hours = getattr(settings, 'LINK_PREVIEW_SUCCESS_TTL_HOURS', 24)
+    return timedelta(hours=hours)
+
+
+def _link_preview_claim_ttl() -> timedelta:
+    return timedelta(minutes=getattr(settings, 'LINK_PREVIEW_CLAIM_TTL_MINUTES', 5))
+
+CHAT_OUTBOX_BATCH_SIZE = getattr(settings, 'CHAT_OUTBOX_BATCH_SIZE', 200)
+CHAT_OUTBOX_CLAIM_TTL_SECONDS = getattr(settings, 'CHAT_OUTBOX_CLAIM_TTL_SECONDS', 300)
+
+
+def _claim_pending_outbox_events():
+    """Claim a bounded public-schema batch without holding locks during Redis I/O."""
+    now = timezone.now()
+    stale_before = now - timedelta(seconds=CHAT_OUTBOX_CLAIM_TTL_SECONDS)
+    with tenant_schema_context('public'):
+        with transaction.atomic():
+            events = list(
+                ChatOutboxEvent.objects
+                .select_for_update(skip_locked=True)
+                .filter(published_at__isnull=True, available_at__lte=now)
+                .filter(Q(claimed_at__isnull=True) | Q(claimed_at__lt=stale_before))
+                .order_by('created_at', 'id')[:CHAT_OUTBOX_BATCH_SIZE]
+            )
+            if events:
+                ChatOutboxEvent.objects.filter(
+                    id__in=[event.id for event in events]
+                ).update(claimed_at=now)
+    return events
+
+
+def _publish_outbox_event(event: ChatOutboxEvent) -> None:
+    task_kwargs = {'tenant_schema': event.tenant_schema}
+    if event.event_type == ChatOutboxEvent.EVENT_MESSAGE_REALTIME:
+        notify_new_message.apply_async(args=[event.aggregate_id], kwargs=task_kwargs)
+        return
+    if event.event_type == ChatOutboxEvent.EVENT_MESSAGE_NOTIFICATIONS:
+        notify_message_recipients.apply_async(args=[event.aggregate_id], kwargs=task_kwargs)
+        return
+    raise ValueError(f'Unsupported chat outbox event type: {event.event_type}')
+
+
+@shared_task
+def dispatch_pending_chat_outbox() -> int:
+    """Publish durable chat events to Celery and mark successful hand-offs."""
+    events = _claim_pending_outbox_events()
+    published_count = 0
+
+    for index, event in enumerate(events):
+        try:
+            _publish_outbox_event(event)
+        except Exception as exc:
+            retry_delay = min(300, max(2, 2 ** min(event.attempt_count + 1, 8)))
+            with tenant_schema_context('public'):
+                ChatOutboxEvent.objects.filter(
+                    id=event.id,
+                    published_at__isnull=True,
+                ).update(
+                    claimed_at=None,
+                    available_at=timezone.now() + timedelta(seconds=retry_delay),
+                    attempt_count=F('attempt_count') + 1,
+                    last_error=str(exc)[:2000],
+                )
+                # A broker failure generally affects the whole batch. Release
+                # unattempted claims immediately and let the next sweep retry.
+                remaining_ids = [item.id for item in events[index + 1:]]
+                if remaining_ids:
+                    ChatOutboxEvent.objects.filter(
+                        id__in=remaining_ids,
+                        published_at__isnull=True,
+                    ).update(claimed_at=None)
+            logger.exception('Chat outbox publish failed for event %s', event.id)
+            break
+
+        with tenant_schema_context('public'):
+            ChatOutboxEvent.objects.filter(
+                id=event.id,
+                published_at__isnull=True,
+            ).update(
+                claimed_at=None,
+                published_at=timezone.now(),
+                attempt_count=F('attempt_count') + 1,
+                last_error='',
+            )
+        published_count += 1
+
+    if events:
+        logger.info(
+            'Chat outbox dispatch: claimed=%s published=%s',
+            len(events),
+            published_count,
+        )
+    return published_count
 
 
 def _build_forwarded_from_payload(message: Message) -> Optional[Dict[str, Any]]:
@@ -92,8 +231,26 @@ def build_realtime_message_payload(message: Message) -> Dict[str, Any]:
     }
 
 
+def _publish_to_chat_group(channel_layer, chat_id, claimed_user_ids, event):
+    """Publish one event to a chat's group, on behalf of the claimed recipients.
+
+    Returns the same (delivered, failures) shape as the per-recipient
+    broadcaster so callers do not branch on which one ran. A single publish has
+    a single outcome, so either every claimed recipient counts as delivered or
+    none of them do.
+    """
+    if not claimed_user_ids:
+        return [], {}
+    try:
+        async_to_sync(channel_layer.group_send)(chat_group_name(chat_id), event)
+    except Exception as exc:
+        return [], {user_id: exc for user_id in claimed_user_ids}
+    return list(claimed_user_ids), {}
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def deliver_message_task(self, message_id: int):
+@tenant_schema_task
+def deliver_message_task(self, message_id: int, tenant_schema: str = 'public'):
     """
     Celery task to deliver a message to offline users.
     
@@ -107,57 +264,69 @@ def deliver_message_task(self, message_id: int):
         message = Message.objects.select_related(
             'chat', 'sender', 'reply_to', 'reply_to__sender'
         ).prefetch_related('attachments').get(id=message_id)
+        # Message creation commits only O(1) rows. The outbox guarantees this
+        # idempotent recipient fan-out is eventually executed after commit.
+        MessageService._create_recipient_statuses(
+            message,
+            message.sender,
+            ignore_conflicts=True,
+        )
         message_payload = build_realtime_message_payload(message)
 
-        # Get all recipients who haven't received the message
-        pending_statuses = MessageStatus.objects.filter(
+        pending_statuses = list(MessageStatus.objects.filter(
             message=message,
             status='sent'
-        ).select_related('user')
-        
-        if not pending_statuses.exists():
-            logger.info(f"No pending recipients for message {message_id}")
+        ).values('id', 'user_id'))
+
+        if not pending_statuses:
+            logger.debug("No pending recipients for message %s", message_id)
             return
-        
+
+        pending_user_ids = [status['user_id'] for status in pending_statuses]
+        online_user_ids = OnlineStatusService.get_online_users(pending_user_ids)
+        claimed_user_ids = claim_recipients_for_delivery(message_id, online_user_ids)
+
+        if not claimed_user_ids:
+            logger.info(
+                "deliver_message_task: message=%s pending=%s online=%s delivered=0",
+                message_id,
+                len(pending_statuses),
+                len(online_user_ids),
+            )
+            return
+
         channel_layer = get_channel_layer()
-        delivered_count = 0
-        
-        for msg_status in pending_statuses:
-            user = msg_status.user
-            
-            # Check if user is online now
-            if OnlineStatusService.is_online(user.id):
-                try:
-                    # Send via WebSocket
-                    async_to_sync(channel_layer.group_send)(
-                        f'chat_user_{user.id}',
-                        {
-                            'type': 'chat_message',
-                            'message': message_payload
-                        }
-                    )
-                    
-                    # Mark as delivered
-                    msg_status.mark_as_delivered()
-                    delivered_count += 1
-                    logger.info(f"Delivered message {message_id} to online user {user.id}")
-                    
-                except Exception as e:
-                    logger.error(f"Failed to send message {message_id} to user {user.id} via WebSocket: {e}")
-            else:
-                logger.debug(f"User {user.id} still offline for message {message_id}")
-        
-        # If there are still pending recipients, retry later
-        if delivered_count < pending_statuses.count():
-            logger.info(f"Message {message_id} has {pending_statuses.count() - delivered_count} pending recipients, will retry")
-            raise self.retry(exc=Exception("Some recipients still offline"))
-        
-        logger.info(f"Message {message_id} delivered to all {delivered_count} recipients")
+        delivered_user_ids, publish_failures = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            claimed_user_ids,
+            {
+                'type': 'chat_message',
+                'message': message_payload,
+            },
+        )
+        # Back to pending, for this task's own retry or the user's next reconnect.
+        release_unpublished_recipients(message_id, publish_failures)
+
+        logger.info(
+            "deliver_message_task: message=%s pending=%s online=%s delivered=%s publish_failures=%s",
+            message_id,
+            len(pending_statuses),
+            len(online_user_ids),
+            len(delivered_user_ids),
+            len(publish_failures),
+        )
+
+        # Remaining offline users are recovered from durable MessageStatus rows
+        # when they reconnect. Retry only transient WebSocket publication errors.
+        if publish_failures:
+            raise RuntimeError(
+                f"WebSocket publish failed for {len(publish_failures)} recipient(s)"
+            )
         
     except Message.DoesNotExist:
         logger.error(f"Message {message_id} not found")
     except Exception as e:
-        logger.error(f"Error delivering message {message_id}: {e}")
+        logger.exception("Error delivering message %s", message_id)
         raise self.retry(exc=e)
 
 
@@ -213,7 +382,13 @@ def finalize_presence_offline_now(user_id: int, offline_token: str) -> bool:
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=5)
-def finalize_presence_offline(self, user_id: int, offline_token: str):
+@tenant_schema_task
+def finalize_presence_offline(
+    self,
+    user_id: int,
+    offline_token: str,
+    tenant_schema: str = 'public',
+):
     """Finalize delayed offline presence and notify online shared-chat users."""
     try:
         finalize_presence_offline_now(user_id, offline_token)
@@ -296,7 +471,13 @@ def cleanup_orphaned_attachments() -> int:
 
 
 @shared_task
-def send_typing_indicator(chat_id: int, user_id: int, is_typing: bool):
+@tenant_schema_task
+def send_typing_indicator(
+    chat_id: int,
+    user_id: int,
+    is_typing: bool,
+    tenant_schema: str = 'public',
+):
     """
     Celery task to broadcast typing indicator to chat participants.
     
@@ -309,31 +490,44 @@ def send_typing_indicator(chat_id: int, user_id: int, is_typing: bool):
         channel_layer = get_channel_layer()
         
         # Get all active participants except the typer
-        participants = ChatParticipant.objects.filter(
+        participant_ids = list(ChatParticipant.objects.filter(
             chat_id=chat_id,
             is_active=True
-        ).exclude(user_id=user_id).values_list('user_id', flat=True)
-        
-        # Broadcast to all participants
-        for participant_id in participants:
-            async_to_sync(channel_layer.group_send)(
-                f'chat_user_{participant_id}',
-                {
-                    'type': 'typing_indicator',
-                    'chat_id': chat_id,
-                    'user_id': user_id,
-                    'is_typing': is_typing,
-                }
-            )
-        
-        logger.debug(f"Sent typing indicator for user {user_id} in chat {chat_id} to {len(participants)} participants")
+        ).exclude(user_id=user_id).values_list('user_id', flat=True))
+
+        succeeded, failed = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            participant_ids,
+            {
+                'type': 'typing_indicator',
+                'chat_id': chat_id,
+                'user_id': user_id,
+                'is_typing': is_typing,
+            },
+        )
+
+        logger.debug(
+            "send_typing_indicator: chat=%s user=%s recipients=%s sent=%s failed=%s",
+            chat_id,
+            user_id,
+            len(participant_ids),
+            len(succeeded),
+            len(failed),
+        )
         
     except Exception as e:
         logger.error(f"Error sending typing indicator: {e}")
 
 
 @shared_task(bind=True, max_retries=3)
-def update_message_status_task(self, message_id: int, user_id: int, status: str):
+@tenant_schema_task
+def update_message_status_task(
+    self,
+    message_id: int,
+    user_id: int,
+    status: str,
+    tenant_schema: str = 'public',
+):
     """
     Celery task to update message status and notify sender.
     
@@ -376,8 +570,13 @@ def update_message_status_task(self, message_id: int, user_id: int, status: str)
         raise self.retry(exc=e)
 
 
-@shared_task
-def notify_new_message(message_id: int):
+@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@tenant_schema_task
+def notify_new_message(
+    self,
+    message_id: int,
+    tenant_schema: str = 'public',
+):
     """
     Celery task to notify all chat participants of a new message.
 
@@ -391,66 +590,79 @@ def notify_new_message(message_id: int):
         message = Message.objects.select_related(
             'chat', 'sender', 'reply_to', 'reply_to__sender'
         ).prefetch_related('attachments').get(id=message_id)
+        MessageService._create_recipient_statuses(
+            message,
+            message.sender,
+            ignore_conflicts=True,
+        )
         message_payload = build_realtime_message_payload(message)
 
-        # Get all active participants except sender
-        participants = ChatParticipant.objects.filter(
+        participant_ids = list(ChatParticipant.objects.filter(
             chat=message.chat,
             is_active=True
-        ).exclude(user=message.sender).select_related('user')
+        ).exclude(user=message.sender).values_list('user_id', flat=True))
 
         channel_layer = get_channel_layer()
-        offline_users = []
+        online_user_ids = OnlineStatusService.get_online_users(participant_ids)
 
-        # Note: In-app notifications are created synchronously in views.py
-        # This task only handles WebSocket delivery for online users
+        claimed_user_ids = claim_recipients_for_delivery(message_id, online_user_ids)
+        event = {
+            'type': 'chat_message',
+            'message': message_payload,
+            # Chat groups also contain the sender's sockets. Preserve the REST
+            # contract (the sender already has the created response) without
+            # falling back to O(participants) Redis publishes.
+            'exclude_user_id': message.sender_id,
+        }
 
-        for participant in participants:
-            user = participant.user
-            is_online = OnlineStatusService.is_online(user.id)
+        if getattr(settings, 'CHAT_CHANNEL_GROUPS_ENABLED', False):
+            # One publish for the whole chat instead of one per recipient.
+            # The group carries every connection entitled to this chat, so
+            # there is no per-recipient result to inspect: the publish either
+            # happened for all of them or for none.
+            delivered_user_ids, publish_failures = _publish_to_chat_group(
+                channel_layer, message.chat_id, claimed_user_ids, event
+            )
+        else:
+            delivered_user_ids, publish_failures = broadcast_event_to_user_groups_sync(
+                channel_layer,
+                claimed_user_ids,
+                event,
+            )
+        # The delivery task scheduled below picks these up as ordinary pending
+        # recipients.
+        release_unpublished_recipients(message_id, publish_failures)
 
-            logger.info(f"[notify_new_message] Checking user {user.id} ({user.username}) online status: {is_online}")
+        delivered_user_id_set = set(delivered_user_ids)
+        pending_user_ids = [
+            user_id for user_id in participant_ids
+            if user_id not in delivered_user_id_set
+        ]
 
-            if is_online:
-                # User is online, send via WebSocket immediately
-                try:
-                    logger.info(f"[notify_new_message] Sending message {message_id} to ONLINE user {user.id} via WebSocket")
-                    async_to_sync(channel_layer.group_send)(
-                        f'chat_user_{user.id}',
-                        {
-                            'type': 'chat_message',
-                            'message': message_payload
-                        }
-                    )
-
-                    # Mark as delivered
-                    MessageStatus.objects.filter(
-                        message=message,
-                        user=user
-                    ).update(status='delivered')
-
-                    logger.info(f"Successfully sent message {message_id} to online user {user.id}")
-
-                except Exception as e:
-                    logger.error(f"Failed to send message to user {user.id}: {e}")
-                    offline_users.append(user.id)
-            else:
-                # User is offline, queue for later delivery
-                offline_users.append(user.id)
-                logger.info(f"User {user.id} ({user.username}) is OFFLINE, queuing message {message_id}")
-
-        # Schedule delivery task for offline users
-        if offline_users:
-            logger.info(f"Scheduling delivery task for message {message_id} to {len(offline_users)} offline users")
+        if pending_user_ids:
             deliver_message_task.apply_async(
                 args=[message_id],
-                countdown=5  # Retry after 5 seconds (reduced from 60)
+                kwargs={'tenant_schema': tenant_schema},
+                countdown=5,
             )
 
+        logger.info(
+            "notify_new_message: message=%s chat=%s recipients=%s online=%s "
+            "delivered=%s pending=%s publish_failures=%s",
+            message_id,
+            message.chat_id,
+            len(participant_ids),
+            len(online_user_ids),
+            len(delivered_user_ids),
+            len(pending_user_ids),
+            len(publish_failures),
+        )
+
     except Message.DoesNotExist:
-        logger.error(f"Message {message_id} not found")
+        logger.warning("notify_new_message: message=%s not found", message_id)
     except Exception as e:
-        logger.error(f"Error notifying new message {message_id}: {e}")
+        logger.exception("notify_new_message failed for message %s", message_id)
+        raise self.retry(exc=e)
 
 
 def _notification_exists_for_message(*, recipient_id: int, event_type: str, message_id: int) -> bool:
@@ -465,7 +677,12 @@ def _notification_exists_for_message(*, recipient_id: int, event_type: str, mess
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def notify_message_recipients(self, message_id: int):
+@tenant_schema_task
+def notify_message_recipients(
+    self,
+    message_id: int,
+    tenant_schema: str = 'public',
+):
     """
     Create persisted in-app notifications for a newly-created chat message.
 
@@ -498,7 +715,7 @@ def notify_message_recipients(self, message_id: int):
         for recipient in recipients:
             if recipient.is_currently_muted():
                 continue
-            if recipient.notification_level == 'mentions':
+            if recipient.notification_level != 'all':
                 continue
             create_or_update_chat_notification(
                 recipient_id=recipient.user_id,
@@ -517,6 +734,8 @@ def notify_message_recipients(self, message_id: int):
             if participant is None:
                 continue
             if participant.is_currently_muted():
+                continue
+            if participant.notification_level == 'none':
                 continue
             if _notification_exists_for_message(
                 recipient_id=mention.mentioned_user_id,
@@ -553,14 +772,16 @@ def notify_message_recipients(self, message_id: int):
         if not root or root.chat_id != message.chat_id:
             return
 
-        muted_user_ids = {
+        thread_suppressed_user_ids = {
             participant.user_id
             for participant in ChatParticipant.objects.filter(
                 chat=message.chat,
                 is_active=True,
-                is_muted=True,
             )
-            if participant.is_currently_muted()
+            if (
+                participant.notification_level != 'all'
+                or participant.is_currently_muted()
+            )
         }
 
         notified_ids = {message.sender_id}
@@ -581,7 +802,7 @@ def notify_message_recipients(self, message_id: int):
         for recipient_id in candidate_ids:
             if recipient_id not in active_recipient_ids:
                 continue
-            if recipient_id in notified_ids or recipient_id in muted_user_ids:
+            if recipient_id in notified_ids or recipient_id in thread_suppressed_user_ids:
                 continue
             notified_ids.add(recipient_id)
             if _notification_exists_for_message(
@@ -620,7 +841,91 @@ def notify_message_recipients(self, message_id: int):
 
 
 @shared_task
-def notify_reaction_update(message_id: int, user_id: int, emoji: str, action: str):
+@tenant_schema_task
+def notify_pin_update(
+    chat_id: int,
+    action: str,
+    message_id: int,
+    pin_data=None,
+    tenant_schema: str = 'public',
+    actor_user_id: int = None,
+):
+    """Broadcast a shared pin change to a channel's other active members.
+
+    Args:
+        chat_id: ID of the channel whose pins changed
+        action: 'pinned' or 'unpinned'
+        message_id: ID of the message that was pinned or unpinned
+        pin_data: serialised pin row for 'pinned'; None for 'unpinned'
+        actor_user_id: the member who made the change, excluded from the
+            broadcast because their own client already applied it. Optional so
+            tasks queued by an older release still run after a deploy.
+
+    The payload is serialised by the request so recipients keep the absolute
+    avatar URLs the request context produces.
+    """
+    try:
+        recipients = ChatParticipant.objects.filter(
+            chat_id=chat_id,
+            is_active=True,
+        )
+        if actor_user_id is not None:
+            # Their client acknowledged the change on the HTTP response; sending
+            # it back marks the channel as having an unseen pin they created
+            # themselves.
+            recipients = recipients.exclude(user_id=actor_user_id)
+        participant_ids = list(recipients.values_list('user_id', flat=True))
+
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        succeeded, failed = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            participant_ids,
+            {
+                'type': 'pin_update',
+                'action': action,
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'pin': pin_data,
+            },
+        )
+
+        if failed:
+            # The request already returned 200, so nothing else records that
+            # these members never got the update.
+            chat_broadcast_publish_failures_total.labels(event='pin').inc(len(failed))
+
+        logger.info(
+            "notify_pin_update: chat=%s action=%s message=%s recipients=%s sent=%s failed=%s",
+            chat_id,
+            action,
+            message_id,
+            len(participant_ids),
+            len(succeeded),
+            len(failed),
+        )
+
+    except Exception:
+        # A broadcast failure must never undo a pin that is already persisted.
+        # Counted too: a channel layer that is down fails every pin this way,
+        # and a log line nobody greps is not a signal.
+        chat_broadcast_publish_failures_total.labels(event='pin').inc()
+        logger.exception(
+            "notify_pin_update failed for chat %s message %s", chat_id, message_id
+        )
+
+
+@shared_task
+@tenant_schema_task
+def notify_reaction_update(
+    message_id: int,
+    user_id: int,
+    emoji: str,
+    action: str,
+    tenant_schema: str = 'public',
+):
     """
     Celery task to notify all chat participants of a reaction update.
 
@@ -647,28 +952,33 @@ def notify_reaction_update(message_id: int, user_id: int, emoji: str, action: st
         }
 
         # Get all active participants
-        participants = ChatParticipant.objects.filter(
+        participant_ids = list(ChatParticipant.objects.filter(
             chat=message.chat,
             is_active=True
-        ).select_related('user')
+        ).values_list('user_id', flat=True))
 
         channel_layer = get_channel_layer()
+        online_user_ids = OnlineStatusService.get_online_users(participant_ids)
+        succeeded, failed = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            online_user_ids,
+            {
+                'type': 'reaction_update',
+                'reaction': reaction_payload,
+            },
+        )
 
-        # Broadcast to all participants (including the reactor, for multi-device sync)
-        for participant in participants:
-            if OnlineStatusService.is_online(participant.user.id):
-                try:
-                    async_to_sync(channel_layer.group_send)(
-                        f'chat_user_{participant.user.id}',
-                        {
-                            'type': 'reaction_update',
-                            'reaction': reaction_payload
-                        }
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send reaction update to user {participant.user.id}: {e}")
-
-        logger.info(f"Reaction update sent for message {message_id}: {emoji} {action} by user {user_id}")
+        logger.info(
+            "notify_reaction_update: message=%s actor=%s action=%s recipients=%s "
+            "online=%s sent=%s failed=%s",
+            message_id,
+            user_id,
+            action,
+            len(participant_ids),
+            len(online_user_ids),
+            len(succeeded),
+            len(failed),
+        )
 
         # Persist an in-app notification for the message author when someone
         # adds (not removes) a reaction — skip self-reactions.
@@ -717,7 +1027,12 @@ def notify_reaction_update(message_id: int, user_id: int, emoji: str, action: st
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def send_scheduled_message(self, scheduled_message_id: int):
+@tenant_schema_task
+def send_scheduled_message(
+    self,
+    scheduled_message_id: int,
+    tenant_schema: str = 'public',
+):
     """
     Celery task that fires at the scheduled time and creates the actual Message.
 
@@ -784,6 +1099,9 @@ def send_scheduled_message(self, scheduled_message_id: int):
                 except Exception:
                     pass
 
+            MessageService._create_recipient_statuses(message, sm.sender)
+            MessageService._schedule_new_message_side_effects(message, sm.sender)
+
         # Finalize
         sm.status = ScheduledMessage.STATUS_SENT
         sm.sent_message = message
@@ -792,9 +1110,6 @@ def send_scheduled_message(self, scheduled_message_id: int):
         logger.info(
             f"send_scheduled_message {scheduled_message_id}: created message {message.id} in chat {sm.chat_id}"
         )
-
-        # Push to online participants
-        notify_new_message.delay(message.id)
 
     except Exception as exc:
         logger.error(f"send_scheduled_message {scheduled_message_id} failed: {exc}")
@@ -808,3 +1123,199 @@ def send_scheduled_message(self, scheduled_message_id: int):
         if isinstance(exc, ValueError):
             return
         raise self.retry(exc=exc)
+
+
+@shared_task
+@tenant_schema_task
+def fetch_link_preview_task(message_id: int, url: str, tenant_schema: str = 'public'):
+    """Fetch a URL's OpenGraph metadata and cache it (MED-279).
+
+    Runs off the hot path: the message is already sent and shown by the time this
+    starts. Every outcome — success, upstream failure, or a URL the safety guard
+    refuses — is cached for 24h, so a link costs one fetch a day however often it
+    is posted, and a dead or unsafe one costs no more than a good one.
+
+    Concurrency is handled by the unique URL key: the first task to create the
+    row fetches, everyone else reuses the answer.
+
+    Retries are deliberately disabled: a link preview is cosmetic, and retrying a
+    fetch that a user can trigger at will would turn this into an amplifier.
+    """
+    cache_key = normalize_preview_url(url)
+    if not cache_key:
+        return
+
+    message = Message.objects.filter(id=message_id, is_deleted=False).first()
+    if message is None:
+        return  # message deleted mid-flight; nothing left to decorate
+
+    # The unique URL key is what makes this single-flight: when several people
+    # post the same new link at once, exactly one task creates the row and
+    # fetches; the rest find it and stop.
+    preview, created = LinkPreview.objects.get_or_create(
+        url=cache_key,
+        defaults={'status': LinkPreview.STATUS_PENDING},
+    )
+    if not created:
+        chat_link_preview_create_races_total.inc()
+
+    if not created and not _preview_needs_refetch(preview):
+        # Someone already answered this URL recently, or is answering it now.
+        # Reusing the answer still means telling *this* message about it.
+        if preview.status == LinkPreview.STATUS_READY and (preview.title or preview.image_url):
+            _broadcast_link_preview(message, preview)
+        return
+
+    # Metered before the row is claimed, not after: claiming flips a stale but
+    # still-usable READY row to PENDING, and a rate-limited sender bailing out
+    # after that would hide a good card from everyone until the claim expired.
+    if not claim_link_preview_fetch_slot(message.sender_id):
+        chat_link_preview_refusals_total.labels(reason='rate_limit').inc()
+        logger.info('Link preview rate limit reached for user %s', message.sender_id)
+        # A brand-new row was never attempted, so it must not look like a cached
+        # failure to the next person; an existing row keeps whatever it had.
+        if created:
+            LinkPreview.objects.filter(pk=preview.pk, status=LinkPreview.STATUS_PENDING).delete()
+        elif preview.status == LinkPreview.STATUS_READY and (preview.title or preview.image_url):
+            _broadcast_link_preview(message, preview)
+        return
+
+    if not created:
+        _claim_stale_preview(preview)
+
+    try:
+        html = fetch_url_safely(cache_key)
+    except UnsafeUrlError:
+        chat_link_preview_refusals_total.labels(reason='guard').inc()
+        chat_link_preview_fetch_outcomes_total.labels(outcome='blocked').inc()
+        logger.warning('Link preview refused by URL guard: %s', cache_key)
+        _store_preview_outcome(preview, LinkPreview.STATUS_BLOCKED)
+        return
+    except (LinkPreviewFetchError, requests.RequestException) as exc:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='failed').inc()
+        logger.info('Link preview fetch failed for %s: %s', cache_key, exc)
+        _store_preview_outcome(preview, LinkPreview.STATUS_FAILED)
+        return
+
+    metadata = parse_opengraph(html)
+    _store_preview_outcome(preview, LinkPreview.STATUS_READY, **metadata)
+
+    if metadata['title'] or metadata['image_url']:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='ready').inc()
+        _broadcast_link_preview(message, preview)
+    else:
+        chat_link_preview_fetch_outcomes_total.labels(outcome='empty').inc()
+
+
+def _preview_needs_refetch(preview: LinkPreview) -> bool:
+    """True when an existing row is stale enough to fetch again. Reads only.
+
+    Kept separate from the claim so callers can decide *whether* to fetch before
+    doing anything destructive: claiming flips the row to pending, which hides a
+    still-usable card from every viewer until the claim expires.
+
+    A row is left alone while it is fresh — and that covers failures and refusals
+    too, so a dead or unsafe link costs one fetch per window rather than one per
+    mention. A row still marked pending belongs to another task, unless that task
+    has been gone long enough to count as dead.
+    """
+    now = timezone.now()
+
+    if preview.status == LinkPreview.STATUS_PENDING:
+        return now - preview.updated_at >= _link_preview_claim_ttl()
+    if preview.fetched_at is None:
+        return True
+    return now - preview.fetched_at >= _link_preview_ttl(preview.status)
+
+
+def _claim_stale_preview(preview: LinkPreview) -> None:
+    """Take ownership of a row we have already decided to refetch.
+
+    Re-stamps updated_at so a concurrent task sees the claim as live.
+    """
+    now = timezone.now()
+    LinkPreview.objects.filter(pk=preview.pk).update(
+        status=LinkPreview.STATUS_PENDING, updated_at=now
+    )
+    preview.status = LinkPreview.STATUS_PENDING
+    preview.updated_at = now
+
+
+def _broadcast_link_preview(message: Message, preview: LinkPreview) -> None:
+    """Push a finished preview to everyone currently watching the conversation.
+
+    Clients that are offline are unaffected: they pick the same preview up from
+    the cache when the conversation loads. The row is already committed, so a
+    channel-layer outage must never undo it — hence the broad except.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        participant_ids = list(
+            ChatParticipant.objects
+            .filter(chat_id=message.chat_id, is_active=True)
+            .values_list('user_id', flat=True)
+        )
+        if not participant_ids:
+            return
+
+        succeeded, failed = broadcast_event_to_user_groups_sync(
+            channel_layer,
+            participant_ids,
+            {
+                'type': 'link_preview',
+                'chat_id': message.chat_id,
+                'message_id': message.id,
+                'preview': {
+                    'url': preview.url,
+                    'title': preview.title,
+                    'description': preview.description,
+                    'image_url': preview.image_url,
+                },
+            },
+        )
+        if failed:
+            chat_broadcast_publish_failures_total.labels(event='link_preview').inc(len(failed))
+        logger.info(
+            'link preview broadcast: message=%s recipients=%s sent=%s failed=%s',
+            message.id, len(participant_ids), len(succeeded), len(failed),
+        )
+    except Exception:
+        chat_broadcast_publish_failures_total.labels(event='link_preview').inc()
+        logger.exception('Failed to broadcast link preview for message %s', message.id)
+
+
+def _store_preview_outcome(
+    preview: LinkPreview,
+    status: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    image_url: Optional[str] = None,
+) -> None:
+    """Record the result of one fetch attempt, successful or not."""
+    preview.status = status
+    preview.title = title
+    preview.description = description
+    preview.image_url = image_url
+    preview.fetched_at = timezone.now()
+    preview.save(update_fields=['status', 'title', 'description', 'image_url', 'fetched_at', 'updated_at'])
+
+
+@shared_task
+@tenant_schema_task
+def prune_link_previews(tenant_schema: str = 'public') -> int:
+    """Delete cache rows nobody has needed for a long time.
+
+    The table is append-only otherwise: every URL anyone ever posted keeps a row,
+    including one-off failures. Rows are only ever read through by URL, so deleting
+    an old one costs at most one re-fetch if that link resurfaces.
+    """
+    cutoff = timezone.now() - timedelta(
+        days=getattr(settings, 'LINK_PREVIEW_PRUNE_AFTER_DAYS', 30)
+    )
+    deleted, _ = LinkPreview.objects.filter(fetched_at__lt=cutoff).delete()
+    if deleted:
+        logger.info('Pruned %s link preview rows older than %s', deleted, cutoff)
+    return deleted

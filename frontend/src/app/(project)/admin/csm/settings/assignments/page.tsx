@@ -9,9 +9,11 @@ import CsmSettingsPageRoot, { CsmSettingsProjectGuard } from '@/components/csm-s
 import { SECONDARY_BUTTON_CLASS } from '@/components/csm-settings/constants';
 import { useProjectIdFromUrl } from '@/components/csm-settings/useProjectIdFromUrl';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export default function AssignmentsSettingsPage() {
   const { projectId, projectValid } = useProjectIdFromUrl();
+  const buildUrl = useBuildUrl();
   const [forms, setForms] = useState<TicketFormListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export default function AssignmentsSettingsPage() {
         {projectValid && (
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href={`/admin/experience-groups`}
+              href={buildUrl(`/admin/experience-groups`)}
               className={SECONDARY_BUTTON_CLASS}
             >
               <Users className="h-4 w-4" aria-hidden />
@@ -84,7 +86,7 @@ export default function AssignmentsSettingsPage() {
                   <td className="px-4 py-3">{form.assignment_count}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/admin/ticket-forms/${form.slug}/assignments`}
+                      href={buildUrl(`/admin/ticket-forms/${form.slug}/assignments`)}
                       title="Manage assignments"
                       aria-label={`Manage assignments for ${form.name}`}
                       className="inline-flex rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"

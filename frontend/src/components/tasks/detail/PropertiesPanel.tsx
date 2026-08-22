@@ -11,6 +11,7 @@ import InlineSelect, { UserInitialsAvatar, type InlineSelectOption } from './Inl
 import { ChevronsUp, ChevronUp, Minus, ChevronDown, ChevronsDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import TaskLabelsPicker from '@/components/tasks/TaskLabelsPicker';
+import TaskParentPicker from '@/components/tasks/TaskParentPicker';
 import type { TaskTag } from '@/types/task';
 
 import {
@@ -205,6 +206,18 @@ export default function PropertiesPanel({
           disabled={saving || readOnly}
         />
       </div>
+
+      {task.is_subtask ? (
+        <div className={ROW}>
+          <span className={LABEL}>Parent</span>
+          <TaskParentPicker
+            task={task}
+            readOnly={readOnly}
+            disabled={saving}
+            onUpdated={onUpdated}
+          />
+        </div>
+      ) : null}
 
       <div className={ROW}>
         <span className={LABEL}>Owner</span>

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { DecisionAPI } from '@/lib/api/decisionApi';
 
 import DecisionDetailHeader from '@/components/decisions/detail/DecisionDetailHeader';
@@ -42,6 +43,7 @@ const EDITABLE_STATUSES = new Set(['PREDRAFT', 'DRAFT']);
 
 function DecisionDetailContent() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams<{ decisionId: string }>();
   const { projectId, activeProject } = useActiveProjectForFlatRoute();
 
@@ -156,7 +158,7 @@ function DecisionDetailContent() {
         riskLevel === 'HIGH' ? 'Decision submitted for approval' : 'Decision committed',
       );
       setFieldErrors({});
-      router.replace('/decisions');
+      router.replace(buildUrl('/decisions'));
       return null;
     } catch (err: any) {
       const body = err?.response?.data;
@@ -235,7 +237,7 @@ function DecisionDetailContent() {
     try {
       await DecisionAPI.deleteDecision(decisionId, projectId);
       toast.success('Decision deleted');
-      router.push('/decisions');
+      router.push(buildUrl('/decisions'));
     } catch (err) {
       toast.error(extractError(err, 'Delete failed'));
     } finally {
@@ -407,7 +409,7 @@ function DecisionDetailContent() {
                 onCreateTask={() => {
                   const q = new URLSearchParams();
                   q.set('link_decision', String(detail.committed?.slug ?? decisionId));
-                  router.push(`/tasks/new?${q.toString()}`);
+                  router.push(buildUrl(`/tasks/new?${q.toString()}`));
                 }}
               />
               {(status === 'COMMITTED' || status === 'REVIEWED' || status === 'ARCHIVED') && (

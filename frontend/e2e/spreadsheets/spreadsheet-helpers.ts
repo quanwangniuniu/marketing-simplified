@@ -10,6 +10,28 @@ export async function waitForSpreadsheetPageReady(page: Page) {
   });
 }
 
+/**
+ * Neutralize the OnboardingGate overlay for this page (route stub, no backend
+ * mutation). Some seeded users have tenant data but no OrganizationMembership
+ * row, so GET /api/core/onboarding-status/ returns needs_onboarding=true and
+ * OnboardingGate renders a full-screen z-[9999] overlay that intercepts every
+ * click. Creating a real org in the test is NOT safe: it would switch the
+ * user's tenant schema away from the seeded data. Call BEFORE page.goto().
+ */
+export async function stubOnboardingComplete(page: Page) {
+  await page.route('**/api/core/onboarding-status/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        needs_onboarding: false,
+        has_org: true,
+        has_project: true,
+      }),
+    }),
+  );
+}
+
 export interface SpreadsheetIds {
   projectId: number;
   spreadsheetId: number;

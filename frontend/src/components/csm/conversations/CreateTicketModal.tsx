@@ -5,6 +5,7 @@ import { CustomerProfile } from '@/types/csmConversation';
 import CsmConversationAPI from '@/lib/api/csmConversationApi';
 import { useCsmConversationStore } from '@/lib/csmConversationStore';
 import { AlertCircle, ExternalLink } from 'lucide-react';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Queue {
   id: number;
@@ -39,6 +40,7 @@ export function CreateTicketModal({
   onClose,
   onCreated,
 }: CreateTicketModalProps) {
+  const buildUrl = useBuildUrl();
   const customerName = customerProfile?.full_name || 'customer';
   const [title, setTitle] = useState(`Support request from ${customerName}`);
   const [description, setDescription] = useState(() => buildInitialDescription(customerProfile));
@@ -161,7 +163,7 @@ export function CreateTicketModal({
             ) : queues.length === 0 ? (
               <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
                 No active queue is available for this workspace.
-                <a href="/csm/queues" className="ml-1 inline-flex items-center gap-1 font-medium text-orange-800 underline">
+                <a href={buildUrl('/csm/queues')} className="ml-1 inline-flex items-center gap-1 font-medium text-orange-800 underline">
                   Manage queues <ExternalLink size={11} />
                 </a>
               </div>

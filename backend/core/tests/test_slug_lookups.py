@@ -4,7 +4,7 @@ Slug-only resource lookups.
 Covers the shared slug infrastructure:
 - slug generation rules (source field, duplicates, numeric titles, empty fallback, rename stability)
 - resolve_lookup_kwargs routing (slug vs UUID pk vs numeric)
-- API behaviour: slug URL resolves (200), numeric URL is rejected (404)
+- API behaviour: slug URL resolves (200); task numeric URL resolves (200); other resources numeric URL 404
 - migration-style backfill helper
 """
 import uuid
@@ -98,7 +98,7 @@ class SlugGenerationTest(APITestCase):
 
 
 class SlugOnlyApiLookupTest(APITestCase):
-    """Slug URLs resolve; numeric URLs 404 (Ray's slug-only decision)."""
+    """Slug URLs resolve; numeric task URLs also resolve; other resources stay slug-only."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -153,9 +153,11 @@ class SlugOnlyApiLookupTest(APITestCase):
         self.assertEqual(response.data["id"], self.task.id)
         self.assertEqual(response.data["slug"], self.task.slug)
 
-    def test_task_numeric_url_is_rejected(self):
+    def test_task_numeric_url_resolves(self):
         response = self.client.get(f"/api/tasks/{self.task.id}/")
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.task.id)
+        self.assertEqual(response.data["slug"], self.task.slug)
 
     def test_unknown_slug_404(self):
         response = self.client.get("/api/tasks/no-such-task/")

@@ -3,6 +3,7 @@ import logging
 import requests
 from celery import shared_task
 from django.contrib.auth import get_user_model
+from core.tenant_context import tenant_schema_context
 
 from .models import AgentMessage, AgentWorkflowRun
 from .services import _generate_miro_board_for_workflow_run
@@ -114,7 +115,12 @@ def generate_miro_board_for_workflow_run_task(workflow_run_id: str, context_payl
 
 
 @shared_task
-def handle_chat_message_for_agent(message_id: int):
+def handle_chat_message_for_agent(message_id: int, tenant_schema: str = 'public'):
+    with tenant_schema_context(tenant_schema):
+        return _handle_chat_message_for_agent(message_id)
+
+
+def _handle_chat_message_for_agent(message_id: int):
     """Process a chat message directed at the Agent Bot and send a reply."""
     from chat.models import ChatParticipant, Message
     from chat.services import MessageService
@@ -157,9 +163,8 @@ def handle_chat_message_for_agent(message_id: int):
         logger.warning("handle_chat_message_for_agent: bot cannot send to chat %s", chat.id)
         return
 
-    # Broadcast the new message via existing notification pipeline
-    from chat.tasks import notify_new_message
-    notify_new_message.delay(bot_message.id)
+    # MessageService created a durable realtime outbox event in the same
+    # transaction, so no direct broker publish is needed here.
     logger.info("handle_chat_message_for_agent: bot replied with message %s in chat %s", bot_message.id, chat.id)
 
 

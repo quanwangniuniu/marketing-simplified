@@ -410,6 +410,15 @@ class Message(TimeStampedModel):
         blank=True,
         help_text="Users who have hidden this message (personal hide, not affecting others)"
     )
+    link_preview_hidden_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='hidden_link_previews',
+        blank=True,
+        help_text=(
+            "Users who dismissed this message's link preview card. Personal view "
+            "preference: the message and the shared LinkPreview cache are untouched."
+        )
+    )
     # Full-text search vector — kept up-to-date via post_save signal in chat/signals.py
     search_vector = SearchVectorField(null=True, blank=True)
 
@@ -525,6 +534,50 @@ class MessageStatus(TimeStampedModel):
             if not self.delivered_at:
                 self.delivered_at = self.read_at
             self.save(update_fields=['status', 'delivered_at', 'read_at', 'updated_at'])
+
+
+class ChatOutboxEvent(models.Model):
+    """Durable hand-off between a committed tenant message and Celery.
+
+    The table deliberately lives in ``public`` (this model is not listed in
+    ``core.tenant_config``), allowing one dispatcher to serve every tenant.
+    """
+
+    EVENT_MESSAGE_REALTIME = 'message.realtime'
+    EVENT_MESSAGE_NOTIFICATIONS = 'message.notifications'
+    EVENT_CHOICES = [
+        (EVENT_MESSAGE_REALTIME, 'Message realtime delivery'),
+        (EVENT_MESSAGE_NOTIFICATIONS, 'Message persisted notifications'),
+    ]
+
+    tenant_schema = models.CharField(max_length=128)
+    event_type = models.CharField(max_length=64, choices=EVENT_CHOICES)
+    aggregate_id = models.PositiveBigIntegerField(help_text='Tenant Message primary key')
+    available_at = models.DateTimeField(default=timezone.now, db_index=True)
+    claimed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_schema', 'event_type', 'aggregate_id'],
+                name='chat_outbox_tenant_event_message_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['published_at', 'available_at', 'claimed_at'],
+                name='chat_outbox_pending_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.tenant_schema}:{self.event_type}:{self.aggregate_id}'
 
 
 class MessageMention(TimeStampedModel):
@@ -1004,3 +1057,54 @@ class ScheduledMessage(TimeStampedModel):
 
     def __str__(self):
         return f"ScheduledMessage by {self.sender_id} in chat {self.chat_id} at {self.scheduled_at} [{self.status}]"
+
+
+class LinkPreview(TimeStampedModel):
+    """Cached OpenGraph metadata for a URL posted in chat (MED-279).
+
+    Keyed by the *normalized* URL and shared across every message that mentions
+    it, so a link posted a hundred times is fetched once. Messages do not own a
+    preview; they look one up by their URL at render time (read-through).
+
+    Outcomes are stored as well as successes: a URL that failed or was refused by
+    the SSRF guard is remembered too, so a bad link costs one fetch rather than
+    one per mention.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_READY = 'ready'
+    STATUS_FAILED = 'failed'
+    STATUS_BLOCKED = 'blocked'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Fetch in progress'),
+        (STATUS_READY, 'Fetched'),
+        (STATUS_FAILED, 'Upstream fetch failed'),
+        (STATUS_BLOCKED, 'Refused by the URL safety guard'),
+    ]
+
+    url = models.TextField(
+        unique=True,
+        help_text="Normalized URL (fragment stripped, host lowercased) — the cache key",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        help_text="Outcome of the last fetch attempt",
+    )
+    title = models.TextField(null=True, blank=True, help_text="og:title, or the <title> tag")
+    description = models.TextField(null=True, blank=True, help_text="og:description")
+    image_url = models.TextField(null=True, blank=True, help_text="og:image — hotlinked by the client")
+    fetched_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the last attempt finished; basis for the 24h freshness window",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', 'fetched_at']),
+        ]
+
+    def __str__(self):
+        return f"LinkPreview({self.url}) [{self.status}]"

@@ -17,6 +17,7 @@ import FilterPanel, {
 } from "./FilterPanel";
 import MetricWeightControls from "./MetricWeightControls";
 import RankingTable from "./RankingTable";
+import { useBuildUrl } from "@/lib/buildUrl";
 import {
   RANKING_METRICS,
   applyPreset,
@@ -124,6 +125,7 @@ export default function RankingPanel({
   currency,
 }: RankingPanelProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -283,7 +285,7 @@ export default function RankingPanel({
       ids,
       days: String(filters.days),
     });
-    router.push(`/meta-ads/compare?${params.toString()}`);
+    router.push(buildUrl(`/meta-ads/compare?${params.toString()}`));
   }, [adAccountId, compareReady, filters.days, router, selectedIds]);
 
   const selectedAds = useMemo(

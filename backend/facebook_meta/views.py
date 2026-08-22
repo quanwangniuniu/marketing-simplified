@@ -132,7 +132,7 @@ class AdCreativesView(generics.ListCreateAPIView):
             
             # Return success response according to OpenAPI spec
             return Response(
-                {"data": {"id": str(ad_creative.id)}},
+                {"data": {"id": str(ad_creative.id), "slug": ad_creative.slug}},
                 status=status.HTTP_201_CREATED
             )
             

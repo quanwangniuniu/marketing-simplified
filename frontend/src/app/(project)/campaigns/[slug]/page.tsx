@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { Button } from '@/components/ui/button';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useCampaignData } from '@/hooks/useCampaignData';
 import type { CampaignCheckIn, CampaignData, PerformanceSnapshot } from '@/types/campaign';
 import CampaignHeader from '@/components/campaigns/CampaignHeader';
@@ -25,6 +26,7 @@ import SaveAsTemplateDialog from '@/components/campaigns/modals/SaveAsTemplateDi
 
 export default function CampaignV2DetailPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams();
   const campaignId = params?.slug as string;
   const { projectId } = useActiveProjectForFlatRoute();
@@ -65,7 +67,7 @@ export default function CampaignV2DetailPage() {
     }
   };
 
-  const handleBack = () => router.push('/campaigns');
+  const handleBack = () => router.push(buildUrl('/campaigns'));
 
   const isArchived = currentCampaign?.status === 'ARCHIVED';
 

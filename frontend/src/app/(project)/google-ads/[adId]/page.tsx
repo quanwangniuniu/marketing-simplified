@@ -21,6 +21,7 @@ import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import InlineSelect from '@/components/tasks/detail/InlineSelect';
 import { useGoogleAdsDesign } from '@/hooks/useGoogleAdsDesign';
 import { FacebookMetaAPI } from '@/lib/api/facebookMetaApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import {
   GoogleAdsAPI,
   type AdStatus,
@@ -78,6 +79,7 @@ function AdForm({ ad, onUpdate, saving }: { ad: GoogleAd; onUpdate: (data: any) 
 
 function GoogleAdsDetailContent() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams<{ adId: string }>();
   const adId = params?.adId ? String(params.adId) : null;
 
@@ -183,7 +185,7 @@ function GoogleAdsDetailContent() {
       // gg-6 DELETE preferred; use GoogleAdsAPI.deleteAd
       await (GoogleAdsAPI as any).deleteAd(ad.id);
       toast.success('Ad deleted');
-      router.push('/google-ads');
+      router.push(buildUrl('/google-ads'));
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? 'Failed to delete');
     } finally {
@@ -237,7 +239,7 @@ function GoogleAdsDetailContent() {
           <p className="text-xs text-gray-500">{error ?? 'Not found'}</p>
           <button
             type="button"
-            onClick={() => router.push('/google-ads')}
+            onClick={() => router.push(buildUrl('/google-ads'))}
             className="inline-flex rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-95"
           >
             Back to list

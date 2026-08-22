@@ -88,6 +88,10 @@ type PrependAnchor = {
   offsetTop: number;
 };
 
+const JUMP_SCROLL_MIN_DURATION_MS = 1100;
+const JUMP_SCROLL_MAX_DURATION_MS = 1500;
+const JUMP_HIGHLIGHT_CLEAR_MS = 8300;
+
 function formatDateHeader(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
   const today = new Date();
@@ -304,7 +308,10 @@ export default function MessageList({
     }
   }, []);
 
-  const scrollJumpTargetToCenter = useCallback((messageId: number, attachmentId?: number): HTMLElement | null => {
+  const getJumpTargetPosition = useCallback((
+    messageId: number,
+    attachmentId?: number,
+  ): { element: HTMLElement; top: number } | null => {
     const container = scrollRef.current;
     const attachmentEl = attachmentId
       ? container?.querySelector<HTMLElement>(`[data-attachment-id="${attachmentId}"]`)
@@ -315,7 +322,6 @@ export default function MessageList({
     const targetEl = attachmentEl ?? messageEl;
     if (!container || !targetEl) return null;
 
-    stickyBottomRef.current = false;
     const containerRect = container.getBoundingClientRect();
     const messageRect = targetEl.getBoundingClientRect();
     const nextTop =
@@ -325,12 +331,69 @@ export default function MessageList({
       container.clientHeight / 2 +
       messageRect.height / 2;
 
-    container.scrollTo({
-      top: Math.max(0, nextTop),
-      behavior: 'instant',
-    });
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    return {
+      element: targetEl,
+      top: Math.max(0, Math.min(nextTop, maxTop)),
+    };
+  }, []);
 
-    return targetEl;
+  const scrollJumpTargetToCenter = useCallback((messageId: number, attachmentId?: number): HTMLElement | null => {
+    const container = scrollRef.current;
+    const target = getJumpTargetPosition(messageId, attachmentId);
+    if (!container || !target) return null;
+
+    stickyBottomRef.current = false;
+    container.scrollTop = target.top;
+    return target.element;
+  }, [getJumpTargetPosition]);
+
+  const animateJumpScroll = useCallback((
+    getTargetTop: () => number,
+    isActiveJump: () => boolean,
+    onComplete: () => void,
+  ) => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    stickyBottomRef.current = false;
+    const startTop = container.scrollTop;
+    const initialTargetTop = getTargetTop();
+    const initialDistance = Math.abs(initialTargetTop - startTop);
+    const duration = Math.min(
+      JUMP_SCROLL_MAX_DURATION_MS,
+      Math.max(JUMP_SCROLL_MIN_DURATION_MS, initialDistance * 0.3),
+    );
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      container.scrollTop = initialTargetTop;
+      onComplete();
+      return;
+    }
+
+    const startedAt = window.performance.now();
+    const step = (now: number) => {
+      if (!isActiveJump()) return;
+
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const latestTargetTop = Math.max(0, Math.min(getTargetTop(), maxTop));
+      container.scrollTop = startTop + (latestTargetTop - startTop) * eased;
+
+      if (progress < 1) {
+        jumpFrameRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
+      container.scrollTop = latestTargetTop;
+      jumpFrameRef.current = null;
+      onComplete();
+    };
+
+    jumpFrameRef.current = window.requestAnimationFrame(step);
   }, []);
 
   const startJumpToTarget = useCallback((target: {
@@ -341,16 +404,15 @@ export default function MessageList({
     if (!target.messageId || !Number.isFinite(target.messageId)) return;
     if (completedJumpRequestRef.current === target.requestId) return;
 
-    cancelPendingJumpSettle();
-    activeJumpRequestRef.current = target.requestId;
-    const isActiveJump = () => activeJumpRequestRef.current === target.requestId;
     const targetIndex = flatItems.findIndex(
       (item) => item.type === 'message' && item.message.id === target.messageId,
     );
-    if (targetIndex >= 0) {
-      stickyBottomRef.current = false;
-      rowVirtualizer.scrollToIndex(targetIndex, { align: 'center' });
-    }
+    const container = scrollRef.current;
+    if (!container || targetIndex < 0) return;
+
+    cancelPendingJumpSettle();
+    activeJumpRequestRef.current = target.requestId;
+    const isActiveJump = () => activeJumpRequestRef.current === target.requestId;
 
     const startSettle = (targetEl: HTMLElement) => {
       let attempts = 0;
@@ -386,23 +448,40 @@ export default function MessageList({
     };
 
     let findAttempts = 0;
-    const findAndJump = () => {
+    let usedFallback = false;
+    const findAndSettle = () => {
       if (!isActiveJump()) return;
-      const targetEl = scrollJumpTargetToCenter(target.messageId, target.attachmentId);
-      if (targetEl) {
-        startSettle(targetEl);
+      const exactTarget = getJumpTargetPosition(target.messageId, target.attachmentId);
+      if (exactTarget) {
+        startSettle(exactTarget.element);
         return;
       }
       findAttempts += 1;
       if (findAttempts < 30) {
-        jumpFrameRef.current = window.requestAnimationFrame(findAndJump);
+        jumpFrameRef.current = window.requestAnimationFrame(findAndSettle);
         return;
       }
+      // Measurement estimates are normally close enough to render the target.
+      // Keep one defensive fallback for unusually tall, late-loading rows.
+      if (!usedFallback) {
+        usedFallback = true;
+        findAttempts = 0;
+        rowVirtualizer.scrollToIndex(targetIndex, { align: 'center' });
+        jumpFrameRef.current = window.requestAnimationFrame(findAndSettle);
+        return;
+      }
+      activeJumpRequestRef.current = null;
       jumpFrameRef.current = null;
     };
 
-    findAndJump();
-  }, [cancelPendingJumpSettle, flatItems, rowVirtualizer, scrollJumpTargetToCenter]);
+    const getAnimatedTargetTop = () => {
+      const exactTarget = getJumpTargetPosition(target.messageId, target.attachmentId);
+      if (exactTarget) return exactTarget.top;
+      return rowVirtualizer.getOffsetForIndex(targetIndex, 'center')?.[0] ?? container.scrollTop;
+    };
+
+    animateJumpScroll(getAnimatedTargetTop, isActiveJump, findAndSettle);
+  }, [animateJumpScroll, cancelPendingJumpSettle, flatItems, getJumpTargetPosition, rowVirtualizer, scrollJumpTargetToCenter]);
 
   const schedulePrependAnchorRestore = useCallback((framesRemaining = 6): void => {
     if (restoreFrameRef.current !== null) {
@@ -443,12 +522,13 @@ export default function MessageList({
     startJumpToTarget(jumpTarget);
   }, [flatItems.length, jumpTarget, startJumpToTarget]);
 
-  // Clear highlight after 4 s
+  // Keep the React class alive slightly beyond the CSS animation so its final
+  // transparent frame is painted instead of disappearing mid-fade.
   useEffect(() => {
     if (!highlightMessageId) return;
     const t = window.setTimeout(() => {
       setHighlightMessageId(null);
-    }, 4000);
+    }, JUMP_HIGHLIGHT_CLEAR_MS);
     return () => window.clearTimeout(t);
   }, [highlightMessageId]);
 

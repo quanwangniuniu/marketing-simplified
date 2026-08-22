@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import api from '@/lib/api';
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import type {
@@ -68,6 +69,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 export default function MeetingDetailPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams<{ meetingId: string }>();
   const { projectId } = useActiveProjectForFlatRoute();
   const meetingId = String(params.meetingId);
@@ -176,7 +178,7 @@ export default function MeetingDetailPage() {
 
   const handleDocumentOpen = useCallback(() => {
     if (!projectId || !meeting) return;
-    router.push(`/meetings/${meeting.slug}/document`);
+    router.push(buildUrl(`/meetings/${meeting.slug}/document`));
   }, [router, projectId, meeting]);
 
   const handleCreateZoomMeeting = useCallback(async () => {

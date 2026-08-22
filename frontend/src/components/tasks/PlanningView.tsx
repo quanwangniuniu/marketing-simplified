@@ -19,6 +19,7 @@ import { TASK_PRIORITY_BY_VALUE } from '@/lib/tasks/taskPriorities';
 import { TASK_STATUS_BY_VALUE } from '@/lib/tasks/taskStatuses';
 import { TASK_TYPE_DEFINITIONS } from '@/lib/tasks/taskTypes';
 import { formatTaskDateShort } from '@/lib/tasks/taskDates';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 type GroupBy = 'type' | 'owner' | 'priority' | 'theme';
 type MetricKey = 'groups' | 'duplicates' | 'conflicts' | 'nextCycle' | 'sparse';
@@ -314,8 +315,9 @@ function findSparseTasks(tasks: TaskData[]): SparseFlag[] {
 }
 
 function TaskLinkRow({ task, meta }: { task: TaskData; meta?: string }) {
+  const buildUrl = useBuildUrl();
   return (
-    <Link href={taskUrl(task)} className="group flex h-8 min-w-0 items-center justify-between gap-3">
+    <Link href={buildUrl(taskUrl(task))} className="group flex h-8 min-w-0 items-center justify-between gap-3">
       <span className="min-w-0 truncate text-sm font-medium text-gray-800 group-hover:text-[#1daeb8]">
         {task.summary || `Task #${task.id}`}
       </span>

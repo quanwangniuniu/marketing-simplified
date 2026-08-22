@@ -4,18 +4,30 @@ import { config as loadEnv } from 'dotenv';
 // Load .env.local for local dev credentials (gitignored; CI uses env vars directly).
 loadEnv({ path: '.env.local', override: false });
 
+const baseURL = process.env.BASE_URL || 'http://localhost';
+const webServerURL = process.env.PLAYWRIGHT_WEB_SERVER_URL || baseURL;
+
+/** When nginx/Docker already serves BASE_URL, set E2E_USE_EXISTING_SERVER=1 to skip `npm run dev`. */
+const useExistingServer =
+  process.env.E2E_USE_EXISTING_SERVER === '1' ||
+  process.env.E2E_USE_EXISTING_SERVER === 'true';
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './e2e',
-  /* Start Next.js so you don't have to run frontend/backend manually. */
-  webServer: {
-    command: 'npm run dev',
-    url: process.env.BASE_URL || 'http://localhost',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  ...(useExistingServer
+    ? {}
+    : {
+        /* Start Next.js when no external stack is running. */
+        webServer: {
+          command: 'npm run dev',
+          url: webServerURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+      }),
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -29,7 +41,10 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. Next.js dev runs on 3000. */
-    baseURL: process.env.BASE_URL || 'http://localhost',
+    baseURL,
+    launchOptions: process.env.PLAYWRIGHT_HOST_RESOLVER_RULES
+      ? { args: [`--host-resolver-rules=${process.env.PLAYWRIGHT_HOST_RESOLVER_RULES}`] }
+      : undefined,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -104,7 +119,32 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
       },
-      testMatch: /e2e[\\/]messages[\\/]messages-reconnect-attachments\.spec\.ts$/,
+      testMatch: [
+        /e2e[\\/]messages[\\/]messages-reconnect-attachments\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-pinned\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-link-preview\.spec\.ts$/,
+      ],
+    },
+    {
+      /* Load/perf specs: need the running Docker stack (and the load fixture
+         for these two). Never wired into CI; run explicitly with
+         --project=messages-load and E2E_USE_EXISTING_SERVER=1. */
+      name: 'messages-load',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      testMatch: [
+        /e2e[\\/]messages[\\/]messages-burst-perf\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-live-load\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-multi-client-render\.spec\.ts$/,
+      ],
+    },
+    {
+      name: 'budget-mock',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      testMatch: /e2e[\\/]budget[\\/]budget-admin-override\.spec\.ts$/,
     },
   ],
 });

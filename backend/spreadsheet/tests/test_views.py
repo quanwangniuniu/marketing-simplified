@@ -16,7 +16,7 @@ from spreadsheet.models import (
     ComputedCellType,
     CellValueType,
 )
-from core.models import Project, Organization
+from core.models import Project, ProjectMember, Organization
 
 User = get_user_model()
 
@@ -72,6 +72,74 @@ def create_test_sheet_row(sheet, position=0):
 
 
 # ========== View Tests ==========
+
+class SpreadsheetProjectAccessTest(TestCase):
+    """Spreadsheet REST routes enforce the same project access as WS rooms."""
+
+    def setUp(self):
+        self.owner = create_test_user('owner', 'owner@example.com')
+        self.member = create_test_user('member', 'member@example.com')
+        self.outsider = create_test_user('outsider', 'outsider@example.com')
+        self.organization = create_test_organization()
+        self.project = create_test_project(self.organization, owner=self.owner)
+        self.spreadsheet = create_test_spreadsheet(self.project)
+        self.sheet = create_test_sheet(self.spreadsheet)
+        ProjectMember.objects.create(
+            user=self.member,
+            project=self.project,
+            role='member',
+            is_active=True,
+        )
+        self.client = APIClient()
+        self.batch_url = (
+            f'/api/spreadsheet/spreadsheets/{self.spreadsheet.slug}/'
+            f'sheets/{self.sheet.id}/cells/batch/'
+        )
+
+    def _write_as(self, user):
+        self.client.force_authenticate(user=user)
+        return self.client.post(
+            self.batch_url,
+            {
+                'operations': [
+                    {'operation': 'set', 'row': 0, 'column': 0, 'raw_input': user.username},
+                ],
+                'auto_expand': True,
+            },
+            format='json',
+        )
+
+    def test_active_member_can_write(self):
+        response = self._write_as(self.member)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_authenticated_outsider_cannot_write(self):
+        response = self._write_as(self.outsider)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Cell.objects.filter(sheet=self.sheet).exists())
+
+    def test_authenticated_outsider_cannot_change_structure(self):
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(
+            (
+                f'/api/spreadsheet/spreadsheets/{self.spreadsheet.slug}/'
+                f'sheets/{self.sheet.id}/rows/insert/'
+            ),
+            {'position': 0, 'count': 1},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(SheetRow.objects.filter(sheet=self.sheet).exists())
+
+    def test_inactive_member_cannot_write(self):
+        ProjectMember.objects.filter(
+            user=self.member,
+            project=self.project,
+        ).update(is_active=False)
+        response = self._write_as(self.member)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Cell.objects.filter(sheet=self.sheet).exists())
+
 
 class SpreadsheetListViewTest(TestCase):
     """Test cases for SpreadsheetListView"""

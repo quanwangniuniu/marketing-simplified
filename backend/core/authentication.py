@@ -5,6 +5,7 @@ Ensures user lookups always happen in the public schema, regardless of which
 tenant schema the request is currently operating in.
 """
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from django.db import connection
 
 
@@ -39,7 +40,11 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
 
         try:
             # Call parent's get_user() which queries the user model
-            return super().get_user(validated_token)
+            user = super().get_user(validated_token)
+            token_version = int(validated_token.get("auth_token_version", 0))
+            if token_version != getattr(user, "auth_token_version", 0):
+                raise AuthenticationFailed("Token has been revoked.", code="token_revoked")
+            return user
         finally:
             # Restore original search_path
             # CRITICAL: Cannot use parameter substitution (cursor.execute('SET search_path TO %s', [path]))

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
 import { TaskAPI } from '@/lib/api/taskApi';
 import type { TaskData } from '@/types/task';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface TaskSharePreviewProps {
   taskId: number | string;
@@ -31,6 +32,7 @@ const formatDate = (value?: string | null) => {
 };
 
 export default function TaskSharePreview({ taskId, className = '' }: TaskSharePreviewProps) {
+  const buildUrl = useBuildUrl();
   const [task, setTask] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -88,7 +90,7 @@ export default function TaskSharePreview({ taskId, className = '' }: TaskSharePr
 
   return (
     <Link
-      href={`/tasks/${task.slug}`}
+      href={buildUrl(`/tasks/${task.slug}`)}
       className={`block rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-indigo-400 ${className}`}
     >
       <div className="flex items-start gap-3">

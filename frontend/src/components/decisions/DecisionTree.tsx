@@ -12,6 +12,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import dagre from '@dagrejs/dagre';
 import { CheckCircle2, FileText, Link2, PencilLine, Plus, Trash2, X } from 'lucide-react';
 import DecisionStatusPill from '@/components/decisions/DecisionStatusPill';
@@ -409,6 +410,7 @@ const DecisionTree = forwardRef<DecisionTreeHandle, DecisionTreeProps>(function 
   },
   ref,
 ) {
+  const buildUrl = useBuildUrl();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const dragState = useRef({
@@ -2557,7 +2559,7 @@ const DecisionTree = forwardRef<DecisionTreeHandle, DecisionTreeProps>(function 
               ) : null}
               {popover.node.status === 'COMMITTED' && canReview ? (
                 <Link
-                  href={(getReviewUrl ?? defaultGetReviewUrl)(popover.node.slug ?? popover.node.id, projectId)}
+                  href={buildUrl((getReviewUrl ?? defaultGetReviewUrl)(popover.node.slug ?? popover.node.id, projectId))}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex w-[80px] items-center justify-center gap-1.5 rounded-md border border-[#3CCED7]/30 bg-[#3CCED7]/10 px-3 py-1.5 text-xs font-semibold text-[#1a9ba3] hover:border-blue-300"
@@ -2567,7 +2569,7 @@ const DecisionTree = forwardRef<DecisionTreeHandle, DecisionTreeProps>(function 
                 </Link>
               ) : null}
               <Link
-                href={(getDecisionUrl ?? defaultGetDecisionUrl)(popover.node.slug ?? popover.node.id, projectId)}
+                href={buildUrl((getDecisionUrl ?? defaultGetDecisionUrl)(popover.node.slug ?? popover.node.id, projectId))}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white"

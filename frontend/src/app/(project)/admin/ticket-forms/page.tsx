@@ -12,9 +12,11 @@ import Modal from '@/components/ui/Modal';
 import { TicketFormAPI } from '@/lib/api/ticketFormApi';
 import type { TicketFormListItem } from '@/types/ticketForm';
 import { PORTAL_SUBMIT_BUTTON_CLASS } from '@/components/ticket-form/constants';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export default function TicketFormsListPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { activeProject } = useActiveProjectForFlatRoute();
   const projectId = Number(activeProject?.id ?? 0);
   const projectValid = projectId > 0;
@@ -49,7 +51,7 @@ export default function TicketFormsListPage() {
       const res = await TicketFormAPI.create(projectId, { name: name.trim() });
       setCreateOpen(false);
       setName('');
-      router.push(`/admin/ticket-forms/${res.data.slug}/edit`);
+      router.push(buildUrl(`/admin/ticket-forms/${res.data.slug}/edit`));
     } catch {
       setError('Could not create form.');
     } finally {
@@ -69,7 +71,7 @@ export default function TicketFormsListPage() {
             {projectValid && (
               <div className="flex flex-wrap items-center gap-3">
                 <Link
-                  href={`/admin/csm/settings`}
+                  href={buildUrl(`/admin/csm/settings`)}
                   className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <Settings className="h-4 w-4" aria-hidden />
@@ -112,14 +114,14 @@ export default function TicketFormsListPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
                           <Link
-                            href={`/admin/ticket-forms/${f.slug}/edit`}
+                            href={buildUrl(`/admin/ticket-forms/${f.slug}/edit`)}
                             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
                           >
                             <Pencil className="h-4 w-4" aria-hidden />
                             Edit
                           </Link>
                           <Link
-                            href={`/admin/ticket-forms/${f.slug}/assignments`}
+                            href={buildUrl(`/admin/ticket-forms/${f.slug}/assignments`)}
                             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
                           >
                             <Link2 className="h-4 w-4" aria-hidden />

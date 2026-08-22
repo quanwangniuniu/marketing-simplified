@@ -8,6 +8,7 @@ import { Building2, FolderKanban, Lock } from "lucide-react"
 import type { AgentWorkflowDefinition, WorkflowStepType, TemplateCategory, TemplateProjectInfo, WorkflowTriggerConfig, TriggerType } from "@/types/agent"
 import toast from "react-hot-toast"
 import { useRouter } from "next/navigation"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const MAX_FLOW_NODES = 6
 
@@ -155,6 +156,7 @@ export function WorkflowHoverContent({
   onDelete,
 }: WorkflowHoverContentProps) {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const [localStatus, setLocalStatus] = useState(currentStatus)
   const [toggling, setToggling] = useState(false)
   const [running, setRunning] = useState(false)
@@ -261,7 +263,7 @@ export function WorkflowHoverContent({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    router.push(`/workflows/${workflowSlug}?openTrigger=true`)
+                    router.push(buildUrl(`/workflows/${workflowSlug}?openTrigger=true`))
                   }}
                   className="flex shrink-0 items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200"
                 >

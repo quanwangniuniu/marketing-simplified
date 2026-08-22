@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { FileX2, Film, Forward, ImageOff, MicOff } from 'lucide-react';
+import MessageFlagChips from './MessageFlagChips';
 import ProfileHovercard from './ProfileHovercard';
 import toast from 'react-hot-toast';
 import type { MessageItemProps, MissingForwardedAttachment } from '@/types/chat';
@@ -12,9 +13,10 @@ import LinkPreview from './LinkPreview';
 import TaskSharePreview from './TaskSharePreview';
 import ReactionsDisplay from './ReactionsDisplay';
 import MessageHoverActions from './MessageHoverActions';
-import { extractUrls } from '@/lib/api/linkPreviewApi';
 import ChatRichTextRenderer from './ChatRichTextRenderer';
 import { buildMessagesPath, parseChatSlugFromPathname } from '@/lib/messages/messagesRoutes';
+import { hideMessageLinkPreview } from '@/lib/api/chatApi';
+import { useChatStore } from '@/lib/chatStore';
 
 const AGENT_BOT_EMAIL = 'agent-bot@system.local';
 const AGENT_BOT_USERNAME = 'agent-bot';
@@ -25,10 +27,7 @@ function isAgentBot(sender: { email?: string; username?: string }): boolean {
   return sender.email === AGENT_BOT_EMAIL || sender.username === AGENT_BOT_USERNAME;
 }
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-teal-500', 'bg-red-500', 'bg-indigo-500',
-];
+import { avatarColor } from './avatarColor';
 
 function MissingForwardedAttachmentCard({ item }: { item: MissingForwardedAttachment }) {
   const isAudioLike = item.kind === 'audio' || item.kind === 'unknown';
@@ -78,10 +77,6 @@ function MissingForwardedAttachmentCard({ item }: { item: MissingForwardedAttach
       </div>
     </div>
   );
-}
-
-function avatarColor(userId: number): string {
-  return AVATAR_COLORS[userId % AVATAR_COLORS.length];
 }
 
 function formatTime(iso: string): string {
@@ -211,17 +206,18 @@ export default function MessageItem({
   const hasReactions = !isDeleted && Boolean(message.reactions && message.reactions.length > 0);
   const hasThreadReplies = !isDeleted && (message.thread_reply_count ?? 0) > 0;
 
-  let hasUrls = false;
-  try {
-    hasUrls = hasContent && extractUrls(messageContent).length > 0;
-  } catch {
-    // ignore malformed content
-  }
-
   const taskIds = extractTaskIds(messageContent);
   const taskPreviewId = taskIds[0];
   const showTaskPreview = !isDeleted && Boolean(taskPreviewId);
-  const showLinkPreview = !isDeleted && hasUrls && !showTaskPreview;
+  const linkPreview = message.link_preview ?? null;
+
+  // Dismissing is optimistic: the card is a view preference, so a failed request
+  // is not worth interrupting the conversation for — it comes back on reload.
+  const handleDismissLinkPreview = useCallback(() => {
+    useChatStore.getState().clearLinkPreview(message.id);
+    void hideMessageLinkPreview(message.id).catch(() => {});
+  }, [message.id]);
+  const showLinkPreview = !isDeleted && Boolean(linkPreview) && !showTaskPreview;
   const bot = isAgentBot(message.sender);
   const time = formatTime(message.created_at);
   const initials = bot ? 'AI' : (message.sender.username[0] ?? '?').toUpperCase();
@@ -302,7 +298,7 @@ export default function MessageItem({
         rowPadding,
         'transition-colors',
         isHighlighted
-          ? 'bg-amber-50/40 scroll-mt-24'
+          ? 'chat-message-jump-highlight scroll-mt-24'
           : isThreadActive
             ? 'bg-teal-50/40'
             : isHovering && !hasImageAttachment
@@ -331,7 +327,6 @@ export default function MessageItem({
       <div
         className={[
           'relative flex gap-2 pl-3 pr-4',
-          isHighlighted ? 'bg-cyan-50' : '',
           isSelectMode ? 'cursor-pointer' : '',
           // Reserve the 2px left-border slot unconditionally so layout never shifts
           'border-l-2 border-transparent',
@@ -340,13 +335,25 @@ export default function MessageItem({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Left-accent bar: split teal/amber when both pinned + saved, single color otherwise */}
-        {(isPinned || isSaved) && (
-          <div className="pointer-events-none absolute -left-0.5 inset-y-0 flex w-0.5 flex-col">
-            <div className={`flex-1 ${isPinned ? 'bg-teal-400' : 'bg-amber-400'}`} />
-            {isPinned && isSaved && <div className="flex-1 bg-amber-400" />}
-          </div>
-        )}
+        {/* Left-accent bar: split teal/amber when both pinned + saved, single
+            color otherwise. Two fixed-color layers fading independently so a
+            disappearing bar never flips hue mid-fade. */}
+        <div className="pointer-events-none absolute -left-0.5 inset-y-0 w-0.5" aria-hidden="true">
+          <div
+            className={[
+              'absolute inset-x-0 top-0 bg-teal-400 transition-[opacity,height] duration-300',
+              isPinned ? 'opacity-100' : 'opacity-0',
+              isPinned && isSaved ? 'h-1/2' : 'h-full',
+            ].join(' ')}
+          />
+          <div
+            className={[
+              'absolute inset-x-0 bottom-0 bg-amber-400 transition-[opacity,height] duration-300',
+              isSaved ? 'opacity-100' : 'opacity-0',
+              isPinned && isSaved ? 'h-1/2' : 'h-full',
+            ].join(' ')}
+          />
+        </div>
         <div className="flex w-8 shrink-0 items-end pb-0.5">
           {showSender ? (
             bot ? (
@@ -468,7 +475,9 @@ export default function MessageItem({
                     <TaskSharePreview taskId={taskPreviewId} className="mt-2" />
                   ) : null}
 
-                  {showLinkPreview && <LinkPreview content={messageContent} />}
+                  {showLinkPreview && linkPreview && (
+                    <LinkPreview preview={linkPreview} onDismiss={handleDismissLinkPreview} />
+                  )}
 
                   {hasAttachments && (
                     <AttachmentDisplay
@@ -526,22 +535,11 @@ export default function MessageItem({
                     </button>
                   )}
 
-                  {(isPinned || isSaved) && (
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                      {isPinned && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-teal-600">
-                          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
-                          Pinned to channel · visible to all members
-                        </span>
-                      )}
-                      {isSaved && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-500">
-                          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-                          Saved for later · only visible to you
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <MessageFlagChips
+                    isPinned={isPinned}
+                    isSaved={isSaved}
+                    onUnpin={onPin ? () => onPin(message.id) : undefined}
+                  />
 
                   {hasReactions && (
                     <ReactionsDisplay

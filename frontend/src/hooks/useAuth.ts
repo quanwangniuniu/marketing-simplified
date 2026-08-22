@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { LoginRequest, RegisterRequest, RegisterResponse, ApiResponse } from '../types/auth';
 import { authAPI } from '../lib/api';
 import { LOGIN_ERROR_MESSAGES, isNetworkError } from '../lib/authMessages';
+import { buildUrl } from '../lib/buildUrl';
 
 // Enhanced useAuth hook that uses Zustand store for state management
 export default function useAuth() {
@@ -27,7 +28,7 @@ export default function useAuth() {
       const result = await storeLogin(credentials.email, credentials.password);
 
       if (result.success) {
-        router.push('/overview');
+        router.push(buildUrl('/overview'));
         return { success: true };
       }
 
@@ -101,7 +102,7 @@ export default function useAuth() {
       const loginResult = await storeLogin(userData.email, userData.password);
 
       if (loginResult.success) {
-        router.push('/overview');
+        router.push(buildUrl('/overview'));
         return { success: true };
       }
 

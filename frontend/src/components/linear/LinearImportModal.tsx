@@ -14,6 +14,7 @@ import {
 import { getApiErrorDetail } from '@/lib/api/errorMessage';
 import { linearApi, type LinearIssueListItem, type LinearTeam } from '@/lib/api/linearApi';
 import { useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 import { Id } from '@/types/common';
 
@@ -31,6 +32,7 @@ export default function LinearImportModal({
   onImported,
 }: LinearImportModalProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [connected, setConnected] = useState<boolean | null>(null);
   const [teams, setTeams] = useState<LinearTeam[]>([]);
   const [teamId, setTeamId] = useState<string>('');
@@ -168,7 +170,7 @@ export default function LinearImportModal({
               className="font-semibold underline"
               onClick={() => {
                 onClose();
-                router.push('/integrations');
+                router.push(buildUrl('/integrations'));
               }}
             >
               Integrations

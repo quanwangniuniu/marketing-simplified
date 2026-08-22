@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import type { KnowledgeNavigationLink } from '@/types/meeting';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export interface MeetingSummaryRelatedArtifactsProps {
   relatedDecisions?: KnowledgeNavigationLink[];
@@ -20,6 +21,7 @@ export function MeetingSummaryRelatedArtifacts({
   relatedDecisions = [],
   relatedTasks = [],
 }: MeetingSummaryRelatedArtifactsProps) {
+  const buildUrl = useBuildUrl();
   return (
     <div className="space-y-4" data-testid="meeting-summary-related-artifacts">
       <section data-testid="meeting-summary-related-decisions">
@@ -31,7 +33,7 @@ export function MeetingSummaryRelatedArtifacts({
             relatedDecisions.map((item) => (
               <Link
                 key={item.id}
-                href={item.detail_url ?? item.url}
+                href={buildUrl(item.detail_url ?? item.url)}
                 className="truncate text-sm text-[#1a9ba3]/90 hover:underline"
               >
                 {item.title}
@@ -52,7 +54,7 @@ export function MeetingSummaryRelatedArtifacts({
             relatedTasks.map((item) => (
               <Link
                 key={item.id}
-                href={item.detail_url ?? item.url}
+                href={buildUrl(item.detail_url ?? item.url)}
                 className="truncate text-sm text-emerald-800/90 hover:underline"
               >
                 {item.title}

@@ -68,16 +68,16 @@ urlpatterns = [
     path('organizations/validate-slug/', ValidateOrganizationSlugView.as_view(), name='validate-organization-slug'),
     path('organizations/join/', JoinOrganizationBySlugView.as_view(), name='join-organization-by-slug'),
     path('organizations/switch/', SwitchOrganizationView.as_view(), name='switch-organization'),
-    path('organizations/<int:org_id>/', OrganizationDetailView.as_view(), name='organization-detail'),
-    path('organizations/<int:org_id>/members/', OrganizationMembersView.as_view(), name='organization-members'),
-    path('organizations/<int:org_id>/members/<int:user_id>/', RemoveOrganizationMemberView.as_view(), name='remove-organization-member'),
-    path('organizations/<int:org_id>/leave/', LeaveOrganizationView.as_view(), name='leave-organization'),
-    path('organizations/<int:org_id>/slug/', UpdateOrganizationSlugView.as_view(), name='update-organization-slug'),
+    path('organizations/<str:org_id>/', OrganizationDetailView.as_view(), name='organization-detail'),
+    path('organizations/<str:org_id>/members/', OrganizationMembersView.as_view(), name='organization-members'),
+    path('organizations/<str:org_id>/members/<int:user_id>/', RemoveOrganizationMemberView.as_view(), name='remove-organization-member'),
+    path('organizations/<str:org_id>/leave/', LeaveOrganizationView.as_view(), name='leave-organization'),
+    path('organizations/<str:org_id>/slug/', UpdateOrganizationSlugView.as_view(), name='update-organization-slug'),
 
     # Organization Invitation endpoints
-    path('organizations/<int:org_id>/invitations/', CreateOrganizationInvitationView.as_view(), name='create-org-invitation'),
-    path('organizations/<int:org_id>/invitations/list/', ListOrganizationInvitationsView.as_view(), name='list-org-invitations'),
-    path('organizations/<int:org_id>/invitations/<int:invitation_id>/', RevokeOrganizationInvitationView.as_view(), name='revoke-org-invitation'),
+    path('organizations/<str:org_id>/invitations/', CreateOrganizationInvitationView.as_view(), name='create-org-invitation'),
+    path('organizations/<str:org_id>/invitations/list/', ListOrganizationInvitationsView.as_view(), name='list-org-invitations'),
+    path('organizations/<str:org_id>/invitations/<int:invitation_id>/', RevokeOrganizationInvitationView.as_view(), name='revoke-org-invitation'),
     path('invitations/accept-organization/', AcceptOrganizationInvitationView.as_view(), name='accept-org-invitation'),
 
     # Project Invitation endpoints

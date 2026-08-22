@@ -55,6 +55,10 @@ class Sheet(TimeStampedModel):
     position = models.IntegerField(
         help_text="Position/order of the sheet within the spreadsheet"
     )
+    revision = models.PositiveBigIntegerField(
+        default=0,
+        help_text="Monotonic coordinate-structure revision for collaboration conflict checks"
+    )
     kind = models.CharField(
         max_length=20,
         choices=SheetKind.choices,
@@ -593,4 +597,3 @@ class PatternJob(TimeStampedModel):
 
     def __str__(self):
         return f"PatternJob {self.id} ({self.status})"
-

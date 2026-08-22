@@ -10,6 +10,7 @@ import type { TaskData } from '@/types/task';
 import { normalizeTaskFromApi } from '@/lib/tasks/normalizeTaskFromApi';
 import { useTaskStore } from '@/lib/taskStore';
 import { useAuthStore } from '@/lib/authStore';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 import TaskDetailHeader from '@/components/tasks/detail/TaskDetailHeader';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -40,6 +41,7 @@ export default function TaskDrawer({
   externalRefreshKey,
 }: TaskDrawerProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const updateTaskInStore = useTaskStore((s) => s.updateTask);
 
   const [task, setTask] = useState<TaskData | null>(null);
@@ -250,11 +252,11 @@ export default function TaskDrawer({
           </div>
           <div className="flex items-center gap-1">
             <a
-              href={`/tasks/${fullPageSlug}`}
+              href={buildUrl(`/tasks/${fullPageSlug}`)}
               data-testid="task-drawer-open-full"
               onClick={(e) => {
                 e.preventDefault();
-                router.push(`/tasks/${fullPageSlug}`);
+                router.push(buildUrl(`/tasks/${fullPageSlug}`));
               }}
               title="Open full page"
               aria-label="Open full page"

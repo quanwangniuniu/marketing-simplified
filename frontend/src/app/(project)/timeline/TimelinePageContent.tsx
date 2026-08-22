@@ -15,10 +15,12 @@ import { useStripProjectIdFromUrl } from "@/lib/useStripProjectIdFromUrl";
 import { useTaskFilterParams } from "@/hooks/useTaskFilterParams";
 import { TaskFilterPanel } from "@/components/tasks/TaskFilterPanel";
 import { TimelineTaskCreateFlow } from "@/components/tasks/TimelineTaskCreateFlow";
+import { useBuildUrl } from "@/lib/buildUrl";
 
 export function TimelinePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   useStripProjectIdFromUrl();
   const originMeetingIdParam =
     searchParams.get("origin_meeting") ?? searchParams.get("origin_meeting_id");
@@ -193,7 +195,7 @@ export function TimelinePageContent() {
                   type="button"
                   onClick={() =>
                     router.push(
-                      "/tasks",
+                      buildUrl("/tasks"),
                     )
                   }
                   className="rounded px-3 py-1.5 text-sm font-medium text-indigo-600 ring-1 ring-indigo-200 transition-colors hover:bg-indigo-50"

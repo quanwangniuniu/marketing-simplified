@@ -4,15 +4,22 @@ API views for spreadsheet operations
 Handles CRUD operations for spreadsheets, sheets, rows, columns, and cells
 """
 import logging
+import re
+import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
+from rest_framework.exceptions import ValidationError, NotFound
+from rest_framework.throttling import ScopedRateThrottle
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
+from django.http import HttpResponse
+
+from .xlsx_export import build_sheet_workbook
 
 from .models import (
     Spreadsheet,
@@ -60,12 +67,101 @@ from .serializers import (
     PivotConfigSerializer,
     PivotConfigCreateUpdateSerializer,
 )
-from .services import SpreadsheetService, SheetService, CellService, CellBatchArgumentError
+from .services import (
+    SpreadsheetService, SheetService, CellService, CellBatchArgumentError,
+    broadcast_sheet_refresh, broadcast_spreadsheet_sheet_list_refresh,
+)
 from .models import SheetStructureOperation
-from core.models import Project
+from .exceptions import SheetRevisionConflict
+from .ws_tickets import WS_TICKET_TTL_SECONDS, mint_websocket_ticket
+from .tenant import current_tenant_schema
 from .tasks import apply_pattern_job
+from .access import (
+    get_accessible_project_or_404,
+    get_accessible_sheet_or_404,
+    get_accessible_spreadsheet_or_404,
+)
 
 logger = logging.getLogger(__name__)
+
+# Header carrying the editing tab's collab WS client id (echo suppression).
+SHEET_CLIENT_ID_HEADER = 'X-Sheet-Client-Id'
+
+
+def _request_sheet_client_id(request, fallback=None):
+    """Return the validated collab client id shared by HTTP and WS paths."""
+    value = (request.headers.get(SHEET_CLIENT_ID_HEADER) or fallback or '').strip()
+    if len(value) > 64:
+        raise ValidationError({
+            'client_id': 'Client id must be 64 characters or fewer.',
+        })
+    return value or None
+
+
+def _request_base_revision(request):
+    value = request.data.get('base_revision') if isinstance(request.data, dict) else None
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValidationError({'base_revision': 'Must be a non-negative integer.'})
+    try:
+        revision = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({'base_revision': 'Must be a non-negative integer.'})
+    if revision < 0:
+        raise ValidationError({'base_revision': 'Must be a non-negative integer.'})
+    return revision
+
+
+def _request_token_expiry(request):
+    now = int(time.time())
+    hard_expiry = now + int(
+        getattr(settings, 'SPREADSHEET_WS_CONNECTION_MAX_SECONDS', 3600)
+    )
+    token = getattr(request, 'auth', None)
+    try:
+        expiry = int(token.get('exp'))
+        if expiry > now:
+            return min(expiry, hard_expiry)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return hard_expiry
+
+
+def _lock_and_validate_sheet_revision(sheet, base_revision):
+    """Lock a coordinate-write domain and reject obsolete coordinate requests."""
+    locked_sheet = Sheet.objects.select_for_update().get(pk=sheet.pk)
+    if base_revision is not None and base_revision != locked_sheet.revision:
+        raise SheetRevisionConflict(base_revision, locked_sheet.revision)
+    return locked_sheet
+
+
+def _notify_sheet_refresh(request, sheet, reason: str) -> None:
+    """Broadcast sheet_refresh_required after a successful structure mutation."""
+    sheet.refresh_from_db(fields=['revision'])
+    broadcast_sheet_refresh(
+        sheet_id=sheet.id,
+        reason=reason,
+        origin_client_id=_request_sheet_client_id(request),
+        origin_user_id=getattr(request.user, 'id', None),
+        revision=sheet.revision,
+    )
+
+
+def _notify_spreadsheet_sheet_list_refresh(
+    request,
+    spreadsheet,
+    reason: str,
+    include_sheet_ids=None,
+) -> None:
+    """Broadcast a sheet-tab list change to every room in a spreadsheet."""
+    broadcast_spreadsheet_sheet_list_refresh(
+        spreadsheet_id=spreadsheet.id,
+        reason=reason,
+        include_sheet_ids=include_sheet_ids,
+        origin_client_id=_request_sheet_client_id(request),
+        origin_user_id=getattr(request.user, 'id', None),
+    )
 
 
 class SpreadsheetListView(APIView):
@@ -83,7 +179,10 @@ class SpreadsheetListView(APIView):
         
         # project_id query param tolerates a numeric pk OR a project slug; the
         # frontend sends the slug, so resolving to a pk first avoids a spurious 404.
-        project = get_object_or_404(Project, pk=resolve_project_pk(project_id))
+        project = get_accessible_project_or_404(
+            request.user,
+            pk=resolve_project_pk(project_id),
+        )
 
         # Get queryset with select_related to avoid N+1 queries
         queryset = Spreadsheet.objects.filter(project=project, is_deleted=False).select_related('project')
@@ -126,7 +225,10 @@ class SpreadsheetListView(APIView):
             raise ValidationError({'project_id': 'project_id is required'})
         
         # project_id query param tolerates a numeric pk OR a project slug.
-        project = get_object_or_404(Project, pk=resolve_project_pk(project_id))
+        project = get_accessible_project_or_404(
+            request.user,
+            pk=resolve_project_pk(project_id),
+        )
         
         serializer = SpreadsheetCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -151,13 +253,19 @@ class SpreadsheetDetailView(APIView):
     
     def get(self, request, id):
         """Get spreadsheet details"""
-        spreadsheet = get_object_or_404(Spreadsheet.objects.select_related('project'), **resolve_lookup_kwargs(id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(id),
+        )
         serializer = SpreadsheetSerializer(spreadsheet)
         return Response(serializer.data)
     
     def put(self, request, id):
         """Update spreadsheet"""
-        spreadsheet = get_object_or_404(Spreadsheet.objects.select_related('project'), **resolve_lookup_kwargs(id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(id),
+        )
         
         serializer = SpreadsheetUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -177,7 +285,10 @@ class SpreadsheetDetailView(APIView):
     
     def delete(self, request, id):
         """Delete spreadsheet (soft delete)"""
-        spreadsheet = get_object_or_404(Spreadsheet.objects.select_related('project'), **resolve_lookup_kwargs(id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(id),
+        )
         SpreadsheetService.delete_spreadsheet(spreadsheet)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -225,7 +336,10 @@ class WorkflowPatternApplyView(APIView):
         sheet_id = serializer.validated_data['sheet_id']
 
         # spreadsheet_id comes from the request body (numeric FK contract), not the URL
-        spreadsheet = get_object_or_404(Spreadsheet, id=spreadsheet_id, is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            id=spreadsheet_id,
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         job = PatternJob.objects.create(
@@ -277,7 +391,10 @@ class SheetListView(APIView):
         List sheets for a spreadsheet
         GET /spreadsheets/{spreadsheet_id}/sheets/?page=1&page_size=20&order_by=position
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(spreadsheet_id),
+        )
         
         # Use select_related to avoid N+1 queries when accessing spreadsheet.id in serializer
         queryset = Sheet.objects.filter(spreadsheet=spreadsheet, is_deleted=False).select_related('spreadsheet')
@@ -315,7 +432,10 @@ class SheetListView(APIView):
         Create a new sheet
         POST /spreadsheets/{spreadsheet_id}/sheets/
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(spreadsheet_id),
+        )
         
         serializer = SheetCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -330,6 +450,7 @@ class SheetListView(APIView):
         
         # Refetch with select_related to ensure spreadsheet is loaded for serialization
         sheet = Sheet.objects.select_related('spreadsheet').get(id=sheet.id)
+        _notify_spreadsheet_sheet_list_refresh(request, spreadsheet, 'sheet_created')
         response_serializer = SheetSerializer(sheet)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -340,7 +461,10 @@ class SheetDetailView(APIView):
     
     def get(self, request, spreadsheet_id, id):
         """Get sheet details"""
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(spreadsheet_id),
+        )
         sheet = get_object_or_404(
             Sheet.objects.select_related('spreadsheet'),
             id=id,
@@ -352,7 +476,10 @@ class SheetDetailView(APIView):
     
     def put(self, request, spreadsheet_id, id):
         """Update sheet"""
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(spreadsheet_id),
+        )
         sheet = get_object_or_404(
             Sheet.objects.select_related('spreadsheet'),
             id=id,
@@ -376,12 +503,16 @@ class SheetDetailView(APIView):
         
         # Refetch with select_related to ensure spreadsheet is loaded for serialization
         updated_sheet = Sheet.objects.select_related('spreadsheet').get(id=updated_sheet.id)
+        _notify_spreadsheet_sheet_list_refresh(request, spreadsheet, 'sheet_updated')
         response_serializer = SheetSerializer(updated_sheet)
         return Response(response_serializer.data)
     
     def delete(self, request, spreadsheet_id, id):
         """Delete sheet (soft delete)"""
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user,
+            **resolve_lookup_kwargs(spreadsheet_id),
+        )
         sheet = get_object_or_404(
             Sheet.objects.select_related('spreadsheet'),
             id=id,
@@ -389,6 +520,12 @@ class SheetDetailView(APIView):
             is_deleted=False
         )
         SheetService.delete_sheet(sheet)
+        _notify_spreadsheet_sheet_list_refresh(
+            request,
+            spreadsheet,
+            'sheet_deleted',
+            include_sheet_ids=[sheet.id],
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -400,7 +537,10 @@ class ProjectSheetDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, project_id, spreadsheet_id, sheet_id):
-        project = get_object_or_404(Project, **resolve_lookup_kwargs(project_id, 'id'))
+        project = get_accessible_project_or_404(
+            request.user,
+            **resolve_lookup_kwargs(project_id, 'id'),
+        )
         spreadsheet = get_object_or_404(
             Spreadsheet,
             **resolve_lookup_kwargs(spreadsheet_id, 'id'),
@@ -414,7 +554,44 @@ class ProjectSheetDeleteView(APIView):
             is_deleted=False
         )
         SheetService.delete_sheet(sheet)
+        _notify_spreadsheet_sheet_list_refresh(
+            request,
+            spreadsheet,
+            'sheet_deleted',
+            include_sheet_ids=[sheet.id],
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SheetWebSocketTicketView(APIView):
+    """Mint a short-lived, one-time credential bound to one sheet and tab."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'spreadsheet_ws_ticket'
+
+    def post(self, request, sheet_id):
+        sheet = get_accessible_sheet_or_404(
+            request.user,
+            id=sheet_id,
+        )
+        client_id = _request_sheet_client_id(
+            request,
+            request.data.get('client_id'),
+        )
+        if not client_id:
+            raise ValidationError({'client_id': 'This field is required.'})
+        ticket = mint_websocket_ticket(
+            user_id=request.user.id,
+            sheet_id=sheet.id,
+            client_id=client_id,
+            connection_expires_at=_request_token_expiry(request),
+            tenant_schema=current_tenant_schema(),
+        )
+        return Response({
+            'ticket': ticket,
+            'expires_in': WS_TICKET_TTL_SECONDS,
+        })
 
 
 class SheetResizeView(APIView):
@@ -426,7 +603,9 @@ class SheetResizeView(APIView):
         Resize sheet to ensure it has at least the specified number of rows/columns
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/resize
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         
         serializer = SheetResizeSerializer(data=request.data)
@@ -436,11 +615,13 @@ class SheetResizeView(APIView):
             result = SheetService.resize_sheet(
                 sheet=sheet,
                 row_count=serializer.validated_data['row_count'],
-                column_count=serializer.validated_data['column_count']
+                column_count=serializer.validated_data['column_count'],
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
         
+        _notify_sheet_refresh(request, sheet, 'resize')
         response_serializer = SheetResizeResponseSerializer(result)
         return Response(response_serializer.data)
 
@@ -450,7 +631,9 @@ class SheetSortView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetSortSerializer(data=request.data)
@@ -463,10 +646,12 @@ class SheetSortView(APIView):
                 direction=serializer.validated_data['direction'],
                 has_header=serializer.validated_data['has_header'],
                 previous_sort_columns=serializer.validated_data.get('previous_sort_columns') or [],
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'sort')
         return Response(result)
 
 
@@ -475,18 +660,25 @@ class SheetReorderView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            SheetService.reorder_rows(sheet=sheet, order=serializer.validated_data['order'])
+            revision = SheetService.reorder_rows(
+                sheet=sheet,
+                order=serializer.validated_data['order'],
+                base_revision=serializer.validated_data.get('base_revision'),
+            )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
-        return Response({'status': 'ok'})
+        _notify_sheet_refresh(request, sheet, 'reorder')
+        return Response({'status': 'ok', 'revision': revision})
 
 
 class SheetRowListView(APIView):
@@ -498,7 +690,9 @@ class SheetRowListView(APIView):
         List rows in a sheet using scrollable pagination
         GET /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/rows/?offset=0&row_limit=100
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         
         offset = int(request.query_params.get('offset', 0))
@@ -534,7 +728,9 @@ class SheetColumnListView(APIView):
         List columns in a sheet using scrollable pagination
         GET /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/columns/?offset=0&column_limit=50
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         
         offset = int(request.query_params.get('offset', 0))
@@ -570,7 +766,9 @@ class SheetRowInsertView(APIView):
         Insert rows at a position
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/rows/insert
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetInsertSerializer(data=request.data)
@@ -581,11 +779,13 @@ class SheetRowInsertView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'rows_inserted')
         return Response(result, status=status.HTTP_201_CREATED)
 
 
@@ -598,7 +798,9 @@ class SheetColumnInsertView(APIView):
         Insert columns at a position
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/columns/insert
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetInsertSerializer(data=request.data)
@@ -609,11 +811,13 @@ class SheetColumnInsertView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'columns_inserted')
         return Response(result, status=status.HTTP_201_CREATED)
 
 
@@ -626,7 +830,9 @@ class SheetRowDeleteView(APIView):
         Delete rows at a position
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/rows/delete
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetDeleteSerializer(data=request.data)
@@ -637,11 +843,13 @@ class SheetRowDeleteView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'rows_deleted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -654,7 +862,9 @@ class SheetColumnDeleteView(APIView):
         Delete columns at a position
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/columns/delete
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SheetDeleteSerializer(data=request.data)
@@ -665,11 +875,13 @@ class SheetColumnDeleteView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'columns_deleted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -682,15 +894,24 @@ class SheetStructureOperationRevertView(APIView):
         Revert a structure operation
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/operations/{operation_id}/revert
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
-        operation = get_object_or_404(SheetStructureOperation, id=operation_id)
+        operation = get_object_or_404(
+            SheetStructureOperation, id=operation_id, sheet=sheet
+        )
 
         try:
-            result = SheetService.revert_structure_operation(sheet=sheet, operation=operation)
+            result = SheetService.revert_structure_operation(
+                sheet=sheet,
+                operation=operation,
+                base_revision=_request_base_revision(request),
+            )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'operation_reverted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -699,7 +920,7 @@ class SheetRowInsertByIdView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, sheet_id):
-        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
+        sheet = get_accessible_sheet_or_404(request.user, id=sheet_id)
         serializer = SheetInsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -708,11 +929,13 @@ class SheetRowInsertByIdView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'rows_inserted')
         return Response(result, status=status.HTTP_201_CREATED)
 
 
@@ -721,7 +944,7 @@ class SheetColumnInsertByIdView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, sheet_id):
-        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
+        sheet = get_accessible_sheet_or_404(request.user, id=sheet_id)
         serializer = SheetInsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -730,11 +953,13 @@ class SheetColumnInsertByIdView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'columns_inserted')
         return Response(result, status=status.HTTP_201_CREATED)
 
 
@@ -743,7 +968,7 @@ class SheetRowDeleteByIdView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, sheet_id):
-        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
+        sheet = get_accessible_sheet_or_404(request.user, id=sheet_id)
         serializer = SheetDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -752,11 +977,13 @@ class SheetRowDeleteByIdView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'rows_deleted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -765,7 +992,7 @@ class SheetColumnDeleteByIdView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, sheet_id):
-        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
+        sheet = get_accessible_sheet_or_404(request.user, id=sheet_id)
         serializer = SheetDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -774,11 +1001,13 @@ class SheetColumnDeleteByIdView(APIView):
                 sheet=sheet,
                 position=serializer.validated_data['position'],
                 count=serializer.validated_data.get('count', 1),
-                created_by=request.user
+                created_by=request.user,
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'columns_deleted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -787,14 +1016,21 @@ class SheetOperationRevertByIdView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, sheet_id, operation_id):
-        sheet = get_object_or_404(Sheet, id=sheet_id, is_deleted=False)
-        operation = get_object_or_404(SheetStructureOperation, id=operation_id)
+        sheet = get_accessible_sheet_or_404(request.user, id=sheet_id)
+        operation = get_object_or_404(
+            SheetStructureOperation, id=operation_id, sheet=sheet
+        )
 
         try:
-            result = SheetService.revert_structure_operation(sheet=sheet, operation=operation)
+            result = SheetService.revert_structure_operation(
+                sheet=sheet,
+                operation=operation,
+                base_revision=_request_base_revision(request),
+            )
         except DjangoValidationError as e:
             raise ValidationError({'error': str(e)})
 
+        _notify_sheet_refresh(request, sheet, 'operation_reverted')
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -807,7 +1043,9 @@ class CellRangeReadView(APIView):
         Read cells within a specified range
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/cells/range
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         
         serializer = CellRangeReadSerializer(data=request.data)
@@ -836,6 +1074,7 @@ class CellRangeReadView(APIView):
             'column_count': result['column_count'],
             'sheet_row_count': result.get('sheet_row_count'),
             'sheet_column_count': result.get('sheet_column_count'),
+            'revision': result['revision'],
         })
 
 
@@ -848,7 +1087,9 @@ class CellBatchUpdateView(APIView):
         Perform batch cell operations (set or clear)
         POST /spreadsheets/{spreadsheet_id}/sheets/{sheet_id}/cells/batch
         """
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = CellBatchUpdateSerializer(data=request.data)
@@ -875,7 +1116,13 @@ class CellBatchUpdateView(APIView):
                 sheet=sheet,
                 operations=serializer.validated_data['operations'],
                 auto_expand=serializer.validated_data.get('auto_expand', True),
-                import_mode=import_mode
+                import_mode=import_mode,
+                origin_client_id=_request_sheet_client_id(
+                    request,
+                    serializer.validated_data.get('client_id'),
+                ),
+                origin_user_id=getattr(request.user, 'id', None),
+                base_revision=serializer.validated_data.get('base_revision'),
             )
         except CellBatchArgumentError as e:
             return Response(
@@ -919,7 +1166,9 @@ class ImportFinalizeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         import_id = request.data.get('import_id')
         if import_id:
@@ -936,7 +1185,10 @@ class ImportFinalizeView(APIView):
             recompute_pivots_for_source_sheet(sheet)
         except Exception:
             logger.exception("Import finalize pivot recompute failed for sheet_id=%s", sheet.id)
-        return Response({'status': 'ok'})
+        # Peers get one coarse refresh for the whole import (per-chunk broadcasts
+        # are suppressed by import_mode in batch_update_cells).
+        _notify_sheet_refresh(request, sheet, 'import_finalized')
+        return Response({'status': 'ok', 'revision': sheet.revision})
 
 
 class PivotConfigView(APIView):
@@ -948,7 +1200,9 @@ class PivotConfigView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         try:
             config = sheet.pivot_config
@@ -958,7 +1212,9 @@ class PivotConfigView(APIView):
         return Response(serializer.data)
 
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = PivotConfigCreateUpdateSerializer(data=request.data)
@@ -1001,7 +1257,9 @@ class PivotRecomputeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
         try:
             config = sheet.pivot_config
@@ -1022,7 +1280,11 @@ class PivotRecomputeView(APIView):
             # Return 202 even on failure; frontend treats this as best-effort background recompute.
             return Response({'status': 'error', 'detail': 'pivot recompute failed'}, status=status.HTTP_202_ACCEPTED)
 
-        return Response({'status': 'ok'}, status=status.HTTP_202_ACCEPTED)
+        sheet.refresh_from_db(fields=['revision'])
+        return Response(
+            {'status': 'ok', 'revision': sheet.revision},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class SpreadsheetHighlightListView(APIView):
@@ -1030,24 +1292,33 @@ class SpreadsheetHighlightListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         highlights = SpreadsheetHighlight.objects.filter(sheet=sheet).order_by('id')
         serializer = SpreadsheetHighlightSerializer(highlights, many=True)
-        return Response({'highlights': serializer.data})
+        return Response({'highlights': serializer.data, 'revision': sheet.revision})
 
 
 class SpreadsheetHighlightBatchView(APIView):
     """Batch set/clear highlights"""
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SpreadsheetHighlightBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        sheet = _lock_and_validate_sheet_revision(
+            sheet,
+            serializer.validated_data.get('base_revision'),
+        )
 
         updated = 0
         deleted = 0
@@ -1099,7 +1370,11 @@ class SpreadsheetHighlightBatchView(APIView):
                     qs = qs.filter(col_index=norm_col)
                 deleted += qs.delete()[0]
 
-        return Response({'updated': updated, 'deleted': deleted})
+        return Response({
+            'updated': updated,
+            'deleted': deleted,
+            'revision': sheet.revision,
+        })
 
 
 class SpreadsheetCellFormatListView(APIView):
@@ -1107,24 +1382,33 @@ class SpreadsheetCellFormatListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         formats = SpreadsheetCellFormat.objects.filter(sheet=sheet, is_deleted=False).order_by('row_index', 'column_index')
         serializer = SpreadsheetCellFormatSerializer(formats, many=True)
-        return Response({'formats': serializer.data})
+        return Response({'formats': serializer.data, 'revision': sheet.revision})
 
 
 class SpreadsheetCellFormatBatchView(APIView):
     """Batch update cell formats"""
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, spreadsheet_id, sheet_id):
-        spreadsheet = get_object_or_404(Spreadsheet, **resolve_lookup_kwargs(spreadsheet_id), is_deleted=False)
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
         sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
 
         serializer = SpreadsheetCellFormatBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        sheet = _lock_and_validate_sheet_revision(
+            sheet,
+            serializer.validated_data.get('base_revision'),
+        )
 
         updated = 0
         for op in serializer.validated_data['ops']:
@@ -1151,5 +1435,25 @@ class SpreadsheetCellFormatBatchView(APIView):
             )
             updated += 1
 
-        return Response({'updated': updated})
+        return Response({'updated': updated, 'revision': sheet.revision})
 
+
+class SheetXlsxExportView(APIView):
+    """Export a sheet to .xlsx, embedding native charts for sparkline cells (MED-295)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, spreadsheet_id, sheet_id):
+        spreadsheet = get_accessible_spreadsheet_or_404(
+            request.user, **resolve_lookup_kwargs(spreadsheet_id)
+        )
+        sheet = get_object_or_404(Sheet, id=sheet_id, spreadsheet=spreadsheet, is_deleted=False)
+        content = build_sheet_workbook(sheet)
+        response = HttpResponse(
+            content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        # sheet.name is user-controlled: strip quotes/backslashes and control
+        # chars so it can't break or inject into the Content-Disposition header.
+        safe_name = re.sub(r'["\\\r\n]|[\x00-\x1f]', '', (sheet.name or 'sheet')).strip() or 'sheet'
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}.xlsx"'
+        return response

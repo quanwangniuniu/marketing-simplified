@@ -61,6 +61,19 @@ interface AuthState {
   clearAuth: () => void;
 }
 
+// Shared across all initializeAuth() calls (e.g. concurrent mounts) so they
+// don't each fire their own /auth/token/refresh/ request.
+let sharedInitAuthRefreshPromise: Promise<string | null> | null = null;
+
+function getSharedInitAuthRefreshedToken(refreshToken: string): Promise<string | null> {
+  if (!sharedInitAuthRefreshPromise) {
+    sharedInitAuthRefreshPromise = authAPI.refreshToken(refreshToken);
+  }
+  return sharedInitAuthRefreshPromise.finally(() => {
+    sharedInitAuthRefreshPromise = null;
+  });
+}
+
 // Create the auth store with persistence
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -270,6 +283,7 @@ export const useAuthStore = create<AuthState>()(
           return { success: false, error: message };
         }
       },
+      
 
       // Initialize authentication state on app startup
       initializeAuth: async () => {
@@ -298,10 +312,10 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ loading: true });
-
+ 
         try {
           if (refreshToken) {
-            const refreshedToken = await authAPI.refreshToken(refreshToken);
+            const refreshedToken = await getSharedInitAuthRefreshedToken(refreshToken);
             if (refreshedToken) {
               token = refreshedToken;
               set({
@@ -319,7 +333,7 @@ export const useAuthStore = create<AuthState>()(
           let userResult = await get().getCurrentUser();
 
           if (!userResult.success && refreshToken && !userResult.retryable) {
-            const refreshedToken = await authAPI.refreshToken(refreshToken);
+            const refreshedToken = await getSharedInitAuthRefreshedToken(refreshToken);
             if (refreshedToken) {
               token = refreshedToken;
               set({ token: refreshedToken });

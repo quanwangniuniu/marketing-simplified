@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -73,6 +74,7 @@ export default function CreativeDetailPage({
 
 function CreativeDetailContent({ creativeId }: { creativeId: string }) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [days, setDays] = useState<number>(28);
   const [detail, setDetail] = useState<MetaCreativeDetail | null>(null);
   const [series, setSeries] = useState<MetaCreativeTimeseries | null>(null);
@@ -149,12 +151,12 @@ function CreativeDetailContent({ creativeId }: { creativeId: string }) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-gray-500">
-        <Link href="/meta-ads" className="hover:text-[#1a9ba3]">
+        <Link href={buildUrl("/meta-ads")} className="hover:text-[#1a9ba3]">
           Meta Ads
         </Link>
         <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
         <Link
-          href="/meta-ads?tab=creatives"
+          href={buildUrl("/meta-ads?tab=creatives")}
           className="hover:text-[#1a9ba3]"
         >
           Creatives

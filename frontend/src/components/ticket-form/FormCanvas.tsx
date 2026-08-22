@@ -2,6 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { BuilderFieldRow } from '@/types/ticketForm';
 import SortableFieldRow from './SortableFieldRow';
 import FormFieldError from './FormFieldError';
@@ -74,7 +75,8 @@ export default function FormCanvas({
   onSaveForm,
   onDeleteForm,
 }: Props) {
-  const assignmentsHref = `/admin/ticket-forms/${formId}/assignments`;
+  const buildUrl = useBuildUrl();
+  const assignmentsHref = buildUrl(`/admin/ticket-forms/${formId}/assignments`);
   const titleInputClass =
     'mt-2 w-full border-0 bg-transparent p-0 text-xl font-semibold leading-tight text-gray-900 outline-none placeholder:text-gray-300 focus:border-b-2 focus:border-[#3CCED7] sm:text-[22px]';
 

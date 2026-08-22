@@ -11,6 +11,7 @@ import {
   activateProjectForNavigation,
   buildNotificationFullPageTarget,
 } from "@/lib/notificationRoutes";
+import { buildUrl } from "@/lib/buildUrl";
 
 interface DrawerActionBarProps {
   notification: NotificationItem;
@@ -225,7 +226,7 @@ function QuickReplyAction({
       if (target.requiresProjectSwitch && target.projectId) {
         await activateProjectForNavigation(target.projectId);
       }
-      router.push(target.href);
+      router.push(buildUrl(target.href));
       toast.success("Redirecting to conversation...");
     } catch (error) {
       console.error("Reply failed:", error);
@@ -287,7 +288,7 @@ function GoToFullPageLink({
     if (target.requiresProjectSwitch && target.projectId) {
       await activateProjectForNavigation(target.projectId);
     }
-    router.push(target.href);
+    router.push(buildUrl(target.href));
   };
 
   return (

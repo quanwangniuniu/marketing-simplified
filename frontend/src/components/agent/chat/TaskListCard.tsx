@@ -7,6 +7,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, Clock, ListChecks, Loader2, Al
 import { cn } from "@/lib/utils"
 import { AgentMessageBoardText } from "./AgentMessageBoardText"
 import type { RecommendedTask } from "@/types/agent"
+import { useBuildUrl } from "@/lib/buildUrl"
 
 const priorityColors = {
   HIGH: { bg: "bg-red-500/20", text: "text-red-400" },
@@ -60,6 +61,7 @@ export function TaskListCard({
   createButtonDisabled,
   generationStatus = "idle",
 }: TaskListCardProps) {
+  const buildUrl = useBuildUrl()
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const titleTarget = `Recommended Tasks (${tasks.length})`
 
@@ -97,7 +99,7 @@ export function TaskListCard({
     const taskId = createdTaskIdByIndex?.[idx]
     if (taskId != null) {
       // taskId may be a numeric ID or a slug string
-      window.location.href = `/tasks/${taskId}`
+      window.location.href = buildUrl(`/tasks/${taskId}`)
       return
     }
     setExpandedIndex((prev) => (prev === idx ? null : idx))

@@ -41,6 +41,7 @@ export interface SheetData {
   spreadsheet: number;
   name: string;
   position: number;
+  revision?: number;
   kind?: 'normal' | 'pivot';
   pivot_config?: PivotConfigDTO | null;
   frozen_row_count?: number;
@@ -66,4 +67,3 @@ export interface UpdateSheetRequest {
   frozen_row_count?: number;
   frozen_column_count?: number;
 }
-

@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useCampaignTasks } from '@/hooks/campaigns/useCampaignTasks';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { TaskData } from '@/types/task';
 
 export interface TasksSectionProps {
@@ -59,6 +60,7 @@ function formatDate(dateString?: string | null): string {
 const TasksSection = forwardRef<TasksSectionHandle, TasksSectionProps>(
   function TasksSection({ campaignId }, ref) {
     const router = useRouter();
+    const buildUrl = useBuildUrl();
     const { items, loading, error, refresh } = useCampaignTasks(campaignId);
 
     useEffect(() => {
@@ -89,7 +91,7 @@ const TasksSection = forwardRef<TasksSectionHandle, TasksSectionProps>(
 
     const handleRowClick = useCallback(
       (task: TaskData) => {
-        if (task?.id != null) router.push(`/tasks/${task.slug}`);
+        if (task?.id != null) router.push(buildUrl(`/tasks/${task.slug}`));
       },
       [router]
     );

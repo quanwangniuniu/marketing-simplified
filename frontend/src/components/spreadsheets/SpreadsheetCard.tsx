@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Trash2, CalendarDays, FileSpreadsheet } from 'lucide-react';
 import type { SpreadsheetData } from '@/types/spreadsheet';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Props {
   spreadsheet: SpreadsheetData;
@@ -22,10 +23,11 @@ function formatRelative(iso: string): string {
 }
 
 export default function SpreadsheetCard({ spreadsheet, projectId, onRequestDelete }: Props) {
+  const buildUrl = useBuildUrl();
   return (
     <div className="group relative rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-gray-200">
       <Link
-        href={`/spreadsheets/${spreadsheet.slug}`}
+        href={buildUrl(`/spreadsheets/${spreadsheet.slug}`)}
         className="block"
         aria-label={`Open ${spreadsheet.name}`}
       >

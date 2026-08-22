@@ -202,7 +202,9 @@ class BudgetRequest(models.Model):
     @transition(field=status, source=[BudgetRequestStatus.REJECTED, BudgetRequestStatus.CANCELLED], target=BudgetRequestStatus.DRAFT)
     def revise(self):
         """Transition from REJECTED or CANCELLED back to DRAFT for revision"""
-        pass
+        # The previous round's approver must not keep approver rights on the
+        # new draft; a fresh approver is assigned at re-submission.
+        self.current_approver = None
 
     @transition(
         field=status,
@@ -244,11 +246,15 @@ class BudgetRequest(models.Model):
 
     def can_lock(self):
         """Check if can lock"""
-        return self.status == BudgetRequestStatus.APPROVED or self.status == BudgetRequestStatus.REJECTED
+        # Only APPROVED requests may be locked (deducted from the pool);
+        # REJECTED must go back through DRAFT via revise() first.
+        return self.status == BudgetRequestStatus.APPROVED
     
     def can_revise(self):
         """Check if can revise"""
-        return self.status == BudgetRequestStatus.REJECTED
+        # Mirror the revise() transition sources (REJECTED or CANCELLED) so the
+        # guard stays consistent with the FSM graph.
+        return self.status in (BudgetRequestStatus.REJECTED, BudgetRequestStatus.CANCELLED)
     
     def can_forward(self):
         """Check if can forward to next approver"""

@@ -17,6 +17,7 @@ jest.mock('@/lib/api/spreadsheetApi', () => ({
     resizeSheet: (...args: any[]) => resizeSheetMock(...args),
     finalizeImport: (...args: any[]) => finalizeImportMock(...args),
     getHighlights: jest.fn().mockResolvedValue({ highlights: [] }),
+    getCellFormats: jest.fn().mockResolvedValue({ formats: [] }),
     batchUpdateHighlights: jest.fn().mockResolvedValue({ updated: 0, deleted: 0 }),
     deleteRows: (...args: any[]) => deleteRowsMock(...args),
     deleteColumns: (...args: any[]) => deleteColumnsMock(...args),
@@ -744,3 +745,151 @@ describe('SpreadsheetGrid import error handling', () => {
   }, 15000);
 });
 
+describe('SpreadsheetGrid collaboration reconciliation', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    readCellRangeMock.mockReset();
+    readCellRangeMock.mockResolvedValue({ cells: [] });
+    batchUpdateCellsMock.mockReset();
+    batchUpdateCellsMock.mockResolvedValue({
+      updated: 0,
+      cleared: 0,
+      rows_expanded: 0,
+      columns_expanded: 0,
+      cells: [],
+    });
+    toastError.mockClear();
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  it('protects a pending optimistic edit and quarantines it on structure refresh', async () => {
+    const ref = React.createRef<SpreadsheetGridHandle>();
+    const { container } = render(
+      <SpreadsheetGrid ref={ref} spreadsheetId={77} sheetId={977} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const cell = container.querySelector(
+      'td[data-row="0"][data-col="0"]'
+    ) as HTMLTableCellElement;
+    fireEvent.doubleClick(cell);
+    const editor = cell.querySelector('input') as HTMLInputElement;
+    fireEvent.change(editor, { target: { value: 'local-pending' } });
+    fireEvent.keyDown(editor, { key: 'Enter' });
+
+    expect(screen.getByText('local-pending')).toBeInTheDocument();
+
+    act(() => {
+      ref.current?.applyRemoteCells([
+        {
+          row_position: 0,
+          column_position: 0,
+          raw_input: 'remote-committed',
+        },
+      ]);
+    });
+    expect(screen.queryByText('remote-committed')).not.toBeInTheDocument();
+    expect(screen.getByText('local-pending')).toBeInTheDocument();
+
+    act(() => {
+      ref.current?.refresh();
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(container.firstElementChild).toHaveClass('pointer-events-none');
+    expect(sessionStorage.getItem('spreadsheet-pending-recovery:77:977')).toBeNull();
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining('discarded'),
+      expect.any(Object)
+    );
+  });
+
+  it('cancels an active editor and blocks keyboard input during canonical refresh', async () => {
+    const ref = React.createRef<SpreadsheetGridHandle>();
+    const { container } = render(
+      <SpreadsheetGrid ref={ref} spreadsheetId={77} sheetId={977} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const cell = container.querySelector(
+      'td[data-row="0"][data-col="0"]'
+    ) as HTMLTableCellElement;
+    fireEvent.doubleClick(cell);
+    const editor = cell.querySelector('input') as HTMLInputElement;
+    fireEvent.change(editor, { target: { value: 'stale-coordinate-edit' } });
+
+    act(() => {
+      ref.current?.refresh();
+      // Dispatch before React removes the input so both the editor's Enter
+      // handler and blur commit path exercise the in-flight refresh guard.
+      editor.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      editor.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+
+    const grid = container.querySelector(
+      '.spreadsheet-scroll-container'
+    ) as HTMLDivElement;
+    expect(container.querySelector('td[data-row="0"][data-col="0"] input')).toBeNull();
+    expect(grid).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(grid, { key: 'x' });
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(container.querySelector('td[data-row="0"][data-col="0"] input')).toBeNull();
+    expect(batchUpdateCellsMock).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining('discarded'),
+      expect.any(Object)
+    );
+  });
+
+  it('ignores an older same-revision cell broadcast by updated_at', async () => {
+    const ref = React.createRef<SpreadsheetGridHandle>();
+    render(<SpreadsheetGrid ref={ref} spreadsheetId={77} sheetId={977} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      ref.current?.applyRemoteCells([
+        {
+          row_position: 0,
+          column_position: 0,
+          raw_input: 'newer-commit',
+          updated_at: '2026-07-25T02:00:02.000Z',
+        },
+      ]);
+      ref.current?.applyRemoteCells([
+        {
+          row_position: 0,
+          column_position: 0,
+          raw_input: 'older-commit',
+          updated_at: '2026-07-25T02:00:01.000Z',
+        },
+      ]);
+    });
+
+    expect(screen.getByText('newer-commit')).toBeInTheDocument();
+    expect(screen.queryByText('older-commit')).not.toBeInTheDocument();
+  });
+});

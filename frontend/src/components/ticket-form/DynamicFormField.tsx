@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { TicketFormField, FormOptionsHint } from '@/types/ticketForm';
 import { BUILDER_CONTROL_CLASS, MAX_FILE_SIZE_MB, PORTAL_INPUT_CLASS } from './constants';
 import FormFieldCard from './FormFieldCard';
@@ -56,6 +57,7 @@ export default function DynamicFormField({
   onFilesChange,
   onFileSizeError,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const inputId = `field-${field.field_key}`;
   const config = field.field_config ?? {};
   const inputClass = variant === 'portal' ? PORTAL_INPUT_CLASS : BUILDER_CONTROL_CLASS;
@@ -150,7 +152,7 @@ export default function DynamicFormField({
             <p className="text-xs italic text-gray-400">No support projects configured.</p>
             {projectId ? (
               <Link
-                href="/admin/csm/settings/support-projects"
+                href={buildUrl("/admin/csm/settings/support-projects")}
                 className="text-xs text-indigo-600 hover:underline not-italic"
               >
                 Configure in Settings
@@ -174,7 +176,7 @@ export default function DynamicFormField({
             <p className="text-xs italic text-gray-400">No work types configured.</p>
             {projectId ? (
               <Link
-                href="/admin/csm/settings/work-types"
+                href={buildUrl("/admin/csm/settings/work-types")}
                 className="text-xs text-indigo-600 hover:underline not-italic"
               >
                 Configure in Settings

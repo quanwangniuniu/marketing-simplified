@@ -1,6 +1,7 @@
 import logging
 from rest_framework import viewsets, status, generics, permissions
-from core.slug_mixins import SlugLookupViewSetMixin, resolve_lookup_kwargs, resolve_project_pk
+from core.slug_mixins import SlugLookupViewSetMixin, resolve_project_pk
+from task.lookups import resolve_task_lookup_kwargs
 
 logger = logging.getLogger(__name__)
 from rest_framework.decorators import action, api_view, permission_classes
@@ -11,7 +12,7 @@ from django.core.cache import cache
 from datetime import datetime
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
@@ -19,7 +20,15 @@ from django.utils import timezone
 from task.models import Task, ApprovalRecord, TaskComment, TaskAttachment, TaskFieldHistory, TaskHierarchy, TaskRelation, ApprovalChain, TaskPin
 from task.serializers import TaskSerializer, TaskListSerializer, TaskLinkSerializer, ApprovalRecordSerializer, TaskApprovalSerializer, TaskForwardSerializer, TaskCommentSerializer, TaskAttachmentSerializer, SubtaskAddSerializer, TaskRelationAddSerializer, TaskBulkActionSerializer, TaskFieldHistorySerializer
 from task.signals import set_current_user
-from task.services import bulk_update_tasks, user_can_edit_task
+from task.services import (
+    bulk_update_tasks,
+    user_can_edit_task,
+    add_subtask_to_parent,
+    reassign_subtask_parent,
+    TaskHierarchyCycleError,
+    HIERARCHY_CYCLE_ERROR_CODE,
+    hierarchy_cycle_error_message,
+)
 from task.gantt_service import build_gantt_payload, resolve_sprint_label_from_tasks
 from task import intelligence as intel
 from django.utils import timezone
@@ -53,6 +62,16 @@ def _debug_log(session_id, location, message, data=None, hypothesis_id=None):
         except Exception:
             continue
 # endregion
+
+
+def _hierarchy_cycle_response():
+    return Response(
+        {
+            'detail': hierarchy_cycle_error_message(),
+            'code': HIERARCHY_CYCLE_ERROR_CODE,
+        },
+        status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    )
 
 
 class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
@@ -127,7 +146,32 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         task = serializer.save()
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
+    def update(self, request, *args, **kwargs):
+        """
+        Echo the client-generated operation ID after a successful update.
+
+        The ID is request metadata only. It is not persisted and therefore
+        requires no model or migration change.
+        """
+        operation_id = request.query_params.get('operation_id')
+
+        if operation_id is not None:
+            operation_id = operation_id.strip()
+            if not operation_id or len(operation_id) > 128:
+                raise DRFValidationError({
+                    'operation_id': (
+                        'Operation ID must contain between 1 and 128 characters.'
+                    ),
+                })
+
+        response = super().update(request, *args, **kwargs)
+
+        if operation_id and isinstance(response.data, dict):
+            response.data['operation_id'] = operation_id
+
+        return response
+
     def get_queryset(self):
         """Filter queryset based on user permissions and query parameters"""
         # region agent log
@@ -365,6 +409,24 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
             else:
                 raise DRFValidationError({'has_parent': 'has_parent must be true or false'})
 
+        search_param = self.request.query_params.get('search')
+        search_rank_order = None
+        if search_param is not None:
+            search_param = str(search_param).strip()
+            if search_param:
+                # Match visible task title only; slug can contain unrelated letters
+                # (e.g. summary "A" with slug "final-campaign-performance-summary").
+                search_q = Q(summary__icontains=search_param)
+                if search_param.isdigit():
+                    search_q |= Q(pk=int(search_param))
+                queryset = queryset.filter(search_q)
+                search_rank_order = Case(
+                    When(summary__iexact=search_param, then=Value(0)),
+                    When(summary__istartswith=search_param, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+
         # Tag names filter — matches tasks that have at least one of the given tag names.
         tag_names = _get_multi_values("tag_names")
         if tag_names:
@@ -377,7 +439,15 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(tag_q)
 
         # Personal pins should float to the top without changing the project order.
-        queryset = queryset.order_by('-_is_pinned', 'order_in_project', '-id')
+        if search_rank_order is not None:
+            queryset = queryset.annotate(_search_rank=search_rank_order).order_by(
+                '_search_rank',
+                '-_is_pinned',
+                'order_in_project',
+                '-id',
+            )
+        else:
+            queryset = queryset.order_by('-_is_pinned', 'order_in_project', '-id')
         # List response does not include draft_payload; defer it so list works if migration adding the column is not yet applied.
         if getattr(self, 'action', None) in ('list', 'gantt'):
             queryset = queryset.defer('draft_payload')
@@ -759,7 +829,7 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
 
         Unlike list(), this should not depend on the user's active_project.
         Instead, we:
-        - fetch the task by primary key
+        - fetch the task by slug or numeric primary key
         - verify the authenticated user has membership in the task's project
         """
         from rest_framework.exceptions import PermissionDenied  # local import to avoid circulars
@@ -772,9 +842,8 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
             'current_approver',
             'meeting_origin__meeting__type_definition',
         )
-        from core.slug_mixins import resolve_lookup_kwargs
         lookup_value = self.kwargs.get('pk')
-        filter_kwargs = resolve_lookup_kwargs(lookup_value, 'pk')
+        filter_kwargs = resolve_task_lookup_kwargs(lookup_value, 'pk')
         task = get_object_or_404(base_qs, **filter_kwargs)
 
         user = self.request.user
@@ -883,7 +952,29 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         old_summary    = task.summary
         old_priority   = task.priority
 
-        serializer.save()
+        validated_field_names = set(serializer.validated_data.keys())
+        attempted_history_fields = {
+            field_name
+            for field_name in TaskFieldHistory.TRACKED_FIELDS
+            if (
+                field_name in validated_field_names
+                or Task._meta.get_field(field_name).attname
+                in validated_field_names
+            )
+        }
+
+        task._attempted_task_field_history_fields = (
+            attempted_history_fields
+        )
+
+        try:
+            serializer.save()
+        finally:
+            if hasattr(
+                task,
+                '_attempted_task_field_history_fields',
+            ):
+                del task._attempted_task_field_history_fields
 
         from meetings.models import MeetingTaskOrigin
         from meetings.services import record_task_updated
@@ -1089,7 +1180,12 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     def field_history(self, request, pk=None):
         """Get field change history for a task."""
         task = self.get_object()
-        qs = TaskFieldHistory.objects.filter(task=task).select_related('changed_by').order_by('-changed_at')
+        qs = (
+            TaskFieldHistory.objects
+            .filter(task=task)
+            .select_related('changed_by')
+            .order_by('-changed_at', '-pk')
+        )
         try:
             page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
             page = max(1, int(request.query_params.get('page', 1)))
@@ -1271,12 +1367,31 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # Verify the requesting user is the designated approver for this step
-                if task.current_approver_id and request.user.id != task.current_approver_id:
-                    return Response(
-                        {'error': 'Only the designated approver for this step can approve or reject.'},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+                # Designated chain approver, or same-org org-admin override on budget (MED-240).
+                is_current_approver = (
+                    task.current_approver_id is not None
+                    and request.user.id == task.current_approver_id
+                )
+                is_admin_override = False
+                if task.current_approver_id and not is_current_approver:
+                    if task.type == 'budget':
+                        from budget_approval.approver_access import (
+                            is_org_admin_override_action,
+                            user_may_process_budget_approval,
+                        )
+                        br = task.linked_object or task.budget_requests.first()
+                        if br is not None and user_may_process_budget_approval(request.user, br):
+                            is_admin_override = is_org_admin_override_action(request.user, br)
+                        else:
+                            return Response(
+                                {'error': 'Only the designated approver for this step can approve or reject.'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                    else:
+                        return Response(
+                            {'error': 'Only the designated approver for this step can approve or reject.'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
 
                 # Execute the action
                 if action == 'approve':
@@ -1292,12 +1407,25 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                     if task.current_approval_step
                     else task.approval_records.count() + 1
                 )
-                # Update revision round so next submission is tracked as a new round
+                # Attribute the decision to the actor (org-admin on override, not the chain assignee).
+                from budget_approval.approver_access import (
+                    format_org_admin_override_marker,
+                )
+                record_comment = comment
+                if is_admin_override:
+                    decision = 'approve' if is_approved else 'reject'
+                    marker = format_org_admin_override_marker(
+                        user_id=request.user.id,
+                        decision=decision,
+                        replaced_step=step_number,
+                        timestamp=timezone.now().isoformat(),
+                    )
+                    record_comment = f'{marker}\n{comment}'.strip() if comment else marker
                 ApprovalRecord.objects.create(
                     task=task,
-                    approved_by=task.current_approver or request.user,
+                    approved_by=request.user,
                     is_approved=is_approved,
-                    comment=comment,
+                    comment=record_comment,
                     step_number=step_number,
                     revision_round=task.revision_round,
                     resubmitted_after_reject=task.revision_round > 0,
@@ -1786,13 +1914,6 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         
         elif request.method == 'POST':
             # Add a subtask
-            # Check if parent task is itself a subtask - subtasks cannot have subtasks
-            if parent_task.is_subtask:
-                return Response(
-                    {'error': 'A subtask cannot have subtasks. Only 1 level of nesting is allowed.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
             serializer = SubtaskAddSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1810,9 +1931,11 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                 raise PermissionDenied('You do not have access to this task.')
             
             try:
-                parent_task.add_subtask(child_task)
+                add_subtask_to_parent(parent_task=parent_task, child_task=child_task)
                 child_serializer = TaskSerializer(child_task, context={'request': request})
                 return Response(child_serializer.data, status=status.HTTP_201_CREATED)
+            except TaskHierarchyCycleError:
+                return _hierarchy_cycle_response()
             except ValidationError as e:
                 return Response(
                     {'error': str(e)},
@@ -1823,7 +1946,7 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     def subtask_detail(self, request, pk=None, subtask_id=None):
         """Remove a subtask relationship (unlink only — does not delete the task)."""
         parent_task = self.get_object()
-        child_task = get_object_or_404(Task, **resolve_lookup_kwargs(subtask_id))
+        child_task = get_object_or_404(Task, **resolve_task_lookup_kwargs(subtask_id))
         qs = TaskHierarchy.objects.filter(parent_task=parent_task, child_task=child_task)
         if not qs.exists():
             return Response({'error': 'Subtask relationship not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -1840,7 +1963,20 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     def move_subtask(self, request, pk=None, subtask_id=None):
         """
         Move subtask from old parent to new parent (pk).
-        payload: { "old_parent_id": <id> }
+
+        Request body: ``{ "old_parent_id": <id> }``
+
+        Success (200): ``{ "success": true }``
+
+        Hierarchy cycle (422) — stable contract for UI and integrations::
+
+            {
+                "detail": "Cannot set this parent: it would create a circular task hierarchy.",
+                "code": "task_hierarchy_cycle"
+            }
+
+        Other validation errors return 400 with ``{ "error": "<message>" }``.
+        Missing relationship returns 404.
         """
         new_parent = self.get_object()
         old_parent_id = request.data.get('old_parent_id')
@@ -1848,13 +1984,29 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
             return Response({'error': 'old_parent_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         old_parent = get_object_or_404(Task, pk=old_parent_id)
-        child_task = get_object_or_404(Task, **resolve_lookup_kwargs(subtask_id))
+        child_task = get_object_or_404(Task, **resolve_task_lookup_kwargs(subtask_id))
 
-        # remove old relationship
-        TaskHierarchy.objects.filter(parent_task=old_parent, child_task=child_task).delete()
+        has_membership = ProjectMember.objects.filter(
+            user=request.user,
+            project=child_task.project,
+            is_active=True,
+        ).exists()
+        if not has_membership:
+            raise PermissionDenied('You do not have access to this task.')
 
-        # add new relationship (uses model validation)
-        new_parent.add_subtask(child_task)
+        try:
+            reassign_subtask_parent(
+                child_task=child_task,
+                new_parent=new_parent,
+                old_parent=old_parent,
+            )
+        except TaskHierarchyCycleError:
+            return _hierarchy_cycle_response()
+        except ValidationError as e:
+            error_message = str(e)
+            if error_message == 'Subtask relationship not found.':
+                return Response({'error': error_message}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': error_message}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'success': True}, status=status.HTTP_200_OK)
     
@@ -2000,7 +2152,7 @@ class TaskCommentListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         task_id = self.kwargs.get('task_id')
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
 
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to this task.')
@@ -2011,7 +2163,7 @@ class TaskCommentListView(generics.ListCreateAPIView):
         import re  # noqa: PLC0415
 
         task_id = self.kwargs.get('task_id')
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
 
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to comment on this task.')
@@ -2061,7 +2213,7 @@ class TaskAttachmentListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         task_id = self.kwargs.get('task_id')
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
 
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to this task.')
@@ -2070,7 +2222,7 @@ class TaskAttachmentListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         task_id = self.kwargs.get('task_id')
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
 
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to upload attachments to this task.')
@@ -2088,7 +2240,7 @@ class TaskAttachmentDetailView(generics.RetrieveDestroyAPIView):
 
     def get_queryset(self):
         task_id = self.kwargs.get('task_id')
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
 
         if not _user_can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have access to this task.')
@@ -2117,7 +2269,7 @@ class TaskAttachmentDownloadView(APIView):
         attachment_id = self.kwargs.get('pk')
         
         # Get the specific attachment
-        task = get_object_or_404(Task, **resolve_lookup_kwargs(task_id))
+        task = get_object_or_404(Task, **resolve_task_lookup_kwargs(task_id))
         attachment = get_object_or_404(TaskAttachment, pk=attachment_id, task=task)
         
         if not _user_can_access_task(request.user, attachment.task):

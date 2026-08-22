@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Check, Loader2, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Id } from '@/types/common';
@@ -14,6 +14,8 @@ interface Props {
   saving?: boolean;
   onRename?: (newName: string) => Promise<void> | void;
   loading?: boolean;
+  /** Optional presence avatars (collab). */
+  presenceSlot?: ReactNode;
 }
 
 export default function SpreadsheetDetailHeader({
@@ -24,6 +26,7 @@ export default function SpreadsheetDetailHeader({
   saving = false,
   onRename,
   loading = false,
+  presenceSlot,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(spreadsheetName);
@@ -101,7 +104,7 @@ export default function SpreadsheetDetailHeader({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2">
             <h1 className="line-clamp-1 text-2xl font-semibold text-gray-900">
               {spreadsheetName || 'Untitled spreadsheet'}
             </h1>
@@ -115,6 +118,7 @@ export default function SpreadsheetDetailHeader({
                 <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
+            {presenceSlot ? <div className="ml-auto shrink-0">{presenceSlot}</div> : null}
           </div>
         )}
       </div>
