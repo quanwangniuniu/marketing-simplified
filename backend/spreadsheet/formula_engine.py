@@ -96,6 +96,42 @@ def _parse_currency_number(raw_input: Optional[str]) -> Optional[Decimal]:
     return -value if negative else value
 
 
+def _active_formula_position_exists(
+    sheet: Sheet,
+    cache_attribute: str,
+    position: int,
+    model,
+) -> bool:
+    """Use a recalculation-scoped row/column cache when one is installed."""
+    positions = getattr(sheet, cache_attribute, None)
+    if positions is not None:
+        return position in positions
+    return model.objects.filter(
+        sheet=sheet,
+        position=position,
+        is_deleted=False,
+    ).exists()
+
+
+def _formula_cell_at(sheet: Sheet, row_index: int, column_index: int):
+    """Resolve one cell through the recalculation cache, falling back to ORM."""
+    cache = getattr(sheet, '_formula_cell_cache', None)
+    key = (row_index, column_index)
+    if cache is not None and key in cache:
+        return cache[key]
+    cell = Cell.objects.filter(
+        sheet=sheet,
+        row__position=row_index,
+        column__position=column_index,
+        row__is_deleted=False,
+        column__is_deleted=False,
+        is_deleted=False,
+    ).select_related('row', 'column').first()
+    if cache is not None:
+        cache[key] = cell
+    return cell
+
+
 def _detect_formula_currency_symbol(sheet: Sheet, raw_input: str) -> Optional[str]:
     references = extract_references(raw_input)
     if not references:
@@ -106,14 +142,7 @@ def _detect_formula_currency_symbol(sheet: Sheet, raw_input: str) -> Optional[st
             row_index, col_index = reference_to_indexes(ref)
         except FormulaError:
             continue
-        cell = Cell.objects.filter(
-            sheet=sheet,
-            row__position=row_index,
-            column__position=col_index,
-            row__is_deleted=False,
-            column__is_deleted=False,
-            is_deleted=False
-        ).select_related('row', 'column').first()
+        cell = _formula_cell_at(sheet, row_index, col_index)
         if cell is None or not cell.raw_input:
             continue
         symbol = _extract_currency_symbol(cell.raw_input)
@@ -953,20 +982,23 @@ def _resolve_reference(sheet: Sheet, ref: str) -> Decimal:
     if row_index < 0 or column_index < 0:
         raise FormulaError("#REF!")
 
-    if not SheetRow.objects.filter(sheet=sheet, position=row_index, is_deleted=False).exists():
+    if not _active_formula_position_exists(
+        sheet,
+        '_formula_active_row_positions',
+        row_index,
+        SheetRow,
+    ):
         raise FormulaError("#REF!")
 
-    if not SheetColumn.objects.filter(sheet=sheet, position=column_index, is_deleted=False).exists():
+    if not _active_formula_position_exists(
+        sheet,
+        '_formula_active_column_positions',
+        column_index,
+        SheetColumn,
+    ):
         raise FormulaError("#REF!")
 
-    cell = Cell.objects.filter(
-        sheet=sheet,
-        row__position=row_index,
-        column__position=column_index,
-        row__is_deleted=False,
-        column__is_deleted=False,
-        is_deleted=False
-    ).select_related('row', 'column').first()
+    cell = _formula_cell_at(sheet, row_index, column_index)
 
     if cell is None:
         return Decimal(0)
@@ -1006,20 +1038,23 @@ def _resolve_reference_value(sheet: Sheet, ref: str) -> Value:
     if row_index < 0 or column_index < 0:
         return _value_error("#REF!")
 
-    if not SheetRow.objects.filter(sheet=sheet, position=row_index, is_deleted=False).exists():
+    if not _active_formula_position_exists(
+        sheet,
+        '_formula_active_row_positions',
+        row_index,
+        SheetRow,
+    ):
         return _value_error("#REF!")
 
-    if not SheetColumn.objects.filter(sheet=sheet, position=column_index, is_deleted=False).exists():
+    if not _active_formula_position_exists(
+        sheet,
+        '_formula_active_column_positions',
+        column_index,
+        SheetColumn,
+    ):
         return _value_error("#REF!")
 
-    cell = Cell.objects.filter(
-        sheet=sheet,
-        row__position=row_index,
-        column__position=column_index,
-        row__is_deleted=False,
-        column__is_deleted=False,
-        is_deleted=False
-    ).select_related('row', 'column').first()
+    cell = _formula_cell_at(sheet, row_index, column_index)
 
     if cell is None:
         return _value_empty()
@@ -1344,17 +1379,10 @@ def _count_single_ref(sheet: Sheet, ref: str) -> int:
     row_index, col_index = reference_to_indexes(ref)
     if row_index < 0 or col_index < 0:
         raise FormulaError("#REF!")
-    cell = Cell.objects.filter(
-        sheet=sheet,
-        row__position=row_index,
-        column__position=col_index,
-        row__is_deleted=False,
-        column__is_deleted=False,
-        is_deleted=False
-    ).values('computed_type').first()
+    cell = _formula_cell_at(sheet, row_index, col_index)
     if cell is None:
         return 0
-    return 1 if cell['computed_type'] == ComputedCellType.NUMBER else 0
+    return 1 if cell.computed_type == ComputedCellType.NUMBER else 0
 
 
 def _count_range(sheet: Sheet, start_ref: str, end_ref: str) -> int:
@@ -1457,4 +1485,3 @@ def _expand_range_refs(start_ref: str, end_ref: str) -> List[str]:
         for col in range(col_start, col_end + 1):
             refs.append(f"{_column_index_to_label(col)}{row + 1}")
     return refs
-

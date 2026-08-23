@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
+import { useBuildUrl } from "@/lib/buildUrl";
 import toast from "react-hot-toast";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,7 @@ export default function ComparisonView({
   ids,
   days,
 }: ComparisonViewProps) {
+  const buildUrl = useBuildUrl();
   const [rows, setRows] = useState<MetaAdPerformanceRow[] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export default function ComparisonView({
     <div className="space-y-5">
       <header className="space-y-1">
         <Link
-          href="/meta-ads?tab=ranking"
+          href={buildUrl("/meta-ads?tab=ranking")}
           className="inline-flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-800"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -134,6 +136,7 @@ export default function ComparisonView({
 }
 
 function ErrorCard({ message }: { message: string }) {
+  const buildUrl = useBuildUrl();
   return (
     <div className="mx-auto max-w-2xl rounded-xl bg-rose-50 p-5 ring-1 ring-rose-200">
       <h2 className="text-sm font-semibold text-rose-900">
@@ -141,7 +144,7 @@ function ErrorCard({ message }: { message: string }) {
       </h2>
       <p className="mt-1 text-sm text-rose-800">{message}</p>
       <Link
-        href="/meta-ads?tab=ranking"
+        href={buildUrl("/meta-ads?tab=ranking")}
         className="mt-4 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-rose-700 ring-1 ring-rose-200 transition-colors hover:bg-rose-100"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

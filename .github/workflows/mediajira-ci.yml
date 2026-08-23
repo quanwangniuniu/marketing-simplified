@@ -207,6 +207,16 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Free disk space on runner
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -284,6 +294,16 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Free disk space on runner
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -485,9 +505,11 @@ jobs:
       - name: Trigger deploy (main)
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.MEDIAJIRA_DEPLOY_WEBHOOK_URL_MAIN }}
+          DEPLOY_TOKEN: ${{ secrets.MEDIAJIRA_DEPLOY_TOKEN }}
         run: |
           curl -fsSL -X POST "$DEPLOY_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
+            -H "X-Deploy-Token: $DEPLOY_TOKEN" \
             -d '{"action": "deploy", "source": "github"}'
 
       - name: Verify production health after deploy

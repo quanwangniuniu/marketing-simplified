@@ -3,6 +3,7 @@
 export interface Organization {
   id: number;
   name: string;
+  slug: string;
   plan_id?: number | null;
 }
 
@@ -17,11 +18,23 @@ export interface User {
   is_org_admin?: boolean;
   is_csm_admin?: boolean;
   organization: Organization | null;
+  current_organization: Organization | null;
   roles: string[];
   team_id?: number;
   job?: string;
   department?: string;
   location?: string;
+  password_rotation?: PasswordRotationStatus;
+}
+
+export interface PasswordRotationStatus {
+  required: boolean;
+  warning: boolean;
+  elevated: boolean;
+  expires_at: string | null;
+  days_until_expiry: number | null;
+  max_age_days: number;
+  warning_days: number;
 }
 
 export interface LoginRequest {
@@ -36,6 +49,12 @@ export interface LoginResponse {
   message: string;
   organization_access_token?: string;
   requires_password_setup?: boolean;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+  user: User;
+  password_rotation: PasswordRotationStatus;
 }
 
 export interface RegisterRequest {

@@ -7,7 +7,7 @@ import { Link2, Plus, X, ExternalLink } from 'lucide-react';
 import { MeetingsAPI } from '@/lib/api/meetingsApi';
 import type { ArtifactLink, KnowledgeNavigationLink } from '@/types/meeting';
 import AddArtifactDialog from './AddArtifactDialog';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Props {
   projectId: number | string;
@@ -21,12 +21,9 @@ interface Props {
   onMutated: () => void;
 }
 
-function v2Url(link: KnowledgeNavigationLink, kind: 'decision' | 'task', projectId: number | string): string {
+function v2Url(link: KnowledgeNavigationLink, kind: 'decision' | 'task'): string {
   const key = link.slug ?? link.id;
-  if (kind === 'decision') {
-    return nestedProjectPath(projectId, `/decisions/${key}`);
-  }
-  return `/tasks/${key}`;
+  return kind === 'decision' ? `/decisions/${key}` : `/tasks/${key}`;
 }
 
 export default function RelatedArtifactsSection({
@@ -40,6 +37,7 @@ export default function RelatedArtifactsSection({
   readOnly,
   onMutated,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
 
@@ -73,7 +71,7 @@ export default function RelatedArtifactsSection({
     return (
       <li key={`${kind}-${link.id}`} className="group flex items-center gap-2">
         <Link
-          href={v2Url(link, kind, projectId)}
+          href={buildUrl(v2Url(link, kind))}
           className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-gray-800 transition hover:bg-gray-50"
         >
           <span className="truncate">{link.title}</span>

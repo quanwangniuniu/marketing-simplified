@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TaskAPI } from '@/lib/api/taskApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { GanttChartPayload, GanttRow } from '@/types/task';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -148,6 +149,7 @@ interface GanttViewProps {
 
 export default function GanttView({ projectId, projectContextLoading }: GanttViewProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledRef = useRef(false);
   const suppressRowClickRef = useRef(false);
@@ -487,7 +489,7 @@ export default function GanttView({ projectId, projectContextLoading }: GanttVie
             <button
               key={`left-${row.id}`}
               type="button"
-              onClick={() => router.push(`/tasks/${row.slug}`)}
+              onClick={() => router.push(buildUrl(`/tasks/${row.slug}`))}
               className="flex w-full items-center gap-2 border-b border-gray-50 px-3 py-3 text-left transition hover:bg-gray-50/80"
               style={{ height: rowHeight }}
             >
@@ -628,7 +630,7 @@ export default function GanttView({ projectId, projectContextLoading }: GanttVie
               type="button"
               onClick={() => {
                 if (dragState || suppressRowClickRef.current) return;
-                router.push(`/tasks/${row.slug}`);
+                router.push(buildUrl(`/tasks/${row.slug}`));
               }}
               className="group relative z-[1] block border-b border-gray-50 text-left transition hover:bg-gray-50/80"
               style={{ width: `${timelineWidth}px`, height: rowHeight }}

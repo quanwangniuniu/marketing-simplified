@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Mail, Shield, UserCheck } from 'lucide-react';
 import type { ProjectInvitationSummary } from '@/types/overview';
@@ -17,6 +18,7 @@ export default function TeamCard({
   canAdminister = false,
 }: TeamCardProps) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const topInvites = pendingInvitations.slice(0, 3);
 
   return (
@@ -74,21 +76,21 @@ export default function TeamCard({
         {canAdminister && (
           <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-gray-100">
             <button
-              onClick={() => router.push('/admin/roles')}
+              onClick={() => router.push(buildUrl('/admin/roles'))}
               className="flex flex-col items-center gap-1 py-2 rounded-md hover:bg-gray-50 transition-colors"
             >
               <UserCheck className="w-3.5 h-3.5 text-gray-500" />
               <span className="text-[11px] text-gray-600">Roles</span>
             </button>
             <button
-              onClick={() => router.push('/admin/permissions')}
+              onClick={() => router.push(buildUrl('/admin/permissions'))}
               className="flex flex-col items-center gap-1 py-2 rounded-md hover:bg-gray-50 transition-colors"
             >
               <Shield className="w-3.5 h-3.5 text-gray-500" />
               <span className="text-[11px] text-gray-600">Permissions</span>
             </button>
             <button
-              onClick={() => router.push('/admin/approvers')}
+              onClick={() => router.push(buildUrl('/admin/approvers'))}
               className="flex flex-col items-center gap-1 py-2 rounded-md hover:bg-gray-50 transition-colors"
             >
               <UserCheck className="w-3.5 h-3.5 text-gray-500" />

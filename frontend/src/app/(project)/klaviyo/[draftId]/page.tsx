@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { useBuildUrl } from '@/lib/buildUrl';
 import {
   Monitor,
   Smartphone,
@@ -68,6 +69,7 @@ type EmailBuilderSnapshot = {
 
 export default function KlaviyoDetailV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams();
   const searchParams = useSearchParams();
   const draftIdParam = params?.draftId as string | undefined;
@@ -78,15 +80,15 @@ export default function KlaviyoDetailV2Page() {
 
   const safeReturnTo = (() => {
     if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
-      return '/klaviyo';
+      return buildUrl('/klaviyo');
     }
     const pathname = (returnTo.split('?')[0] ?? '').replace(/\/+$/, '') || '/';
     // Never treat a draft detail URL as "return" — it breaks "Back to templates"
     // (router.push to the current page is a no-op) and is never the templates list.
     if (/^\/klaviyo\/[^/]+$/.test(pathname)) {
-      return '/klaviyo';
+      return buildUrl('/klaviyo');
     }
-    return returnTo;
+    return buildUrl(returnTo);
   })();
 
   // Save state

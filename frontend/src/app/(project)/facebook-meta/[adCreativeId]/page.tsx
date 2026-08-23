@@ -43,6 +43,7 @@ import {
   getSharePreview,
   type SharePreviewData,
 } from '@/lib/api/sharePreviewApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const SECTION_CLS = 'rounded-xl bg-white shadow-sm ring-1 ring-gray-100';
 const EYEBROW_CLS = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
@@ -139,6 +140,7 @@ function getPrimaryText(creative: AdCreative | null): string {
 
 function FacebookMetaDetailContent() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const params = useParams<{ adCreativeId: string }>();
   const adCreativeId = params?.adCreativeId;
 
@@ -409,7 +411,7 @@ function FacebookMetaDetailContent() {
       setDeleting(true);
       await FacebookMetaAPI.deleteAdCreative(adCreativeId);
       toast.success('Ad creative deleted');
-      router.push('/facebook-meta');
+      router.push(buildUrl('/facebook-meta'));
     } catch (err: any) {
       toast.error(err?.response?.data?.error ?? 'Failed to delete');
     } finally {
@@ -560,7 +562,7 @@ function FacebookMetaDetailContent() {
           <p className="text-xs text-gray-500">{error ?? 'Not found'}</p>
           <button
             type="button"
-            onClick={() => router.push('/facebook-meta')}
+            onClick={() => router.push(buildUrl('/facebook-meta'))}
             className="inline-flex rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-95"
           >
             Back to list

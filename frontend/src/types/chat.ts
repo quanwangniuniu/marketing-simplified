@@ -186,6 +186,8 @@ export interface Message {
   thread_participants?: Array<{ id: number; username: string; email: string; avatar?: string | null }>;
   /** True when there are thread replies the current user has not seen. */
   has_unread_thread_replies?: boolean;
+  /** Server-resolved OpenGraph card for the message's first URL (MED-279). */
+  link_preview?: MessageLinkPreview | null;
   /** Client idempotency key while a send is still in the outbox. */
   client_message_id?: string;
   /** Local delivery state for optimistic / retried sends. */
@@ -387,6 +389,7 @@ export interface ChatState {
   typingUsersByChat: Record<number, number[]>; // chatId -> userIds currently typing
   presenceByUserId: Record<number, boolean>; // Current online/offline state keyed by user id
   presenceVersionByUserId: Record<number, number>; // Last applied presence event version keyed by user id
+  unseenPinChatIds: Record<number, true>; // Chat IDs with a pin update not yet acknowledged by this user
   
   // UI State
   isWidgetOpen: boolean;
@@ -427,11 +430,17 @@ export interface ChatState {
   removePendingAttachment: (chatId: number, attachmentId: string) => void;
   clearPendingAttachments: (chatId: number) => void;
   applyReactionUpdate: (messageId: number, emoji: string, action: 'added' | 'removed', user: ReactionUser, currentUserId: number | null) => void;
+  applyLinkPreview: (messageId: number, preview: MessageLinkPreview) => void;
+  clearLinkPreview: (messageId: number) => void;
   updateUserPresence: (userId: number, isOnline: boolean, version?: number | null) => void;
   setPresenceSnapshot: (users: Array<{ user_id: number; is_online: boolean; version?: number | null }>) => void;
   
   updateUnreadCount: (chatId: number, count: number) => void;
   decrementUnreadCount: (chatId: number) => void;
+
+  // Shared pin alerts
+  markChatPinUnseen: (chatId: number) => void;
+  clearChatPinUnseen: (chatId: number) => void;
 
   // Typing indicator actions
   setTypingUser: (chatId: number, userId: number) => void;
@@ -653,6 +662,18 @@ export interface ProjectMember {
 }
 
 // ==================== Link Preview Types ====================
+
+/**
+ * Preview served on the message payload — resolved server-side, cached per URL.
+ * Distinct from `LinkPreview` below, which is the shape of the on-demand
+ * /api/chat/link-preview/ endpoint still used by comments.
+ */
+export interface MessageLinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image_url: string | null;
+}
 
 export interface LinkPreview {
   url: string;

@@ -18,6 +18,7 @@ import type {
 } from '@/types/task';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Id } from '@/types/common';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ function ProgressStrip({ data }: { data: TaskIntelligencePayload }) {
 // ── Task stub row ─────────────────────────────────────────────────────────────
 
 function TaskRow({ task }: { task: IntelligenceTaskStub }) {
+  const buildUrl = useBuildUrl();
   return (
     <li className="flex min-w-0 items-center gap-2 py-1.5">
       {task.priority && (
@@ -118,7 +120,7 @@ function TaskRow({ task }: { task: IntelligenceTaskStub }) {
         </span>
       )}
       <Link
-        href={`/tasks/${task.slug}`}
+        href={buildUrl(`/tasks/${task.slug}`)}
         className="min-w-0 flex-1 truncate text-sm text-gray-800 hover:text-[#3CCED7] hover:underline"
       >
         {task.summary}
@@ -244,10 +246,11 @@ function monthStartISO() {
 }
 
 function CycleTaskRow({ task }: { task: WorkCycleTaskStub }) {
+  const buildUrl = useBuildUrl();
   return (
     <li className="flex min-w-0 items-center gap-2 py-1">
       <Link
-        href={`/tasks/${task.slug}`}
+        href={buildUrl(`/tasks/${task.slug}`)}
         className="min-w-0 flex-1 truncate text-[12px] text-gray-700 hover:text-[#3CCED7] hover:underline"
       >
         {task.summary}
@@ -260,11 +263,12 @@ function CycleTaskRow({ task }: { task: WorkCycleTaskStub }) {
 }
 
 function CycleFieldRow({ entry }: { entry: WorkCycleFieldEntry }) {
+  const buildUrl = useBuildUrl();
   return (
     <li className="flex min-w-0 items-start gap-2 py-1">
       <div className="min-w-0 flex-1">
         <p className="truncate text-[12px] text-gray-700">
-          <Link href={`/tasks/${entry.task_slug ?? entry.task_id}`} className="font-medium hover:text-[#3CCED7] hover:underline">
+          <Link href={buildUrl(`/tasks/${entry.task_slug ?? entry.task_id}`)} className="font-medium hover:text-[#3CCED7] hover:underline">
             {entry.task_summary}
           </Link>
           {entry.old_value && entry.new_value

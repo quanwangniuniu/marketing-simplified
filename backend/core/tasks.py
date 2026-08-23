@@ -189,6 +189,7 @@ def assemble_personal_data_export(self, export_request_id):
 
     try:
         assemble_data_export_zip(export_request)
+        export_request.refresh_from_db()
     except Exception as exc:
         logger.exception("Failed to assemble data export %s", export_request_id)
         export_request.status = DataExportRequest.Status.FAILED

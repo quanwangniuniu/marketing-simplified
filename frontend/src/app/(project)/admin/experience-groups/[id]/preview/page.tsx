@@ -11,9 +11,11 @@ import PortalPageShell from '@/components/ticket-form/portal/PortalPageShell';
 import PortalBrandingRow from '@/components/ticket-form/portal/PortalBrandingRow';
 import PortalPreviewSkeleton from '@/components/ticket-form/portal/PortalPreviewSkeleton';
 import { AlertCircle } from 'lucide-react';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const PreviewPage: React.FC = () => {
   const params = useParams();
+  const buildUrl = useBuildUrl();
   const id = String(params.id);
   const projectId = useProjectStore((s) => s.activeProject)?.id ?? null;
 
@@ -63,7 +65,7 @@ const PreviewPage: React.FC = () => {
     fetchRequestForm();
   }, [fetchPreview, fetchRequestForm]);
 
-  const ticketFormsHref = '/admin/ticket-forms';
+  const ticketFormsHref = buildUrl('/admin/ticket-forms');
 
   if (loading) {
     return (

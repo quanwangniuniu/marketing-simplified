@@ -10,6 +10,7 @@ import { TASK_TYPE_CONFIG_STATIC } from '@/lib/taskTypeConfigRegistry';
 import TaskTypeFieldsSection from '@/components/tasks/new/TaskTypeFieldsSection';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { loadFieldOptions } from '@/lib/tasks/typeFieldOptions';
+import { AdminOverrideBadge, stripAdminOverrideNotes } from '@/components/budget/AdminOverrideBadge';
 
 function prettyLabel(type?: string): string {
   if (!type) return 'Work type';
@@ -39,6 +40,8 @@ const HIDDEN_KEYS = new Set(['id', 'task', 'task_id', 'created_at', 'updated_at'
 const REDUNDANT_ID_KEYS = new Set([
   // budget
   'current_approver', 'ad_channel', 'budget_pool_id', 'budget_pool_composite', 'is_escalated', 'status',
+  'is_admin_override',
+  'admin_override',
   // asset
   'owner',
   // retrospective
@@ -293,6 +296,16 @@ export default function TaskTypeBlock({
     displayObj = rest;
   }
 
+  if (typeof displayObj.notes === 'string') {
+    const cleaned = stripAdminOverrideNotes(displayObj.notes);
+    if (cleaned) {
+      displayObj = { ...displayObj, notes: cleaned };
+    } else {
+      const { notes: _notes, ...rest } = displayObj;
+      displayObj = rest;
+    }
+  }
+
   const rawEntries = flattenEntries(displayObj, task.type ?? undefined);
   const entries = task.status === 'DRAFT'
     ? rawEntries.filter(([k]) => k !== 'submitted_at')
@@ -416,10 +429,15 @@ export default function TaskTypeBlock({
 
   return (
     <section className="min-w-0 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
-          {prettyLabel(task.type)} details
-        </h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-gray-900">
+            {prettyLabel(task.type)} details
+          </h2>
+          {task.type === 'budget' && Boolean(displayObj.is_admin_override) ? (
+            <AdminOverrideBadge />
+          ) : null}
+        </div>
         {!loading && !readOnly && config && schema && task.status === 'DRAFT' && (
           editing ? (
             <div className="flex gap-2">

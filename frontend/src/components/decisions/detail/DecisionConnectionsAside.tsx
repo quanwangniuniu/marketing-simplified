@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DecisionAPI } from '@/lib/api/decisionApi';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 interface Connection {
   id: number;
@@ -24,6 +24,7 @@ interface Props {
 }
 
 export default function DecisionConnectionsAside({ decisionId, projectId, mySeq }: Props) {
+  const buildUrl = useBuildUrl();
   const [connected, setConnected] = useState<Connection[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,12 +62,7 @@ export default function DecisionConnectionsAside({ decisionId, projectId, mySeq 
     .map((e) => connected.find((c) => c.project_seq === e.to_seq))
     .filter(Boolean) as Connection[];
 
-  const linkHref = (c: Connection) => {
-    const key = c.slug ?? c.id;
-    return projectId
-      ? nestedProjectPath(projectId, `/decisions/${key}`)
-      : `/decisions/${key}`;
-  };
+  const linkHref = (c: Connection) => buildUrl(`/decisions/${c.slug ?? c.id}`);
 
   return (
     <section className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-xl">

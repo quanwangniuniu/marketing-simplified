@@ -11,7 +11,7 @@ import type { TimelineColumn, TimelineScale } from './timelineUtils';
 import { TaskAPI } from '@/lib/api/taskApi';
 import { getTaskTypeLabel } from '@/lib/taskTypeLabels';
 import { cn } from '@/lib/utils';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 const DONE_STATUSES = new Set(['APPROVED', 'LOCKED', 'DONE', 'COMPLETED', 'RESOLVED']);
@@ -76,6 +76,7 @@ const TaskRow = ({
   onReorder,
   onDelete,
 }: TaskRowProps) => {
+  const buildUrl = useBuildUrl();
   const [hoverPos, setHoverPos] = useState<'before' | 'after' | null>(null);
   const [navigating, setNavigating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -194,13 +195,7 @@ const TaskRow = ({
               <span className="shrink-0 text-[10px] text-slate-400" title="From decision">
                 From{' '}
                 <Link
-                  href={(() => {
-                    const pid = task.project?.slug ?? task.project?.id ?? task.project_id;
-                    const key = task.linked_object_slug ?? task.object_id;
-                    return pid
-                      ? nestedProjectPath(pid, `/decisions/${key}`)
-                      : `/decisions/${key}`;
-                  })()}
+                  href={buildUrl(`/decisions/${task.linked_object_slug ?? task.object_id}`)}
                   className="text-indigo-600 hover:text-indigo-800 hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >

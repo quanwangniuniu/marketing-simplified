@@ -18,7 +18,7 @@ Strategy
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-
+from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 from django.test import AsyncRequestFactory, TestCase
 from django.urls import reverse
 from rest_framework_simplejwt.tokens import AccessToken
@@ -417,8 +417,12 @@ class SSEGeneratorReplayTests(TestCase):
 
     def test_no_replay_when_last_event_id_is_absent(self):
         """
-        Without Last-Event-ID the generator must skip the DB query entirely
-        (sync_to_async is never called).
+        Without Last-Event-ID the generator must skip the replay DB query.
+
+        Asserted on what was handed to sync_to_async rather than on the call
+        count: the generator also releases the request's database connection
+        through sync_to_async before going long-lived, so "never called" would
+        no longer distinguish "no replay" from "no work at all".
         """
         mock_pubsub = _make_mock_pubsub(stop_after=1)
         mock_redis = _make_mock_redis(pubsub=mock_pubsub)
@@ -428,12 +432,50 @@ class SSEGeneratorReplayTests(TestCase):
 
         with (
             patch("redis.asyncio.from_url", return_value=mock_redis),
-            patch("asgiref.sync.sync_to_async") as mock_s2a,
+            patch("asgiref.sync.sync_to_async", return_value=AsyncMock()) as mock_s2a,
         ):
             asyncio.run(run())
 
-        mock_s2a.assert_not_called()
+        wrapped = [
+            getattr(call.args[0], "__name__", "")
+            for call in mock_s2a.call_args_list
+            if call.args
+        ]
+        self.assertNotIn("_fetch_missed", wrapped)
 
+
+class SSEMetricsTests(TestCase):
+    def test_metrics_emitted_when_connection_drops(self):
+        registry = CollectorRegistry()
+
+        active = Gauge(
+            "sse_active_connections",
+            "Number of currently active SSE connections",
+            registry=registry,
+        )
+        drops = Counter(
+            "sse_connection_drops_total",
+            "Total number of dropped SSE connections",
+            registry=registry,
+        )
+
+        mock_pubsub = _make_mock_pubsub(stop_after=1)
+        mock_redis = _make_mock_redis(pubsub=mock_pubsub)
+
+        async def run():
+            await _collect(sse_event_generator(1, None))
+
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("notifications.sse.sse_active_connections", active),
+            patch("notifications.sse.sse_connection_drops_total", drops),
+        ):
+            asyncio.run(run())
+
+        metrics = generate_latest(registry).decode()
+
+        self.assertIn("sse_active_connections 0.0", metrics)
+        self.assertIn("sse_connection_drops_total 1.0", metrics)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Generator – heartbeat tests

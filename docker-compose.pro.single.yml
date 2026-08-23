@@ -29,7 +29,9 @@ services:
       context: ./pgbackrest
       dockerfile: Dockerfile
     container_name: pgbackrest
-    restart: always    
+    restart: always
+    environment:
+      PGBACKREST_PG1_USER: ${POSTGRES_USER:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - pgbackups:/var/lib/pgbackrest
@@ -74,6 +76,47 @@ services:
       timeout: 10s
       retries: 3
 
+  # Session pooling preserves tenant SET search_path state for each client.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    container_name: pgbouncer-prod
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${PGBOUNCER_DB_HOST:-db}
+      - DB_PORT=${PGBOUNCER_DB_PORT:-5432}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-}
+      # Wildcard keeps Django's postgres/test database management connections valid.
+      - DB_NAME=*
+      # PostgreSQL 14+ defaults to scram-sha-256. PgBouncer cannot derive a
+      # SCRAM secret from a stored md5 hash, so without this it fails every
+      # upstream login with "cannot do SCRAM authentication: wrong password
+      # type" and the pool never fills. Override only for an older server
+      # that still uses md5.
+      - AUTH_TYPE=${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
+      - POOL_MODE=session
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - MAX_CLIENT_CONN=300
+      - DEFAULT_POOL_SIZE=25
+      - MIN_POOL_SIZE=5
+      - RESERVE_POOL_SIZE=5
+      - RESERVE_POOL_TIMEOUT=3
+      - SERVER_IDLE_TIMEOUT=60
+      - ADMIN_USERS=${POSTGRES_USER:-postgres}
+      - STATS_USERS=${POSTGRES_USER:-postgres}
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mediajira_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: 
       context: ./backend
@@ -85,7 +128,8 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_HOST=pgbouncer
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-}
       - POSTGRES_USER=${POSTGRES_USER:-}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
@@ -111,6 +155,8 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       # Conditional dependencies - Only depend on db and redis in CI environment or full environment
+      pgbouncer:
+        condition: service_healthy
       db:
         condition: service_healthy
         required: false
@@ -163,6 +209,8 @@ services:
       - ./nginx/nginx.conf.pro:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/zmarkio.com:/etc/letsencrypt/live/zmarkio.com:ro
       - /etc/letsencrypt/archive/zmarkio.com:/etc/letsencrypt/archive/zmarkio.com:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_started
@@ -175,12 +223,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: marketing-simplified-celery-worker-prod
     container_name: celery-worker-prod
     restart: always
     env_file:
       - .env
     environment:
-      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_HOST=pgbouncer
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-}
       - POSTGRES_USER=${POSTGRES_USER:-}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
@@ -201,6 +251,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      pgbouncer:
+        condition: service_healthy
       db:
         condition: service_healthy
         required: false    
@@ -208,9 +260,29 @@ services:
         condition: service_healthy
       clamav:
         condition: service_healthy
-    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=4
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=4 -Q celery
     networks:
       - app-network
+
+  celery-chat-realtime:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-realtime-prod
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_REALTIME_WORKER_CONCURRENCY:-4} -Q chat.realtime
+
+  celery-chat-background:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-background-prod
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_BACKGROUND_WORKER_CONCURRENCY:-2} -Q chat.notifications,chat.delivery
+
+  # Link previews wait on third-party sites, so they get their own worker:
+  # a slow host must never occupy a slot that message delivery needs.
+  celery-chat-link-previews:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-link-previews-prod
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_LINK_PREVIEW_WORKER_CONCURRENCY:-2} -Q chat.link_previews
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
@@ -251,4 +323,3 @@ volumes:
   pglogs:
   clamav_data:
   kafka_data:
-

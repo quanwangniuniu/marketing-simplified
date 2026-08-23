@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { NotificationItem } from '@/types/notifications';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -148,12 +149,13 @@ function ActivityItem({
 
 export default function ActivitySidebarView() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { groups, isLoading, error, unreadCount, markRead, markAllRead, clearRead } =
     useActivityFeed();
   const [confirmingClear, setConfirmingClear] = useState(false);
 
   const handleNavigate = (url: string) => {
-    router.push(url);
+    router.push(buildUrl(url));
   };
 
   if (isLoading && groups.length === 0) {

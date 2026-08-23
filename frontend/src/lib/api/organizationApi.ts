@@ -170,14 +170,14 @@ export const OrganizationAPI = {
   },
 
   // Get detailed info for a single organization (incl. subscription + usage)
-  getOrganizationDetail: (orgId: number): Promise<OrgDetail> => {
+  getOrganizationDetail: (orgId: number | string): Promise<OrgDetail> => {
     return api
       .get<OrgDetail>(`/api/core/organizations/${orgId}/`)
       .then((response) => response.data);
   },
 
   // Get members list for an organization (admin only)
-  getOrganizationMembers: (orgId: number): Promise<OrgMembersResponse> => {
+  getOrganizationMembers: (orgId: number | string): Promise<OrgMembersResponse> => {
     return api
       .get<OrgMembersResponse>(`/api/core/organizations/${orgId}/members/`)
       .then((response) => response.data);

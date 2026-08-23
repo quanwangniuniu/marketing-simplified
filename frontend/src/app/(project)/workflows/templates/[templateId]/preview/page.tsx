@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import TemplatePreviewCanvas from "@/components/workflows/agent/canvas/TemplatePreviewCanvas";
 import { AgentAPI } from "@/lib/api/agentApi";
+import { useBuildUrl } from "@/lib/buildUrl";
 import type { AgentWorkflowTemplate } from "@/types/agent";
 
 export default function TemplatePreviewPage({
@@ -14,6 +15,7 @@ export default function TemplatePreviewPage({
   params: { templateId: string };
 }) {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [template, setTemplate] = useState<AgentWorkflowTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export default function TemplatePreviewPage({
   }, [params.templateId]);
 
   const handleBack = () => {
-    router.push("/workflows?tab=templates");
+    router.push(buildUrl("/workflows?tab=templates"));
   };
 
   if (loading) {

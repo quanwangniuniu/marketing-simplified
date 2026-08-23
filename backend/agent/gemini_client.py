@@ -12,14 +12,21 @@ import time
 import requests
 from django.conf import settings
 
+from agent.log_redaction import redact_string
+
 logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
-_GEMINI_BASE = "https://aiplatform.googleapis.com/v1/publishers/google/models"
+_GEMINI_BASE = "https://aiplatform.googleapis.com/v1/projects/406201877905/locations/global/publishers/google/models"
 
 # Retries for HTTP 429 (rate limit) before surfacing to callers.
 _RATE_LIMIT_MAX_ATTEMPTS = 4
 _RATE_LIMIT_BACKOFF_SECONDS = (2.0, 4.0, 8.0)
+
+
+class GeminiRetriesExhausted(Exception):
+    """Raised when Gemini's own HTTP 429 retries are exhausted."""
+    pass
 
 
 def _get_api_key() -> str:
@@ -62,13 +69,13 @@ def _gemini_request_with_retry(
                 time.sleep(wait_seconds)
                 continue
             if status_code == 429:
-                raise RuntimeError("Gemini rate limited (HTTP 429).") from exc
+                raise GeminiRetriesExhausted("Gemini rate limited (HTTP 429).") from exc
             raise RuntimeError(
-                f"Gemini request failed with HTTP {status_code or 'unknown'}."
+                redact_string(f"Gemini request failed with HTTP {status_code or 'unknown'}.")
             ) from exc
         except requests.exceptions.RequestException as exc:
-            raise RuntimeError("Gemini network error.") from exc
-    raise RuntimeError("Gemini rate limited (HTTP 429).") from last_http_error
+            raise RuntimeError(redact_string(f"Gemini network error: {exc}")) from exc
+    raise GeminiRetriesExhausted("Gemini rate limited (HTTP 429).") from last_http_error
 
 
 def call_gemini(

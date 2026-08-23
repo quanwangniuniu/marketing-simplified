@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ChatFAB from '@/components/global-chat/ChatFAB';
 import { Button } from '@/components/ui/button';
 import { useActiveProjectForFlatRoute } from '@/lib/useActiveProjectForFlatRoute';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { useCampaignTemplates } from '@/hooks/campaigns/useCampaignTemplates';
 import TemplateListTable from '@/components/campaigns/templates/TemplateListTable';
 import type { TemplateSharingScope } from '@/types/campaign';
@@ -21,6 +22,7 @@ const SCOPE_OPTIONS: Array<{ value: string; label: string }> = [
 
 export default function TemplatesListV2Page() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const { projectId, activeProject } = useActiveProjectForFlatRoute();
 
   const { items, loading, error, refresh } = useCampaignTemplates();
@@ -62,7 +64,7 @@ export default function TemplatesListV2Page() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => router.push('/campaigns')}
+          onClick={() => router.push(buildUrl('/campaigns'))}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -116,7 +118,10 @@ export default function TemplatesListV2Page() {
           loading={loading}
           errorMessage={errorMessage}
           showArchived={showArchived}
-          onRowClick={(t) => router.push(`/campaigns/templates/${t.slug}`)}
+          onRowClick={(t) => {
+            if (!projectId) return;
+            router.push(buildUrl(`/campaigns/templates/${t.slug}`));
+          }}
         />
       </div>
       <ChatFAB />

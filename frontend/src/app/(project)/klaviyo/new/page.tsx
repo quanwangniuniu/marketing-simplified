@@ -6,9 +6,11 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { klaviyoApi } from '@/lib/api/klaviyoApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 export default function KlaviyoNewPage() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [subject, setSubject] = useState('');
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +19,7 @@ export default function KlaviyoNewPage() {
   const canSubmit = subject.trim().length > 0 && !submitting;
 
   const handleCancel = () => {
-    router.push('/klaviyo');
+    router.push(buildUrl('/klaviyo'));
   };
 
   const handleSubmit = async () => {
@@ -32,9 +34,9 @@ export default function KlaviyoNewPage() {
       });
       toast.success('Template created');
       if (created?.id) {
-        router.push(`/klaviyo/${created.slug}`);
+        router.push(buildUrl(`/klaviyo/${created.slug}`));
       } else {
-        router.push('/klaviyo');
+        router.push(buildUrl('/klaviyo'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create template');

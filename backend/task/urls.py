@@ -38,6 +38,7 @@ urlpatterns = [
     # Task subtasks endpoints
     path('tasks/<str:pk>/subtasks/', TaskViewSet.as_view({'get': 'subtasks', 'post': 'subtasks'}), name='task-subtasks'),
     path('tasks/<str:pk>/subtasks/<str:subtask_id>/', TaskViewSet.as_view({'delete': 'subtask_detail'}), name='task-subtask-detail'),
+    path('tasks/<str:pk>/subtasks/<str:subtask_id>/move/', TaskViewSet.as_view({'post': 'move_subtask'}), name='task-move-subtask'),
     
     # Task relations endpoints
     path('tasks/<str:pk>/relations/', TaskViewSet.as_view({'get': 'relations', 'post': 'relations'}), name='task-relations'),

@@ -1,13 +1,131 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django_fsm import can_proceed
 
 from core.models import ProjectMember
-from task.models import Task
+from task.models import Task, TaskHierarchy, validate_task_hierarchy_no_cycle
 
 User = get_user_model()
 
 _START_BEFORE_DUE_MSG = 'Start date must be on or before due date.'
+HIERARCHY_CYCLE_ERROR_CODE = 'task_hierarchy_cycle'
+_NESTING_MSG = 'A subtask cannot have subtasks. Only 1 level of nesting is allowed.'
+
+
+class TaskHierarchyCycleError(ValidationError):
+    """Raised when assigning a parent would create a task hierarchy cycle."""
+
+
+def hierarchy_cycle_error_message():
+    return (
+        'Cannot set this parent: it would create a circular task hierarchy.'
+    )
+
+
+def _lock_tasks_for_hierarchy_write(*tasks: Task) -> dict[int, Task]:
+    """
+    Row-lock Task rows involved in a hierarchy write, in ascending pk order.
+
+    Serializes concurrent add/move operations on the same task pair (e.g. 1→2
+    vs 2→1) so validation and insert happen against a consistent snapshot.
+    """
+    pks = sorted({t.pk for t in tasks if t.pk is not None})
+    if not pks:
+        raise ValidationError(
+            'Both tasks must be saved before creating a hierarchy relationship.'
+        )
+
+    locked_rows = Task.objects.select_for_update().filter(pk__in=pks).order_by('pk')
+    by_pk = {row.pk: row for row in locked_rows}
+
+    missing = set(pks) - set(by_pk.keys())
+    if missing:
+        raise ValidationError(f'Task(s) not found: {sorted(missing)}')
+
+    return by_pk
+
+
+def validate_parent_assignment(
+    parent_task,
+    child_task,
+    *,
+    excluding_edges=None,
+):
+    """
+    Validate that parent_task → child_task is allowed.
+
+    Raises TaskHierarchyCycleError for cycles (maps to HTTP 422 in views).
+    Raises ValidationError for other hierarchy constraint violations (HTTP 400).
+    """
+    if parent_task.pk == child_task.pk:
+        raise ValidationError('A task cannot be a subtask of itself.')
+
+    if parent_task.is_subtask:
+        raise ValidationError(_NESTING_MSG)
+
+    try:
+        validate_task_hierarchy_no_cycle(
+            parent_task.pk,
+            child_task.pk,
+            excluding_edges=excluding_edges,
+        )
+    except ValidationError as exc:
+        raise TaskHierarchyCycleError(
+            hierarchy_cycle_error_message(),
+            code=HIERARCHY_CYCLE_ERROR_CODE,
+        ) from exc
+
+    qs = TaskHierarchy.objects.all()
+    if excluding_edges:
+        for parent_id, child_id in excluding_edges:
+            qs = qs.exclude(parent_task_id=parent_id, child_task_id=child_id)
+
+    if qs.filter(parent_task_id=child_task.pk).exists():
+        raise ValidationError(_NESTING_MSG)
+
+
+@transaction.atomic
+def add_subtask_to_parent(*, parent_task, child_task):
+    """Link child_task under parent_task after hierarchy validation."""
+    locked = _lock_tasks_for_hierarchy_write(parent_task, child_task)
+    parent_task = locked[parent_task.pk]
+    child_task = locked[child_task.pk]
+    validate_parent_assignment(parent_task, child_task)
+    parent_task.add_subtask(child_task)
+    return child_task
+
+
+@transaction.atomic
+def reassign_subtask_parent(*, child_task, new_parent, old_parent):
+    """Move child_task from old_parent to new_parent after hierarchy validation."""
+    locked = _lock_tasks_for_hierarchy_write(child_task, new_parent, old_parent)
+    child_task = locked[child_task.pk]
+    new_parent = locked[new_parent.pk]
+    old_parent = locked[old_parent.pk]
+
+    if not TaskHierarchy.objects.filter(
+        parent_task=old_parent,
+        child_task=child_task,
+    ).exists():
+        raise ValidationError('Subtask relationship not found.')
+
+    validate_parent_assignment(
+        new_parent,
+        child_task,
+        excluding_edges=[(old_parent.pk, child_task.pk)],
+    )
+
+    # Prevent post_delete orphan handler from deleting the child mid-move.
+    child_task.is_subtask = False
+    child_task.save(update_fields=['is_subtask'])
+
+    TaskHierarchy.objects.filter(
+        parent_task=old_parent,
+        child_task=child_task,
+    ).delete()
+    new_parent.add_subtask(child_task)
+    return child_task
 
 
 def _effective_start_due(task, updates):

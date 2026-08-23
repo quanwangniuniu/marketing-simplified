@@ -224,7 +224,9 @@ export interface PinnedMessageRow {
   chat: number;
   pinned_by: { id: number; username: string; email: string } | null;
   created_at: string;
-  message: Message;
+  message: Pick<Message, 'id' | 'sender' | 'content' | 'created_at' | 'parent_message_id'> & {
+    chat: number;
+  };
 }
 
 export const listPins = async (chatSlug: string): Promise<PinnedMessageRow[]> => {
@@ -248,13 +250,13 @@ export const listChatFiles = async (chatId: number, page = 1): Promise<{ results
   return response.data;
 };
 
-export const pinMessage = async (chatId: number, messageId: number): Promise<PinnedMessageRow> => {
-  const response = await api.post(`/api/chat/chats/${chatId}/pin/`, { message_id: messageId });
+export const pinMessage = async (chatSlug: string, messageId: number): Promise<PinnedMessageRow> => {
+  const response = await api.post(`/api/chat/chats/${chatSlug}/pin/`, { message_id: messageId });
   return response.data;
 };
 
-export const unpinMessage = async (chatId: number, messageId: number): Promise<void> => {
-  await api.delete(`/api/chat/chats/${chatId}/pin/${messageId}/`);
+export const unpinMessage = async (chatSlug: string, messageId: number): Promise<void> => {
+  await api.delete(`/api/chat/chats/${chatSlug}/pin/${messageId}/`);
 };
 
 // ==================== Browse channels ====================
@@ -651,6 +653,27 @@ export const hideMessage = async (
   messageId: number
 ): Promise<{ status: 'hidden'; message: Message }> => {
   const response = await api.post(`/api/chat/messages/${messageId}/hide/`);
+  return response.data;
+};
+
+/**
+ * Route a preview thumbnail through our own backend (MED-279).
+ *
+ * Loading og:image directly would hand every viewer's IP to the third-party host.
+ * The backend only proxies images a guarded fetch already recorded, and decides the
+ * content type by sniffing the bytes rather than trusting the remote host's claim.
+ */
+export const linkPreviewImageUrl = (imageUrl: string): string =>
+  `/api/chat/link-preview-image/?url=${encodeURIComponent(imageUrl)}`;
+
+/**
+ * Dismiss a message's link preview card for the current user only (MED-279).
+ * POST /api/chat/messages/{messageId}/hide_link_preview/
+ */
+export const hideMessageLinkPreview = async (
+  messageId: number
+): Promise<{ status: 'link_preview_hidden'; message: Message }> => {
+  const response = await api.post(`/api/chat/messages/${messageId}/hide_link_preview/`);
   return response.data;
 };
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { nestedProjectPath } from '@/lib/projectNestedRoutes';
+import { useBuildUrl } from '@/lib/buildUrl';
 import { ArrowLeft, Users, CalendarDays, ExternalLink, History } from 'lucide-react';
 import type { Meeting, MeetingStatus } from '@/types/meeting';
 import MeetingStatusPill from '@/components/meetings/MeetingStatusPill';
@@ -49,6 +49,7 @@ export default function MeetingDetailHeader({
   onTransitioned,
   onOpenDocument,
 }: Props) {
+  const buildUrl = useBuildUrl();
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = useState(false);
   const scheduled = formatScheduled(meeting.scheduled_date, meeting.scheduled_time);
 
@@ -71,7 +72,7 @@ export default function MeetingDetailHeader({
     <header className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
       <nav className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
         <Link
-          href={nestedProjectPath(projectId, '/meetings')}
+          href={buildUrl('/meetings')}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <ArrowLeft className="h-3 w-3" aria-hidden="true" />

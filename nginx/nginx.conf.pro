@@ -1,6 +1,14 @@
 # for production environment
+# This file replaces the image's /etc/nginx/nginx.conf, so the image's
+# `worker_processes auto;` does not apply and nginx falls back to its built-in
+# default of 1. One worker caps us far below the host's capacity, so set it
+# explicitly here. Each proxied WebSocket costs two connection slots (client
+# side + upstream side), so worker_connections bounds concurrent sockets at
+# roughly half its value per worker.
+worker_processes auto;
+
 events {
-    worker_connections 1024;
+    worker_connections 4096;
 }
 
 http {
@@ -57,6 +65,13 @@ http {
     # reload on deploy if keepalive to the backend matters under load.
 
 
+    # Redirect all plain HTTP traffic to HTTPS
+    server {
+        listen 80;
+        server_name zmarkio.com;
+        return 301 https://$host$request_uri;
+    }
+
     server {
         listen 443 ssl;
         server_name zmarkio.com;
@@ -70,6 +85,12 @@ http {
         # resolver per request (picks up container IP changes without reload).
         set $backend_host "backend:8000";
         set $frontend_host "frontend:3000";
+        # deploy_listener runs on the VM host, not in Compose, so it's reached
+        # via the host-gateway IP rather than a service name. Using the literal
+        # IP (not the host.docker.internal hostname) avoids a lookup against
+        # the resolver below, which only knows Docker service names and can't
+        # resolve host.docker.internal (verified: "could not be resolved").
+        set $deploy_host "172.17.0.1:9000";
 
         # Enhanced health check endpoint for monitoring
         location = /health {
@@ -249,7 +270,11 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_set_header CF-Connecting-IP $http_cf_connecting_ip;
+            # A WebSocket is a two-way tunnel: proxy_read_timeout alone leaves the
+            # write direction on the 60s default, which drops idle-ish sockets.
             proxy_read_timeout 86400;
+            proxy_send_timeout 86400;
+            proxy_connect_timeout 10s;
         }
 
         # Static files - explicitly pass request URI with variables
@@ -286,6 +311,18 @@ http {
             proxy_send_timeout 60s;
             proxy_read_timeout 60s;
             proxy_set_header Connection "";
+        }
+
+        # GitHub Actions deploy webhook -- proxied straight to deploy_listener
+        # on the host. Token auth (X-Deploy-Token) is enforced by the
+        # listener itself; nginx just forwards the request as-is.
+        location = /deploy {
+            proxy_pass http://$deploy_host$request_uri;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
         }
 
         # Frontend routes (catch-all - must be last)

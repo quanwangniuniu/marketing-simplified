@@ -8,6 +8,9 @@ dev.sh
 DOCKER_README.md
 env.example
 setup_local_db.sh
+fetch-secrets.sh
+recompose.sh
+ops/webhook/deploy_listener.py
 mediaJira/
 *test*.sh
 /node_modules/
@@ -35,6 +38,7 @@ backend/celerybeat.pid
 # SMP-539 Q7: write-only benchmark output (regenerated with a fresh
 # run_timestamp every test run; nothing reads it as a baseline).
 backend/benchmarks/retrospective.json
+test-results/chat-load/
 
 # Debug/scratch scripts — never tracked
 frontend/.scratch/

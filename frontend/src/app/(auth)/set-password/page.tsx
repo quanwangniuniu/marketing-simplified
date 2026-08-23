@@ -10,10 +10,11 @@ import {
   ErrorMessage
 } from '@/components/form';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import { authApi } from '@/lib/api/authApi';
 import { useAuthStore } from '@/lib/authStore';
 
 interface SetPasswordFormData {
+  currentPassword: string;
   password: string;
   confirmPassword: string;
 }
@@ -33,7 +34,9 @@ function SetPasswordContent() {
   const setOrganizationAccessToken = useAuthStore((s) => s.setOrganizationAccessToken);
   const getUserTeams = useAuthStore((s) => s.getUserTeams);
   const [token, setToken] = useState<string>('');
+  const isRotationMode = searchParams.get('rotation') === '1';
   const [formData, setFormData] = useState<SetPasswordFormData>({
+    currentPassword: '',
     password: '',
     confirmPassword: ''
   });
@@ -42,13 +45,16 @@ function SetPasswordContent() {
 
   useEffect(() => {
     const tokenFromUrl = searchParams.get('token');
+    if (isRotationMode) {
+      return;
+    }
     if (!tokenFromUrl) {
       toast.error('Invalid or missing token');
       router.push('/login');
       return;
     }
     setToken(tokenFromUrl);
-  }, [searchParams, router]);
+  }, [searchParams, router, isRotationMode]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -67,6 +73,10 @@ function SetPasswordContent() {
 
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
+
+    if (isRotationMode && !formData.currentPassword) {
+      newErrors.general = 'Current password is required';
+    }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
@@ -91,7 +101,7 @@ function SetPasswordContent() {
       return;
     }
 
-    if (!token) {
+    if (!isRotationMode && !token) {
       toast.error('Invalid token');
       return;
     }
@@ -99,12 +109,18 @@ function SetPasswordContent() {
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/google/set-password/', {
-        token: token,
-        password: formData.password
-      });
+      const response = isRotationMode
+        ? await authApi.changePassword(formData.currentPassword, formData.password)
+        : await authApi.googleSetPassword({
+            token: token,
+            password: formData.password
+          });
 
-      const { token: accessToken, refresh, user, organization_access_token } = response.data;
+      const accessToken = 'token' in response ? response.token : undefined;
+      const refresh = 'refresh' in response ? response.refresh : undefined;
+      const organization_access_token =
+        'organization_access_token' in response ? response.organization_access_token : undefined;
+      const { user } = response;
 
       if (accessToken) {
         setAuthToken(accessToken);
@@ -125,7 +141,7 @@ function SetPasswordContent() {
         console.warn('Failed to fetch user teams after password setup:', teamError);
       }
 
-      toast.success('Password set successfully! Redirecting...');
+      toast.success(isRotationMode ? 'Password changed successfully.' : 'Password set successfully! Redirecting...');
       router.replace('/overview');
     } catch (error: any) {
       console.error('Set password error:', error);
@@ -148,22 +164,44 @@ function SetPasswordContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-cyan-50 py-12 px-4 sm:px-6 lg:px-8">
-      <FormContainer 
-        title="Set Your Password" 
-        subtitle="Complete your Google sign-up by setting a password"
+      <FormContainer
+        title={isRotationMode ? "Change Your Password" : "Set Your Password"}
+        subtitle={isRotationMode ? "Your admin password rotation period has expired" : "Complete your Google sign-up by setting a password"}
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           {errors.general && <ErrorMessage message={errors.general} />}
 
+          {isRotationMode && (
+            <div className="space-y-2">
+              <FormInput
+                label="Current Password"
+                type="password"
+                name="currentPassword"
+                value={formData.currentPassword}
+                onChange={handleChange}
+                required
+                placeholder="Enter your current password"
+              />
+              <div className="text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                >
+                  Forgot current password?
+                </Link>
+              </div>
+            </div>
+          )}
+
           <FormInput
-            label="Password"
+            label={isRotationMode ? "New Password" : "Password"}
             type="password"
             name="password"
             value={formData.password}
             onChange={handleChange}
             error={errors.password}
             required
-            placeholder="Create a password (min 8 characters)"
+            placeholder={isRotationMode ? "Create a new password (min 8 characters)" : "Create a password (min 8 characters)"}
           />
 
           <FormInput
@@ -183,17 +221,19 @@ function SetPasswordContent() {
             loading={loading}
             disabled={loading || !!formHasValidationErrors}
           >
-            {loading ? 'Setting Password...' : 'Set Password & Continue'}
+            {loading ? (isRotationMode ? 'Changing Password...' : 'Setting Password...') : (isRotationMode ? 'Change Password & Continue' : 'Set Password & Continue')}
           </FormButton>
 
-          <div className="text-center">
-            <Link 
-              href="/login" 
-              className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
-            >
-              Back to Login
-            </Link>
-          </div>
+          {!isRotationMode && (
+            <div className="text-center">
+              <Link
+                href="/login"
+                className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              >
+                Back to Login
+              </Link>
+            </div>
+          )}
         </form>
       </FormContainer>
     </div>

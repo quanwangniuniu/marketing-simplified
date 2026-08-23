@@ -22,6 +22,7 @@ import { OrganizationAPI } from '@/lib/api/organizationApi';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { useAuthStore } from '@/lib/authStore';
 import { useRouter } from 'next/navigation';
+import { buildUrl } from '@/lib/buildUrl';
 
 type WizardStep = {
   id: string;
@@ -372,7 +373,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onExit }) => {
 
       // Navigate immediately since markCompleted already set the active project
       // We'll let the main app refresh projects on mount
-      router.push('/overview');
+      router.push(buildUrl('/overview'));
     } catch (error: any) {
       const message = error?.response?.data?.error || error?.message || 'Failed to finish onboarding';
       setSubmitError(message);

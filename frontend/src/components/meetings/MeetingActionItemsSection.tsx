@@ -11,6 +11,7 @@ import { TaskAPI } from '@/lib/api/taskApi';
 import { formatMeetingsApiError } from '@/lib/meetingsApiErrors';
 import { formatProjectMemberLabel } from '@/components/meetings/projectMemberLabel';
 import type { ProjectMemberData } from '@/lib/api/projectApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { MeetingActionItem } from '@/types/meeting';
 
 // Keep this intentionally small: the product only wants "extremes" for meeting action item conversion.
@@ -29,6 +30,7 @@ export function MeetingActionItemsSection({
   projectMembers,
   onChanged,
 }: MeetingActionItemsSectionProps) {
+  const buildUrl = useBuildUrl();
   const [items, setItems] = useState<MeetingActionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [taskTypes, setTaskTypes] = useState<{ value: string; label: string }[]>([]);
@@ -357,7 +359,7 @@ export function MeetingActionItemsSection({
                       ) : null}
                       {row.converted_task_id != null ? (
                         <Link
-                          href={`/tasks/${row.converted_task_slug ?? row.converted_task_id}`}
+                          href={buildUrl(`/tasks/${row.converted_task_slug ?? row.converted_task_id}`)}
                           className="mt-1 inline-block text-xs font-medium text-[#1a9ba3] hover:underline"
                         >
                           Open task {row.converted_task_slug ? row.converted_task_slug : `#${row.converted_task_id}`}

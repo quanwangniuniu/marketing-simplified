@@ -7,9 +7,63 @@ the logic for that particular action.
 import logging
 import os
 from django.core.cache import cache
+import time
+import anthropic
+from .gemini_client import GeminiRetriesExhausted
+
 
 logger = logging.getLogger(__name__)
 
+def retry_policy(max_retries=3,  retry_delay= 5,on_exhausted='fail'):
+
+    """
+    retry_policy is a decorator that wraps a function with retry logic. 
+    It attempts to execute the function up to max_retries times in case of 
+    specific exceptions (anthropic.APITimeoutError or RuntimeError). 
+    If all retries are exhausted, it returns a StepResult indicating failure or skip based on the on_exhausted parameter.
+
+    Args:
+        max_retries (int): The maximum number of retry attempts (including the initial attempt).
+        retry_delay (int): The delay in seconds between retry attempts.
+        on_exhausted (str): The behavior when retries are exhausted ('fail' or 'skip').
+
+    Returns:
+        StepResult: The result of the function execution, indicating success or failure.
+
+    Example usage:
+        @retry_policy(max_retries=5, on_exhausted='skip')
+        def call_llm():
+            #llm call logic
+
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+
+            #The retry properties are overriden by per-step configuration if that exists.
+            effective_max_retries = args[0].config.get('max_retries', max_retries)
+            effective_retry_delay = args[0].config.get('retry_delay', retry_delay)
+            effective_on_exhausted = args[0].config.get('on_exhausted', on_exhausted)
+
+            for attempt in range(effective_max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (anthropic.APITimeoutError, RuntimeError) as e:
+                    if attempt == effective_max_retries -1:
+                        if effective_on_exhausted == 'fail':
+                            return StepResult(success=False, error=str(e), skipped=False)
+                        else:
+                            return StepResult(success=False, error=str(e), skipped=True)
+                    else:
+                        logger.warning(
+                            "LLM call failed: %s. Retry %s/%s in %ss.",
+                            e,
+                            attempt + 1,
+                            effective_max_retries - 1,
+                            effective_retry_delay,
+                        )
+                        time.sleep(effective_retry_delay)
+        return wrapper
+    return decorator
 
 class StepResult:
     """Unified return type for all executors."""
@@ -21,13 +75,14 @@ class StepResult:
         error=None,
         sse_events=None,
         pause_external_approval=False,
+        skipped = False
     ):
         self.success = success
         self.output_data = output_data
         self.error = error
         self.sse_events = sse_events or []
         self.pause_external_approval = pause_external_approval
-
+        self.skipped = skipped
 
 class BaseStepExecutor:
     """Base class — subclasses implement execute()."""
@@ -45,7 +100,8 @@ class BaseStepExecutor:
 
 class AnalyzeDataExecutor(BaseStepExecutor):
     """Runs the Dify->Claude analysis fallback chain via _run_analysis()."""
-
+    
+    @retry_policy(max_retries=3, retry_delay=5, on_exhausted='fail')
     def execute(self, input_data):
         from .services import _run_analysis
 
@@ -111,8 +167,14 @@ class AnalyzeDataExecutor(BaseStepExecutor):
                 },
                 sse_events=sse_events,
             )
+        except (anthropic.APITimeoutError, RuntimeError) as e:
+            logger.warning("AnalyzeDataExecutor: LLM API timeout: %s", e)
+            raise
         except GenerationValidationError as e:
             logger.warning("AnalyzeDataExecutor validation failed: %s", e)
+            return StepResult(success=False, error=str(e))
+        except GeminiRetriesExhausted as e:
+            logger.warning("AnalyzeDataExecutor: Gemini 429 retries exhausted: %s", e)
             return StepResult(success=False, error=str(e))
         except Exception as e:
             logger.exception("AnalyzeDataExecutor failed")
@@ -131,7 +193,9 @@ class CallDifyExecutor(BaseStepExecutor):
 
 class CallLLMExecutor(BaseStepExecutor):
     """Calls Claude directly, supports per-step config override."""
-
+    
+    #Anthropic API call has default retry logic, so the retry policy is simple to avoid double retrying.
+    @retry_policy(max_retries=1, retry_delay=0, on_exhausted='fail')
     def execute(self, input_data):
         from .services import _call_llm, _get_llm_client
 
@@ -151,6 +215,9 @@ class CallLLMExecutor(BaseStepExecutor):
                 },
                 sse_events=[{'type': 'text', 'content': 'LLM analysis completed.'}],
             )
+        except anthropic.APITimeoutError as e:
+            logger.warning("CallLLMExecutor: LLM API timeout: %s", e)
+            raise
         except Exception as e:
             logger.exception("CallLLMExecutor failed")
             return StepResult(success=False, error=str(e))
@@ -300,7 +367,8 @@ class CreateTasksExecutor(BaseStepExecutor):
 
 class GenerateMiroSnapshotExecutor(BaseStepExecutor):
     """Generate a validated Miro snapshot from workflow context via Gemini."""
-
+    
+    @retry_policy(max_retries=3, retry_delay=5, on_exhausted='fail')
     def execute(self, input_data):
         from .miro_generation import (
             build_miro_generation_context_from_run,
@@ -330,6 +398,12 @@ class GenerateMiroSnapshotExecutor(BaseStepExecutor):
                     'data': {'item_count': len(snapshot.get('items', []))},
                 }],
             )
+        except RuntimeError as e:
+            logger.warning("Gemini API Timeout Error: %s", e)
+            raise
+        except GeminiRetriesExhausted as e:
+            logger.warning("GenerateMiroSnapshotExecutor: Gemini 429 retries exhausted: %s", e)
+            return StepResult(success=False, error=str(e))
         except Exception as e:
             logger.exception("GenerateMiroSnapshotExecutor failed")
             return StepResult(success=False, error=str(e))
@@ -501,7 +575,8 @@ class DetectColumnsExecutor(BaseStepExecutor):
     Also emits a column_mapping SSE event so the frontend can render a
     confirmation UI for the user to review or correct the mappings.
     """
-
+    #If the Gemini API call fails, we retry a few times before skipping the step. This is non-fatal because workflow can run without column detection.
+    @retry_policy(max_retries=3, retry_delay=5, on_exhausted='skip')
     def execute(self, input_data):
         from .column_registry import detect_columns
 
@@ -540,6 +615,12 @@ class DetectColumnsExecutor(BaseStepExecutor):
                     'data': detection_dict,
                 }],
             )
+        except RuntimeError as e:
+            logger.warning("Gemini API Timeout Error: %s", e)
+            raise
+        except GeminiRetriesExhausted as e:
+            logger.warning("DetectColumnsExecutor: Gemini 429 retries exhausted: %s", e)
+            return StepResult(success=False, error=str(e), skipped=True)
         except Exception as e:
             logger.exception("DetectColumnsExecutor failed")
             return StepResult(success=False, error=str(e))
@@ -836,7 +917,8 @@ class GenerateCriteriaExecutor(BaseStepExecutor):
     The criteria are stored on workflow_run.success_criteria so they persist
     across step boundaries and are forwarded in output_data for the next step.
     """
-
+    #If the Gemini API call fails, we retry a few times before skipping the step. This is non-fatal because analysis can still run without criteria.
+    @retry_policy(max_retries=3, retry_delay=5, on_exhausted='skip')
     def execute(self, input_data):
         import json
         from .gemini_client import _get_api_key as _gemini_key
@@ -921,7 +1003,12 @@ class GenerateCriteriaExecutor(BaseStepExecutor):
                     'content': criteria_text,
                 }],
             )
-
+        except RuntimeError as e:
+            logger.warning("GenerateCriteriaExecutor: LLM API Timeout error: %s", e)
+            raise
+        except GeminiRetriesExhausted as e:
+            logger.warning("GenerateCriteriaExecutor: Gemini 429 retries exhausted: %s", e)
+            return StepResult(success=False, error=str(e), skipped=True)
         except Exception as e:
             # Non-fatal: analysis can still run without criteria
             logger.exception("GenerateCriteriaExecutor failed; continuing without criteria")

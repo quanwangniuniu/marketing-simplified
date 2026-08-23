@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Loader2, X } from "lucide-react"
 import toast from "react-hot-toast"
 import { AgentAPI } from "@/lib/api/agentApi"
+import { useBuildUrl } from "@/lib/buildUrl"
 import type { AgentWorkflowDefinition, WorkflowStepType } from "@/types/agent"
 import { useAgentWorkflowProjectParams } from "../hooks/useAgentWorkflows"
 import useCanvasState, { makeTempId } from "./useCanvasState"
@@ -112,6 +113,7 @@ interface CanvasInnerProps {
 
 function CanvasInner({ workflowId, workflow, currentStatus, onStatusChange, onWorkflowUpdate, isUpdatingStatus }: CanvasInnerProps) {
   const router = useRouter()
+  const buildUrl = useBuildUrl()
   const searchParams = useSearchParams()
   const isNew = searchParams.get("new") === "1"
   const { fitView } = useReactFlow()
@@ -326,25 +328,25 @@ function CanvasInner({ workflowId, workflow, currentStatus, onStatusChange, onWo
       } catch {
         // best-effort; navigate regardless
       }
-      router.push("/workflows")
+      router.push(buildUrl("/workflows"))
       return
     }
     if (isDirty) {
       setShowUnsavedDialog(true)
     } else {
-      router.push("/workflows")
+      router.push(buildUrl("/workflows"))
     }
   }, [isNew, isDirty, steps.length, workflow, workflowId, projectParams, router])
 
   const handleLeave = useCallback(() => {
-    router.push("/workflows")
+    router.push(buildUrl("/workflows"))
   }, [router])
 
   const handleSaveAndLeave = useCallback(async () => {
     setIsSavingAndLeaving(true)
     try {
       await save(workflowId, projectParams)
-      router.push("/workflows")
+      router.push(buildUrl("/workflows"))
     } catch {
       // save() already shows a toast error; keep dialog open so user can retry
       setIsSavingAndLeaving(false)

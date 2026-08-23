@@ -2,6 +2,11 @@ from rest_framework import permissions
 from django.conf import settings
 import logging
 from .models import BudgetRequestStatus
+from .approver_access import (
+    user_is_org_admin_for_budget_request,
+    user_may_process_budget_approval,
+)
+from core.admin_utils import is_org_admin
 from utils.rbac_utils import has_rbac_permission, require_user_context, user_has_team
 
 class BudgetRequestPermission(permissions.BasePermission):
@@ -104,7 +109,11 @@ class BudgetRequestPermission(permissions.BasePermission):
 
 
 class ApprovalPermission(permissions.BasePermission):
-    """Permissions to approve or reject budget requests"""
+    """Permissions to approve or reject budget requests.
+
+    This class (plus BudgetRequestService / make_approval) is the authorization
+    gate. Frontend Approve/Reject visibility is not a security boundary.
+    """
     
     def has_permission(self, request, view):
         """Check if the user has permission to access the decision API"""
@@ -121,6 +130,11 @@ class ApprovalPermission(permissions.BasePermission):
         # if user has team, must have x-team-id
         if not require_user_context(request, user_has_team(request.user)):
             return False
+
+        # MED-240: org-admin may reach the decision endpoint without APPROVE RBAC.
+        # Object-level check still enforces same-org + override rules.
+        if is_org_admin(request.user) or getattr(request, 'is_org_admin', False):
+            return True
         
         # Get team_id if user has team
         team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
@@ -140,10 +154,14 @@ class ApprovalPermission(permissions.BasePermission):
         # Super admin bypass all object permission checks
         if request.user.is_superuser:
             return True
-            
-        # Only the current approver can make a decision
-        if obj.current_approver != request.user:
+
+        # MED-240: chain approver OR same-org org-admin override
+        if not user_may_process_budget_approval(request.user, obj):
             return False
+
+        # Org-admin override does not require BUDGET_REQUEST.APPROVE RBAC
+        if user_is_org_admin_for_budget_request(request.user, obj):
+            return True
         
         # Get team_id if user has team
         team_id = request.headers.get('x-team-id') if user_has_team(request.user) else None
@@ -160,7 +178,7 @@ class ApprovalPermission(permissions.BasePermission):
         if organization is None:
             organization = getattr(request.user, 'organization', None)
 
-        # Check if the user has approval permission with organization check
+        # Chain approver still needs APPROVE RBAC
         return has_rbac_permission(request.user, 'BUDGET_REQUEST', 'APPROVE', organization, team_id)
 
 

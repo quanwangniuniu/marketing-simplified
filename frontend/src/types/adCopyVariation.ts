@@ -13,6 +13,7 @@ export interface AdCopyVariation extends AdCopyVariationCopy {
   slug?: string;
   project: number | null;
   creative: number | null;
+  creative_slug?: string | null;
   source_mode: AdCopyVariationSourceMode;
   source_ref: string;
   instruction: string;

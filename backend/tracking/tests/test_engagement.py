@@ -57,16 +57,17 @@ class TaskEngagementViewTest(APITestCase):
     def url(self, task_ref):
         return ENGAGEMENT_URL.format(task_id=task_ref)
 
-    # 1a. Unknown task slug → 404 (lookups are slug-only)
+    # 1a. Unknown task slug → 404
     def test_unknown_task_returns_404(self):
         response = self.client.get(self.url('no-such-task'))
         self.assertEqual(response.status_code, 404)
 
-    # 1b. Numeric ID of an existing task → 404 (slug-only lookups by design)
-    def test_numeric_id_of_existing_task_returns_404(self):
+    # 1b. Numeric ID of an existing task resolves (task path accepts id or slug)
+    def test_numeric_id_of_existing_task_resolves(self):
         task = self.make_task('Numeric lookup task')
         response = self.client.get(self.url(task.id))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['task_id'], task.pk)
 
     # 1c. No data: all fields are 0/null
     def test_no_data_returns_zeros_and_nulls(self):

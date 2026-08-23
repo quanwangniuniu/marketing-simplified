@@ -10,11 +10,87 @@ import {
   UpdateSheetRequest,
   PivotConfigDTO,
 } from '@/types/spreadsheet';
+import {
+  isSheetRevisionConflictResponse,
+  publishSheetRevisionConflict,
+  setSheetRevision,
+  withBaseRevision,
+} from '@/lib/sheetRevisionStore';
 
 /** Timeout for long-running spreadsheet requests (import batch, large range read). Default axios 10s is too short. */
 const SPREADSHEET_LONG_REQUEST_TIMEOUT_MS = 300000; // 5 minutes (safety net; optimized batch writes should finish in <5s)
 
+/**
+ * Collab WS client id of this tab (set by useSheetSocket while a sheet room is
+ * open). Attached as X-Sheet-Client-Id to every /api/spreadsheet/ request so
+ * the backend can suppress this tab's own broadcast echo — structure-op
+ * endpoints (insert/delete/sort/resize/revert/import-finalize) read it from
+ * the header, so it must ride on all mutations without per-call plumbing.
+ */
+let sheetCollabClientId: string | null = null;
+
+export function setSheetCollabClientId(clientId: string | null): void {
+  sheetCollabClientId = clientId;
+}
+
+function captureSheetRevision<T>(sheetId: number | string, data: T): T {
+  if (data && typeof data === 'object' && 'revision' in data) {
+    setSheetRevision(sheetId, (data as { revision?: unknown }).revision);
+  }
+  return data;
+}
+
+api.interceptors.request.use((config) => {
+  if (sheetCollabClientId && config.url && config.url.startsWith('/api/spreadsheet/')) {
+    (config.headers as Record<string, unknown>)['X-Sheet-Client-Id'] = sheetCollabClientId;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const data = error?.response?.data;
+    const match = String(error?.config?.url || '').match(/\/sheets\/(\d+)\//);
+    if (
+      match &&
+      isSheetRevisionConflictResponse(error?.response?.status, data)
+    ) {
+      publishSheetRevisionConflict(match[1], data.current_revision);
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const SpreadsheetAPI = {
+  /**
+   * Export a sheet to .xlsx. The backend (openpyxl) writes cell values plus a
+   * native chart for every sparkline cell — something the frontend SheetJS
+   * exporter cannot do (MED-295). Returns the file as a Blob to download.
+   */
+  exportSheetXlsx: async (
+    spreadsheetId: number | string,
+    sheetId: number | string,
+  ): Promise<Blob> => {
+    const response = await api.get(
+      `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/export.xlsx`,
+      { responseType: 'blob' },
+    );
+    return response.data as Blob;
+  },
+
+  createWebSocketTicket: async (
+    sheetId: number | string,
+    clientId: string
+  ): Promise<{ ticket: string; expires_in: number }> => {
+    const response = await api.post<{ ticket: string; expires_in: number }>(
+      `/api/spreadsheet/sheets/${sheetId}/ws-ticket/`,
+      { client_id: clientId },
+      { headers: { 'X-Sheet-Client-Id': clientId } }
+    );
+    return response.data;
+  },
+
   // List spreadsheets for a project
   listSpreadsheets: async (
     projectId: number | string,
@@ -95,7 +171,7 @@ export const SpreadsheetAPI = {
     const response = await api.get<SheetData>(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/`
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Create a new sheet
@@ -136,20 +212,22 @@ export const SpreadsheetAPI = {
   ): Promise<{
     previous_order: Array<{ row_id: number | string; position: number }>;
     new_order: Array<{ row_id: number | string; position: number }>;
+    revision: number;
   }> => {
     const response = await api.post<{
       previous_order: Array<{ row_id: number | string; position: number }>;
       new_order: Array<{ row_id: number | string; position: number }>;
+      revision: number;
     }>(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/sort/`,
-      {
+      withBaseRevision(sheetId, {
         column_position: params.column_position,
         direction: params.direction,
         has_header: params.has_header,
         previous_sort_columns: params.previous_sort_columns ?? [],
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Reorder rows by position (for undo/redo)
@@ -157,12 +235,12 @@ export const SpreadsheetAPI = {
     spreadsheetId: number | string,
     sheetId: number | string,
     params: { order: Array<{ row_id: number | string; position: number }> }
-  ): Promise<{ status: string }> => {
-    const response = await api.post<{ status: string }>(
+  ): Promise<{ status: string; revision: number }> => {
+    const response = await api.post<{ status: string; revision: number }>(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/reorder-rows/`,
-      { order: params.order }
+      withBaseRevision(sheetId, { order: params.order })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Delete a sheet (soft delete) via project-scoped endpoint
@@ -197,12 +275,14 @@ export const SpreadsheetAPI = {
       computed_number?: number | string | null;
       computed_string?: string | null;
       error_code?: string | null;
+      updated_at?: string | null;
     }>;
     row_count: number;
     column_count: number;
     /** Full sheet dimensions (use for grid size). When present, prefer over row_count/column_count which are the requested range size. */
     sheet_row_count?: number | null;
     sheet_column_count?: number | null;
+    revision: number;
   }> => {
     const response = await api.post<{
       cells: Array<{
@@ -219,11 +299,13 @@ export const SpreadsheetAPI = {
         computed_number?: number | string | null;
         computed_string?: string | null;
         error_code?: string | null;
+        updated_at?: string | null;
       }>;
       row_count: number;
       column_count: number;
       sheet_row_count?: number | null;
       sheet_column_count?: number | null;
+      revision: number;
     }>(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/cells/range/`,
       {
@@ -237,7 +319,7 @@ export const SpreadsheetAPI = {
       },
       { timeout: SPREADSHEET_LONG_REQUEST_TIMEOUT_MS }
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Batch update cells
@@ -261,12 +343,15 @@ export const SpreadsheetAPI = {
       chunkIndex?: number;
       importMode?: boolean;
       signal?: AbortSignal;
+      /** Collab WS client id; echoed in the cells_updated broadcast so the origin tab can skip its own echo. */
+      clientId?: string;
     }
   ): Promise<{
     updated: number;
     cleared: number;
     rows_expanded: number;
     columns_expanded: number;
+    revision: number;
     cells?: Array<{
       id: number | string;
       row_position: number;
@@ -281,27 +366,36 @@ export const SpreadsheetAPI = {
       computed_number?: number | string | null;
       computed_string?: string | null;
       error_code?: string | null;
+      updated_at?: string | null;
     }>;
   }> => {
-    const body: Record<string, unknown> = {
+    const body: Record<string, unknown> = withBaseRevision(sheetId, {
       operations,
       auto_expand: autoExpand,
-    };
+    });
     if (options?.importId != null) body.import_id = options.importId;
     if (options?.chunkIndex != null) body.chunk_index = options.chunkIndex;
     if (options?.importMode === true) body.import_mode = true;
+    if (options?.clientId) body.client_id = options.clientId;
 
-    const config: { timeout: number; signal?: AbortSignal } = {
+    const config: {
+      timeout: number;
+      signal?: AbortSignal;
+      headers?: Record<string, string>;
+    } = {
       timeout: SPREADSHEET_LONG_REQUEST_TIMEOUT_MS,
     };
     if (options?.signal) config.signal = options.signal;
+    if (options?.clientId) {
+      config.headers = { 'X-Sheet-Client-Id': options.clientId };
+    }
 
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/cells/batch/`,
       body,
       config
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   /** Finalize import: recompute formulas and update sheet meta. Call after all batch chunks complete. */
@@ -309,13 +403,13 @@ export const SpreadsheetAPI = {
     spreadsheetId: number | string,
     sheetId: number | string,
     importId: string
-  ): Promise<{ status: string }> => {
+  ): Promise<{ status: string; revision: number }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/cells/import-finalize/`,
       { import_id: importId },
       { timeout: SPREADSHEET_LONG_REQUEST_TIMEOUT_MS }
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Highlights
@@ -332,11 +426,12 @@ export const SpreadsheetAPI = {
       created_at: string;
       updated_at: string;
     }>;
+    revision: number;
   }> => {
     const response = await api.get(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/highlights/`
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   getCellFormats: async (
@@ -361,11 +456,12 @@ export const SpreadsheetAPI = {
       created_at: string;
       updated_at: string;
     }>;
+    revision: number;
   }> => {
     const response = await api.get(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/cell-formats/`
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   batchUpdateCellFormats: async (
@@ -386,12 +482,12 @@ export const SpreadsheetAPI = {
         decimal_places?: number | null;
       } | null;
     }>
-  ): Promise<{ updated: number }> => {
+  ): Promise<{ updated: number; revision: number }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/cell-formats/batch/`,
-      { ops }
+      withBaseRevision(sheetId, { ops })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   batchUpdateHighlights: async (
@@ -404,12 +500,12 @@ export const SpreadsheetAPI = {
       color?: string;
       operation: 'SET' | 'CLEAR';
     }>
-  ): Promise<{ updated: number; deleted: number }> => {
+  ): Promise<{ updated: number; deleted: number; revision: number }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/highlights/batch/`,
-      { ops }
+      withBaseRevision(sheetId, { ops })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Resize sheet (ensure minimum dimensions)
@@ -423,15 +519,16 @@ export const SpreadsheetAPI = {
     columns_created: number;
     total_rows: number;
     total_columns: number;
+    revision: number;
   }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/resize/`,
-      {
+      withBaseRevision(sheetId, {
         row_count: rowCount,
         column_count: columnCount,
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Insert rows
@@ -444,15 +541,16 @@ export const SpreadsheetAPI = {
     rows_created: number;
     total_rows: number;
     operation_id: number | string;
+    revision: number;
   }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/rows/insert/`,
-      {
+      withBaseRevision(sheetId, {
         position,
         count,
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Insert columns
@@ -465,15 +563,16 @@ export const SpreadsheetAPI = {
     columns_created: number;
     total_columns: number;
     operation_id: number | string;
+    revision: number;
   }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/columns/insert/`,
-      {
+      withBaseRevision(sheetId, {
         position,
         count,
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Delete rows
@@ -486,15 +585,16 @@ export const SpreadsheetAPI = {
     rows_deleted: number;
     total_rows: number;
     operation_id: number | string;
+    revision: number;
   }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/rows/delete/`,
-      {
+      withBaseRevision(sheetId, {
         position,
         count,
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Delete columns
@@ -507,15 +607,16 @@ export const SpreadsheetAPI = {
     columns_deleted: number;
     total_columns: number;
     operation_id: number | string;
+    revision: number;
   }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/columns/delete/`,
-      {
+      withBaseRevision(sheetId, {
         position,
         count,
-      }
+      })
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Revert structure operation
@@ -523,12 +624,12 @@ export const SpreadsheetAPI = {
     spreadsheetId: number | string,
     sheetId: number | string,
     operationId: number | string
-  ): Promise<{ operation_id: number | string; is_reverted: boolean }> => {
+  ): Promise<{ operation_id: number | string; is_reverted: boolean; revision: number }> => {
     const response = await api.post(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/operations/${operationId}/revert/`,
-      {}
+      withBaseRevision(sheetId, {})
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 
   // Upsert pivot configuration for a sheet and trigger recompute
@@ -567,12 +668,11 @@ export const SpreadsheetAPI = {
   recomputePivot: async (
     spreadsheetId: number | string,
     sheetId: number | string
-  ): Promise<{ status: string; detail?: string }> => {
+  ): Promise<{ status: string; detail?: string; revision?: number }> => {
     const response = await api.post<{ status: string; detail?: string }>(
       `/api/spreadsheet/spreadsheets/${spreadsheetId}/sheets/${sheetId}/pivot-recompute/`,
       {}
     );
-    return response.data;
+    return captureSheetRevision(sheetId, response.data);
   },
 };
-

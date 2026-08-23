@@ -15,6 +15,7 @@ import BrandDialog from '@/components/tasks/detail/BrandDialog';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useFacebookMetaData } from '@/hooks/useFacebookMetaData';
 import { FacebookMetaAPI } from '@/lib/api/facebookMetaApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 
 const SECTION_CLS = 'rounded-xl bg-white shadow-sm ring-1 ring-gray-100';
 const EYEBROW_CLS = 'text-[11px] font-medium uppercase tracking-wide text-gray-500';
@@ -29,6 +30,7 @@ const STATUS_FILTER_OPTIONS = [
 
 function FacebookMetaV2Content() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const {
     adCreatives,
     loading,
@@ -58,9 +60,9 @@ function FacebookMetaV2Content() {
     try {
       const result = await FacebookMetaAPI.createAdCreative(payload);
       setCreateOpen(false);
-      const newId = result?.data?.id;
+      const newId = result?.data?.slug ?? result?.data?.id;
       if (newId) {
-        router.push(`/facebook-meta/${newId}`);
+        router.push(buildUrl(`/facebook-meta/${newId}`));
       } else {
         fetchAdCreatives();
       }
@@ -134,7 +136,7 @@ function FacebookMetaV2Content() {
         <AdCreativeTableV2
           creatives={adCreatives as any}
           loading={loading}
-          onRowClick={(id) => router.push(`/facebook-meta/${id}`)}
+          onRowClick={(id) => router.push(buildUrl(`/facebook-meta/${id}`))}
           onDelete={(id) => setDeleteTargetId(id)}
         />
 

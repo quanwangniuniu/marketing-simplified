@@ -9,6 +9,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import NotionDraftCard from '@/components/notion/NotionDraftCard';
 import ConfirmDialog from '@/components/tasks/detail/ConfirmDialog';
 import { NotionDraftAPI } from '@/lib/api/notionDraftApi';
+import { useBuildUrl } from '@/lib/buildUrl';
 import type { DraftStatus, DraftSummary } from '@/types/notion';
 
 type StatusFilter = 'all' | 'draft' | 'published' | 'archived';
@@ -21,6 +22,7 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 
 function NotionV2ListContent() {
   const router = useRouter();
+  const buildUrl = useBuildUrl();
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -73,7 +75,7 @@ function NotionV2ListContent() {
       });
       if (!created?.id) throw new Error('Draft created but id is missing');
       toast.success('Draft created');
-      router.push(`/notion/${created.slug}`);
+      router.push(buildUrl(`/notion/${created.slug}`));
     } catch (error: any) {
       console.error('Failed to create draft', error);
       toast.error(error?.response?.data?.detail || 'Failed to create draft');
@@ -84,7 +86,7 @@ function NotionV2ListContent() {
 
   const handleOpen = useCallback(
     (idOrSlug: number | string) => {
-      router.push(`/notion/${idOrSlug}`);
+      router.push(buildUrl(`/notion/${idOrSlug}`));
     },
     [router]
   );
@@ -95,7 +97,7 @@ function NotionV2ListContent() {
         const created = await NotionDraftAPI.duplicateDraft(id);
         if (!created?.id) throw new Error('Duplicated draft id missing');
         toast.success('Draft duplicated');
-        router.push(`/notion/${created.slug}`);
+        router.push(buildUrl(`/notion/${created.slug}`));
       } catch (error: any) {
         console.error('Failed to duplicate draft', error);
         toast.error(error?.response?.data?.detail || 'Failed to duplicate draft');

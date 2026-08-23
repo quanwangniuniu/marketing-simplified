@@ -185,7 +185,7 @@ class TenantSchemaMiddleware:
         based on the authenticated user. DRF's authentication normally runs at
         the view layer, but we need it earlier.
         """
-        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from core.authentication import TenantAwareJWTAuthentication
         from rest_framework.exceptions import AuthenticationFailed
 
         # Skip if already authenticated (e.g. session auth)
@@ -193,7 +193,7 @@ class TenantSchemaMiddleware:
             return
 
         try:
-            jwt_auth = JWTAuthentication()
+            jwt_auth = TenantAwareJWTAuthentication()
             auth_result = jwt_auth.authenticate(request)
             if auth_result is not None:
                 user, token = auth_result

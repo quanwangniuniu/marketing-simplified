@@ -30,6 +30,8 @@ class TestBudgetRequestSerializerRead:
         assert d['currency'] == 'AUD'
         assert d['status'] == BudgetRequestStatus.DRAFT
         assert d['is_escalated'] is False
+        assert d['is_admin_override'] is False
+        assert d['admin_override'] is None
 
     def test_get_requested_by_returns_username(self, budget_request_draft, user1):
         s = BudgetRequestSerializer(budget_request_draft)
