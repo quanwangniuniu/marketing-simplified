@@ -6,10 +6,10 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from chat.models import Chat, ChatParticipant, ChatType
 from core.models import Organization, Project, ProjectMember
+from core.services.auth_tokens import build_user_refresh_token
 from core.services.tenant import slug_to_schema_name
 from core.tenant_context import tenant_schema_context
 from stripe_meta.permissions import generate_organization_access_token
@@ -155,7 +155,7 @@ class Command(BaseCommand):
 
             credentials.append({
                 'user_id': user.id,
-                'token': str(RefreshToken.for_user(user).access_token),
+                'token': str(build_user_refresh_token(user).access_token),
                 'organization_token': generate_organization_access_token(user),
             })
 

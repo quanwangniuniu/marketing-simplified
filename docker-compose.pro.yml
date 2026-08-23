@@ -187,6 +187,14 @@ services:
     container_name: celery-chat-background-prod
     command: celery -A backend worker --loglevel=info --concurrency=${CHAT_BACKGROUND_WORKER_CONCURRENCY:-2} -Q chat.notifications,chat.delivery
 
+  # Link previews wait on third-party sites, so they get their own worker:
+  # a slow host must never occupy a slot that message delivery needs.
+  celery-chat-link-previews:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-link-previews-prod
+    command: celery -A backend worker --loglevel=info --concurrency=${CHAT_LINK_PREVIEW_WORKER_CONCURRENCY:-2} -Q chat.link_previews
+
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     restart: always

@@ -10,7 +10,7 @@ import {
   ApiResponse,
   PaginatedResponse
 } from '@/types/permission';
-import { readPersistedAuthState } from '@/lib/api';
+import { readPersistedAuthState, refreshAccessToken } from '@/lib/api';
 
 // API settings — base must point at access_control namespace so /roles/, /organizations/, etc. resolve correctly.
 // Default to a same-origin relative path so it works through nginx -> local backend in every
@@ -22,25 +22,51 @@ const API_BASE_URL =
   (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.trim()) ||
   DEFAULT_API_BASE_URL;
 const API_TIMEOUT = 10000;
+
+function buildAuthHeaders(baseHeaders?: HeadersInit): Headers {
+  const headers = new Headers(baseHeaders);
+  const authState = readPersistedAuthState();
+  const token = authState?.state?.token;
+  const organizationToken = authState?.state?.organizationAccessToken;
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (organizationToken && !headers.has('X-Organization-Token')) {
+    headers.set('X-Organization-Token', organizationToken);
+  }
+
+  return headers;
+}
+
 // HTTP client
 class ApiClient {
   private static async request<T>(
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<T> {
+    return this.requestWithAuth<T>(endpoint, options, true);
+  }
+
+  private static async requestWithAuth<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    allowRefresh: boolean
+  ): Promise<T> {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${API_BASE_URL}${cleanEndpoint}`;
+    const headers = buildAuthHeaders({
+      'Content-Type': 'application/json',
+      ...options.headers,
+    });
     
     const authData = readPersistedAuthState();
     const token = authData?.state?.token;
 
     const defaultOptions: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: 'include',
+      credentials: 'include', 
       ...options,
+      headers,
     };
 
     try {
@@ -57,6 +83,16 @@ class ApiClient {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
+        if (response.status === 401 && allowRefresh) {
+          const refreshToken = readPersistedAuthState()?.state?.refreshToken;
+          if (refreshToken) {
+            const accessToken = await refreshAccessToken(refreshToken);
+            if (accessToken) {
+              return this.requestWithAuth<T>(endpoint, options, false);
+            }
+          }
+        }
+
         let errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;
         try {
           const errorData = await response.json();

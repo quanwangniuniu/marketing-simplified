@@ -733,6 +733,60 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      applyLinkPreview: (messageId, preview) => {
+        set(state => {
+          // Attach a preview that finished fetching after the message arrived, so
+          // the card appears without a reload. Same shape the serializer sends,
+          // so a live card and a reloaded one are identical.
+          const attach = (msg: Message): Message =>
+            msg.id === messageId ? { ...msg, link_preview: preview } : msg;
+
+          const newMessages = { ...state.messages };
+          Object.keys(newMessages).forEach(chatIdStr => {
+            const chatId = parseInt(chatIdStr);
+            if (newMessages[chatId].some(m => m.id === messageId)) {
+              newMessages[chatId] = newMessages[chatId].map(attach);
+            }
+          });
+
+          const newThreadReplies = { ...state.threadReplies };
+          Object.keys(newThreadReplies).forEach(rootIdStr => {
+            const rootId = parseInt(rootIdStr);
+            if (newThreadReplies[rootId].some(r => r.id === messageId)) {
+              newThreadReplies[rootId] = newThreadReplies[rootId].map(attach);
+            }
+          });
+
+          return { messages: newMessages, threadReplies: newThreadReplies };
+        });
+      },
+
+      clearLinkPreview: (messageId) => {
+        set(state => {
+          // Dismissing is a view preference; the message and its text are untouched.
+          const drop = (msg: Message): Message =>
+            msg.id === messageId ? { ...msg, link_preview: null } : msg;
+
+          const newMessages = { ...state.messages };
+          Object.keys(newMessages).forEach(chatIdStr => {
+            const chatId = parseInt(chatIdStr);
+            if (newMessages[chatId].some(m => m.id === messageId)) {
+              newMessages[chatId] = newMessages[chatId].map(drop);
+            }
+          });
+
+          const newThreadReplies = { ...state.threadReplies };
+          Object.keys(newThreadReplies).forEach(rootIdStr => {
+            const rootId = parseInt(rootIdStr);
+            if (newThreadReplies[rootId].some(r => r.id === messageId)) {
+              newThreadReplies[rootId] = newThreadReplies[rootId].map(drop);
+            }
+          });
+
+          return { messages: newMessages, threadReplies: newThreadReplies };
+        });
+      },
+
       updateUserPresence: (userId: number, isOnline: boolean, version: number | null = null) => {
         const numericUserId = Number(userId);
         if (!Number.isFinite(numericUserId)) return;

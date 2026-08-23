@@ -61,6 +61,7 @@ from decision.serializers import DecisionEdgeSerializer, DecisionGraphNodeSerial
 from decision.services import decision_topic_label as default_decision_topic_label, normalize_decision_topic
 from core.services.project_initialization import ProjectInitializationService
 from core.services.organization_activity import log_org_activity
+from core.services.audit_events import safe_emit_audit_event
 from core.services.privacy_export import build_download_url, mark_expired_exports, verify_download_token
 from core.tasks import assemble_personal_data_export
 from core.utils.invitations import accept_invitation, create_project_invitation, send_invitation_email
@@ -73,6 +74,21 @@ from notifications.action_urls import overview_action_url
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def _audit_project_event(event_type, request, project, *, target_type="project", target_id=None, before=None, after=None, context=None):
+    safe_emit_audit_event(
+        event_type=event_type,
+        actor=request.user,
+        organization=getattr(project, "organization", None),
+        project=project,
+        target_type=target_type,
+        target_id=target_id if target_id is not None else getattr(project, "id", ""),
+        before=before,
+        after=after,
+        context=context,
+        request=request,
+    )
 
 
 def _serialize_data_export_request(export_request, request=None):
@@ -139,6 +155,20 @@ class PersonalDataExportRequestListCreateView(APIView):
             return Response(_serialize_data_export_request(active_export, request=request), status=status.HTTP_202_ACCEPTED)
 
         export_request = DataExportRequest.objects.create(user=request.user, export_format=export_format)
+        safe_emit_audit_event(
+            event_type="privacy.data_export.requested",
+            actor=request.user,
+            organization=getattr(request.user, "current_organization", None),
+            project=getattr(request.user, "active_project", None),
+            target_type="data_export_request",
+            target_id=export_request.id,
+            after={
+                "status": export_request.status,
+                "export_format": export_request.export_format,
+                "expires_at": export_request.expires_at,
+            },
+            request=request,
+        )
         assemble_personal_data_export.delay(str(export_request.id))
         return Response(_serialize_data_export_request(export_request, request=request), status=status.HTTP_202_ACCEPTED)
 
@@ -168,6 +198,20 @@ class PersonalDataExportDownloadView(APIView):
         ):
             return Response({"detail": "This export link is invalid or expired."}, status=status.HTTP_403_FORBIDDEN)
 
+        safe_emit_audit_event(
+            event_type="privacy.data_export.downloaded",
+            actor=export_request.user,
+            organization=getattr(export_request.user, "current_organization", None),
+            project=getattr(export_request.user, "active_project", None),
+            target_type="data_export_request",
+            target_id=export_request.id,
+            after={
+                "status": export_request.status,
+                "export_format": export_request.export_format,
+                "expires_at": export_request.expires_at,
+            },
+            request=request,
+        )
         response = FileResponse(export_request.file.open("rb"), as_attachment=True, filename=export_request.file.name.rsplit("/", 1)[-1])
         response["Cache-Control"] = "private, no-store"
         return response
@@ -521,6 +565,17 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                 cursor.execute(f'SET search_path TO {original_path}')
 
         ensure_project_calendar(project)
+        _audit_project_event(
+            "project.created",
+            self.request,
+            project,
+            after={
+                "name": project.name,
+                "slug": project.slug,
+                "organization_id": project.organization_id,
+                "owner_id": project.owner_id,
+            },
+        )
 
         return project
 
@@ -592,6 +647,13 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         # query tables in the wrong schema. Solution: use raw SQL and let PostgreSQL handle it.
 
         project_id = instance.id
+        project_snapshot = {
+            "id": instance.id,
+            "name": instance.name,
+            "slug": instance.slug,
+            "organization_id": instance.organization_id,
+            "owner_id": instance.owner_id,
+        }
 
         # Step 1: Get original search_path and find calendar IDs in tenant schema first
         with connection.cursor() as cursor:
@@ -691,6 +753,47 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                     'DELETE FROM core_project WHERE id = %s',
                     [project_id]
                 )
+        safe_emit_audit_event(
+            event_type="project.deleted",
+            actor=self.request.user,
+            organization=instance.organization,
+            project=None,
+            target_type="project",
+            target_id=project_id,
+            before=project_snapshot,
+            request=self.request,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        before = {
+            "name": instance.name,
+            "description": instance.description,
+            "organization_id": instance.organization_id,
+            "owner_id": instance.owner_id,
+        }
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        instance.refresh_from_db()
+        _audit_project_event(
+            "project.updated",
+            request,
+            instance,
+            before=before,
+            after={
+                "name": instance.name,
+                "description": instance.description,
+                "organization_id": instance.organization_id,
+                "owner_id": instance.owner_id,
+            },
+        )
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
             record_audit_entry(
                 actor=self.request.user if self.request.user.is_authenticated else None,
@@ -964,10 +1067,31 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.get('partial', False)
         instance = self.get_object()
+        before = {
+            "user_id": instance.user_id,
+            "user_email": instance.user.email,
+            "role": instance.role,
+            "is_active": instance.is_active,
+        }
         requested_role = request.data.get('role')
         if requested_role == 'owner':
             self._transfer_project_owner(instance, request.user)
             instance.refresh_from_db()
+            _audit_project_event(
+                "project_member.role_changed",
+                request,
+                instance.project,
+                target_type="project_member",
+                target_id=instance.id,
+                before=before,
+                after={
+                    "user_id": instance.user_id,
+                    "user_email": instance.user.email,
+                    "role": instance.role,
+                    "is_active": instance.is_active,
+                    "ownership_transferred": True,
+                },
+            )
             return Response(self.get_serializer(instance).data)
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -976,6 +1100,21 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if desired_role == 'owner':
             self._transfer_project_owner(instance, request.user)
             instance.refresh_from_db()
+            _audit_project_event(
+                "project_member.role_changed",
+                request,
+                instance.project,
+                target_type="project_member",
+                target_id=instance.id,
+                before=before,
+                after={
+                    "user_id": instance.user_id,
+                    "user_email": instance.user.email,
+                    "role": instance.role,
+                    "is_active": instance.is_active,
+                    "ownership_transferred": True,
+                },
+            )
             return Response(self.get_serializer(instance).data)
 
         if (
@@ -990,6 +1129,20 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 
         response = super().update(request, *args, **kwargs)
         instance.refresh_from_db()
+        _audit_project_event(
+            "project_member.role_changed",
+            request,
+            instance.project,
+            target_type="project_member",
+            target_id=instance.id,
+            before=before,
+            after={
+                "user_id": instance.user_id,
+                "user_email": instance.user.email,
+                "role": instance.role,
+                "is_active": instance.is_active,
+            },
+        )
         return response
 
     def check_object_permissions(self, request, obj):
@@ -1096,6 +1249,20 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                     )
 
             invitation_serializer = ProjectInvitationSerializer(invitation, context={'request': request})
+            _audit_project_event(
+                "project_member.invited",
+                request,
+                project,
+                target_type="project_invitation",
+                target_id=invitation.id,
+                after={
+                    "email": invitation.email,
+                    "role": invitation.role,
+                    "approved": invitation.approved,
+                    "accepted": invitation.accepted,
+                    "user_exists": invited_user is not None,
+                },
+            )
             message = 'Invitation created and pending owner approval.'
             return Response(
                 {
@@ -1127,6 +1294,25 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         # Deactivate instead of delete
         instance.is_active = False
         instance.save()
+        _audit_project_event(
+            "project_member.removed",
+            self.request,
+            project,
+            target_type="project_member",
+            target_id=instance.id,
+            before={
+                "user_id": removed_user.id,
+                "user_email": removed_user.email,
+                "role": instance.role,
+                "is_active": True,
+            },
+            after={
+                "user_id": removed_user.id,
+                "user_email": removed_user.email,
+                "role": instance.role,
+                "is_active": False,
+            },
+        )
 
         # Notify the removed user (skip self-removal)
         if removed_user.id != actor.id:
@@ -1280,9 +1466,9 @@ class AcceptInvitationView(APIView):
             )
 
             # Generate tokens for new users
-            from rest_framework_simplejwt.tokens import RefreshToken
+            from core.services.auth_tokens import build_user_refresh_token
 
-            refresh = RefreshToken.for_user(user)
+            refresh = build_user_refresh_token(user)
             from core.serializers import UserSummarySerializer
 
             user_data = UserSummarySerializer(user).data
@@ -2386,8 +2572,9 @@ class AcceptOrganizationInvitationView(APIView):
 
         if user_created:
             # Generate JWT tokens
-            from rest_framework_simplejwt.tokens import RefreshToken
-            refresh = RefreshToken.for_user(user)
+            from core.services.auth_tokens import build_user_refresh_token
+
+            refresh = build_user_refresh_token(user)
             response_data['tokens'] = {
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
