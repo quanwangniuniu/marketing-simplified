@@ -29,7 +29,9 @@ services:
       context: ./pgbackrest
       dockerfile: Dockerfile
     container_name: pgbackrest
-    restart: always    
+    restart: always
+    environment:
+      PGBACKREST_PG1_USER: ${POSTGRES_USER:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - pgbackups:/var/lib/pgbackrest
@@ -207,6 +209,8 @@ services:
       - ./nginx/nginx.conf.pro:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/zmarkio.com:/etc/letsencrypt/live/zmarkio.com:ro
       - /etc/letsencrypt/archive/zmarkio.com:/etc/letsencrypt/archive/zmarkio.com:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_started
