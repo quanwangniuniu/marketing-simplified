@@ -373,3 +373,52 @@ export function getEventTypesForCategory(category: string): AuditEventType[] {
 export function isValidAuditEventType(value: unknown): value is AuditEventType {
   return typeof value === 'string' && AUDIT_EVENTS.includes(value as AuditEventType);
 }
+
+/**
+ * Admin action logs
+ */
+export type AdminAuditAction =
+  | 'role.created'
+  | 'role.updated'
+  | 'role.deleted'
+  | 'role.permissions_updated'
+  | 'role.permissions_copied'
+  | 'user_role.assigned'
+  | 'user_role.removed'
+  | 'project.updated'
+  | 'project.deleted'
+  | 'project.labels_updated'
+  | 'org.slug_updated'
+  | 'org.deleted'
+  | 'org.admin_assigned'
+  | 'org.admin_removed';
+
+export interface AdminAuditEvent {
+  id: string;
+  organization_id: number | null;
+  project_id: number | null;
+  actor_id: number | null;
+  actor_email: string | null;
+  actor_name: string | null;
+  action: AdminAuditAction;
+  target_type: string;
+  target_id: string;
+  target_name: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  timestamp: string; // ISO 8601
+}
+
+export interface PaginatedAdminAuditEvents {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: AdminAuditEvent[];
+}
+
+export interface AdminAuditEventFilters {
+  action?: AdminAuditAction;
+  target_type?: string;
+  project_id?: number | string;
+}
+

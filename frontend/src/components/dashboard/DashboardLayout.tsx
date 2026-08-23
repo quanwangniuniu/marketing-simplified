@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardSidebar from './DashboardSidebar';
 import NotificationBell from './NotificationBell';
@@ -25,6 +25,9 @@ import { useNotificationSSE } from '@/hooks/useNotificationSSE';
 import { useStripProjectIdFromUrl } from '@/lib/useStripProjectIdFromUrl';
 import { useGuardedRouterPush } from '@/contexts/UnsavedChangesGuardContext';
 import { useBuildUrl } from '@/lib/buildUrl';
+import { authApi } from '@/lib/api/authApi';
+import { useAuthStore } from '@/lib/authStore';
+import type { PasswordRotationStatus } from '@/types/auth';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -150,6 +153,9 @@ export default function DashboardLayout({
   };
   const activeProject = useProjectStore((s) => s.activeProject);
   const hasProjectStoreHydrated = useProjectStore((s) => s.hasHydrated);
+  const setAuthUser = useAuthStore((s) => s.setUser);
+  const authUser = useAuthStore((s) => s.user);
+  const [passwordRotation, setPasswordRotation] = useState<PasswordRotationStatus | null>(null);
   const [autoMeetings, setAutoMeetings] = useState<MeetingListItem[]>([]);
   const useExplicit = upcomingMeetings && upcomingMeetings.length > 0;
 
@@ -175,6 +181,33 @@ export default function DashboardLayout({
       mediaQuery.removeEventListener('change', syncPanelStateForViewport);
     };
   }, [setIsPanelOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    authApi
+      .getCurrentUser()
+      .then((user) => {
+        if (cancelled) return;
+        setAuthUser(user);
+        setPasswordRotation(user.password_rotation ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPasswordRotation(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setAuthUser]);
+
+  useEffect(() => {
+    if (passwordRotation?.required && pathname !== '/set-password') {
+      router.replace('/set-password?rotation=1');
+    }
+  }, [passwordRotation?.required, pathname, router]);
 
   useEffect(() => {
     if (isMobileViewport()) {
@@ -233,6 +266,15 @@ export default function DashboardLayout({
   }, [activeProject?.id, hasProjectStoreHydrated, useExplicit]);
 
   const meetingsForPanel = useExplicit ? upcomingMeetings! : autoMeetings;
+  const cachedElevatedUser = Boolean(
+    authUser?.is_staff ||
+    authUser?.is_org_admin ||
+    authUser?.roles?.some((role) => role.toLowerCase().includes('admin') || role.toLowerCase().includes('owner')),
+  );
+  const bannerDays = passwordRotation?.days_until_expiry ?? passwordRotation?.warning_days ?? 7;
+  const showPasswordRotationWarning =
+    (passwordRotation?.warning && !passwordRotation.required) ||
+    (!passwordRotation && cachedElevatedUser);
   const toggleMeetingsPanel = () => {
     if (isMobileViewport()) {
       setIsPanelOpen((prev) => !prev);
@@ -288,6 +330,23 @@ export default function DashboardLayout({
             )}
           </div>
         </header>
+        {showPasswordRotationWarning && (
+          <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-900">
+            <div className="flex min-w-0 items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+              <span className="truncate">
+                Your elevated account password expires in {bannerDays} {bannerDays === 1 ? 'day' : 'days'}.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/set-password?rotation=1')}
+              className="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+            >
+              Change password
+            </button>
+          </div>
+        )}
 
         {/* Scrollable content */}
         <main className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4 sm:p-5 ${mainClassName}`}>

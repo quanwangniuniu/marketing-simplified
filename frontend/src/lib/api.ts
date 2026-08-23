@@ -8,7 +8,8 @@ import {
   User,
   AuthError,
   GoogleAuthResponse,
-  SetPasswordRequest
+  SetPasswordRequest,
+  ChangePasswordResponse,
 } from '../types/auth';
 
 const DEFAULT_API_BASE_URL = '';
@@ -427,6 +428,17 @@ api.interceptors.response.use(
     const quotaCode = responseData?.code;
     if (
       typeof window !== 'undefined' &&
+      status === 403 &&
+      responseData?.errorCode === 'PASSWORD_ROTATION_REQUIRED'
+    ) {
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith('/set-password')) {
+        window.location.href = '/set-password?rotation=1';
+      }
+    }
+
+    if (
+      typeof window !== 'undefined' &&
       (status === 402 || status === 409 || status === 422) &&
       (quotaCode === 'TOKEN_QUOTA_EXCEEDED' ||
         quotaCode === 'SINGLE_CALL_TOO_LARGE' ||
@@ -504,6 +516,11 @@ export const authAPI = {
 
   resetPassword: async(token: string, new_password: string):Promise<{ message:string }> =>{
     const response = await api.post('/auth/reset-password/', { token, new_password });
+    return response.data;
+  },
+
+  changePassword: async(current_password: string, new_password: string): Promise<ChangePasswordResponse> => {
+    const response = await api.post('/auth/change-password/', { current_password, new_password });
     return response.data;
   },
 

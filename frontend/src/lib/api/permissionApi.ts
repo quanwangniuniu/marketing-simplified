@@ -1,15 +1,16 @@
 // src/lib/api/permissionApi.ts - Connect to AUTH-06 backend API
-import { 
-  Organization, 
-  Team, 
-  Role, 
-  Permission, 
-  RolePermission, 
+import {
+  Organization,
+  Team,
+  Role,
+  Permission,
+  RolePermission,
   PermissionMatrix,
   ProjectPermissionMatrix,
   ApiResponse,
   PaginatedResponse
 } from '@/types/permission';
+import { readPersistedAuthState, refreshAccessToken } from '@/lib/api';
 
 // API settings — base must point at access_control namespace so /roles/, /organizations/, etc. resolve correctly.
 // Default to a same-origin relative path so it works through nginx -> local backend in every
@@ -21,21 +22,51 @@ const API_BASE_URL =
   (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.trim()) ||
   DEFAULT_API_BASE_URL;
 const API_TIMEOUT = 10000;
+
+function buildAuthHeaders(baseHeaders?: HeadersInit): Headers {
+  const headers = new Headers(baseHeaders);
+  const authState = readPersistedAuthState();
+  const token = authState?.state?.token;
+  const organizationToken = authState?.state?.organizationAccessToken;
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (organizationToken && !headers.has('X-Organization-Token')) {
+    headers.set('X-Organization-Token', organizationToken);
+  }
+
+  return headers;
+}
+
 // HTTP client
 class ApiClient {
   private static async request<T>(
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<T> {
+    return this.requestWithAuth<T>(endpoint, options, true);
+  }
+
+  private static async requestWithAuth<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    allowRefresh: boolean
+  ): Promise<T> {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${API_BASE_URL}${cleanEndpoint}`;
+    const headers = buildAuthHeaders({
+      'Content-Type': 'application/json',
+      ...options.headers,
+    });
     
+    const authData = readPersistedAuthState();
+    const token = authData?.state?.token;
+
     const defaultOptions: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-      },
       credentials: 'include', 
       ...options,
+      headers,
     };
 
     try {
@@ -52,6 +83,16 @@ class ApiClient {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
+        if (response.status === 401 && allowRefresh) {
+          const refreshToken = readPersistedAuthState()?.state?.refreshToken;
+          if (refreshToken) {
+            const accessToken = await refreshAccessToken(refreshToken);
+            if (accessToken) {
+              return this.requestWithAuth<T>(endpoint, options, false);
+            }
+          }
+        }
+
         let errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;
         try {
           const errorData = await response.json();
@@ -251,22 +292,45 @@ export class PermissionAPI {
 
 
 
-  // Current user's roles from auth store only — no network calls (avoids /api/access_control/roles/).
+  // Current user's roles with real rank values fetched from the API.
   static async getCurrentUserRoles(): Promise<Role[]> {
     try {
       const { useAuthStore } = await import('../authStore');
-      const currentUser = useAuthStore.getState().user;
+      // If Zustand hasn't hydrated yet, fall back to localStorage directly.
+      const currentUser = useAuthStore.getState().user ?? readPersistedAuthState()?.state?.user ?? null;
 
-      if (!currentUser?.roles || !Array.isArray(currentUser.roles) || currentUser.roles.length === 0) {
+      if (!currentUser) return [];
+
+      // Staff and org admins always get full access.
+      if (currentUser.is_staff || currentUser.is_org_admin) {
+        return [{
+          id: 'admin',
+          name: 'Admin',
+          description: 'Administrator',
+          rank: 1,
+          organizationId: undefined,
+          isReadOnly: false,
+        }];
+      }
+
+      if (!currentUser.roles || !Array.isArray(currentUser.roles) || currentUser.roles.length === 0) {
         return [];
       }
 
-      const defaultRank = 10;
+      // Fetch real roles from the API to get actual level/rank values.
+      const allRoles = await PermissionAPI.getRoles();
+      const userRoleNames = new Set(currentUser.roles.map((r: string) => r.toLowerCase()));
+      const matched = allRoles.filter(r => userRoleNames.has(r.name.toLowerCase()));
+
+      // If we matched at least one role, use those (with real ranks).
+      if (matched.length > 0) return matched;
+
+      // Fallback: role names from auth store but unknown rank — treat as no access.
       return currentUser.roles.map((name: string, index: number) => ({
         id: `auth-${index}-${name}`,
         name,
         description: `Role: ${name}`,
-        rank: defaultRank,
+        rank: 10,
         organizationId: undefined,
         isReadOnly: false,
       }));

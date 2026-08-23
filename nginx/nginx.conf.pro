@@ -65,6 +65,13 @@ http {
     # reload on deploy if keepalive to the backend matters under load.
 
 
+    # Redirect all plain HTTP traffic to HTTPS
+    server {
+        listen 80;
+        server_name zmarkio.com;
+        return 301 https://$host$request_uri;
+    }
+
     server {
         listen 443 ssl;
         server_name zmarkio.com;
@@ -78,6 +85,12 @@ http {
         # resolver per request (picks up container IP changes without reload).
         set $backend_host "backend:8000";
         set $frontend_host "frontend:3000";
+        # deploy_listener runs on the VM host, not in Compose, so it's reached
+        # via the host-gateway IP rather than a service name. Using the literal
+        # IP (not the host.docker.internal hostname) avoids a lookup against
+        # the resolver below, which only knows Docker service names and can't
+        # resolve host.docker.internal (verified: "could not be resolved").
+        set $deploy_host "172.17.0.1:9000";
 
         # Enhanced health check endpoint for monitoring
         location = /health {
@@ -298,6 +311,18 @@ http {
             proxy_send_timeout 60s;
             proxy_read_timeout 60s;
             proxy_set_header Connection "";
+        }
+
+        # GitHub Actions deploy webhook -- proxied straight to deploy_listener
+        # on the host. Token auth (X-Deploy-Token) is enforced by the
+        # listener itself; nginx just forwards the request as-is.
+        location = /deploy {
+            proxy_pass http://$deploy_host$request_uri;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
         }
 
         # Frontend routes (catch-all - must be last)

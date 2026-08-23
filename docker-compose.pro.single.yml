@@ -29,7 +29,9 @@ services:
       context: ./pgbackrest
       dockerfile: Dockerfile
     container_name: pgbackrest
-    restart: always    
+    restart: always
+    environment:
+      PGBACKREST_PG1_USER: ${POSTGRES_USER:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - pgbackups:/var/lib/pgbackrest
@@ -207,6 +209,8 @@ services:
       - ./nginx/nginx.conf.pro:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/zmarkio.com:/etc/letsencrypt/live/zmarkio.com:ro
       - /etc/letsencrypt/archive/zmarkio.com:/etc/letsencrypt/archive/zmarkio.com:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_started
@@ -271,6 +275,14 @@ services:
       service: celery-worker
     container_name: celery-chat-background-prod
     command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_BACKGROUND_WORKER_CONCURRENCY:-2} -Q chat.notifications,chat.delivery
+
+  # Link previews wait on third-party sites, so they get their own worker:
+  # a slow host must never occupy a slot that message delivery needs.
+  celery-chat-link-previews:
+    extends:
+      service: celery-worker
+    container_name: celery-chat-link-previews-prod
+    command: celery -A backend worker --loglevel=info --pool=threads --concurrency=${CHAT_LINK_PREVIEW_WORKER_CONCURRENCY:-2} -Q chat.link_previews
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
