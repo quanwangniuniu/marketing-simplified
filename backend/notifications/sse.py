@@ -15,8 +15,9 @@ Architecture
   seconds so that Nginx's proxy_read_timeout doesn't kill the connection.
 
 * Last-Event-ID reconnect: if the browser reconnects with a Last-Event-ID
-  header (set to the UUID of the last received Notification), we replay all
-  later notifications from the database before resuming live streaming.
+  header (set to the UUID of the last received Notification), we replay later
+  notifications from the database in bounded batches before resuming live
+  streaming. The event timestamp is a fallback if that UUID has been deleted.
 """
 
 from __future__ import annotations
@@ -25,10 +26,14 @@ import asyncio
 import json
 import logging
 import time
+import uuid
+from datetime import timezone as datetime_timezone
 
 from django.conf import settings
 from django.db import connections
 from django.db.models import Q
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from prometheus_client import Counter, Gauge
 
 logger = logging.getLogger(__name__)
@@ -44,6 +49,26 @@ sse_active_connections = Gauge(
 )
 HEARTBEAT_INTERVAL = 25  # seconds – below Nginx proxy_read_timeout (60 s typical)
 _REDIS_DB = 0  # same DB as Celery broker; Pub/Sub is namespace-isolated by channel name
+
+_REPLAY_RATE_LIMIT_SCRIPT = """
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local cutoff_ms = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+local ttl_ms = tonumber(ARGV[5])
+
+redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff_ms)
+local count = redis.call('ZCARD', key)
+if count >= limit then
+    redis.call('PEXPIRE', key, ttl_ms)
+    return 0
+end
+
+redis.call('ZADD', key, now_ms, member)
+redis.call('PEXPIRE', key, ttl_ms)
+return 1
+"""
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -62,24 +87,106 @@ def _redis_host_port() -> tuple[str, int]:
         return "redis", 6379
 
 
-def _serialize_missed_notifications(user_id: int, last_event_id: str):
-    """Return notifications after the user's UUID cursor in stable order."""
+def _parse_replay_timestamp(value: str | None):
+    if not value:
+        return None
+
+    parsed = parse_datetime(value)
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, datetime_timezone.utc)
+    return parsed
+
+
+def _serialize_missed_notifications(
+    user_id: int,
+    last_event_id: str,
+    last_event_created_at: str | None = None,
+):
+    """Return one bounded replay batch and whether another batch remains."""
     from .models import Notification  # noqa: PLC0415
     from .serializers import NotificationSerializer  # noqa: PLC0415
 
-    cursor = (
-        Notification.objects.filter(recipient_id=user_id, pk=last_event_id)
-        .only("id", "created_at")
-        .first()
-    )
-    if cursor is None:
-        return []
+    try:
+        cursor_id = uuid.UUID(str(last_event_id))
+    except (TypeError, ValueError, AttributeError):
+        cursor_id = None
 
-    qs = Notification.objects.filter(recipient_id=user_id).filter(
-        Q(created_at__gt=cursor.created_at)
-        | Q(created_at=cursor.created_at, id__gt=cursor.id)
-    ).order_by("created_at", "id")
-    return NotificationSerializer(qs, many=True).data
+    cursor = None
+    if cursor_id is not None:
+        cursor = (
+            Notification.objects.filter(recipient_id=user_id, pk=cursor_id)
+            .only("id", "created_at")
+            .first()
+        )
+
+    qs = Notification.objects.filter(recipient_id=user_id)
+    if cursor is not None:
+        qs = qs.filter(
+            Q(created_at__gt=cursor.created_at)
+            | Q(created_at=cursor.created_at, id__gt=cursor.id)
+        )
+    else:
+        fallback_created_at = _parse_replay_timestamp(last_event_created_at)
+        if fallback_created_at is None:
+            return [], False
+
+        # The UUID cursor may have been deleted. Replay the timestamp boundary
+        # inclusively so an equal-timestamp event is never silently skipped;
+        # the browser suppresses any already-seen UUIDs.
+        qs = qs.filter(created_at__gte=fallback_created_at)
+        if cursor_id is not None:
+            qs = qs.exclude(pk=cursor_id)
+
+    batch_size = max(
+        1,
+        int(getattr(settings, "NOTIFICATION_SSE_REPLAY_BATCH_SIZE", 500)),
+    )
+    rows = list(qs.order_by("created_at", "id")[: batch_size + 1])
+    has_more = len(rows) > batch_size
+    serialized = list(NotificationSerializer(rows[:batch_size], many=True).data)
+    return serialized, has_more
+
+
+def _allow_replay_attempt(user_id: int) -> bool:
+    """Apply a Redis-backed rolling-window replay limit per authenticated user."""
+    from django_redis import get_redis_connection  # noqa: PLC0415
+
+    limit = max(
+        1,
+        int(getattr(settings, "NOTIFICATION_SSE_REPLAY_RATE_LIMIT", 5)),
+    )
+    window_seconds = max(
+        1,
+        int(getattr(settings, "NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS", 30)),
+    )
+    now_ms = int(time.time() * 1000)
+    window_ms = window_seconds * 1000
+    key = f"mediajira:sse:replay-rate:{user_id}"
+    member = f"{now_ms}:{uuid.uuid4().hex}"
+
+    try:
+        redis_client = get_redis_connection("default")
+        allowed = redis_client.eval(
+            _REPLAY_RATE_LIMIT_SCRIPT,
+            1,
+            key,
+            now_ms,
+            now_ms - window_ms,
+            limit,
+            member,
+            window_ms,
+        )
+        return bool(allowed)
+    except Exception:
+        # Availability wins over throttling if the cache is temporarily down.
+        logger.warning(
+            "SSE: replay rate limiter unavailable for user_id=%s",
+            user_id,
+            exc_info=True,
+        )
+        return True
 
 
 # ── sync publisher (called from create_notification) ─────────────────────────
@@ -131,7 +238,11 @@ def publish_notification_to_redis(user_id: int, notification) -> None:
 
 # ── async SSE generator ───────────────────────────────────────────────────────
 
-async def sse_event_generator(user_id: int, last_event_id: str | None):
+async def sse_event_generator(
+    user_id: int,
+    last_event_id: str | None,
+    last_event_created_at: str | None = None,
+):
     """
     Async generator that yields SSE-formatted byte strings.
 
@@ -140,7 +251,7 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
     1. Subscribe to Redis channel ``user_{user_id}_events`` so notifications
        created during replay are queued rather than lost.
     2. If *last_event_id* is given (the UUID of the last event the browser
-       received), replay all later Notifications from the DB.
+       received), replay one bounded batch of later Notifications from the DB.
     3. Forward every published JSON payload as an SSE ``data:`` line, using
        the Notification's UUID as the event id.
     4. Emit a comment heartbeat every HEARTBEAT_INTERVAL seconds.
@@ -168,9 +279,12 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
 
         if last_event_id:
             try:
-                missed = await sync_to_async(_serialize_missed_notifications)(
+                missed, has_more = await sync_to_async(
+                    _serialize_missed_notifications
+                )(
                     user_id,
                     last_event_id,
+                    last_event_created_at,
                 )
                 for item in missed:
                     event_id = str(item.get("id", ""))
@@ -184,11 +298,17 @@ async def sse_event_generator(user_id: int, last_event_id: str | None):
                     yield f"id: {event_id}\ndata: {payload}\n\n"
 
                 logger.debug(
-                    "SSE: replayed %d missed notification(s) for user_id=%s after id=%s",
+                    "SSE: replayed %d notification(s) for user_id=%s after id=%s has_more=%s",
                     len(missed),
                     user_id,
                     last_event_id,
+                    has_more,
                 )
+
+                if has_more:
+                    # End this bounded batch. EventSource reconnects with the
+                    # last UUID it received and continues with the next batch.
+                    return
             except Exception:
                 logger.exception(
                     "SSE: replay failed for user_id=%s last_event_id=%s",

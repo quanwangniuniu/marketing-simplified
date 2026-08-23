@@ -38,6 +38,13 @@ const CHAT_EVENT_TYPES = new Set([
 
 const MIN_RETRY_MS = 3_000;
 const MAX_RETRY_MS = 30_000;
+const RETRY_JITTER_RATIO = 0.2;
+const RECENT_EVENT_ID_LIMIT = 1_000;
+
+function jitteredRetryDelay(baseMs: number): number {
+  const spread = baseMs * RETRY_JITTER_RATIO;
+  return Math.round(baseMs - spread + Math.random() * spread * 2);
+}
 
 export function useNotificationSSE(): void {
   const token = useAuthStore((state) => state.token);
@@ -49,6 +56,9 @@ export function useNotificationSSE(): void {
 
   // Track the Last-Event-ID for reconnect replay.
   const lastEventIdRef = useRef<string>('');
+  const lastEventCreatedAtRef = useRef<string>('');
+  const recentEventIdsRef = useRef<string[]>([]);
+  const recentEventIdSetRef = useRef<Set<string>>(new Set());
 
   // Retry back-off state.
   const retryMsRef = useRef(MIN_RETRY_MS);
@@ -101,6 +111,9 @@ export function useNotificationSSE(): void {
       const params = new URLSearchParams({ token: currentToken });
       if (lastEventIdRef.current) {
         params.set('lastEventId', lastEventIdRef.current);
+        if (lastEventCreatedAtRef.current) {
+          params.set('lastEventCreatedAt', lastEventCreatedAtRef.current);
+        }
       }
       const url = `/api/notifications/stream/?${params.toString()}`;
 
@@ -113,13 +126,14 @@ export function useNotificationSSE(): void {
       };
 
       es.onmessage = (event: MessageEvent<string>) => {
-        // The browser automatically sends Last-Event-ID on reconnect, but we
-        // also track it ourselves for manual reconnects (visibility change).
-        if (event.lastEventId) {
-          lastEventIdRef.current = event.lastEventId;
-        }
-
-        let payload: { type: string; data?: { event_type?: string; metadata?: unknown } };
+        let payload: {
+          type: string;
+          data?: {
+            created_at?: string;
+            event_type?: string;
+            metadata?: unknown;
+          };
+        };
         try {
           payload = JSON.parse(event.data) as typeof payload;
         } catch {
@@ -129,6 +143,26 @@ export function useNotificationSSE(): void {
 
         if (payload.type !== 'notification') {
           return;
+        }
+
+        const eventId = event.lastEventId;
+        if (eventId && recentEventIdSetRef.current.has(eventId)) {
+          return;
+        }
+
+        // Keep the UUID as the primary cursor and created_at as a fallback if
+        // the notification row is deleted before the next reconnect.
+        if (eventId) {
+          lastEventIdRef.current = eventId;
+          recentEventIdsRef.current.push(eventId);
+          recentEventIdSetRef.current.add(eventId);
+          if (recentEventIdsRef.current.length > RECENT_EVENT_ID_LIMIT) {
+            const expiredId = recentEventIdsRef.current.shift();
+            if (expiredId) recentEventIdSetRef.current.delete(expiredId);
+          }
+        }
+        if (typeof payload.data?.created_at === 'string') {
+          lastEventCreatedAtRef.current = payload.data.created_at;
         }
 
         const eventType = payload.data?.event_type ?? '';
@@ -161,16 +195,18 @@ export function useNotificationSSE(): void {
         close();
         setConnectionStatus('reconnecting');
 
+        const retryDelay = jitteredRetryDelay(retryMsRef.current);
         if (process.env.NODE_ENV === 'development') {
           console.warn(
-            `[NotificationSSE] error – reconnecting in ${retryMsRef.current}ms`,
+            `[NotificationSSE] error – reconnecting in ${retryDelay}ms`,
           );
         }
 
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         retryTimerRef.current = setTimeout(() => {
           retryMsRef.current = Math.min(retryMsRef.current * 2, MAX_RETRY_MS);
           connect();
-        }, retryMsRef.current);
+        }, retryDelay);
       };
     };
 

@@ -18,9 +18,11 @@ Strategy
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
-from django.test import AsyncRequestFactory, TestCase
+from urllib.parse import urlencode
+
+from django.test import AsyncRequestFactory, TestCase, override_settings
 from django.urls import reverse
+from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 from rest_framework_simplejwt.tokens import AccessToken
 
 from notifications.models import (
@@ -30,6 +32,7 @@ from notifications.models import (
 )
 from notifications.services import create_notification
 from notifications.sse import (
+    _allow_replay_attempt,
     _serialize_missed_notifications,
     publish_notification_to_redis,
     sse_event_generator,
@@ -149,8 +152,16 @@ class SSEViewAuthTests(TestCase):
         )
         self.token = str(AccessToken.for_user(self.user))
 
-    def _get(self, path, *, auth_header: str | None = None, query_token: str | None = None,
-             mock_user=None):
+    def _get(
+        self,
+        path,
+        *,
+        auth_header: str | None = None,
+        query_token: str | None = None,
+        last_event_id: str | None = None,
+        last_event_created_at: str | None = None,
+        mock_user=None,
+    ):
         """
         Invoke stream_notifications directly as an async view.
 
@@ -161,7 +172,14 @@ class SSEViewAuthTests(TestCase):
         """
         from notifications.views import stream_notifications  # noqa: PLC0415
 
-        url = f"{path}?token={query_token}" if query_token else path
+        query_params = {}
+        if query_token:
+            query_params["token"] = query_token
+        if last_event_id:
+            query_params["lastEventId"] = last_event_id
+        if last_event_created_at:
+            query_params["lastEventCreatedAt"] = last_event_created_at
+        url = f"{path}?{urlencode(query_params)}" if query_params else path
         req_kwargs: dict = {}
         if auth_header is not None:
             req_kwargs["headers"] = {"Authorization": auth_header}
@@ -255,7 +273,7 @@ class SSEViewAuthTests(TestCase):
         # Capture the user_id that reaches sse_event_generator.
         captured: list[int] = []
 
-        def _capturing_gen(user_id, last_event_id):
+        def _capturing_gen(user_id, last_event_id, last_event_created_at=None):
             captured.append(user_id)
             return iter([])
 
@@ -277,6 +295,55 @@ class SSEViewAuthTests(TestCase):
             self.user.id,
             "user_id from the Bearer header token must be used",
         )
+
+    def test_reconnect_forwards_uuid_and_created_at_fallback(self):
+        captured = []
+
+        def _capturing_gen(user_id, last_event_id, last_event_created_at=None):
+            captured.append((user_id, last_event_id, last_event_created_at))
+            return iter([])
+
+        with (
+            patch("notifications.views._allow_replay_attempt", return_value=True),
+            patch("notifications.views.sse_event_generator", _capturing_gen),
+        ):
+            response = self._get(
+                reverse("notifications-stream"),
+                query_token=self.token,
+                last_event_id="11111111-1111-1111-1111-111111111111",
+                last_event_created_at="2026-08-22T10:00:00Z",
+                mock_user=self.user,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            captured,
+            [
+                (
+                    self.user.id,
+                    "11111111-1111-1111-1111-111111111111",
+                    "2026-08-22T10:00:00Z",
+                )
+            ],
+        )
+
+    @override_settings(NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS=30)
+    def test_replay_rate_limit_returns_429_with_retry_after(self):
+        generator = MagicMock(return_value=iter([]))
+        with (
+            patch("notifications.views._allow_replay_attempt", return_value=False),
+            patch("notifications.views.sse_event_generator", generator),
+        ):
+            response = self._get(
+                reverse("notifications-stream"),
+                query_token=self.token,
+                last_event_id="11111111-1111-1111-1111-111111111111",
+                mock_user=self.user,
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response["Retry-After"], "30")
+        generator.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -384,7 +451,7 @@ class SSEGeneratorReplayTests(TestCase):
         mock_redis = _make_mock_redis(pubsub=mock_pubsub)
 
         # async_replay_mock is what sync_to_async(fn) returns: a coroutine func.
-        async_replay_mock = AsyncMock(return_value=fake_data)
+        async_replay_mock = AsyncMock(return_value=(fake_data, False))
 
         async def run():
             return await _collect(sse_event_generator(1, last_event_id))
@@ -420,6 +487,35 @@ class SSEGeneratorReplayTests(TestCase):
         combined = "".join(events)
         self.assertIn("id: aaaabbbb-0000-0000-0000-aabbccddeeff", combined)
 
+    def test_full_replay_batch_ends_stream_before_live_loop(self):
+        mock_pubsub = AsyncMock()
+        mock_pubsub.subscribe = AsyncMock()
+        mock_pubsub.unsubscribe = AsyncMock()
+        mock_pubsub.get_message = AsyncMock(
+            side_effect=AssertionError("live loop must wait for the next batch")
+        )
+        mock_redis = _make_mock_redis(pubsub=mock_pubsub)
+
+        async def run():
+            return await _collect(
+                sse_event_generator(
+                    1,
+                    "11111111-1111-1111-1111-111111111111",
+                )
+            )
+
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch(
+                "asgiref.sync.sync_to_async",
+                return_value=AsyncMock(return_value=(self._FAKE_MISSED, True)),
+            ),
+        ):
+            events = asyncio.run(run())
+
+        self.assertEqual(len(events), 1)
+        mock_pubsub.get_message.assert_not_awaited()
+
     def test_live_copy_of_replayed_event_is_not_delivered_twice(self):
         raw = json.dumps({"type": "notification", "data": self._FAKE_MISSED[0]})
         calls = 0
@@ -439,7 +535,7 @@ class SSEGeneratorReplayTests(TestCase):
 
         def _sync_to_async(func):
             if getattr(func, "__name__", "") == "_serialize_missed_notifications":
-                return AsyncMock(return_value=self._FAKE_MISSED)
+                return AsyncMock(return_value=(self._FAKE_MISSED, False))
             return AsyncMock(return_value=None)
 
         async def run():
@@ -512,19 +608,131 @@ class SSEReplayQueryTests(TestCase):
         missed = self._notification(self.recipient, "Missed")
         self._notification(self.other_user, "Private to another user")
 
-        replay = _serialize_missed_notifications(self.recipient.id, str(cursor.id))
+        replay, has_more = _serialize_missed_notifications(
+            self.recipient.id,
+            str(cursor.id),
+        )
 
         self.assertEqual([str(item["id"]) for item in replay], [str(missed.id)])
+        self.assertFalse(has_more)
 
     def test_unknown_cursor_does_not_replay_history(self):
         self._notification(self.recipient, "Existing")
 
-        replay = _serialize_missed_notifications(
+        replay, has_more = _serialize_missed_notifications(
             self.recipient.id,
             "11111111-1111-1111-1111-111111111111",
         )
 
         self.assertEqual(replay, [])
+        self.assertFalse(has_more)
+
+    def test_deleted_cursor_uses_created_at_fallback(self):
+        cursor = self._notification(self.recipient, "Deleted cursor")
+        cursor_id = str(cursor.id)
+        fallback_created_at = cursor.created_at.isoformat()
+        cursor.delete()
+        missed = self._notification(self.recipient, "Missed after deletion")
+        self._notification(self.other_user, "Private to another user")
+
+        replay, has_more = _serialize_missed_notifications(
+            self.recipient.id,
+            cursor_id,
+            fallback_created_at,
+        )
+
+        self.assertEqual([str(item["id"]) for item in replay], [str(missed.id)])
+        self.assertFalse(has_more)
+
+    def test_deleted_cursor_fallback_keeps_equal_timestamp_notification(self):
+        cursor = self._notification(self.recipient, "Deleted cursor")
+        same_timestamp = self._notification(self.recipient, "Same timestamp")
+        Notification.objects.filter(pk=same_timestamp.pk).update(
+            created_at=cursor.created_at
+        )
+        cursor_id = str(cursor.id)
+        fallback_created_at = cursor.created_at.isoformat()
+        cursor.delete()
+
+        replay, has_more = _serialize_missed_notifications(
+            self.recipient.id,
+            cursor_id,
+            fallback_created_at,
+        )
+
+        self.assertEqual(
+            [str(item["id"]) for item in replay],
+            [str(same_timestamp.id)],
+        )
+        self.assertFalse(has_more)
+
+    def test_malformed_uuid_without_fallback_is_quietly_ignored(self):
+        replay, has_more = _serialize_missed_notifications(
+            self.recipient.id,
+            "not-a-uuid",
+        )
+
+        self.assertEqual(replay, [])
+        self.assertFalse(has_more)
+
+    @override_settings(NOTIFICATION_SSE_REPLAY_BATCH_SIZE=2)
+    def test_replay_is_limited_to_configured_batch_size(self):
+        cursor = self._notification(self.recipient, "Already received")
+        expected = [
+            self._notification(self.recipient, f"Missed {index}")
+            for index in range(3)
+        ]
+
+        replay, has_more = _serialize_missed_notifications(
+            self.recipient.id,
+            str(cursor.id),
+        )
+
+        self.assertEqual(
+            [str(item["id"]) for item in replay],
+            [str(item.id) for item in expected[:2]],
+        )
+        self.assertTrue(has_more)
+
+
+class SSEReplayRateLimiterTests(TestCase):
+    @override_settings(
+        NOTIFICATION_SSE_REPLAY_RATE_LIMIT=5,
+        NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS=30,
+    )
+    def test_uses_redis_rolling_window(self):
+        redis_client = MagicMock()
+        redis_client.eval.return_value = 1
+
+        with patch(
+            "django_redis.get_redis_connection",
+            return_value=redis_client,
+        ):
+            allowed = _allow_replay_attempt(42)
+
+        self.assertTrue(allowed)
+        args = redis_client.eval.call_args.args
+        self.assertEqual(args[1], 1)
+        self.assertEqual(args[2], "mediajira:sse:replay-rate:42")
+        self.assertEqual(args[5], 5)
+        self.assertEqual(args[7], 30_000)
+
+    def test_rejects_replay_when_rolling_window_is_full(self):
+        redis_client = MagicMock()
+        redis_client.eval.return_value = 0
+
+        with patch(
+            "django_redis.get_redis_connection",
+            return_value=redis_client,
+        ):
+            self.assertFalse(_allow_replay_attempt(42))
+
+    def test_fails_open_when_redis_is_unavailable(self):
+        with patch(
+            "django_redis.get_redis_connection",
+            side_effect=ConnectionError("redis unavailable"),
+        ):
+            self.assertTrue(_allow_replay_attempt(42))
 
 
 class SSEMetricsTests(TestCase):
