@@ -16,9 +16,10 @@ from django.db.models import Q, Prefetch
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from django.http import HttpResponse
 from django.conf import settings
 from datetime import datetime
-from .models import Chat, ChatParticipant, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
+from .models import Chat, ChatParticipant, LinkPreview, Message, MessageStatus, ChatType, ChannelVisibility, MessageAttachment, MessageReaction, PinnedMessage, SavedMessage, ScheduledMessage
 from .serializers import (
     ChatSerializer,
     ChatListSerializer,
@@ -28,6 +29,7 @@ from .serializers import (
     ChatCreateSerializer,
     ChatUpdateSerializer,
     PinnedMessageSerializer,
+    PinMessageRequestSerializer,
     ParticipantNotificationSerializer,
     SavedMessageSerializer,
     MessageSerializer,
@@ -47,16 +49,60 @@ from .serializers import (
 from .services import (
     ChatService,
     ChatStarService,
+    LinkPreviewFetchError,
     MessageService,
     OnlineStatusService,
+    UnsafeUrlError,
     UnsupportedAttachmentMimeType,
+    fetch_image_safely,
+    fetch_url_safely,
     validate_attachment_mime_type,
+    validate_public_url,
 )
-from .tasks import notify_message_recipients, notify_new_message, send_scheduled_message
+from .metrics import chat_broadcast_enqueue_failures_total, chat_link_preview_refusals_total
+from .tasks import notify_pin_update, send_scheduled_message
 from core.models import ProjectMember
 from core.slug_mixins import resolve_project_pk, SlugLookupViewSetMixin
+from core.tenant_context import current_tenant_schema
 
 logger = logging.getLogger(__name__)
+
+
+def queue_pin_update(chat_id, action, message_id, pin_data=None, actor_user_id=None):
+    """Queue a shared pin change for broadcast to a channel's other members.
+
+    Fan-out runs on the dedicated realtime worker rather than inside the
+    request: a large channel would otherwise cost one sequential Channels
+    publication per member before the caller gets a response.
+
+    Shared by the pin/unpin actions and by the delete/revoke paths, which drop
+    a message's pin row as a side effect. Those live on a different viewset,
+    and leaving them out is what let members keep a pin the server had already
+    removed until they reloaded.
+    """
+    chat_id = int(chat_id)
+    tenant_schema = current_tenant_schema()
+
+    def enqueue() -> None:
+        try:
+            notify_pin_update.delay(
+                chat_id,
+                action,
+                message_id,
+                pin_data,
+                tenant_schema=tenant_schema,
+                actor_user_id=actor_user_id,
+            )
+        except Exception:
+            # A broker failure must never roll back a pin change that has
+            # already been persisted successfully. The pin state is durable
+            # either way; what is lost is the live update, so members only see
+            # it after a refresh. Counted as well as logged: this is silent
+            # from the user's side and nobody reads logs looking for it.
+            chat_broadcast_enqueue_failures_total.labels(event='pin').inc()
+            logger.exception('Failed to queue pin update for chat %s', chat_id)
+
+    transaction.on_commit(enqueue)
 
 
 def _encode_search_cursor(message, include_rank=False):
@@ -192,7 +238,16 @@ class ChatViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
 
     def _is_channel_manager(self, chat, user):
         return ChatService.is_channel_manager(chat, user)
-    
+
+    def _notify_pin_update(self, chat, action, message_id, pin_data=None):
+        queue_pin_update(
+            chat.id,
+            action,
+            message_id,
+            pin_data=pin_data,
+            actor_user_id=self.request.user.id,
+        )
+
     def get_queryset(self):
         """Get chats where user is a participant"""
         # For actions where the user may not be a member yet, return all chats.
@@ -588,7 +643,20 @@ class ChatViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         chat = self.get_object()
         if not ChatParticipant.objects.filter(chat=chat, user=request.user, is_active=True).exists():
             return Response({'error': 'You are not a participant of this chat'}, status=status.HTTP_403_FORBIDDEN)
-        pins = PinnedMessage.objects.filter(chat=chat).select_related('message', 'message__sender', 'pinned_by')
+        # Pinning is a group-channel feature: only managers can pin/unpin, and a
+        # direct message has no manager. Legacy rows created before that rule was
+        # enforced would otherwise be listed here with no way to remove them.
+        if chat.type != ChatType.GROUP:
+            return Response([])
+        pins = (
+            PinnedMessage.objects.filter(
+                chat=chat,
+                message__is_deleted=False,
+                message__is_revoked=False,
+            )
+            .select_related('message', 'message__sender', 'pinned_by')
+            .order_by('-created_at', '-id')
+        )
         serializer = PinnedMessageSerializer(pins, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -645,21 +713,31 @@ class ChatViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         chat = self.get_object()
         if not ChatParticipant.objects.filter(chat=chat, user=request.user, is_active=True).exists():
             return Response({'error': 'You are not a participant of this chat'}, status=status.HTTP_403_FORBIDDEN)
-        if chat.type == ChatType.GROUP and not self._is_channel_manager(chat, request.user):
+        if chat.type != ChatType.GROUP or not self._is_channel_manager(chat, request.user):
             return Response({'error': 'Only channel managers can pin messages'}, status=status.HTTP_403_FORBIDDEN)
-        message_id = request.data.get('message_id')
-        if not message_id:
-            return Response({'error': 'message_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        request_serializer = PinMessageRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        message_id = request_serializer.validated_data['message_id']
+
         try:
-            message = Message.objects.get(id=message_id, chat=chat, is_deleted=False)
+            message = Message.objects.get(
+                id=message_id,
+                chat=chat,
+                is_deleted=False,
+                is_revoked=False,
+            )
         except Message.DoesNotExist:
             return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
         pin, created = PinnedMessage.objects.get_or_create(
             chat=chat, message=message,
             defaults={'pinned_by': request.user},
         )
+        pin_data = PinnedMessageSerializer(pin, context={'request': request}).data
+        if created:
+            self._notify_pin_update(chat, 'pinned', message.id, pin_data)
         return Response(
-            PinnedMessageSerializer(pin, context={'request': request}).data,
+            pin_data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
@@ -669,11 +747,20 @@ class ChatViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         chat = self.get_object()
         if not ChatParticipant.objects.filter(chat=chat, user=request.user, is_active=True).exists():
             return Response({'error': 'You are not a participant of this chat'}, status=status.HTTP_403_FORBIDDEN)
-        if chat.type == ChatType.GROUP and not self._is_channel_manager(chat, request.user):
+        if chat.type != ChatType.GROUP or not self._is_channel_manager(chat, request.user):
             return Response({'error': 'Only channel managers can unpin messages'}, status=status.HTTP_403_FORBIDDEN)
-        deleted, _ = PinnedMessage.objects.filter(chat=chat, message_id=message_id).delete()
+
+        request_serializer = PinMessageRequestSerializer(data={'message_id': message_id})
+        request_serializer.is_valid(raise_exception=True)
+        validated_message_id = request_serializer.validated_data['message_id']
+
+        deleted, _ = PinnedMessage.objects.filter(
+            chat=chat,
+            message_id=validated_message_id,
+        ).delete()
         if not deleted:
             return Response({'error': 'Pin not found'}, status=status.HTTP_404_NOT_FOUND)
+        self._notify_pin_update(chat, 'unpinned', validated_message_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'], url_path='browse')
@@ -770,6 +857,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def _message_queryset(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
         thread_replies_for_summary = (
             Message.objects
             .select_related('sender')
@@ -804,12 +894,19 @@ class MessageViewSet(viewsets.ModelViewSet):
                 queryset=thread_replies_for_summary,
                 to_attr='_thread_replies_for_summary',
             ),
+            # Only the viewer's own row matters, so fetch just that one and let the
+            # serializer read it off the instance instead of asking per message.
+            Prefetch(
+                'link_preview_hidden_by',
+                queryset=User.objects.filter(id=self.request.user.id).only('id'),
+                to_attr='_link_preview_hidden_for_viewer',
+            ),
         )
     
     def get_queryset(self):
         """Get messages for a specific chat"""
         # For retrieve/detail actions, return all messages (permission checked in retrieve method)
-        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
+        if self.action in ['retrieve', 'mark_as_read', 'react', 'remove_reaction', 'remind', 'cancel_remind', 'revoke', 'destroy', 'hide', 'hide_link_preview', 'partial_update', 'update', 'thread_replies', 'mark_thread_as_read']:
             return self._message_queryset()
 
         # For list action, require chat_id
@@ -951,11 +1048,26 @@ class MessageViewSet(viewsets.ModelViewSet):
             message = serializer.save()
             created = getattr(serializer, '_message_created', True)
 
+            # Keep the create response independent of channel size. The sender
+            # only needs the committed message; recipient statuses are durable
+            # server-side delivery bookkeeping and are available on normal
+            # message reads. Serializing 99 nested users for every send caused
+            # large responses and kept ASGI database connections occupied.
             message = Message.objects.select_related(
-                'sender', 'reply_to', 'reply_to__sender'
-            ).prefetch_related('attachments').get(id=message.id)
+                'sender', 'reply_to', 'reply_to__sender', 'forwarded_from_message'
+            ).prefetch_related(
+                'attachments',
+                'reply_to__attachments',
+                'mentions__mentioned_user',
+            ).get(id=message.id)
 
-            response_serializer = MessageWithAttachmentsSerializer(message, context={'request': request})
+            response_serializer = MessageWithAttachmentsSerializer(
+                message,
+                context={
+                    'request': request,
+                    'send_response': True,
+                },
+            )
             logger.info(
                 "Message %s %s successfully with %s attachments",
                 message.id,
@@ -1214,7 +1326,13 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         # Notify via WebSocket
         from .tasks import notify_reaction_update
-        notify_reaction_update.delay(message.id, request.user.id, emoji, action_taken)
+        notify_reaction_update.delay(
+            message.id,
+            request.user.id,
+            emoji,
+            action_taken,
+            tenant_schema=current_tenant_schema(),
+        )
 
         # Return updated reactions
         message.refresh_from_db()
@@ -1266,7 +1384,13 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         # Notify via WebSocket
         from .tasks import notify_reaction_update
-        notify_reaction_update.delay(message.id, request.user.id, emoji, 'removed')
+        notify_reaction_update.delay(
+            message.id,
+            request.user.id,
+            emoji,
+            'removed',
+            tenant_schema=current_tenant_schema(),
+        )
 
         # Return updated reactions
         message.refresh_from_db()
@@ -1411,6 +1535,17 @@ class MessageViewSet(viewsets.ModelViewSet):
         message.is_revoked = True
         message.revoked_at = timezone.now()
         message.save(update_fields=['is_revoked', 'revoked_at', 'updated_at'])
+        # A revoked message is filtered out of the pin list, so the row has to
+        # go — and members holding it on screen have to be told, or their
+        # banner keeps offering a jump to a message that is no longer there.
+        unpinned, _ = PinnedMessage.objects.filter(message=message).delete()
+        if unpinned:
+            queue_pin_update(
+                message.chat_id,
+                'unpinned',
+                message.id,
+                actor_user_id=request.user.id,
+            )
 
         logger.info(f"User {request.user.id} revoked message {message.id}")
 
@@ -1536,6 +1671,17 @@ class MessageViewSet(viewsets.ModelViewSet):
                 'updated_at',
             ])
 
+        # Same reasoning as revoke: dropping the row silently leaves every
+        # other member's pinned list pointing at a deleted message.
+        unpinned, _ = PinnedMessage.objects.filter(message=message).delete()
+        if unpinned:
+            queue_pin_update(
+                message.chat_id,
+                'unpinned',
+                message.id,
+                actor_user_id=request.user.id,
+            )
+
         logger.info(f"User {request.user.id} soft-deleted message {message_id}")
 
         response_serializer = MessageWithAttachmentsSerializer(message, context={'request': request})
@@ -1575,6 +1721,38 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Return the updated message
         serializer = self.get_serializer(message)
         return Response({'status': 'hidden', 'message': serializer.data}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def hide_link_preview(self, request, pk=None):
+        """Dismiss this message's link preview card, for the current user only.
+
+        A view preference, not an edit: the message stays, other participants keep
+        their card, and the URL-keyed preview cache is untouched — the same link
+        still previews in other messages and is never re-fetched because of this.
+        """
+        message = self.get_object()
+
+        if not ChatParticipant.objects.filter(
+            chat=message.chat,
+            user=request.user,
+            is_active=True
+        ).exists():
+            return Response(
+                {'error': 'You are not a participant in this chat'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # add() is idempotent, so dismissing twice is harmless.
+        message.link_preview_hidden_by.add(request.user)
+
+        logger.info(
+            'User %s dismissed the link preview on message %s', request.user.id, message.id
+        )
+        serializer = self.get_serializer(message)
+        return Response(
+            {'status': 'link_preview_hidden', 'message': serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AttachmentViewSet(viewsets.GenericViewSet):
@@ -1856,7 +2034,11 @@ class ScheduledMessageViewSet(
         )
 
         # Dispatch Celery task with ETA
-        result = send_scheduled_message.apply_async(args=[sm.id], eta=sm.scheduled_at)
+        result = send_scheduled_message.apply_async(
+            args=[sm.id],
+            kwargs={'tenant_schema': current_tenant_schema()},
+            eta=sm.scheduled_at,
+        )
         sm.task_id = result.id
         sm.save(update_fields=['task_id', 'updated_at'])
 
@@ -1917,37 +2099,33 @@ def fetch_link_preview(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Validate URL
+    # SSRF guard (MED-279): the server is about to fetch a URL a user supplied, so
+    # safety is decided by the *resolved IP*, not by the URL string, and redirects
+    # are re-validated hop by hop inside fetch_url_safely.
     try:
-        parsed = urlparse(url)
-        if not parsed.scheme or not parsed.netloc:
-            return Response(
-                {'error': 'Invalid URL format'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    except Exception:
+        safe_url = validate_public_url(url)
+    except UnsafeUrlError as exc:
+        logger.warning('Refused link preview for %s: %s', url, exc)
         return Response(
-            {'error': 'Invalid URL format'},
+            {'error': 'Invalid or disallowed URL'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
+    parsed = urlparse(safe_url)
+
     # Check cache first
-    cache_key = f"link_preview:{url}"
+    cache_key = f"link_preview:{safe_url}"
     cached_data = cache.get(cache_key)
     if cached_data:
         return Response(cached_data)
-    
+
     try:
-        # Fetch the page with timeout
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        response.raise_for_status()
-        
+        html = fetch_url_safely(safe_url)
+
         # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
+        soup = BeautifulSoup(html, 'html.parser')
+        url = safe_url  # relative og:image URLs resolve against the validated URL
+
         # Extract metadata
         preview_data = {
             'url': url,
@@ -2023,6 +2201,19 @@ def fetch_link_preview(request):
         
         return Response(preview_data)
         
+    except UnsafeUrlError as exc:
+        # A redirect hop pointed somewhere internal, or the response was not HTML.
+        logger.warning('Refused link preview mid-fetch for %s: %s', url, exc)
+        return Response(
+            {'error': 'Invalid or disallowed URL'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except LinkPreviewFetchError as exc:
+        logger.warning('Upstream error fetching link preview for %s: %s', url, exc)
+        return Response(
+            {'error': 'Failed to fetch URL'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
     except requests.exceptions.Timeout:
         logger.warning(f"Timeout fetching link preview for {url}")
         return Response(
@@ -2041,6 +2232,46 @@ def fetch_link_preview(request):
             {'error': 'Internal server error'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def link_preview_image(request):
+    """Serve a preview thumbnail from our own domain (MED-279).
+
+    Hotlinking og:image meant every viewer's browser contacted the third-party
+    host, handing it their IP. Proxying removes that, but only for images we have
+    already recorded: an endpoint that fetched any URL a caller named would be a
+    general-purpose SSRF tool, which is a worse hole than the one being closed.
+    """
+    url = request.query_params.get('url')
+    if not url:
+        return Response({'error': 'url is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # The allowlist is the cache itself: only images a guarded fetch already found.
+    if not LinkPreview.objects.filter(
+        image_url=url, status=LinkPreview.STATUS_READY
+    ).exists():
+        logger.warning('Refused to proxy an image that is not in the preview cache')
+        return Response({'error': 'Unknown image'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        data, content_type = fetch_image_safely(url)
+    except UnsafeUrlError as exc:
+        chat_link_preview_refusals_total.labels(reason='image_guard').inc()
+        logger.warning('Refused to proxy image: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_400_BAD_REQUEST)
+    except (LinkPreviewFetchError, requests.RequestException) as exc:
+        logger.info('Image proxy upstream failure: %s', exc)
+        return Response({'error': 'Image unavailable'}, status=status.HTTP_502_BAD_GATEWAY)
+
+    response = HttpResponse(data, content_type=content_type)
+    # Served from our origin, so be explicit that it is only ever an image.
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    response['Referrer-Policy'] = 'no-referrer'
+    response['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 
 # ── Full-text message search ───────────────────────────────────────────────────

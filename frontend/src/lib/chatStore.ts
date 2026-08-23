@@ -161,6 +161,7 @@ export const useChatStore = create<ChatState>()(
       presenceByUserId: {},     // userId -> current online/offline state
       presenceVersionByUserId: {}, // userId -> latest applied presence version
       mentionedChatIds: {},     // chatId -> true when current user has unread @-mention
+      unseenPinChatIds: {},     // chatId -> true until the user opens Pins
       outbox: [],
 
       // Thread panel
@@ -780,6 +781,60 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      applyLinkPreview: (messageId, preview) => {
+        set(state => {
+          // Attach a preview that finished fetching after the message arrived, so
+          // the card appears without a reload. Same shape the serializer sends,
+          // so a live card and a reloaded one are identical.
+          const attach = (msg: Message): Message =>
+            msg.id === messageId ? { ...msg, link_preview: preview } : msg;
+
+          const newMessages = { ...state.messages };
+          Object.keys(newMessages).forEach(chatIdStr => {
+            const chatId = parseInt(chatIdStr);
+            if (newMessages[chatId].some(m => m.id === messageId)) {
+              newMessages[chatId] = newMessages[chatId].map(attach);
+            }
+          });
+
+          const newThreadReplies = { ...state.threadReplies };
+          Object.keys(newThreadReplies).forEach(rootIdStr => {
+            const rootId = parseInt(rootIdStr);
+            if (newThreadReplies[rootId].some(r => r.id === messageId)) {
+              newThreadReplies[rootId] = newThreadReplies[rootId].map(attach);
+            }
+          });
+
+          return { messages: newMessages, threadReplies: newThreadReplies };
+        });
+      },
+
+      clearLinkPreview: (messageId) => {
+        set(state => {
+          // Dismissing is a view preference; the message and its text are untouched.
+          const drop = (msg: Message): Message =>
+            msg.id === messageId ? { ...msg, link_preview: null } : msg;
+
+          const newMessages = { ...state.messages };
+          Object.keys(newMessages).forEach(chatIdStr => {
+            const chatId = parseInt(chatIdStr);
+            if (newMessages[chatId].some(m => m.id === messageId)) {
+              newMessages[chatId] = newMessages[chatId].map(drop);
+            }
+          });
+
+          const newThreadReplies = { ...state.threadReplies };
+          Object.keys(newThreadReplies).forEach(rootIdStr => {
+            const rootId = parseInt(rootIdStr);
+            if (newThreadReplies[rootId].some(r => r.id === messageId)) {
+              newThreadReplies[rootId] = newThreadReplies[rootId].map(drop);
+            }
+          });
+
+          return { messages: newMessages, threadReplies: newThreadReplies };
+        });
+      },
+
       updateUserPresence: (userId: number, isOnline: boolean, version: number | null = null) => {
         const numericUserId = Number(userId);
         if (!Number.isFinite(numericUserId)) return;
@@ -1064,6 +1119,7 @@ export const useChatStore = create<ChatState>()(
           presenceByUserId: {},
           presenceVersionByUserId: {},
           mentionedChatIds: {},
+          unseenPinChatIds: {},
           activeThreadMessageId: null,
           threadReplies: {},
           outbox: [],
@@ -1096,6 +1152,18 @@ export const useChatStore = create<ChatState>()(
             );
           });
           return { mentionedChatIds: next, chatsByProject: newChatsByProject };
+        }),
+
+      // ── Shared pin badges ─────────────────────────────────────────────
+      markChatPinUnseen: (chatId) =>
+        set((state) => ({
+          unseenPinChatIds: { ...state.unseenPinChatIds, [chatId]: true },
+        })),
+      clearChatPinUnseen: (chatId) =>
+        set((state) => {
+          const next = { ...state.unseenPinChatIds };
+          delete next[chatId];
+          return { unseenPinChatIds: next };
         }),
 
       // ── Thread panel ─────────────────────────────────────────────────
@@ -1142,6 +1210,7 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => ({
         isWidgetOpen: state.isWidgetOpen,
         outbox: state.outbox,
+        unseenPinChatIds: state.unseenPinChatIds,
         // Don't persist chats/messages as they should be fetched fresh
       }),
     }

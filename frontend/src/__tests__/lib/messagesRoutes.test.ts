@@ -1,6 +1,7 @@
 import {
   buildMessagesPath,
   getLegacyChatIdFromQuery,
+  isMessageDeepLinkForChat,
   normalizeProjectKey,
   parseChatSlugFromPathname,
   projectKeysMatch,
@@ -18,6 +19,12 @@ describe('messagesRoutes', () => {
   it('parses chat slug from pathname', () => {
     expect(parseChatSlugFromPathname('/messages/general')).toBe('general');
     expect(parseChatSlugFromPathname('/messages')).toBeNull();
+  });
+
+  it('does not resolve a stale message deep link against a newly selected chat', () => {
+    expect(isMessageDeepLinkForChat('announcements', 'direct-message')).toBe(false);
+    expect(isMessageDeepLinkForChat('announcements', 'announcements')).toBe(true);
+    expect(isMessageDeepLinkForChat(undefined, 'widget-chat')).toBe(true);
   });
 
   it('detects legacy chatId query', () => {

@@ -11,6 +11,7 @@ from typing import Any
 
 from django.conf import settings
 
+from agent.log_redaction import redact_string
 from stripe_meta.exceptions import QuotaError
 from stripe_meta.models import LLMCallLog
 from stripe_meta.services import (
@@ -132,7 +133,7 @@ def call_llm(
             output_cost_cents=0,
             total_cost_cents=0,
             success=False,
-            error_message=str(exc)[:500],
+            error_message=redact_string(str(exc))[:500],
         )
         raise
 

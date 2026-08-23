@@ -119,7 +119,33 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
       },
-      testMatch: /e2e[\\/]messages[\\/]messages-(reconnect-attachments|ordering-jitter)\.spec\.ts$/,
+      testMatch: [
+        /e2e[\\/]messages[\\/]messages-reconnect-attachments\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-pinned\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-link-preview\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-ordering-jitter\.spec\.ts$/,
+      ],
+    },
+    {
+      /* Load/perf specs: need the running Docker stack (and the load fixture
+         for these two). Never wired into CI; run explicitly with
+         --project=messages-load and E2E_USE_EXISTING_SERVER=1. */
+      name: 'messages-load',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      testMatch: [
+        /e2e[\\/]messages[\\/]messages-burst-perf\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-live-load\.spec\.ts$/,
+        /e2e[\\/]messages[\\/]messages-multi-client-render\.spec\.ts$/,
+      ],
+    },
+    {
+      name: 'budget-mock',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      testMatch: /e2e[\\/]budget[\\/]budget-admin-override\.spec\.ts$/,
     },
   ],
 });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowUpRight,
   Bell,
   Calendar as CalendarIcon,
   ChevronDown,
@@ -25,6 +26,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import { avatarColor } from './avatarColor';
 import {
   addMonths,
   eachDayOfInterval,
@@ -42,6 +44,7 @@ import {
 import toast from 'react-hot-toast';
 import type { Chat, ChatParticipant, ChannelVisibility } from '@/types/chat';
 import { useChatStore } from '@/lib/chatStore';
+import { isChannelManager } from '@/lib/chatPermissions';
 import { addParticipant, cancelScheduledMessage, createScheduledMessage, getChat, leaveChat, listPins, listChatFiles, listScheduledMessages, removeParticipant, unpinMessage, updateChatDetails, updateNotificationSettings, updateParticipantManager } from '@/lib/api/chatApi';
 import { TEMP_MUTE_OPTIONS, formatMutedUntil, getTemporaryMuteUntil, isParticipantCurrentlyMuted } from '@/lib/chatMute';
 import { MAX_CHANNEL_NAME_LENGTH, limitName, normalizeLimitedName } from '@/lib/messages/nameLimits';
@@ -473,12 +476,13 @@ function DatePickerUp({ value, min, onChange, className }: DatePickerUpProps) {
 
 // ── Collapsible section ───────────────────────────────────────────────────────
 
-function Section({ title, icon, defaultOpen = true, onOpen, contentClassName, children }: {
+function Section({ title, icon, defaultOpen = true, onOpen, contentClassName, testId, children }: {
   title: string;
   icon: React.ReactNode;
   defaultOpen?: boolean;
   onOpen?: () => void;
   contentClassName?: string;
+  testId?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -487,6 +491,7 @@ function Section({ title, icon, defaultOpen = true, onOpen, contentClassName, ch
     <div className="border-b border-gray-100">
       <button
         ref={headerRef}
+        data-testid={testId}
         type="button"
         onClick={() => {
           const next = !open;
@@ -561,6 +566,8 @@ export default function ChannelDetailsDrawer({
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [pins, setPins] = useState<PinnedMessageRow[]>([]);
   const [pinsLoaded, setPinsLoaded] = useState(false);
+  const [pinsLoading, setPinsLoading] = useState(false);
+  const [pinsError, setPinsError] = useState<string | null>(null);
   const [unpinningId, setUnpinningId] = useState<number | null>(null);
   const [files, setFiles] = useState<ChatFileRow[]>([]);
   const [filesTotal, setFilesTotal] = useState(0);
@@ -658,20 +665,15 @@ export default function ChannelDetailsDrawer({
       : null;
   const managerCount = participants.filter((p) => p.is_manager).length;
   const assignedManagerCount = participants.filter((p) => p.is_manager && p.user.id !== metadataSource.created_by_id).length;
-  const hasExplicitManager = managerCount > 0;
-  const isEffectiveManager = (participant: ChatParticipant) => Boolean(
-    participant.is_manager
-    || (metadataSource.created_by_id && participant.user.id === metadataSource.created_by_id)
-    || (!hasExplicitManager && inferredCreator?.id === participant.user.id)
+  const permissionChat = { ...metadataSource, participants };
+  const isEffectiveManager = (participant: ChatParticipant) => isChannelManager(
+    permissionChat,
+    participant.user.id,
   );
   const managerParticipants = participants.filter(isEffectiveManager);
   const nonManagerParticipants = participants.filter((p) => !isEffectiveManager(p));
   const channelVisibility: ChannelVisibility = metadataSource.visibility ?? 'public';
-  const canManageChannel = isGroup && Boolean(
-    myParticipant?.is_manager
-    || (metadataSource.created_by_id && metadataSource.created_by_id === currentUserId)
-    || (!hasExplicitManager && inferredCreator?.id === currentUserId)
-  );
+  const canManageChannel = isChannelManager(permissionChat, currentUserId);
   const canAddMembers = isGroup && (channelVisibility !== 'manager_invite' || canManageChannel);
 
   useEffect(() => {
@@ -681,7 +683,7 @@ export default function ChannelDetailsDrawer({
   useEffect(() => {
     let cancelled = false;
     setMetadataChat(null);
-    getChat(chat.id)
+    getChat(chat.slug)
       .then((details) => {
         if (cancelled) return;
         syncChatDetails(details);
@@ -691,7 +693,7 @@ export default function ChannelDetailsDrawer({
     return () => {
       cancelled = true;
     };
-  }, [chat.id, syncChatDetails]);
+  }, [chat.id, chat.slug, syncChatDetails]);
 
   const handleSaveName = useCallback(async (value: string) => {
     const updated = await updateChatDetails(chat.id, { name: normalizeLimitedName(value, MAX_CHANNEL_NAME_LENGTH) });
@@ -903,32 +905,76 @@ export default function ChannelDetailsDrawer({
     }
   };
 
+  // pinRefreshKey bumps on every pin_update the channel receives, so several of
+  // these can be in flight at once and they need not resolve in order. Only the
+  // newest may write, or a late reply reinstates a list the server has already
+  // moved past. Switching channels re-enters this too, which is what stops one
+  // channel's pins rendering inside another.
+  const pinRequestGenerationRef = useRef(0);
+  const chatScopedRequestGenerationRef = useRef(0);
+
+  const fetchPins = useCallback(async () => {
+    const generation = ++pinRequestGenerationRef.current;
+    setPinsLoaded(true);
+    setPinsLoading(true);
+    setPinsError(null);
+    try {
+      const rows = await listPins(chat.slug);
+      if (generation !== pinRequestGenerationRef.current) return;
+      setPins(
+        [...rows].sort((a, b) => {
+          const timeDifference = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          return timeDifference || b.id - a.id;
+        }),
+      );
+    } catch {
+      if (generation !== pinRequestGenerationRef.current) return;
+      setPinsError('Could not load pinned messages.');
+    } finally {
+      if (generation === pinRequestGenerationRef.current) setPinsLoading(false);
+    }
+  }, [chat.slug]);
+
   // Keep pins fresh while the drawer is open; the timeline bumps pinRefreshKey
   // after pin/unpin actions so this section updates immediately.
   useEffect(() => {
-    setPinsLoaded(true);
-    listPins(chat.slug).then(setPins).catch(() => {});
-  }, [chat.id, chat.slug, pinRefreshKey]);
+    setPins([]);
+    void fetchPins();
+  }, [chat.id, fetchPins, pinRefreshKey]);
 
   // Fetch counts on mount so each section header shows its count even before
   // it's expanded. The onOpen loaders below become no-ops once *Loaded is true.
+  // Both responses belong to one channel, and switching channels does not
+  // cancel the request the previous one started. Without the check, its reply
+  // lands afterwards and fills this drawer with the other channel's contents.
   useEffect(() => {
+    // Comparing against a captured chat.id would not work: the closure holds
+    // the value from its own render, so it always matches itself. The counter
+    // lives outside the render and is what actually advances on a switch.
+    const generation = ++chatScopedRequestGenerationRef.current;
+    const isStale = () => generation !== chatScopedRequestGenerationRef.current;
+
     setFilesLoaded(true);
     setFilesLoading(true);
     listChatFiles(chat.id)
-      .then(({ results, total }) => { setFiles(results); setFilesTotal(total); })
+      .then(({ results, total }) => {
+        if (isStale()) return;
+        setFiles(results);
+        setFilesTotal(total);
+      })
       .catch(() => {})
-      .finally(() => setFilesLoading(false));
+      .finally(() => { if (!isStale()) setFilesLoading(false); });
 
     setScheduledLoaded(true);
-    listScheduledMessages(chat.id).then(setScheduled).catch(() => {});
+    listScheduledMessages(chat.id)
+      .then((rows) => { if (!isStale()) setScheduled(rows); })
+      .catch(() => {});
   }, [chat.id]);
 
   const loadPins = useCallback(() => {
     if (pinsLoaded) return;
-    setPinsLoaded(true);
-    listPins(chat.slug).then(setPins).catch(() => {});
-  }, [chat.id, chat.slug, pinsLoaded]);
+    void fetchPins();
+  }, [fetchPins, pinsLoaded]);
 
   const loadFiles = useCallback(() => {
     if (filesLoaded) return;
@@ -949,11 +995,12 @@ export default function ChannelDetailsDrawer({
   const handleUnpin = async (pin: PinnedMessageRow) => {
     setUnpinningId(pin.id);
     try {
-      await unpinMessage(chat.id, pin.message.id);
+      await unpinMessage(chat.slug, pin.message.id);
       setPins((prev) => prev.filter((p) => p.id !== pin.id));
       onPinRemoved?.(pin.message.id);
+      toast.success('Message unpinned');
     } catch {
-      /* silently ignore */
+      toast.error('Failed to unpin message');
     } finally {
       setUnpinningId(null);
     }
@@ -1048,7 +1095,7 @@ export default function ChannelDetailsDrawer({
   return (
     <div className="flex h-full w-full flex-col border-l border-gray-200 bg-white" data-testid="channel-details-drawer">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+      <div className="relative z-10 flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
         <span className="text-sm font-semibold text-gray-800">{isGroup ? 'Channel details' : 'Direct message'}</span>
         <button
           type="button"
@@ -1382,69 +1429,96 @@ export default function ChannelDetailsDrawer({
           icon={<Pin className="h-4 w-4" />}
           defaultOpen={false}
           onOpen={loadPins}
+          testId="pinned-messages-section-toggle"
         >
-          {pins.length === 0 ? (
+          {pinsLoading ? (
+            <div className="flex items-center gap-2 py-1 text-sm text-gray-400" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading pinned messages…
+            </div>
+          ) : pinsError ? (
+            <div className="space-y-2" role="alert">
+              <p className="text-sm text-red-600">{pinsError}</p>
+              <button
+                type="button"
+                onClick={() => void fetchPins()}
+                className="text-xs font-medium text-teal-700 hover:text-teal-800"
+              >
+                Try again
+              </button>
+            </div>
+          ) : pins.length === 0 ? (
             <p className="text-sm text-gray-400 italic">No pinned messages yet.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
-              {pins.map((pin) => (
-                <li key={pin.id} className="group flex items-center gap-2 py-2 first:pt-0 last:pb-0">
-                  {/* Left accent bar */}
-                  <div className="w-0.5 self-stretch rounded-full bg-teal-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    {/* One-line preview: sender · snippet */}
+            <ul className="space-y-2" data-testid="pinned-messages-list">
+              {pins.map((pin) => {
+                const sender = pin.message.sender?.username || pin.message.sender?.email || 'Unknown';
+                return (
+                  <li
+                    key={pin.id}
+                    className="group rounded-lg border border-gray-200/80 bg-white p-2.5 shadow-[0_1px_3px_rgba(16,24,40,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-[0_6px_16px_rgba(16,24,40,0.10)]"
+                    data-testid="pinned-message-item"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${avatarColor(pin.message.sender?.id)}`}>
+                        {sender.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-700">
+                        {sender}
+                      </span>
+                    </div>
                     {onJumpToMessage ? (
                       <button
                         type="button"
                         onClick={() => onJumpToMessage(pin.message.id, pin.message.parent_message_id ?? null)}
-                        className="block w-full text-left"
+                        className="mt-1 block w-full rounded text-left"
+                        title="Jump to message"
+                        aria-label={`Jump to pinned message: ${pin.message.content || 'attachment'}`}
                       >
-                        <span className="text-[11px] font-semibold text-gray-600">
-                          {pin.message.sender?.username || pin.message.sender?.email || 'Unknown'}
-                        </span>
-                        <span className="mx-1 text-[11px] text-gray-300">·</span>
-                        <span className="text-[11px] text-gray-500 line-clamp-1 [overflow-wrap:anywhere]">
+                        <span className="block text-[11px] text-gray-500 line-clamp-2 [overflow-wrap:anywhere]">
                           {pin.message.content || '(attachment)'}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] text-teal-600 group-hover:underline">
-                          Jump to message →
                         </span>
                       </button>
                     ) : (
-                      <>
-                        <span className="text-[11px] font-semibold text-gray-600">
-                          {pin.message.sender?.username || pin.message.sender?.email || 'Unknown'}
-                        </span>
-                        <p className="text-[11px] text-gray-500 line-clamp-1">{pin.message.content || '(attachment)'}</p>
-                      </>
+                      <p className="mt-1 text-[11px] text-gray-500 line-clamp-2">{pin.message.content || '(attachment)'}</p>
                     )}
-                    {/* Pinned label */}
-                    <span className="mt-0.5 flex items-center gap-1 text-[10px] text-teal-600">
-                      <Pin className="h-2.5 w-2.5 shrink-0" />
-                      Pinned to channel · visible to all members
-                    </span>
-                    {/* Pinned-by context */}
-                    {pin.pinned_by && (
-                      <p className="text-[10px] text-gray-400">
-                        by {pin.pinned_by.username || pin.pinned_by.email}
+                    {/* Pin audit context + aligned actions */}
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <p className="min-w-0 flex-1 truncate text-[10px] text-gray-400" data-testid="pinned-message-meta">
+                        {pin.pinned_by
+                          ? `by ${pin.pinned_by.username || pin.pinned_by.email} · `
+                          : ''}
+                        {format(parseISO(pin.created_at), 'MMM d, yyyy · h:mm a')}
                       </p>
-                    )}
-                  </div>
-                  {canManageChannel && (
-                    <button
-                      type="button"
-                      onClick={() => void handleUnpin(pin)}
-                      disabled={unpinningId === pin.id}
-                      className="hidden shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500 group-hover:block disabled:opacity-50"
-                      aria-label="Unpin"
-                    >
-                      {unpinningId === pin.id
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <X className="h-3.5 w-3.5" />}
-                    </button>
-                  )}
-                </li>
-              ))}
+                      {onJumpToMessage && (
+                        <button
+                          type="button"
+                          onClick={() => onJumpToMessage(pin.message.id, pin.message.parent_message_id ?? null)}
+                          className="shrink-0 rounded p-1 text-gray-300 transition hover:bg-teal-50 hover:text-teal-600"
+                          aria-label={`Jump to pinned message: ${pin.message.content || 'attachment'}`}
+                          title="Jump to message"
+                        >
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {canManageChannel && (
+                        <button
+                          type="button"
+                          onClick={() => void handleUnpin(pin)}
+                          disabled={unpinningId === pin.id}
+                          className="shrink-0 rounded p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                          aria-label="Unpin"
+                          title="Unpin"
+                        >
+                          {unpinningId === pin.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <X className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Section>

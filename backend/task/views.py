@@ -146,7 +146,32 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         task = serializer.save()
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
+    def update(self, request, *args, **kwargs):
+        """
+        Echo the client-generated operation ID after a successful update.
+
+        The ID is request metadata only. It is not persisted and therefore
+        requires no model or migration change.
+        """
+        operation_id = request.query_params.get('operation_id')
+
+        if operation_id is not None:
+            operation_id = operation_id.strip()
+            if not operation_id or len(operation_id) > 128:
+                raise DRFValidationError({
+                    'operation_id': (
+                        'Operation ID must contain between 1 and 128 characters.'
+                    ),
+                })
+
+        response = super().update(request, *args, **kwargs)
+
+        if operation_id and isinstance(response.data, dict):
+            response.data['operation_id'] = operation_id
+
+        return response
+
     def get_queryset(self):
         """Filter queryset based on user permissions and query parameters"""
         # region agent log
@@ -927,7 +952,29 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         old_summary    = task.summary
         old_priority   = task.priority
 
-        serializer.save()
+        validated_field_names = set(serializer.validated_data.keys())
+        attempted_history_fields = {
+            field_name
+            for field_name in TaskFieldHistory.TRACKED_FIELDS
+            if (
+                field_name in validated_field_names
+                or Task._meta.get_field(field_name).attname
+                in validated_field_names
+            )
+        }
+
+        task._attempted_task_field_history_fields = (
+            attempted_history_fields
+        )
+
+        try:
+            serializer.save()
+        finally:
+            if hasattr(
+                task,
+                '_attempted_task_field_history_fields',
+            ):
+                del task._attempted_task_field_history_fields
 
         from meetings.models import MeetingTaskOrigin
         from meetings.services import record_task_updated
@@ -1133,7 +1180,12 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
     def field_history(self, request, pk=None):
         """Get field change history for a task."""
         task = self.get_object()
-        qs = TaskFieldHistory.objects.filter(task=task).select_related('changed_by').order_by('-changed_at')
+        qs = (
+            TaskFieldHistory.objects
+            .filter(task=task)
+            .select_related('changed_by')
+            .order_by('-changed_at', '-pk')
+        )
         try:
             page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
             page = max(1, int(request.query_params.get('page', 1)))
@@ -1315,12 +1367,31 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                # Verify the requesting user is the designated approver for this step
-                if task.current_approver_id and request.user.id != task.current_approver_id:
-                    return Response(
-                        {'error': 'Only the designated approver for this step can approve or reject.'},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+                # Designated chain approver, or same-org org-admin override on budget (MED-240).
+                is_current_approver = (
+                    task.current_approver_id is not None
+                    and request.user.id == task.current_approver_id
+                )
+                is_admin_override = False
+                if task.current_approver_id and not is_current_approver:
+                    if task.type == 'budget':
+                        from budget_approval.approver_access import (
+                            is_org_admin_override_action,
+                            user_may_process_budget_approval,
+                        )
+                        br = task.linked_object or task.budget_requests.first()
+                        if br is not None and user_may_process_budget_approval(request.user, br):
+                            is_admin_override = is_org_admin_override_action(request.user, br)
+                        else:
+                            return Response(
+                                {'error': 'Only the designated approver for this step can approve or reject.'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                    else:
+                        return Response(
+                            {'error': 'Only the designated approver for this step can approve or reject.'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
 
                 # Execute the action
                 if action == 'approve':
@@ -1336,12 +1407,25 @@ class TaskViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
                     if task.current_approval_step
                     else task.approval_records.count() + 1
                 )
-                # Update revision round so next submission is tracked as a new round
+                # Attribute the decision to the actor (org-admin on override, not the chain assignee).
+                from budget_approval.approver_access import (
+                    format_org_admin_override_marker,
+                )
+                record_comment = comment
+                if is_admin_override:
+                    decision = 'approve' if is_approved else 'reject'
+                    marker = format_org_admin_override_marker(
+                        user_id=request.user.id,
+                        decision=decision,
+                        replaced_step=step_number,
+                        timestamp=timezone.now().isoformat(),
+                    )
+                    record_comment = f'{marker}\n{comment}'.strip() if comment else marker
                 ApprovalRecord.objects.create(
                     task=task,
-                    approved_by=task.current_approver or request.user,
+                    approved_by=request.user,
                     is_approved=is_approved,
-                    comment=comment,
+                    comment=record_comment,
                     step_number=step_number,
                     revision_round=task.revision_round,
                     resubmitted_after_reject=task.revision_round > 0,

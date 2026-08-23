@@ -1,6 +1,10 @@
 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../ui/accordion";
 import { BudgetRequestData, BudgetPoolData } from "@/lib/api/budgetApi";
+import {
+  AdminOverrideBadge,
+  stripAdminOverrideNotes,
+} from "@/components/budget/AdminOverrideBadge";
 
 interface BudgetRequestDetailProps {
   budgetRequest?: BudgetRequestData;
@@ -54,6 +58,8 @@ export default function BudgetRequestDetail({ budgetRequest, budgetPool, loading
     );
   }
 
+  const visibleNotes = stripAdminOverrideNotes(budgetRequest.notes);
+
   return (
     <section>
       <Accordion type="multiple" defaultValue={["item-1"]}>
@@ -63,11 +69,12 @@ export default function BudgetRequestDetail({ budgetRequest, budgetPool, loading
           </AccordionTrigger>
           <AccordionContent className="min-h-0 overflow-y-auto">
             <div className="space-y-8">
-              <div className="flex flex-row items-center gap-3">
+              <div className="flex flex-row items-center gap-3 flex-wrap">
                 <label className="block text-sm font-semibold text-gray-900 tracking-wide">Status</label>
                   <span className={`inline-block px-2 py-1 text-sm font-medium rounded-full ${getStatusColor(budgetRequest.status)}`}>
                     {budgetRequest.status || 'Unknown'}
                   </span>
+                  {budgetRequest.is_admin_override ? <AdminOverrideBadge /> : null}
               </div>
               <div className="flex flex-row items-center gap-3">
                 <label className="block text-sm font-semibold text-gray-900 tracking-wide">Amount</label>
@@ -131,7 +138,7 @@ export default function BudgetRequestDetail({ budgetRequest, budgetPool, loading
               <div className="flex flex-col gap-3">
                 <label className="block text-sm font-semibold text-gray-900 tracking-wide">Notes</label>
                 <span className="text-sm text-gray-900">
-                  {budgetRequest.notes || 'No notes'}
+                  {visibleNotes || 'No notes'}
                 </span>
               </div>
             </div>

@@ -104,9 +104,9 @@ export default function SavedItemsPanel({ onClose, onJumpToMessage }: SavedItems
                         {item.message.content || '(attachment)'}
                       </p>
                       {/* Saved label */}
-                      <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-500">
-                        <Bookmark className="h-3 w-3 shrink-0" />
-                        Saved for later · only visible to you
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400">
+                        <Bookmark className="h-3 w-3 shrink-0 text-amber-500" />
+                        Saved for later
                       </p>
                       {onJumpToMessage && chatId && (
                         <button

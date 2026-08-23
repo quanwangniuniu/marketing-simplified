@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 
 from budget_approval.models import BudgetPool, BudgetRequest, BudgetRequestStatus
 from budget_approval.services import BudgetRequestService, BudgetPoolService
+from budget_approval.exceptions import ApprovalConflict
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +339,271 @@ class TestProcessApproval:
                 budget_request_under_review, superuser, is_approved=True, comment=""
             )
         assert result.status == BudgetRequestStatus.APPROVED
+
+    def test_org_admin_can_bypass_approver_check(
+        self, budget_request_under_review, org_admin, user2
+    ):
+        """MED-240: org-admin may process approval even when not current_approver."""
+        assert budget_request_under_review.current_approver_id == user2.id
+        assert org_admin.id != user2.id
+
+        with patch('budget_approval.services.budget_notifications'):
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                org_admin,
+                is_approved=True,
+                comment="Org-admin override",
+            )
+        assert result.status == BudgetRequestStatus.APPROVED
+
+    def test_org_admin_override_auto_advances_original_chain(
+        self, budget_request_under_review, org_admin, user2, user3, project
+    ):
+        """MED-240: override approve continues the original ApprovalChain (not admin-picked)."""
+        from task.models import ApprovalChain, ApprovalChainStep
+
+        task = budget_request_under_review.task
+        chain = ApprovalChain.objects.create(
+            name="Buyer → Lead → Client",
+            project=project,
+            task_type="budget",
+        )
+        ApprovalChainStep.objects.create(chain=chain, order=1, approver=user2)
+        ApprovalChainStep.objects.create(chain=chain, order=2, approver=user3)
+        task.approval_chain = chain
+        task.current_approval_step = 1
+        task.current_approver = user2
+        task.save(
+            update_fields=['approval_chain', 'current_approval_step', 'current_approver']
+        )
+
+        with patch('budget_approval.services.budget_notifications') as mock_notif:
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                org_admin,
+                is_approved=True,
+                comment="Override step 1",
+                next_approver=org_admin,  # must be ignored — chain picks user3
+            )
+
+        assert result.status == BudgetRequestStatus.UNDER_REVIEW
+        assert result.current_approver_id == user3.id
+        # Avoid Task.refresh_from_db() — FSMField(protected) blocks status setattr
+        from task.models import Task
+        task_row = Task.objects.filter(pk=task.pk).values(
+            'current_approval_step', 'current_approver_id'
+        ).get()
+        assert task_row['current_approval_step'] == 2
+        assert task_row['current_approver_id'] == user3.id
+        mock_notif.notify_budget_forwarded.assert_called_once()
+        from budget_approval.serializers import BudgetRequestSerializer
+        audit = BudgetRequestSerializer(result).data['admin_override']
+        assert audit['replaced_step'] == 1
+        assert 'replaced_step=1' in (result.notes or "")
+
+    def test_stale_step1_approver_conflicts_after_override_advances(
+        self, budget_request_under_review, org_admin, user2, user3, project
+    ):
+        """MED-240: after override moves to step 2, a stale step-1 approve must 409.
+
+        Simulates the in-flight request that passed the lock-outer permission
+        check while current_approver was still user2.
+        """
+        from task.models import ApprovalChain, ApprovalChainStep
+
+        task = budget_request_under_review.task
+        chain = ApprovalChain.objects.create(
+            name="Buyer → Lead",
+            project=project,
+            task_type="budget",
+        )
+        ApprovalChainStep.objects.create(chain=chain, order=1, approver=user2)
+        ApprovalChainStep.objects.create(chain=chain, order=2, approver=user3)
+        task.approval_chain = chain
+        task.current_approval_step = 1
+        task.current_approver = user2
+        task.save(
+            update_fields=['approval_chain', 'current_approval_step', 'current_approver']
+        )
+
+        stale = budget_request_under_review
+        assert stale.current_approver_id == user2.id
+
+        with patch('budget_approval.services.budget_notifications'):
+            result = BudgetRequestService.process_approval(
+                stale,
+                org_admin,
+                is_approved=True,
+                comment="Override step 1",
+            )
+
+        assert result.status == BudgetRequestStatus.UNDER_REVIEW
+        assert result.current_approver_id == user3.id
+        # Original Python object was not refreshed — still looks like step 1.
+        assert stale.current_approver_id == user2.id
+
+        with patch('budget_approval.services.budget_notifications'):
+            with pytest.raises(ApprovalConflict):
+                BudgetRequestService.process_approval(
+                    stale,
+                    user2,
+                    is_approved=True,
+                    comment="Late step-1 approve",
+                )
+
+        fresh = BudgetRequest.objects.get(pk=result.pk)
+        assert fresh.current_approver_id == user3.id
+        assert fresh.status == BudgetRequestStatus.UNDER_REVIEW
+
+    def test_second_approve_on_same_step_raises_conflict(
+        self, budget_request_under_review, user2
+    ):
+        """Duplicate approve after a final decision is a conflict, not a 400."""
+        with patch('budget_approval.services.budget_notifications'):
+            BudgetRequestService.process_approval(
+                budget_request_under_review,
+                user2,
+                is_approved=True,
+                comment="First",
+            )
+        with patch('budget_approval.services.budget_notifications'):
+            with pytest.raises(ApprovalConflict):
+                BudgetRequestService.process_approval(
+                    budget_request_under_review,
+                    user2,
+                    is_approved=True,
+                    comment="Duplicate click",
+                )
+
+    def test_org_admin_override_finalizes_when_no_next_chain_step(
+        self, budget_request_under_review, org_admin, user2, project
+    ):
+        """Last chain step / legacy: override approve finalizes APPROVED."""
+        from task.models import ApprovalChain, ApprovalChainStep
+
+        task = budget_request_under_review.task
+        chain = ApprovalChain.objects.create(
+            name="Single step",
+            project=project,
+            task_type="budget",
+        )
+        ApprovalChainStep.objects.create(chain=chain, order=1, approver=user2)
+        task.approval_chain = chain
+        task.current_approval_step = 1
+        task.current_approver = user2
+        task.save(
+            update_fields=['approval_chain', 'current_approval_step', 'current_approver']
+        )
+
+        with patch('budget_approval.services.budget_notifications') as mock_notif:
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                org_admin,
+                is_approved=True,
+                comment="Override last step",
+            )
+
+        assert result.status == BudgetRequestStatus.APPROVED
+        mock_notif.notify_budget_approved.assert_called_once()
+
+    def test_org_admin_override_writes_audit_entry(
+        self, budget_request_under_review, org_admin, user2
+    ):
+        """MED-240: org-admin override must leave an auditable ApprovalRecord + marker."""
+        from task.models import ApprovalRecord
+        from budget_approval.approver_access import (
+            ORG_ADMIN_OVERRIDE_PREFIX,
+            budget_request_has_admin_override,
+        )
+        from budget_approval.serializers import BudgetRequestSerializer
+
+        assert budget_request_under_review.current_approver_id == user2.id
+        task = budget_request_under_review.task
+        assert task is not None
+        task.current_approval_step = 1
+        task.save(update_fields=['current_approval_step'])
+
+        with patch('budget_approval.services.budget_notifications'):
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                org_admin,
+                is_approved=True,
+                comment="Emergency approve",
+            )
+
+        assert budget_request_has_admin_override(result) is True
+        assert ORG_ADMIN_OVERRIDE_PREFIX in (result.notes or "")
+
+        records = ApprovalRecord.objects.filter(
+            task=task,
+            approved_by=org_admin,
+            comment__startswith=ORG_ADMIN_OVERRIDE_PREFIX,
+        )
+        assert records.count() == 1
+        assert records.first().is_approved is True
+        assert "Emergency approve" in records.first().comment
+
+        payload = BudgetRequestSerializer(result).data
+        assert payload['is_admin_override'] is True
+        audit = payload['admin_override']
+        assert audit is not None
+        assert audit['override_by_user_id'] == org_admin.id
+        assert audit['override_type'] == 'org_admin'
+        assert audit['final_outcome'] == 'approve'
+        assert audit['replaced_step'] == 1
+        assert audit['override_timestamp']
+        assert f'replaced_step=1' in (result.notes or "")
+
+    def test_chain_approver_does_not_write_override_audit(
+        self, budget_request_under_review, user2
+    ):
+        """Normal chain approval must not be marked as admin override."""
+        from task.models import ApprovalRecord
+        from budget_approval.approver_access import (
+            ORG_ADMIN_OVERRIDE_PREFIX,
+            budget_request_has_admin_override,
+        )
+
+        task = budget_request_under_review.task
+        before = ApprovalRecord.objects.filter(task=task).count()
+
+        with patch('budget_approval.services.budget_notifications'):
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                user2,
+                is_approved=True,
+                comment="Normal approve",
+            )
+
+        assert budget_request_has_admin_override(result) is False
+        assert ORG_ADMIN_OVERRIDE_PREFIX not in (result.notes or "")
+        assert ApprovalRecord.objects.filter(task=task).count() == before
+
+    def test_org_admin_as_current_approver_does_not_write_override_audit(
+        self, budget_request_under_review, org_admin
+    ):
+        """MED-240: org-admin who is the assigned approver is not an override."""
+        from budget_approval.approver_access import (
+            ORG_ADMIN_OVERRIDE_PREFIX,
+            budget_request_has_admin_override,
+        )
+
+        budget_request_under_review.current_approver = org_admin
+        budget_request_under_review.save(update_fields=['current_approver'])
+
+        with patch('budget_approval.services.budget_notifications'):
+            result = BudgetRequestService.process_approval(
+                budget_request_under_review,
+                org_admin,
+                is_approved=True,
+                comment="Admin is on the chain",
+            )
+
+        assert result.status == BudgetRequestStatus.APPROVED
+        assert budget_request_has_admin_override(result) is False
+        assert ORG_ADMIN_OVERRIDE_PREFIX not in (result.notes or "")
+        from budget_approval.serializers import BudgetRequestSerializer
+        assert BudgetRequestSerializer(result).data['admin_override'] is None
 
     def test_raises_when_not_under_review(self, budget_request_draft, user2):
         with pytest.raises(ValidationError, match="cannot be processed"):

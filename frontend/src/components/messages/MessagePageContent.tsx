@@ -646,6 +646,7 @@ export default function MessagePageContent() {
                 chat={currentChat}
                 onBack={handleBackToList}
                 roleByUserId={roleByUserId}
+                routeChatSlug={chatSlugFromPath}
                 hideBackOnDesktop
                 openDetailsSignal={detailsSignal ?? undefined}
               />

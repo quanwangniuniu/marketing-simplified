@@ -1,7 +1,7 @@
-# MediaJira
+# Marketing Simplified
 
 > **The best media buyer Jira platform in the world**
-> MediaJira is a campaign management platform tailored for media buying teams. It streamlines the process of creating, tracking, and optimizing advertising campaigns, while providing collaboration tools, performance analytics, budget control, and professional API access.
+> Marketing Simplified is a campaign management platform tailored for media buying teams. It streamlines the process of creating, tracking, and optimizing advertising campaigns, while providing collaboration tools, performance analytics, budget control, and professional API access.
 
 ---
 
@@ -165,7 +165,7 @@
 - **agent**: Powers AI-assisted workflow orchestration, decision support, and execution guidance.
 - **automationWorkflow**: Defines and executes automation flows across business modules.
 - **decision**: Tracks decision records, approval states, and related governance flows.
-- **integrations** (`notion_editor`, `slack_integration`, `linear_integration`, `zoom_integration`, `google_calendar_integration`, `google_docs_integration`): Connects MediaJira with external systems for synchronized workflows.
+- **integrations** (`notion_editor`, `slack_integration`, `linear_integration`, `zoom_integration`, `google_calendar_integration`, `google_docs_integration`): Connects Marketing Simplified with external systems for synchronized workflows.
 
 ---
 
@@ -201,8 +201,8 @@ Minimum local DB-related values:
 
 ```env
 DB_HOST=host.docker.internal
-POSTGRES_DB=mediajira_db
-POSTGRES_USER=mediajira_user
+POSTGRES_DB=Marketing Simplified_db
+POSTGRES_USER=Marketing Simplified_user
 POSTGRES_PASSWORD=<your-password>
 POSTGRES_PORT=5432
 ```
@@ -271,14 +271,14 @@ docker compose -f docker-compose.dev.yml --env-file .env up --build -d
 
 Each tagged release (`v*`) publishes CycloneDX SBOM files as GitHub Release assets:
 
-- `mediajira-backend-python-<tag>.cdx.json`
-- `mediajira-frontend-npm-<tag>.cdx.json`
+- `Marketing Simplified-backend-python-<tag>.cdx.json`
+- `Marketing Simplified-frontend-npm-<tag>.cdx.json`
 
 The same files are also available as workflow artifacts on the release tag run.
 
 ## 📊 Monitoring & Observability
 
-MediaJira includes monitoring and observability tools for local development and troubleshooting:
+Marketing Simplified includes monitoring and observability tools for local development and troubleshooting:
 
 ### Metrics Collection
 

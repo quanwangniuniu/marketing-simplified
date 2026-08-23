@@ -76,7 +76,7 @@ export async function mockAuthenticatedUserApis(
 }
 
 export async function mockProjectShellApis(page: Page) {
-	await page.route('**/api/core/onboarding-status**', async (route) => {
+	await page.route('**/api/core/onboarding-status/**', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -228,7 +228,7 @@ export async function mockProjectShellApis(page: Page) {
 
 	await page.route('**/api/chat/chats/**', async (route) => {
 		const pathname = new URL(route.request().url()).pathname;
-		if (/\/api\/chat\/chats\/\d+\/pins\/?$/.test(pathname)) {
+		if (/\/api\/chat\/chats\/[^/]+\/pins\/?$/.test(pathname)) {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -253,40 +253,50 @@ export async function mockProjectShellApis(page: Page) {
 }
 
 export async function seedActiveProject(page: Page, project: MessagesProjectSeed) {
+	await page.context().addCookies([
+		{
+			name: 'active-project',
+			value: JSON.stringify(project),
+			url: process.env.BASE_URL || 'http://localhost:3000',
+		},
+	]);
+
 	await page.addInitScript((activeProject) => {
-		const state = JSON.stringify({
-			state: {
-				activeProject,
-				activeProjectIds: [activeProject.id],
-				inactiveProjectIds: [],
-				completedProjectIds: [],
-				hasHydrated: true,
-				loading: false,
-				error: null,
-			},
-			version: 0,
-		});
-		window.localStorage.setItem('project-storage-v1', state);
-		window.localStorage.setItem('project-storage', state);
+		window.localStorage.setItem(
+			'project-storage-v1',
+			JSON.stringify({
+				state: {
+					activeProject,
+					activeProjectIds: [activeProject.id],
+					inactiveProjectIds: [],
+					completedProjectIds: [],
+					hasHydrated: true,
+					loading: false,
+					error: null,
+				},
+				version: 0,
+			})
+		);
 	}, project);
 }
 
 export async function clearProjectStore(page: Page) {
 	await page.addInitScript(() => {
-		const state = JSON.stringify({
-			state: {
-				activeProject: null,
-				activeProjectIds: [],
-				inactiveProjectIds: [],
-				completedProjectIds: [],
-				hasHydrated: true,
-				loading: false,
-				error: null,
-			},
-			version: 0,
-		});
-		window.localStorage.setItem('project-storage-v1', state);
-		window.localStorage.setItem('project-storage', state);
+		window.localStorage.setItem(
+			'project-storage-v1',
+			JSON.stringify({
+				state: {
+					activeProject: null,
+					activeProjectIds: [],
+					inactiveProjectIds: [],
+					completedProjectIds: [],
+					hasHydrated: true,
+					loading: false,
+					error: null,
+				},
+				version: 0,
+			})
+		);
 	});
 }
 
