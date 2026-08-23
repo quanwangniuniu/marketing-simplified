@@ -9,6 +9,8 @@ import api from '../api';
 import type {
   AuditLogFilters,
   AuditLogResponse,
+  AdminAuditEventFilters,
+  PaginatedAdminAuditEvents,
 } from '@/types/audit';
 
 const BASE = '/api/projects';
@@ -120,3 +122,12 @@ const auditLogApi = {
 };
 
 export default auditLogApi;
+
+/**
+ * Fetch paginated admin audit events.
+ * Supports optional filtering by action and target_type.
+ */
+export const AdminAuditLogAPI = {
+  list: (filters?: AdminAuditEventFilters) =>
+    api.get<PaginatedAdminAuditEvents>('/api/audit/events/', { params: filters }),
+};

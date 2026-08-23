@@ -33,6 +33,7 @@ urlpatterns = [
     path('api/facebook_integration/', include('facebook_integration.urls')),
     path('api/meta_ads/', include('meta_ads.urls')),
     path('api/access_control/', include('access_control.urls')),
+    path('api/audit/', include('audit.urls')),
     path('api/teams/', include('teams.urls')),
     path('api/csm/', include('csm.urls')),
     path('auth/', include('authentication.urls')),

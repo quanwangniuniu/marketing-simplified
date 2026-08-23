@@ -1,12 +1,14 @@
 """Root-admin endpoints for Organization management."""
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from access_control.models import UserRole
+from audit.utils import record_audit_entry
 from core.admin_permissions import IsOrgAdmin
 from core.models import Organization, Role
 
@@ -106,15 +108,25 @@ class AdminOrganizationViewSet(viewsets.ModelViewSet):
             defaults={'level': 2},
         )
 
-        user_role, created = UserRole.objects.get_or_create(
-            user=user,
-            role=role,
-            defaults={'team': None},
-        )
-        if not created:
-            return Response(
-                {'detail': 'User is already an admin of this organization.'},
-                status=status.HTTP_200_OK,
+        with transaction.atomic():
+            user_role, created = UserRole.objects.get_or_create(
+                user=user,
+                role=role,
+                defaults={'team': None},
+            )
+            if not created:
+                return Response(
+                    {'detail': 'User is already an admin of this organization.'},
+                    status=status.HTTP_200_OK,
+                )
+
+            record_audit_entry(
+                actor=request.user if request.user.is_authenticated else None,
+                action='org.admin_assigned',
+                target=user,
+                before=None,
+                after={'user_id': user.id, 'email': user.email, 'org_id': org.id},
+                organization=org,
             )
 
         return Response(
@@ -149,16 +161,26 @@ class AdminOrganizationViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-        deleted, _ = UserRole.objects.filter(
-            user=user,
-            role__organization=org,
-            role__level=2,
-        ).delete()
+        with transaction.atomic():
+            deleted, _ = UserRole.objects.filter(
+                user=user,
+                role__organization=org,
+                role__level=2,
+            ).delete()
 
-        if not deleted:
-            return Response(
-                {'detail': 'User is not an admin of this organization.'},
-                status=status.HTTP_404_NOT_FOUND,
+            if not deleted:
+                return Response(
+                    {'detail': 'User is not an admin of this organization.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            record_audit_entry(
+                actor=request.user if request.user.is_authenticated else None,
+                action='org.admin_removed',
+                target=user,
+                before={'user_id': user.id, 'email': user.email, 'org_id': org.id},
+                after=None,
+                organization=org,
             )
 
         return Response(
