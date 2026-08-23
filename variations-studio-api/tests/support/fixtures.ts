@@ -96,12 +96,12 @@ async function createUser(organizationId: bigint, isActive: boolean): Promise<nu
       password, is_superuser, username, first_name, last_name,
       is_staff, is_active, date_joined, is_verified, email,
       google_registered, password_set, job, department, location,
-      organization_id, current_organization_id
+      organization_id, current_organization_id, auth_token_version
     ) VALUES (
       '!', false, ${email}, 'Studio', 'Test',
       false, ${isActive}, now(), true, ${email},
       false, false, '', '', '',
-      ${organizationId}, ${organizationId}
+      ${organizationId}, ${organizationId}, 0
     )
     RETURNING id`;
   return Number(rows[0].id);
