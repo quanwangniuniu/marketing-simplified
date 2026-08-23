@@ -795,15 +795,6 @@ class ProjectViewSet(SlugLookupViewSetMixin, viewsets.ModelViewSet):
         kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
 
-            record_audit_entry(
-                actor=self.request.user if self.request.user.is_authenticated else None,
-                action='project.deleted',
-                target=instance,
-                before=before,
-                after=None,
-                organization=project_org,
-            )
-
     @action(detail=True, methods=['post'])
     def set_active(self, request, pk=None):
         """Set project as user's active project."""
