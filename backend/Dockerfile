@@ -32,4 +32,4 @@ USER appuser
 # in settings.py for the change that makes the handshake fast.
 # sh -c + exec so WS_CONNECT_TIMEOUT can be overridden at runtime without a
 # rebuild, while daphne still runs as PID 1 and receives signals.
-CMD ["sh", "-c", "exec daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout ${WS_CONNECT_TIMEOUT:-30} backend.asgi:application"]
+CMD ["sh", "-c", "exec daphne -b 0.0.0.0 -p 8000 --http-timeout 0 --websocket_connect_timeout ${WS_CONNECT_TIMEOUT:-30} backend.asgi:application"]

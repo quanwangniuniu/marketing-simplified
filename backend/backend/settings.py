@@ -761,6 +761,19 @@ INTERNAL_CRON_SECRET = config('INTERNAL_CRON_SECRET', default='')
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
 
+# Notification SSE replay protection. Replay is delivered in bounded batches,
+# and repeated replay connections are limited per authenticated user using a
+# rolling Redis window.
+NOTIFICATION_SSE_REPLAY_BATCH_SIZE = config(
+    'NOTIFICATION_SSE_REPLAY_BATCH_SIZE', default=500, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_LIMIT = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_LIMIT', default=5, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS', default=30, cast=int
+)
+
 # Cache Configuration (for online status, etc.)
 CACHES = {
     'default': {

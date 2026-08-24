@@ -11,4 +11,6 @@ export DJANGO_SETTINGS_MODULE=backend.settings
 # timeout, so a burst of connections that queues longer than that is refused.
 # 30s makes a slow handshake slow rather than fatal. See CONN_MAX_AGE in
 # settings.py for the change that actually makes the handshake fast.
-exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT:-30}" backend.asgi:application
+# Keep HTTP streaming responses such as notification SSE open indefinitely.
+# Nginx idle protection is handled by the application's 25-second heartbeat.
+exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --http-timeout 0 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT:-30}" backend.asgi:application
