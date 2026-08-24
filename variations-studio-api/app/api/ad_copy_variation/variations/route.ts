@@ -2,21 +2,14 @@ import { NextResponse } from 'next/server';
 
 import { isAuthFailure } from '@/lib/auth';
 import { projectIdParam, readJsonBody, responseFromUnknown } from '@/lib/bulk';
-import {
-  activeProjectIdsForUser,
-  isActiveProjectMember,
-  requireProjectForUser,
-  resolveProjectId,
-} from '@/lib/projects';
+import { requireProjectForUser } from '@/lib/projects';
 import { requireStudioContext } from '@/lib/tenant';
 import { createVariation } from '@/lib/variationCreate';
 import { countVariations, listVariations } from '@/lib/variationStore';
 import { serializeVariation } from '@/lib/variations';
+import { parseListRequest } from '@/src/domains/list';
 
 export const dynamic = 'force-dynamic';
-
-const DEFAULT_PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 100;
 
 export async function GET(request: Request) {
   const auth = await requireStudioContext(request);
@@ -24,52 +17,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ detail: auth.error }, { status: auth.status });
   }
 
-  const url = new URL(request.url);
-  const projectParam = url.searchParams.get('project_id');
-  const statusParam = url.searchParams.get('status');
-  const sourceMode = url.searchParams.get('source_mode');
-  const creativeParam = url.searchParams.get('creative');
-  const batchId = url.searchParams.get('batch_id');
-  const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1);
-  const pageSize = Math.min(
-    MAX_PAGE_SIZE,
-    Math.max(1, Number(url.searchParams.get('page_size') || DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE)
+  const result = await parseListRequest(
+    new URL(request.url),
+    auth.schema,
+    auth.userId
   );
+  if (!result.ok) return result.response;
 
-  const filter: Parameters<typeof listVariations>[1] = {};
-
-  if (projectParam) {
-    const projectId = await resolveProjectId(auth.schema, projectParam);
-    if (!projectId) {
-      return NextResponse.json(
-        { error: 'project_id is required' },
-        { status: 400 }
-      );
-    }
-    const allowed = await isActiveProjectMember(auth.schema, auth.userId, projectId);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: 'You are not a member of this project.' },
-        { status: 403 }
-      );
-    }
-    filter.projectId = projectId;
-  } else {
-    filter.accessibleProjectIds = await activeProjectIdsForUser(
-      auth.schema,
-      auth.userId
-    );
-  }
-
-  if (statusParam) {
-    const statuses = statusParam.split(',').map((item) => item.trim()).filter(Boolean);
-    if (statuses.length) filter.statuses = statuses;
-  }
-  if (sourceMode) filter.sourceMode = sourceMode;
-  if (creativeParam && /^\d+$/.test(creativeParam)) {
-    filter.creativeId = BigInt(creativeParam);
-  }
-  if (batchId) filter.batchId = batchId;
+  const { filter, page, pageSize } = result.params;
 
   const [count, rows] = await Promise.all([
     countVariations(auth.schema, filter),
@@ -93,7 +48,6 @@ export async function POST(request: Request) {
   const json = await readJsonBody(request);
   if (!json.ok) return json.response;
 
-  // Django reads the project from `project`, not `project_id`, on this endpoint.
   const project = await requireProjectForUser(
     auth.schema,
     auth.userId,

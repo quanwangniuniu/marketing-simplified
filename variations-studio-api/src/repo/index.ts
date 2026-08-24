@@ -1,10 +1,7 @@
-/**
- * Re-export barrel — preserves backward compatibility.
- * Actual implementations live in src/repo/.
- */
-export type { VariationRow, VariationInsert, SqlClient, VariationListFilter } from '@/src/repo';
+export type { VariationRow, VariationInsert, SqlClient } from './internals';
+export { VARIATION_TABLE } from './internals';
+
 export {
-  VARIATION_TABLE,
   findVariationBySlug,
   findVariationById,
   findVariationsByIds,
@@ -17,11 +14,15 @@ export {
   deleteVariationsForProjects,
   setVariationStatus,
   listSlugs,
+} from './variation.repo';
+
+export {
   findBatchVariations,
   findLatestBatchRow,
   markReviewed,
   markBatchReviewed,
   deleteUnselectedBatchDrafts,
-  countVariations,
-  listVariations,
-} from '@/src/repo';
+} from './batch.repo';
+
+export type { VariationListFilter } from './list.repo';
+export { countVariations, listVariations } from './list.repo';
