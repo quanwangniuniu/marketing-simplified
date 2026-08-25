@@ -1,4 +1,5 @@
-import { buildUserPrompt, type CopyJson } from '@/lib/prompts';
+import { buildUserPrompt } from '@/src/ai/prompts';
+import type { CopyJson } from '@/src/ai/types';
 
 import type { GenerateContext, SourceModeHandler, SourceModeResult } from '../types';
 

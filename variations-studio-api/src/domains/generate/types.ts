@@ -1,4 +1,4 @@
-import type { CopyJson } from '@/lib/prompts';
+import type { CopyJson } from '@/src/ai/types';
 
 export type GenerateContext = {
   schema: string;

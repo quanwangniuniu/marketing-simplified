@@ -13,7 +13,7 @@ import { accessToken } from './support/tokens';
 
 // Guards run before any model call, but mocking keeps a regression from
 // reaching the real Vertex endpoint.
-jest.mock('@/lib/gemini');
+jest.mock('@/src/ai/providers/gemini');
 
 let fixture: StudioFixture;
 let token: string;

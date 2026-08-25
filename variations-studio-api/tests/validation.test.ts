@@ -12,7 +12,7 @@ import {
 import { readJson, studioRequest } from './support/requests';
 import { accessToken } from './support/tokens';
 
-jest.mock('@/lib/gemini', () => ({
+jest.mock('@/src/ai/providers/gemini', () => ({
   callGeminiJson: jest.fn(async () => ({
     hook: 'Mocked hook',
     headline: 'Mocked headline',

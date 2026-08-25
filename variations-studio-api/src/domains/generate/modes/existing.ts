@@ -3,7 +3,7 @@ import {
   loadCreativeForProject,
   parseCreativeId,
 } from '@/lib/creatives';
-import { buildUserPrompt } from '@/lib/prompts';
+import { buildUserPrompt } from '@/src/ai/prompts';
 
 import type { GenerateContext, SourceModeHandler, SourceModeResult } from '../types';
 

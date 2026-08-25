@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { buildExternalUrlPrompt } from '@/lib/prompts';
+import { buildExternalUrlPrompt } from '@/src/ai/prompts';
 import { BrowserlessError, fetchUrlText, parseExternalUrl } from '@/lib/urlFetch';
 
 import type { GenerateContext, SourceModeHandler, SourceModeResult, SourceModeEarlyReturn } from '../types';

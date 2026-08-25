@@ -1,5 +1,5 @@
 import { POST as generate } from '@/app/api/ad_copy_variation/variations/generate/route';
-import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
+import { callGeminiJson, isGeminiQuotaError } from '@/src/ai/providers/gemini';
 import { prisma } from '@/lib/prisma';
 import {
   countVariations,
@@ -14,7 +14,7 @@ import {
 import { readJson, studioRequest } from './support/requests';
 import { accessToken } from './support/tokens';
 
-jest.mock('@/lib/gemini', () => ({
+jest.mock('@/src/ai/providers/gemini', () => ({
   callGeminiJson: jest.fn(),
   isGeminiQuotaError: jest.fn(() => false),
 }));

@@ -1,17 +1,17 @@
 import { randomUUID } from 'crypto';
 
-import { ApiError, projectIdParam } from '@/src/platform/http';
-import { callGeminiJson, isGeminiQuotaError } from '@/lib/gemini';
-import { requireProjectForUser } from '@/lib/projects';
 import {
   AI_QUOTA_MESSAGE,
   BATCH_CONCURRENCY,
   MAX_BATCH,
-  MODEL_NAME,
   PROMPT_VERSION,
   SYSTEM_PROMPT,
+  defaultCopyGenerator,
+  type CopyGenerator,
   type CopyJson,
-} from '@/lib/prompts';
+} from '@/src/ai';
+import { ApiError, projectIdParam } from '@/src/platform/http';
+import { requireProjectForUser } from '@/lib/projects';
 import { allocateSlugs } from '@/lib/slugs';
 import { insertVariations } from '@/src/repo';
 import { serializeVariation } from '@/lib/variations';
@@ -40,7 +40,8 @@ function parseCount(raw: unknown): number {
 
 async function generateCopies(
   userPrompt: string,
-  count: number
+  count: number,
+  generator: CopyGenerator
 ): Promise<{ copies: CopyJson[]; failedIndices: number[]; quotaFailed: boolean }> {
   const ordered: Array<CopyJson | null> = Array.from({ length: count }, () => null);
   const failedIndices: number[] = [];
@@ -53,9 +54,9 @@ async function generateCopies(
       next += 1;
       if (index >= count) return;
       try {
-        ordered[index] = await callGeminiJson(SYSTEM_PROMPT, userPrompt);
+        ordered[index] = await generator.generateCopy(SYSTEM_PROMPT, userPrompt);
       } catch (err) {
-        if (isGeminiQuotaError(err)) quotaFailed = true;
+        if (generator.isQuotaError(err)) quotaFailed = true;
         failedIndices.push(index);
       }
     }
@@ -81,6 +82,7 @@ async function persistBatch(args: {
   sourceRef: string;
   instruction: string;
   creativeId: bigint | null;
+  modelName: string;
 }) {
   const slugs = await allocateSlugs(
     args.schema,
@@ -96,7 +98,7 @@ async function persistBatch(args: {
       description: copy.description,
       cta: copy.cta,
       instruction: args.instruction,
-      modelName: MODEL_NAME,
+      modelName: args.modelName,
       promptVersion: PROMPT_VERSION,
       batchId: args.batchId,
       batchPosition: index,
@@ -113,7 +115,10 @@ export async function runCustomGenerate(args: {
   schema: string;
   userId: number;
   body: Record<string, unknown>;
+  /** Optional inject for tests / alternate providers. Defaults to Gemini. */
+  generator?: CopyGenerator;
 }): Promise<GenerateBatchResponse> {
+  const generator = args.generator ?? defaultCopyGenerator;
   const count = parseCount(args.body.count);
   if (count < 1 || count > MAX_BATCH) {
     throw new ApiError(400, `count must be between 1 and ${MAX_BATCH}`);
@@ -147,7 +152,8 @@ export async function runCustomGenerate(args: {
   const batchId = randomUUID();
   const { copies, failedIndices, quotaFailed } = await generateCopies(
     modeResult.userPrompt,
-    count
+    count,
+    generator
   );
 
   const saved = copies.length
@@ -161,6 +167,7 @@ export async function runCustomGenerate(args: {
         sourceRef: modeResult.sourceRef,
         instruction,
         creativeId: modeResult.creativeId,
+        modelName: generator.modelName,
       })
     : [];
 
