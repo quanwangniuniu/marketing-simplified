@@ -16,9 +16,12 @@ function signingKey(secret?: string): Uint8Array {
 }
 
 type TokenOptions = {
-  tokenType?: string;
+  /** When set, include token_type; when null, omit the claim entirely. */
+  tokenType?: string | null;
   expiresInSeconds?: number;
   secret?: string;
+  /** Mirrors Django build_user_refresh_token → access claim. Default 0. */
+  authTokenVersion?: number;
 };
 
 export async function signToken(
@@ -28,19 +31,32 @@ export async function signToken(
   const now = Math.floor(Date.now() / 1000);
   const lifetime = options.expiresInSeconds ?? ACCESS_LIFETIME_SECONDS;
 
-  return new SignJWT({
-    token_type: options.tokenType ?? 'access',
+  const claims: Record<string, unknown> = {
     user_id: userId,
+    auth_token_version: options.authTokenVersion ?? 0,
     jti: Math.random().toString(16).slice(2),
-  })
+  };
+  if (options.tokenType !== null) {
+    claims.token_type = options.tokenType ?? 'access';
+  }
+
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt(now)
     .setExpirationTime(now + lifetime)
     .sign(signingKey(options.secret));
 }
 
-export function accessToken(userId: number): Promise<string> {
-  return signToken(userId);
+export function accessToken(
+  userId: number,
+  authTokenVersion = 0
+): Promise<string> {
+  return signToken(userId, { authTokenVersion });
+}
+
+/** Signed HS256 token that deliberately omits token_type (forgery / lax client). */
+export function accessTokenWithoutType(userId: number): Promise<string> {
+  return signToken(userId, { tokenType: null });
 }
 
 export function expiredAccessToken(userId: number): Promise<string> {

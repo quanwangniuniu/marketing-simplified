@@ -50,6 +50,8 @@ model CustomUser {
   isActive              Boolean @map("is_active")
   currentOrganizationId BigInt? @map("current_organization_id")
   organizationId        BigInt? @map("organization_id")
+  // Bumped by Django on password change / forced logout; JWT claim must match.
+  authTokenVersion      Int     @default(0) @map("auth_token_version")
 
   @@map("core_customuser")
 }

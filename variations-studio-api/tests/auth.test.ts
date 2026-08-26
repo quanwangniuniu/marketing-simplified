@@ -10,6 +10,7 @@ import {
 import { studioRequest } from './support/requests';
 import {
   accessToken,
+  accessTokenWithoutType,
   expiredAccessToken,
   foreignlySignedToken,
   refreshToken,
@@ -73,6 +74,16 @@ describe('access token rejection', () => {
       detail: 'Given token not valid for any token type',
     });
   });
+
+  it('rejects a signed token that omits token_type', async () => {
+    const token = await accessTokenWithoutType(fixture.memberUserId);
+    const response = await latestBatch(latestBatchRequest(`Bearer ${token}`));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      detail: 'Given token not valid for any token type',
+    });
+  });
 });
 
 describe('user state is re-checked on every request', () => {
@@ -91,6 +102,46 @@ describe('user state is re-checked on every request', () => {
     const response = await latestBatch(latestBatchRequest(`Bearer ${token}`));
 
     expect(response.status).toBe(401);
+  });
+
+  // Mirrors backend/core/authentication.py auth_token_version check.
+  it('rejects a token whose auth_token_version no longer matches the user', async () => {
+    const token = await accessToken(fixture.memberUserId, 0);
+    await prisma.$executeRaw`
+      UPDATE public.core_customuser
+      SET auth_token_version = auth_token_version + 1
+      WHERE id = ${BigInt(fixture.memberUserId)}`;
+
+    try {
+      const response = await latestBatch(latestBatchRequest(`Bearer ${token}`));
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toEqual({
+        detail: 'Token has been revoked.',
+      });
+    } finally {
+      await prisma.$executeRaw`
+        UPDATE public.core_customuser
+        SET auth_token_version = 0
+        WHERE id = ${BigInt(fixture.memberUserId)}`;
+    }
+  });
+
+  it('accepts a token whose auth_token_version matches after rotation', async () => {
+    await prisma.$executeRaw`
+      UPDATE public.core_customuser
+      SET auth_token_version = 3
+      WHERE id = ${BigInt(fixture.memberUserId)}`;
+
+    try {
+      const token = await accessToken(fixture.memberUserId, 3);
+      const response = await latestBatch(latestBatchRequest(`Bearer ${token}`));
+      expect(response.status).not.toBe(401);
+    } finally {
+      await prisma.$executeRaw`
+        UPDATE public.core_customuser
+        SET auth_token_version = 0
+        WHERE id = ${BigInt(fixture.memberUserId)}`;
+    }
   });
 });
 
