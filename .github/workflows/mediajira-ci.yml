@@ -519,13 +519,30 @@ jobs:
           PY
           EOS
 
+      - name: Mint Django JWT fixtures for studio auth parity
+        run: |
+          set -e
+          docker compose exec -T backend python manage.py issue_studio_jwt_fixtures \
+            --org-slug=ci-studio-org \
+            > /tmp/django-jwt-fixtures.json
+          python3 -c "
+          import json
+          data = json.load(open('/tmp/django-jwt-fixtures.json'))
+          assert data.get('access_token'), 'missing access_token'
+          assert data.get('django_accepts_access') is True
+          print('django jwt fixtures ready for user_id=', data.get('user_id'))
+          "
+
       - name: Run variations-studio tests
         run: |
           set -a; . ./.env; set +a
           docker run --rm --network host \
-            -v "$PWD/variations-studio-api:/app" -w /app \
+            -v "$PWD/variations-studio-api:/app" \
+            -v "/tmp/django-jwt-fixtures.json:/fixtures/django-jwt-fixtures.json:ro" \
+            -w /app \
             -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}" \
             -e SECRET_KEY="${SECRET_KEY}" \
+            -e DJANGO_JWT_FIXTURES_PATH=/fixtures/django-jwt-fixtures.json \
             node:20-alpine sh -c "
               npm ci &&
               npx prisma generate &&

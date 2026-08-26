@@ -21,6 +21,12 @@ export type AuthFailure = {
  * - Required claim token_type === "access" (missing / refresh / other → 401)
  * - user_id must resolve to an active CustomUser in public
  * - auth_token_version claim must match CustomUser.auth_token_version (revocation)
+ * - Clock skew / leeway: none (jose default 0), matching unset SIMPLE_JWT leeway —
+ *   already-expired tokens are rejected; see djangoIssuedAuth.test.ts for
+ *   Django-minted expired + near-expiry cases.
+ *
+ * Cross-system proof: CI runs `manage.py issue_studio_jwt_fixtures` (Django
+ * production mint path) and Jest consumes those tokens via DJANGO_JWT_FIXTURES_PATH.
  *
  * Intentionally NOT re-implemented (not configured / not needed for Studio access):
  * - refresh-token blacklist / ROTATE_REFRESH_TOKENS flows (Studio never accepts refresh)
