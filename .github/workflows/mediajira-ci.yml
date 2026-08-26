@@ -507,15 +507,20 @@ jobs:
 
           post_save.disconnect(create_default_subscription, sender=Organization)
           try:
-              org, created = Organization.objects.get_or_create(
-                  slug='ci-studio-org',
-                  defaults={'name': 'CI Studio Org', 'is_active': True},
-              )
-              if not created:
-                  provision_tenant_schema(org.slug)
+              for slug, name in (
+                  ('ci-studio-org', 'CI Studio Org'),
+                  # Second org enables dual-tenant routing Jest coverage.
+                  ('ci-studio-org-b', 'CI Studio Org B'),
+              ):
+                  org, created = Organization.objects.get_or_create(
+                      slug=slug,
+                      defaults={'name': name, 'is_active': True},
+                  )
+                  if not created:
+                      provision_tenant_schema(org.slug)
+                  print('tenant schema ready for', org.slug)
           finally:
               post_save.connect(create_default_subscription, sender=Organization)
-          print('tenant schema ready for', org.slug)
           PY
           EOS
 

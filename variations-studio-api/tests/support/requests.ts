@@ -5,10 +5,11 @@ type RequestOptions = {
   authorization?: string;
   method?: string;
   body?: unknown;
+  headers?: Record<string, string>;
 };
 
 export function studioRequest(path: string, options: RequestOptions = {}): Request {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (options.authorization !== undefined) {
     headers.Authorization = options.authorization;
   } else if (options.token) {
