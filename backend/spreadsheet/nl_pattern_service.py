@@ -17,7 +17,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from agent.gemini_client import call_gemini_json
+from core.services.gemini_client import call_gemini_json
 from .nl_pattern_schema import SYSTEM_PROMPT, VALID_STEP_TYPES, VALID_HIGHLIGHT_OPERATORS
 
 logger = logging.getLogger(__name__)
@@ -143,6 +143,9 @@ def _validate_step(step: dict, position: int, sheet_schema: dict) -> dict:
         target = params["target"]
         if not isinstance(target, dict) or "row" not in target or "col" not in target:
             raise ValueError(f"Step {position}: APPLY_FORMULA target must have row and col.")
+        _check_formula_target_column(
+            target["col"], sheet_schema, step_type, position
+        )
         if not isinstance(params["formula"], str) or not params["formula"].startswith("="):
             raise ValueError(f"Step {position}: formula must be a string starting with '='.")
 
@@ -253,6 +256,45 @@ def _require_keys(params: dict, keys: list[str], step_type: str, position: int) 
     for key in keys:
         if key not in params:
             raise ValueError(f"Step {position} ({step_type}): missing required param '{key}'.")
+
+
+def _check_formula_target_column(
+    col_index, sheet_schema: dict, step_type: str, position: int
+) -> None:
+    """Verify an APPLY_FORMULA target column resolves to a real column.
+
+    The instruction may reference a column that Gemini hallucinated (e.g.
+    "column D" on a sheet that only has A–C). Rather than a vague "index out of
+    range", name the column and list what is actually available. One brand-new
+    column immediately after the last one is allowed (``=I+J`` into a fresh
+    "column K").
+    """
+    schema_cols = sheet_schema.get("columns", []) or []
+    if not isinstance(col_index, int):
+        raise ValueError(
+            f"Step {position} ({step_type}): target 'col' must be an integer."
+        )
+
+    # No schema to check against — fall back to the permissive bound check.
+    if not schema_cols:
+        return
+
+    known_indexes = {
+        c.get("index") for c in schema_cols if isinstance(c.get("index"), int)
+    }
+    max_index = max(known_indexes) if known_indexes else len(schema_cols) - 1
+    available = [str(c.get("name")) for c in schema_cols if c.get("name")]
+
+    if col_index < 0 or col_index > max_index + 1:
+        referenced = next(
+            (c.get("name") for c in schema_cols if c.get("index") == col_index),
+            f"column index {col_index}",
+        )
+        raise ValueError(
+            f"Step {position}: APPLY_FORMULA references '{referenced}', which "
+            f"does not exist in the sheet. Available columns: "
+            f"{available or 'none'}."
+        )
 
 
 def _check_col_index(index, col_count: int, step_type: str, position: int) -> None:

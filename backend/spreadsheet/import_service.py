@@ -9,7 +9,6 @@ from typing import Any
 
 from django.db import transaction
 
-from agent.file_parser import parse_file_to_json
 from core.models import Project
 from spreadsheet.models import Spreadsheet
 from spreadsheet.services import CellService, SheetService, SpreadsheetService
@@ -119,12 +118,17 @@ def _populate_sheet(sheet, columns: list, rows: list) -> None:
 def create_spreadsheet_from_upload(
     *,
     project: Project,
-    filepath: str,
+    parsed: dict[str, Any],
     original_filename: str,
 ) -> dict[str, Any]:
-    """Parse an uploaded file and create a populated Spreadsheet in the project."""
-    parsed = parse_file_to_json(filepath, original_filename, max_rows=None)
-    sheets_data = parsed.get("sheets") or []
+    """Create a populated Spreadsheet in the project from an already-parsed upload.
+
+    ``parsed`` is the ``core.services.file_parser.parse_file_to_json`` output
+    ``{"name": str, "sheets": [{"name", "columns", "rows"}], ...}``. Parsing (and
+    its hard row/column/cell caps) happens in the caller, not here, so this
+    module has no dependency on the agent's file-parsing layer.
+    """
+    sheets_data = (parsed or {}).get("sheets") or []
     if not sheets_data:
         raise ValueError("No sheet data found in uploaded file.")
 

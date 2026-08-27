@@ -15,7 +15,8 @@ export type CalendarPreload = {
 
 export type SpreadsheetPreload = {
   message: string;
-  projectId: number;
+  // Projects on flat routes are identified by slug (string) or numeric id.
+  projectId: number | string;
   spreadsheetId: number;
   sheetId: number;
   sheetName: string;
@@ -72,7 +73,7 @@ export function consumeCalendarPreload(): CalendarPreload | null {
  * Stage spreadsheet context for in-sheet AI analysis (consumed by AgentChatPage).
  */
 export function stageSpreadsheetInsightsPreload(payload: {
-  projectId: number;
+  projectId: number | string;
   spreadsheetId: number;
   sheetId: number;
   sheetName: string;
@@ -109,7 +110,7 @@ export function consumeSpreadsheetPreload(): SpreadsheetPreload | null {
   try {
     const parsed = JSON.parse(raw) as SpreadsheetPreload;
     if (
-      typeof parsed.projectId !== 'number' ||
+      (typeof parsed.projectId !== 'number' && typeof parsed.projectId !== 'string') ||
       typeof parsed.spreadsheetId !== 'number' ||
       typeof parsed.sheetId !== 'number' ||
       typeof parsed.message !== 'string'

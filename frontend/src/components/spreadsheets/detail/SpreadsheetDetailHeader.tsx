@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Loader2, Pencil, Bot, Wand2, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Pencil, Bot, Wand2, Sparkles, TableProperties } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Id } from '@/types/common';
 import SpreadsheetBreadcrumb from './SpreadsheetBreadcrumb';
@@ -27,6 +27,9 @@ interface Props {
   /** Called when the user clicks "Generate Pattern with AI". */
   onOpenPatternGenerationAgent?: () => void;
   patternGenerationAgentDisabled?: boolean;
+  /** Called when the user clicks "Generate Pivot Table with AI". */
+  onOpenPivotGenerationAgent?: () => void;
+  pivotGenerationAgentDisabled?: boolean;
 }
 
 export default function SpreadsheetDetailHeader({
@@ -45,6 +48,8 @@ export default function SpreadsheetDetailHeader({
   patternAgentDisabled = false,
   onOpenPatternGenerationAgent,
   patternGenerationAgentDisabled = false,
+  onOpenPivotGenerationAgent,
+  pivotGenerationAgentDisabled = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(spreadsheetName);
@@ -157,12 +162,12 @@ export default function SpreadsheetDetailHeader({
         </div>
 
         {/* Workflow chooser */}
-        {(onAnalyzeWithAgent || onOpenPatternAgent || onOpenPatternGenerationAgent) && !loading && (
+        {(onAnalyzeWithAgent || onOpenPatternAgent || onOpenPatternGenerationAgent || onOpenPivotGenerationAgent) && !loading && (
           <div ref={dropdownRef} className="relative shrink-0">
             <button
               type="button"
               onClick={() => setDropdownOpen((o) => !o)}
-              disabled={analyzeDisabled && patternAgentDisabled && patternGenerationAgentDisabled}
+              disabled={analyzeDisabled && patternAgentDisabled && patternGenerationAgentDisabled && pivotGenerationAgentDisabled}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-gradient-to-r from-[#3CCED7] to-[#A6E661] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Bot className="h-4 w-4" strokeWidth={2.3} aria-hidden="true" />
@@ -188,7 +193,7 @@ export default function SpreadsheetDetailHeader({
                       </span>
                       <span>
                         <span className="block text-sm font-semibold text-gray-900">Analyze with AI</span>
-                        <span className="block text-xs text-gray-500">Ask questions, get insights, and explore your data in a chat conversation.</span>
+                        <span className="block text-xs text-gray-500">Ask questions, get insights, and explore the data.</span>
                       </span>
                     </button>
                   )}
@@ -220,7 +225,23 @@ export default function SpreadsheetDetailHeader({
                       </span>
                       <span>
                         <span className="block text-sm font-semibold text-gray-900">Generate Pattern with AI</span>
-                        <span className="block text-xs text-gray-500">Describe in plain language what you want to do — AI will generate the pattern steps automatically.</span>
+                        <span className="block text-xs text-gray-500">Describe want to do — AI will generate the pattern steps for you.</span>
+                      </span>
+                    </button>
+                  )}
+                  {onOpenPivotGenerationAgent && (
+                    <button
+                      type="button"
+                      disabled={pivotGenerationAgentDisabled}
+                      onClick={() => { onOpenPivotGenerationAgent(); setDropdownOpen(false); }}
+                      className="flex w-full items-start gap-3 rounded-lg p-3 text-left transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-100">
+                        <TableProperties className="h-4 w-4 text-indigo-600" />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-gray-900">Generate Pivot Table with AI</span>
+                        <span className="block text-xs text-gray-500">Describe the pivot table you want — AI will build it.</span>
                       </span>
                     </button>
                   )}

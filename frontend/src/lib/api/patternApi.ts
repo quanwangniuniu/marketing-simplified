@@ -1,4 +1,5 @@
 import api from '../api';
+import { AiConsentRequiredError, aiConsentSpreadsheetId, isAiConsentRequired } from './aiConsentApi';
 import { Id } from '@/types/common';
 import {
   CreatePatternPayload,
@@ -77,11 +78,17 @@ export const PatternAPI = {
    * Throws a generic Error on network / server failure.
    */
   generatePatternSteps: async (sheetId: number, instruction: string): Promise<TimelineItem[]> => {
-    const response = await api.post<{ steps: Array<Record<string, any>>; error?: string }>(
-      `/api/spreadsheet/sheets/${sheetId}/generate-pattern-steps/`,
-      { instruction },
-      { timeout: 60000 }  // Gemini can take 15-30s; override the global 10s default
-    );
+    let response;
+    try {
+      response = await api.post<{ steps: Array<Record<string, any>>; error?: string }>(
+        `/api/spreadsheet/sheets/${sheetId}/generate-pattern-steps/`,
+        { instruction },
+        { timeout: 60000 }  // Gemini can take 15-30s; override the global 10s default
+      );
+    } catch (err) {
+      if (isAiConsentRequired(err)) throw new AiConsentRequiredError(aiConsentSpreadsheetId(err));
+      throw err;
+    }
     const { steps, error } = response.data;
     if (error) throw new Error(error);
 

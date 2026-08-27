@@ -37,6 +37,14 @@ export interface CreateSessionRequest {
   approval_required?: boolean;
 }
 
+/** Appends a message to a session's transcript without invoking the agent pipeline. */
+export interface AppendMessageRequest {
+  role: AgentMessageRole;
+  content: string;
+  message_type?: string;
+  data?: Record<string, unknown>;
+}
+
 // ==================== Message Types ====================
 
 export type AgentMessageRole = 'user' | 'assistant';

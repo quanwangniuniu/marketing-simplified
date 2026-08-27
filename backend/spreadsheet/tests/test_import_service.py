@@ -5,6 +5,7 @@ import tempfile
 from django.test import TestCase, override_settings
 
 from core.models import Organization, Project, CustomUser
+from core.services.file_parser import parse_file_to_json
 from spreadsheet.models import Spreadsheet, Sheet, Cell
 from spreadsheet.import_service import create_spreadsheet_from_upload
 from spreadsheet.services import SpreadsheetService
@@ -43,7 +44,7 @@ class SpreadsheetImportServiceTests(TestCase):
         try:
             result = create_spreadsheet_from_upload(
                 project=self.project,
-                filepath=path,
+                parsed=parse_file_to_json(path, 'campaigns.csv', max_rows=None),
                 original_filename='campaigns.csv',
             )
         finally:
@@ -69,7 +70,7 @@ class SpreadsheetImportServiceTests(TestCase):
         try:
             result = create_spreadsheet_from_upload(
                 project=self.project,
-                filepath=path,
+                parsed=parse_file_to_json(path, 'report.csv', max_rows=None),
                 original_filename='report.csv',
             )
         finally:
@@ -77,24 +78,25 @@ class SpreadsheetImportServiceTests(TestCase):
 
         self.assertEqual(result['name'], 'report (1)')
 
-    def test_parse_file_full_rows_not_capped(self):
-        from agent.file_parser import parse_file_to_json
+    def test_parse_file_caps_rows_at_setting_default(self):
+        from django.test import override_settings
 
         path = self._write_csv([(f'Row{i}', str(i)) for i in range(250)])
         try:
-            parsed = parse_file_to_json(path, 'large.csv', max_rows=None)
+            with override_settings(SPREADSHEET_AI_MAX_ROWS=100):
+                parsed = parse_file_to_json(path, 'large.csv')
+        finally:
+            os.remove(path)
+
+        self.assertEqual(len(parsed['sheets'][0]['rows']), 100)
+        self.assertTrue(parsed['limits_hit']['rows'])
+
+    def test_parse_file_explicit_max_rows(self):
+        path = self._write_csv([(f'Row{i}', str(i)) for i in range(250)])
+        try:
+            parsed = parse_file_to_json(path, 'large.csv', max_rows=250)
         finally:
             os.remove(path)
 
         self.assertEqual(len(parsed['sheets'][0]['rows']), 250)
-
-    def test_parse_file_default_still_caps_rows(self):
-        from agent.file_parser import parse_file_to_json, MAX_ROWS
-
-        path = self._write_csv([(f'Row{i}', str(i)) for i in range(250)])
-        try:
-            parsed = parse_file_to_json(path, 'large.csv')
-        finally:
-            os.remove(path)
-
-        self.assertEqual(len(parsed['sheets'][0]['rows']), MAX_ROWS)
+        self.assertFalse(parsed['limits_hit']['rows'])

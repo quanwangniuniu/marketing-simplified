@@ -126,7 +126,12 @@ export interface MessageListProps {
   showRevisitThinkingBubble?: boolean
   onRenderFinishChange?: (finished: boolean) => void
   requestedGenerationOutputs?: GenerationOutputKey[]
-  /** Skip the sequential reveal queue for assistant bubbles (e.g. pattern generation mode). */
+  /**
+   * Skip the sequential reveal queue for assistant bubbles / nav buttons.
+   * Used by pattern- and pivot-generation modes, which run as plain request/
+   * response calls with no SSE stream to drive the queue — routing their
+   * bubbles through the queue leaves them stuck unrevealed.
+   */
   bypassRevealQueue?: boolean
 }
 
@@ -322,8 +327,10 @@ export function MessageList({
         miroCardsAnchorMode,
         wantsTasks,
         wantsDecisions,
+        bypassRevealQueue,
       }),
     [
+      bypassRevealQueue,
       messages,
       latestAnalysisMessageId,
       showFollowUpToggle,
@@ -440,6 +447,7 @@ export function MessageList({
             {/* Avatar */}
             <AgentMessageBoardAvatar
               role={message.role}
+              forceVisible={bypassRevealQueue && message.role === "assistant"}
               blockIds={
                 message.role === "assistant"
                   ? getAssistantMessageBlockIds(message, {
@@ -519,7 +527,7 @@ export function MessageList({
 
               {/* Navigation button */}
               {message.role === "assistant" && message.navigateTo && message.navigateLabel && (
-                <AgentMessageBoardBlock blockId={`${message.id}-nav`}>
+                bypassRevealQueue ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -527,14 +535,27 @@ export function MessageList({
                     disabled={message.navigateDisabled}
                     onClick={() => onNavigate?.(message.navigateTo!, message)}
                   >
-                    <AgentMessageBoardText
-                      target={message.navigateLabel}
-                      partId={`${message.id}-nav-label`}
-                      blockId={`${message.id}-nav`}
-                    />
+                    {message.navigateLabel}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
-                </AgentMessageBoardBlock>
+                ) : (
+                  <AgentMessageBoardBlock blockId={`${message.id}-nav`}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={message.navigateDisabled}
+                      onClick={() => onNavigate?.(message.navigateTo!, message)}
+                    >
+                      <AgentMessageBoardText
+                        target={message.navigateLabel}
+                        partId={`${message.id}-nav-label`}
+                        blockId={`${message.id}-nav`}
+                      />
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </AgentMessageBoardBlock>
+                )
               )}
 
               {/* Calendar invite prompt */}

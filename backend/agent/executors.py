@@ -9,7 +9,7 @@ import os
 from django.core.cache import cache
 import time
 import anthropic
-from .gemini_client import GeminiRetriesExhausted
+from core.services.gemini_client import GeminiRetriesExhausted
 
 
 logger = logging.getLogger(__name__)
@@ -295,6 +295,24 @@ class CreateTasksExecutor(BaseStepExecutor):
             return StepResult(success=False, error='No analysis_result in input')
 
         try:
+            # Anomaly confirmation gate: analyses that surfaced anomalies must
+            # have them reviewed + confirmed before tasks are created, so
+            # data-quality issues are not committed downstream unreviewed. The
+            # lightweight in-sheet "spreadsheet insights" flow auto-confirms
+            # (anomalies_confirmed + _source='spreadsheet_insights') and is not
+            # blocked here. Zero-anomaly analyses proceed unchanged.
+            had_anomalies = bool(analysis.get('anomalies'))
+            is_insights_flow = analysis.get('_source') == 'spreadsheet_insights'
+            if (
+                had_anomalies
+                and not is_insights_flow
+                and not analysis.get('anomalies_confirmed')
+            ):
+                return StepResult(
+                    success=False,
+                    error='Anomalies must be confirmed before creating tasks.',
+                )
+
             tasks_data = analysis.get('recommended_tasks', [])
             if not tasks_data:
                 return StepResult(success=False, error='No recommended_tasks in analysis.')
@@ -900,7 +918,7 @@ class GenerateCriteriaExecutor(BaseStepExecutor):
     @retry_policy(max_retries=3, retry_delay=5, on_exhausted='skip')
     def execute(self, input_data):
         import json
-        from .gemini_client import _get_api_key as _gemini_key
+        from core.services.gemini_client import _get_api_key as _gemini_key
         from .llm_client import call_llm as _call_llm_unified
 
         if not _gemini_key():

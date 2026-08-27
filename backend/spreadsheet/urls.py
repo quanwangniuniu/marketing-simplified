@@ -55,4 +55,7 @@ urlpatterns = [
 
     # Natural-language → PatternStep generation
     path('sheets/<int:sheet_id>/generate-pattern-steps/', views.GeneratePatternStepsView.as_view(), name='generate-pattern-steps'),
+
+    # Natural-language → PivotConfig generation
+    path('sheets/<int:sheet_id>/generate-pivot-config/', views.GeneratePivotConfigView.as_view(), name='generate-pivot-config'),
 ]

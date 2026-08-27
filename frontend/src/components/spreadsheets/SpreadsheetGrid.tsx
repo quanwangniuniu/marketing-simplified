@@ -617,7 +617,6 @@ const SpreadsheetGrid = forwardRef<SpreadsheetGridHandle, SpreadsheetGridProps>(
   onSelectionChange,
   collabClientId,
   remotePresenceUsers = [],
-  onAnalyzeWithAgent,
 }: SpreadsheetGridProps, ref) => {
   const isGridLoading = loading || sheetId <= 0;
   const [rowCount, setRowCount] = useState(DEFAULT_ROWS);

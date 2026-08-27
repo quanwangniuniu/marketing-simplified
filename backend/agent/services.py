@@ -7,14 +7,18 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone as django_timezone
 
-from spreadsheet.models import Spreadsheet, Sheet, Cell
+from spreadsheet.providers import (
+    SpreadsheetDataProvider,
+    SpreadsheetAccessError,
+    AiAnalysisDisabled,
+)
 from task.models import Task
 from .models import (
     AgentSession, AgentMessage, AgentWorkflowRun, ImportedCSVFile,
     AgentWorkflowDefinition, AgentStepExecution,
 )
 from . import data_service
-from . import file_parser
+from core.services import file_parser
 from .agent_utils import json_input, serialize_agent_messages
 
 logger = logging.getLogger(__name__)
@@ -60,49 +64,20 @@ def _get_llm_client():
         return None
 
 
-def _extract_spreadsheet_data(spreadsheet, sheet_id=None):
-    """Extract spreadsheet data into a structured dict for LLM analysis.
-
-    When *sheet_id* is set, only that sheet is included (active-sheet analysis).
-    """
-    data = {"name": spreadsheet.name, "sheets": []}
-    sheets_qs = spreadsheet.sheets.filter(is_deleted=False).order_by('position')
-    if sheet_id is not None:
-        sheets_qs = sheets_qs.filter(id=sheet_id)
-    for sheet in sheets_qs:
-        columns = list(
-            sheet.columns.filter(is_deleted=False)
-            .order_by('position')
-            .values_list('name', flat=True)
+def _truncation_notice(spreadsheet_data):
+    """Human-readable notice when the provider windowed the sheet, else None."""
+    if not spreadsheet_data.get("truncated"):
+        return None
+    windows = [s.get("window", {}) for s in spreadsheet_data.get("sheets", [])]
+    max_rows = next((w.get("max_rows") for w in windows if w.get("max_rows")), None)
+    if any(w.get("row_limited") for w in windows):
+        base = (
+            f"Analyzed the first {max_rows} rows"
+            if max_rows
+            else "Analyzed a limited window of rows"
         )
-        rows_data = []
-        rows = sheet.rows.filter(is_deleted=False).order_by('position')[:100]  # limit rows
-        for row in rows:
-            cells = Cell.objects.filter(
-                sheet=sheet, row=row, is_deleted=False
-            ).select_related('column').order_by('column__position')
-            row_dict = {}
-            for cell in cells:
-                col_name = cell.column.name if cell.column else f"col_{cell.column_id}"
-                if cell.computed_type == 'NUMBER' and cell.computed_number is not None:
-                    row_dict[col_name] = float(cell.computed_number)
-                elif cell.computed_string:
-                    row_dict[col_name] = cell.computed_string
-                elif cell.string_value:
-                    row_dict[col_name] = cell.string_value
-                elif cell.number_value is not None:
-                    row_dict[col_name] = float(cell.number_value)
-                elif cell.boolean_value is not None:
-                    row_dict[col_name] = cell.boolean_value
-            if row_dict:
-                rows_data.append(row_dict)
-        data["sheets"].append({
-            "id": sheet.id,
-            "name": sheet.name,
-            "columns": columns,
-            "rows": rows_data,
-        })
-    return data
+        return f"{base} — narrow the sheet or a range for a full pass."
+    return "Analyzed a subset of the columns — some wide columns were left out."
 
 
 def _call_llm(client, spreadsheet_data):
@@ -327,7 +302,7 @@ def _call_gemini_analysis(
 ):
     """Call Gemini to analyze spreadsheet data."""
     from .llm_client import call_llm as _call_llm_unified
-    from .gemini_client import call_gemini_json
+    from core.services.gemini_client import call_gemini_json
     from .generation_registry import (
         build_analysis_prompt,
         normalize_generation_outputs,
@@ -367,7 +342,6 @@ def _call_gemini_analysis(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.3,
-            timeout=300,
         )
 
     result = _call_llm_unified(
@@ -450,6 +424,10 @@ Rules:
 - Return ONLY the JSON object, nothing else\
 """
 
+# Max data rows handed to Gemini for in-sheet insights. Anomaly locations are
+# validated against this window (see _spreadsheet_insights_sample_bounds).
+_SPREADSHEET_INSIGHTS_SAMPLE_ROWS = 50
+
 
 def _preprocess_spreadsheet_insights(spreadsheet_data):
     """Return (column_summary, cleaned_data) for in-sheet insights analysis."""
@@ -468,22 +446,62 @@ def _preprocess_spreadsheet_insights(spreadsheet_data):
                 row_with_idx['_row_index'] = row_idx
                 all_rows.append(row_with_idx)
 
-    limited = all_rows[:50]
+    unique_columns = list(dict.fromkeys(columns_info))
+    limited = all_rows[:_SPREADSHEET_INSIGHTS_SAMPLE_ROWS]
     column_summary = (
         f"Spreadsheet: {spreadsheet_data.get('name', 'Unknown')}, "
         f"Sheets: {', '.join(sheet_meta) or 'none'}, "
         f"Total rows: {len(all_rows)}, Showing: {len(limited)}, "
-        f"Columns: {list(dict.fromkeys(columns_info))}"
+        f"Columns: {unique_columns}, "
+        f"Valid 0-based location indices: rows 0..{max(len(limited) - 1, 0)}, "
+        f"cols 0..{max(len(unique_columns) - 1, 0)}"
     )
     return column_summary, json.dumps(limited, default=str)
 
 
-def _normalize_spreadsheet_insights_result(raw, sheet_id=None):
-    """Validate and normalize Gemini spreadsheet insights JSON."""
+def _spreadsheet_insights_sample_bounds(spreadsheet_data):
+    """Row/column extent of the data sample handed to Gemini for insights.
+
+    The system prompt tells the model to reference only cells inside the sample
+    it was shown, using 0-based indices. A location outside that window points
+    the sheet-highlight UI at a cell that does not exist, so callers use these
+    bounds to reject such locations. Returns ``(row_count, col_count)``; a zero
+    means the dimension is unknown and must not be enforced.
+    """
+    unique_columns: list = []
+    total_rows = 0
+    for sheet in spreadsheet_data.get('sheets', []):
+        for name in sheet.get('columns', []) or []:
+            if name not in unique_columns:
+                unique_columns.append(name)
+        total_rows += sum(
+            1 for row in (sheet.get('rows', []) or []) if isinstance(row, dict)
+        )
+    return (
+        min(total_rows, _SPREADSHEET_INSIGHTS_SAMPLE_ROWS),
+        len(unique_columns),
+    )
+
+
+def _normalize_spreadsheet_insights_result(
+    raw, sheet_id=None, row_count=None, col_count=None
+):
+    """Validate and normalize Gemini spreadsheet insights JSON.
+
+    ``row_count`` / ``col_count`` are the dimensions of the data sample shown to
+    Gemini (see :func:`_spreadsheet_insights_sample_bounds`). When set, anomaly
+    locations that fall outside that window are rejected so the sheet-highlight
+    UI is never handed a non-existent cell.
+    """
     if not isinstance(raw, dict):
         raise ValueError('Insights response must be a JSON object')
 
-    summary = str(raw.get('summary') or '').strip()
+    summary_raw = raw.get('summary')
+    if summary_raw is not None and not isinstance(summary_raw, str):
+        raise ValueError('Gemini insights summary must be a string.')
+    summary = (summary_raw or '').strip()
+    if not summary:
+        raise ValueError('Gemini insights summary is empty or missing.')
     recommendations = raw.get('recommendations') or []
     if not isinstance(recommendations, list):
         recommendations = []
@@ -501,6 +519,7 @@ def _normalize_spreadsheet_insights_result(raw, sheet_id=None):
         if severity not in ('critical', 'warning', 'info'):
             severity = 'info'
 
+        anomaly_ref = anomaly.get('id') or anomaly.get('title') or f'#{i}'
         locations_in = anomaly.get('locations') or []
         norm_locations = []
         if isinstance(locations_in, list):
@@ -510,12 +529,29 @@ def _normalize_spreadsheet_insights_result(raw, sheet_id=None):
                 if 'row' not in loc or 'col' not in loc:
                     continue
                 try:
-                    norm_loc = {
-                        'row': int(loc['row']),
-                        'col': int(loc['col']),
-                    }
+                    row = int(loc['row'])
+                    col = int(loc['col'])
                 except (TypeError, ValueError):
-                    continue
+                    raise ValueError(
+                        f"Anomaly {anomaly_ref} has a location with non-integer "
+                        f"row/col indices: {loc!r}"
+                    )
+                if row < 0 or col < 0:
+                    raise ValueError(
+                        f"Anomaly {anomaly_ref} has a location with a negative "
+                        f"row/col index: row={row}, col={col}"
+                    )
+                if row_count and row >= row_count:
+                    raise ValueError(
+                        f"Anomaly {anomaly_ref} references row {row}, which is "
+                        f"outside the analysed data (valid rows are 0..{row_count - 1})."
+                    )
+                if col_count and col >= col_count:
+                    raise ValueError(
+                        f"Anomaly {anomaly_ref} references column {col}, which is "
+                        f"outside the analysed data (valid columns are 0..{col_count - 1})."
+                    )
+                norm_loc = {'row': row, 'col': col}
                 if loc.get('a1'):
                     norm_loc['a1'] = str(loc['a1'])
                 if sheet_id is not None:
@@ -550,6 +586,9 @@ def _normalize_spreadsheet_insights_result(raw, sheet_id=None):
         'anomalies': normalized_anomalies,
         'recommended_tasks': recommended_tasks,
         'anomalies_confirmed': True,
+        # Marks the lightweight in-sheet flow so the task-creation gate knows
+        # anomalies were auto-confirmed here rather than requiring a review pass.
+        '_source': 'spreadsheet_insights',
     }
 
 
@@ -558,9 +597,17 @@ def _call_gemini_spreadsheet_insights(
     user_id=None,
     sheet_id=None,
     validation_feedback=None,
+    agent_session=None,
 ):
-    """Call Gemini for in-sheet summarization and anomaly detection."""
-    from .gemini_client import call_gemini_json
+    """Call Gemini for in-sheet summarization and anomaly detection.
+
+    When *agent_session* is set the call is routed through the unified
+    ``llm_client.call_llm`` so it is quota-checked and written to ``LLMCallLog``
+    (mirrors ``_call_gemini_analysis``); otherwise it falls back to a direct
+    ``call_gemini_json``.
+    """
+    from core.services.gemini_client import call_gemini_json
+    from .llm_client import call_llm as _call_llm_unified
 
     column_summary, cleaned_data = _preprocess_spreadsheet_insights(spreadsheet_data)
     user_prompt = (
@@ -579,26 +626,43 @@ def _call_gemini_spreadsheet_insights(
         sheet_id,
         'retry' if validation_feedback else 'initial',
     )
-    return call_gemini_json(
+    if agent_session is None:
+        return call_gemini_json(
+            system_prompt=_SPREADSHEET_INSIGHTS_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            temperature=0.3,
+        )
+    result = _call_llm_unified(
+        agent_session=agent_session,
+        provider='gemini',
+        model='gemini-2.5-flash-lite',
         system_prompt=_SPREADSHEET_INSIGHTS_SYSTEM_PROMPT,
         user_prompt=user_prompt,
         temperature=0.3,
-        timeout=300,
+        max_output_tokens=4096,
+        response_mime_type='application/json',
+        call_purpose='data_analysis',
     )
+    return json.loads(result['text'])
 
 
-def _run_spreadsheet_insights(spreadsheet_data, user_id=None, sheet_id=None):
+def _run_spreadsheet_insights(
+    spreadsheet_data, user_id=None, sheet_id=None, agent_session=None
+):
     """Run in-sheet insights using Gemini.
 
     Raises RuntimeError if no provider is configured or the call fails.
     Raises GenerationValidationError if recommended_tasks fail validation after retries.
+    Propagates QuotaError from the billed path untouched.
     """
-    from .gemini_client import _get_api_key as _gemini_key
+    from core.services.gemini_client import _get_api_key as _gemini_key
     from .generation_registry import GenerationValidationError, validate_recommended_tasks
+    from stripe_meta.exceptions import QuotaError
 
     if not _gemini_key():
         raise RuntimeError("No analysis provider available.")
 
+    sample_rows, sample_cols = _spreadsheet_insights_sample_bounds(spreadsheet_data)
     validation_feedback = None
     for attempt in range(1, _ANALYSIS_VALIDATION_MAX_ATTEMPTS + 1):
         try:
@@ -607,13 +671,21 @@ def _run_spreadsheet_insights(spreadsheet_data, user_id=None, sheet_id=None):
                 user_id=user_id,
                 sheet_id=sheet_id,
                 validation_feedback=validation_feedback,
+                agent_session=agent_session,
             )
-            result = _normalize_spreadsheet_insights_result(raw, sheet_id=sheet_id)
+            result = _normalize_spreadsheet_insights_result(
+                raw,
+                sheet_id=sheet_id,
+                row_count=sample_rows,
+                col_count=sample_cols,
+            )
             result['recommended_tasks'] = validate_recommended_tasks(
                 result.get('recommended_tasks', [])
             )
             return result
-        except GenerationValidationError as exc:
+        except QuotaError:
+            raise
+        except (GenerationValidationError, ValueError) as exc:
             if attempt >= _ANALYSIS_VALIDATION_MAX_ATTEMPTS:
                 raise
             validation_feedback = str(exc)
@@ -639,7 +711,7 @@ def _call_gemini_calendar_from_analysis(
     agent_session=None,
 ):
     """Suggest calendar events from spreadsheet + analysis context."""
-    from .gemini_client import call_gemini_json
+    from core.services.gemini_client import call_gemini_json
     from .generation_registry import (
         build_calendar_from_analysis_user_prompt,
         calendar_from_analysis_system_prompt,
@@ -721,7 +793,7 @@ def _run_analysis(
     requested = frozenset(normalize_generation_outputs(generation_outputs))
 
     # 1. Try Gemini (primary)
-    from .gemini_client import _get_api_key as _gemini_key
+    from core.services.gemini_client import _get_api_key as _gemini_key
     if _gemini_key():
         validation_feedback = None
         for attempt in range(1, _ANALYSIS_VALIDATION_MAX_ATTEMPTS + 1):
@@ -919,7 +991,7 @@ def _call_gemini_chat(
     agent_session=None,
 ):
     """Call Gemini for post-analysis follow-up. Replaces _call_dify_chat."""
-    from .gemini_client import call_gemini_json
+    from core.services.gemini_client import call_gemini_json
 
     user_prompt = (
         f"Chat history:\n  {chat_messages}\n\n"
@@ -1168,6 +1240,33 @@ class AgentOrchestrator:
         self.user = user
         self.project = project
         self.session = session
+        self.spreadsheet_provider = SpreadsheetDataProvider(user)
+
+    def _audit_spreadsheet_analysis(self, event_type, spreadsheet_data, sheet_id=None):
+        """Record that this user sent spreadsheet data to an LLM. Counts only."""
+        from core.services.audit_events import safe_emit_audit_event
+
+        sheets = spreadsheet_data.get('sheets', [])
+        safe_emit_audit_event(
+            event_type=event_type,
+            actor=self.user,
+            organization=getattr(self.project, 'organization', None),
+            project=self.project,
+            target_type='spreadsheet',
+            target_id=spreadsheet_data.get('id'),
+            context={
+                'sheet_id': sheet_id,
+                'sheets_sent': len(sheets),
+                'rows_sent': sum(len(s.get('rows', [])) for s in sheets),
+                'cols_sent': sum(len(s.get('columns', [])) for s in sheets),
+                'cells_sent': sum(
+                    s.get('window', {}).get('cells_returned', 0) for s in sheets
+                ),
+                'truncated': bool(spreadsheet_data.get('truncated')),
+                'provider': 'gemini',
+                'model': 'gemini-2.5-flash-lite',
+            },
+        )
 
     def resolve_external_approval_stream(
         self,
@@ -1582,7 +1681,7 @@ class AgentOrchestrator:
         from types import SimpleNamespace
         from notion_editor.views import DraftViewSet
         from notion_editor.services import _html_to_plain_text
-        from .gemini_client import call_gemini, _get_api_key as _gemini_key
+        from core.services.gemini_client import call_gemini, _get_api_key as _gemini_key
 
         draft_ref = None
         if isinstance(draft_context, dict):
@@ -1705,7 +1804,7 @@ class AgentOrchestrator:
         calendar_data_str = json.dumps(calendar_payload, ensure_ascii=False)
 
         # Call Gemini Calendar Assistant
-        from .gemini_client import call_gemini, _get_api_key as _gemini_key
+        from core.services.gemini_client import call_gemini, _get_api_key as _gemini_key
         if not _gemini_key():
             yield {"type": "error", "content": "Calendar AI is not configured. Please set GEMINI_API_KEY."}
             return
@@ -1897,26 +1996,37 @@ class AgentOrchestrator:
         }
 
     def analyze_spreadsheet(self, spreadsheet_id):
-        """Read spreadsheet data via ORM, send to LLM for analysis."""
+        """Read spreadsheet data via the provider facade, send to LLM for analysis."""
         yield {"type": "text", "content": "Analyzing spreadsheet data..."}
 
         try:
-            spreadsheet = Spreadsheet.objects.get(
-                id=spreadsheet_id,
-                project=self.project,
-                is_deleted=False,
+            spreadsheet_data = self.spreadsheet_provider.get_analysis_payload(
+                spreadsheet_id
             )
-        except Spreadsheet.DoesNotExist:
+        except SpreadsheetAccessError:
             yield {"type": "error", "content": "Spreadsheet not found."}
             return
+        except AiAnalysisDisabled as exc:
+            yield {
+                "type": "error",
+                "content": exc.message,
+                "data": {"code": exc.code, "spreadsheet_id": exc.spreadsheet_id},
+            }
+            return
+
+        self._audit_spreadsheet_analysis(
+            'agent.spreadsheet.analyzed', spreadsheet_data
+        )
 
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
-            spreadsheet=spreadsheet,
+            spreadsheet_id=spreadsheet_data["id"],
             status='analyzing',
         )
 
-        spreadsheet_data = _extract_spreadsheet_data(spreadsheet)
+        _notice = _truncation_notice(spreadsheet_data)
+        if _notice:
+            yield {"type": "text", "content": _notice}
 
         try:
             analysis = _run_analysis(
@@ -1948,6 +2058,8 @@ class AgentOrchestrator:
 
     def analyze_spreadsheet_insights(self, spreadsheet_id, sheet_id=None):
         """Analyze the active sheet in-place: summary + anomalies (lightweight path)."""
+        from stripe_meta.exceptions import QuotaError
+
         yield {"type": "text", "content": "Analyzing spreadsheet data..."}
 
         if not spreadsheet_id:
@@ -1955,34 +2067,47 @@ class AgentOrchestrator:
             return
 
         try:
-            spreadsheet = Spreadsheet.objects.get(
-                id=spreadsheet_id,
-                project=self.project,
-                is_deleted=False,
+            spreadsheet_data = self.spreadsheet_provider.get_analysis_payload(
+                spreadsheet_id, sheet_id=sheet_id
             )
-        except Spreadsheet.DoesNotExist:
+        except SpreadsheetAccessError:
             yield {"type": "error", "content": "Spreadsheet not found."}
             return
+        except AiAnalysisDisabled as exc:
+            yield {
+                "type": "error",
+                "content": exc.message,
+                "data": {"code": exc.code, "spreadsheet_id": exc.spreadsheet_id},
+            }
+            return
 
-        if sheet_id is not None:
-            if not spreadsheet.sheets.filter(id=sheet_id, is_deleted=False).exists():
-                yield {"type": "error", "content": "Sheet not found."}
-                return
+        if not spreadsheet_data["sheets"]:
+            yield {"type": "error", "content": "Sheet not found."}
+            return
+
+        self._audit_spreadsheet_analysis(
+            'agent.spreadsheet.insights_analyzed', spreadsheet_data, sheet_id=sheet_id
+        )
 
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
-            spreadsheet=spreadsheet,
+            spreadsheet_id=spreadsheet_data["id"],
             status='analyzing',
         )
 
-        spreadsheet_data = _extract_spreadsheet_data(spreadsheet, sheet_id=sheet_id)
+        _notice = _truncation_notice(spreadsheet_data)
+        if _notice:
+            yield {"type": "text", "content": _notice}
 
         try:
             insights = _run_spreadsheet_insights(
                 spreadsheet_data,
                 user_id=self.user.id,
                 sheet_id=sheet_id,
+                agent_session=self.session,
             )
+        except QuotaError:
+            raise
         except Exception as e:
             from .generation_registry import GenerationValidationError
 
@@ -2334,6 +2459,24 @@ class AgentOrchestrator:
 
         analysis = self._workflow_run_analysis(workflow_run)
 
+        # Anomaly confirmation gate: when the analysis surfaced anomalies, they
+        # must be reviewed + confirmed before tasks are created, so data-quality
+        # issues do not silently propagate downstream. The lightweight in-sheet
+        # "spreadsheet insights" path auto-confirms (it sets anomalies_confirmed
+        # and _source='spreadsheet_insights'), so it is not blocked here.
+        had_anomalies = bool(analysis.get('anomalies'))
+        is_insights_flow = analysis.get('_source') == 'spreadsheet_insights'
+        if (
+            had_anomalies
+            and not is_insights_flow
+            and not analysis.get('anomalies_confirmed')
+        ):
+            yield {
+                "type": "error",
+                "content": "Anomalies must be confirmed before creating tasks.",
+            }
+            return
+
         recommended_tasks = analysis.get("recommended_tasks", [])
         if not recommended_tasks:
             yield {"type": "error", "content": "No recommended tasks found in analysis."}
@@ -2434,12 +2577,10 @@ class AgentOrchestrator:
             }
 
         if spreadsheet_id:
-            spreadsheet = Spreadsheet.objects.get(
-                id=spreadsheet_id, project=self.project, is_deleted=False,
-            )
+            payload = self.spreadsheet_provider.get_analysis_payload(spreadsheet_id)
             return {
-                'spreadsheet_data': _extract_spreadsheet_data(spreadsheet),
-                'spreadsheet': spreadsheet,
+                'spreadsheet_data': payload,
+                'spreadsheet_id': payload['id'],
             }
 
         if csv_filename:
@@ -2472,20 +2613,20 @@ class AgentOrchestrator:
         )
         input_data['generation_outputs'] = outputs
 
-        spreadsheet_obj = input_data.get('spreadsheet')
-        if spreadsheet_obj is None and spreadsheet_id:
-            spreadsheet_obj = Spreadsheet.objects.filter(
-                id=spreadsheet_id,
-                project=self.project,
-                is_deleted=False,
-            ).first()
+        # _prepare_input_data's spreadsheet branch already access-checked and
+        # returns the id; otherwise (e.g. file-upload path) re-check the raw id.
+        resolved_spreadsheet_id = input_data.get('spreadsheet_id')
+        if resolved_spreadsheet_id is None and spreadsheet_id:
+            resolved_spreadsheet_id = self.spreadsheet_provider.accessible_spreadsheet_id(
+                spreadsheet_id
+            )
 
         workflow_run = AgentWorkflowRun.objects.create(
             session=self.session,
             workflow_definition=workflow_def,
             status='analyzing',
             current_step_order=1,
-            spreadsheet=spreadsheet_obj,
+            spreadsheet_id=resolved_spreadsheet_id,
             generation_outputs_requested=outputs,
         )
         if user_context:
@@ -2523,7 +2664,7 @@ class AgentOrchestrator:
             return
 
         try:
-            from .gemini_client import _get_api_key as _gemini_key
+            from core.services.gemini_client import _get_api_key as _gemini_key
             if not _gemini_key():
                 yield {
                     'type': 'error',

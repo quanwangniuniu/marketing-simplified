@@ -278,6 +278,20 @@ export default function SpreadsheetsV2DetailPage() {
     openAgentSidePanel();
   }, [activeSheetId, sheets, spreadsheet]);
 
+  const handleOpenPivotGenerationAgent = useCallback(() => {
+    if (!spreadsheetId || activeSheetId == null) return;
+    const active = sheets.find((s) => s.id === activeSheetId);
+    window.dispatchEvent(new CustomEvent('agent:pivot-generation-mode', {
+      detail: {
+        spreadsheetId,
+        sheetId: activeSheetId,
+        sheetName: active?.name ?? undefined,
+        spreadsheetName: spreadsheet?.name ?? undefined,
+      },
+    }));
+    openAgentSidePanel();
+  }, [spreadsheetId, activeSheetId, sheets, spreadsheet]);
+
   useEffect(() => {
     const onStepsGenerated = (e: Event) => {
       const detail = (e as CustomEvent<{ sheetId: number; steps: TimelineItem[] }>).detail;
@@ -290,6 +304,21 @@ export default function SpreadsheetsV2DetailPage() {
     window.addEventListener('agent:pattern-steps-generated', onStepsGenerated);
     return () => window.removeEventListener('agent:pattern-steps-generated', onStepsGenerated);
   }, []);
+
+  // The pivot-generation agent creates a new pivot sheet through the API from the
+  // side panel; pull it into this view (and switch to it) without a full reload.
+  useEffect(() => {
+    const onPivotSheetCreated = (e: Event) => {
+      const detail = (e as CustomEvent<{ spreadsheetId?: string | number; sheetId?: number }>).detail;
+      if (!detail || detail.sheetId == null) return;
+      if (String(detail.spreadsheetId) !== String(spreadsheetId)) return;
+      void refreshSheetListRef.current().then(() => {
+        setActiveSheetId(detail.sheetId!);
+      });
+    };
+    window.addEventListener('agent:pivot-sheet-created', onPivotSheetCreated);
+    return () => window.removeEventListener('agent:pivot-sheet-created', onPivotSheetCreated);
+  }, [spreadsheetId]);
 
   useEffect(() => {
     let clearTimer: number | null = null;
@@ -1035,6 +1064,8 @@ export default function SpreadsheetsV2DetailPage() {
             analyzeDisabled={loading || activeSheetId == null || !spreadsheet}
             onOpenPatternGenerationAgent={handleOpenPatternGenerationAgent}
             patternGenerationAgentDisabled={loading || !spreadsheet}
+            onOpenPivotGenerationAgent={handleOpenPivotGenerationAgent}
+            pivotGenerationAgentDisabled={loading || activeSheetId == null || !spreadsheet}
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100 sm:rounded-xl">
