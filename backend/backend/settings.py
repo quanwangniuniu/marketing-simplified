@@ -551,6 +551,15 @@ LINK_PREVIEW_PRUNE_AFTER_DAYS = config('LINK_PREVIEW_PRUNE_AFTER_DAYS', default=
 # large group cannot create an unbounded Redis command burst.
 CHAT_FANOUT_CONCURRENCY = config('CHAT_FANOUT_CONCURRENCY', default=25, cast=int)
 
+# A SubscriptionRegistry normally runs on its owning ASGI event loop. Calls
+# submitted from another OS thread must not wait forever if that loop stalls or
+# shuts down between availability checks.
+CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS = config(
+    'CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS',
+    default=5.0,
+    cast=float,
+)
+
 # Publish a chat message once to a per-chat channel-layer group instead of once
 # per recipient.
 #
