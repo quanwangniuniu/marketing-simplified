@@ -530,6 +530,16 @@ export const authAPI = {
     });
     return response.data;
   },
+
+  getSessions: async (): Promise<{ jti: string; ip: string; user_agent: string; created_at: string }[]> => {
+    const response = await api.get('/auth/sessions/');
+    return response.data;
+  },
+
+  revokeSession: async (jti: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/auth/sessions/${jti}/`);
+    return response.data;
+  },
 };
 
 export type CreateDecisionFromMeetingPayload = {
