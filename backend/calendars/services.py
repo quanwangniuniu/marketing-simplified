@@ -6,7 +6,7 @@ Also hosts the recurring-event scope logic (this / this-and-future / all):
 keeping this business logic here keeps the views thin (fat core, thin edges).
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,8 +14,12 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
+# availability holds only pure functions and imports nothing from this app,
+# so a module-level import here cannot create a cycle.
+from .availability import BookingRules, WeeklyWindow
 from .models import (
     CalendarEvent,
+    CalendarSettings,
     Event,
     EventAttendee,
     EventReminder,
@@ -638,3 +642,85 @@ def merge_busy_intervals(
         else:
             merged.append((start, end))
     return merged
+
+
+# ── MED-284: booking link → availability inputs ──────────────────────────
+
+# Fallback when neither the link nor the owner's settings say otherwise.
+DEFAULT_WORKING_WINDOW = (time(9, 0), time(17, 0))
+DEFAULT_WORKING_WEEKDAYS = (0, 1, 2, 3, 4)  # Mon–Fri, Python convention
+
+
+def rules_from_booking_link(link) -> BookingRules:
+    """Translate a BookingLink's stored rules into availability BookingRules."""
+    return BookingRules(
+        duration_minutes=link.duration_minutes,
+        slot_increment_minutes=link.slot_increment_minutes,
+        buffer_before_minutes=link.buffer_before_minutes,
+        buffer_after_minutes=link.buffer_after_minutes,
+        min_notice_minutes=link.min_notice_minutes,
+        max_advance_days=link.max_advance_days,
+    )
+
+
+def windows_from_booking_link(link) -> list[WeeklyWindow]:
+    """
+    Weekly availability windows for a link.
+
+    Precedence: the link's own `availability_windows`, else the owner's
+    CalendarSettings working hours, else Mon–Fri 09:00–17:00.
+    """
+    explicit = link.availability_windows or []
+    if explicit:
+        return [
+            WeeklyWindow(
+                weekday=int(window["weekday"]),
+                start=_parse_hhmm(window["start"]),
+                end=_parse_hhmm(window["end"]),
+            )
+            for window in explicit
+        ]
+
+    settings_obj = CalendarSettings.objects.filter(user_id=link.owner_id).first()
+    if settings_obj and settings_obj.working_hours_enabled:
+        start = settings_obj.working_hours_start or DEFAULT_WORKING_WINDOW[0]
+        end = settings_obj.working_hours_end or DEFAULT_WORKING_WINDOW[1]
+        weekdays = _weekdays_from_settings(settings_obj)
+        if start < end and weekdays:
+            return [
+                WeeklyWindow(weekday=day, start=start, end=end) for day in weekdays
+            ]
+
+    start, end = DEFAULT_WORKING_WINDOW
+    return [
+        WeeklyWindow(weekday=day, start=start, end=end)
+        for day in DEFAULT_WORKING_WEEKDAYS
+    ]
+
+
+def _weekdays_from_settings(settings_obj) -> list[int]:
+    """
+    Convert CalendarSettings.working_days to Python weekdays (Monday=0).
+
+    ASSUMPTION: working_days uses Sunday=0 … Saturday=6, matching the model's
+    WEEK_START_CHOICES. Nothing in the codebase reads this field, so the
+    convention is inferred rather than documented — revisit if the calendar UI
+    starts writing it with different semantics.
+    """
+    raw = settings_obj.working_days or []
+    converted: list[int] = []
+    for value in raw:
+        try:
+            js_weekday = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= js_weekday <= 6:
+            converted.append((js_weekday - 1) % 7)  # Sunday=0 → Monday=0
+    return sorted(set(converted))
+
+
+def _parse_hhmm(value) -> time:
+    """Accept either a 'HH:MM' string or an existing time object."""
+    if isinstance(value, time):
+        return value
+    return datetime.strptime(str(value), "%H:%M").time()

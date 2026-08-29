@@ -12,7 +12,7 @@ Key updates vs previous version:
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -1311,6 +1311,150 @@ class CalendarEvent(TimeStampedModel):
             if not self.decision_id:
                 raise ValidationError(
                     {"decision": "Decision Review Event must be linked to a Decision."}
+                )
+
+    def save(self, *args, validate: bool = True, **kwargs):
+        if validate:
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# -----------------------------
+# Booking Link (MED-284)
+# -----------------------------
+class BookingLink(TimeStampedModel):
+    """
+    A shareable link that lets an external prospect book time with one user.
+
+    Tenant-scoped like the rest of this app, so a public request must resolve
+    the organisation before it can read one. That is why the public URL carries
+    the org slug (/book/<org>/<slug>) rather than an opaque token: the org has
+    to be known up front to select the right schema.
+
+    Availability rules live here as plain values so they can be handed straight
+    to calendars.availability without the booking flow needing the model.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Multi-tenancy boundary
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="booking_links",
+        help_text="Tenant boundary. Must match the owner's organization.",
+    )
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="booking_links",
+        help_text="The person whose time is being booked.",
+    )
+
+    calendar = models.ForeignKey(
+        Calendar,
+        on_delete=models.CASCADE,
+        related_name="booking_links",
+        help_text="Calendar that bookings are written to.",
+    )
+
+    slug = models.SlugField(
+        max_length=100,
+        help_text="URL segment, unique within the organisation.",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+
+    # Scheduling rules — mirror calendars.availability.BookingRules.
+    duration_minutes = models.PositiveIntegerField(default=30)
+    slot_increment_minutes = models.PositiveIntegerField(default=15)
+    buffer_before_minutes = models.PositiveIntegerField(default=0)
+    buffer_after_minutes = models.PositiveIntegerField(default=0)
+    min_notice_minutes = models.PositiveIntegerField(default=60)
+    max_advance_days = models.PositiveIntegerField(default=60)
+
+    timezone = models.CharField(
+        max_length=100,
+        default="UTC",
+        help_text="Owner's timezone; availability windows are wall-clock in this zone.",
+    )
+
+    availability_windows = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Weekly windows as [{'weekday': 0-6 (Mon-Sun), 'start': 'HH:MM', "
+            "'end': 'HH:MM'}]. Empty falls back to the owner's CalendarSettings "
+            "working hours."
+        ),
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["title"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "slug"],
+                condition=models.Q(is_deleted=False),
+                name="uniq_booking_link_org_slug",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["organization", "slug"]),
+        ]
+
+    def __str__(self):
+        return f"{self.slug} ({self.title})"
+
+    def clean(self):
+        super().clean()
+
+        if self.duration_minutes <= 0:
+            raise ValidationError({"duration_minutes": "Duration must be positive."})
+        if self.slot_increment_minutes <= 0:
+            raise ValidationError(
+                {"slot_increment_minutes": "Slot increment must be positive."}
+            )
+        if self.max_advance_days <= 0:
+            raise ValidationError(
+                {"max_advance_days": "Booking horizon must be at least one day."}
+            )
+
+        # The calendar receives the bookings, so it must sit in the same tenant.
+        if self.calendar_id and self.calendar.organization_id != self.organization_id:
+            raise ValidationError(
+                {"calendar": "Calendar must belong to the same organization."}
+            )
+
+        for window in self.availability_windows or []:
+            if not isinstance(window, dict):
+                raise ValidationError(
+                    {"availability_windows": "Each window must be an object."}
+                )
+            missing = {"weekday", "start", "end"} - set(window)
+            if missing:
+                raise ValidationError(
+                    {
+                        "availability_windows":
+                            f"Window is missing {', '.join(sorted(missing))}."
+                    }
+                )
+            if not isinstance(window["weekday"], int) or not 0 <= window["weekday"] <= 6:
+                raise ValidationError(
+                    {"availability_windows": "weekday must be an integer 0-6."}
+                )
+            try:
+                start = datetime.strptime(window["start"], "%H:%M").time()
+                end = datetime.strptime(window["end"], "%H:%M").time()
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    {"availability_windows": "start and end must be 'HH:MM'."}
+                )
+            if start >= end:
+                raise ValidationError(
+                    {"availability_windows": "Window start must precede its end."}
                 )
 
     def save(self, *args, validate: bool = True, **kwargs):
