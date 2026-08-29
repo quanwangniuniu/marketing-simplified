@@ -7,9 +7,12 @@ keeping this business logic here keeps the views thin (fat core, thin edges).
 """
 import uuid
 from datetime import datetime, timedelta
+from types import SimpleNamespace
+from typing import Any
 
 from django.db import transaction
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 
 from .models import (
     CalendarEvent,
@@ -436,3 +439,202 @@ def update_entire_series(event: Event, data: dict, context: dict) -> Event:
         )
         serializer.is_valid(raise_exception=True)
         return serializer.save()
+
+# ── Occurrence expansion ─────────────────────────────────────────────────
+# Moved here from views.py so non-view callers (booking links) can reuse the
+# recurrence logic without importing the API layer. views.py re-exports both
+# names, so existing imports keep working.
+
+
+def _events_intersecting_range(start_dt, end_dt, base_qs=None):
+    """
+    Return events that may appear in [start_dt, end_dt).
+
+    Non-recurring events use wall-clock overlap. Recurring masters are included
+    when the series can still produce instances in the window (so split-born
+    series remain visible after their first occurrence day).
+    """
+    if base_qs is None:
+        base_qs = Event.objects.all()
+
+    non_recurring = Q(
+        is_recurring=False,
+        start_datetime__lt=end_dt,
+        end_datetime__gt=start_dt,
+    )
+    recurring = Q(
+        is_recurring=True,
+        recurrence_rule__isnull=False,
+        start_datetime__lt=end_dt,
+    ) & (
+        Q(recurrence_rule__until__isnull=True)
+        | Q(recurrence_rule__until__gt=start_dt)
+    )
+    return base_qs.filter(non_recurring | recurring)
+
+
+def _expand_recurring_event(
+    event: Event,
+    time_min,
+    time_max,
+    max_results: int = 250,
+):
+    """
+    Expand a recurring event into concrete instances within [time_min, time_max).
+    Currently supports simple DAILY and WEEKLY patterns based on start_datetime.
+    """
+    if not event.is_recurring or not event.recurrence_rule_id:
+        return []
+
+    rule = event.recurrence_rule
+    frequency = rule.frequency
+    interval = max(int(rule.interval or 1), 1)
+
+    duration = event.end_datetime - event.start_datetime
+    instances: list[Any] = []
+
+    # Load exceptions for this event/rule within range
+    exceptions = RecurrenceException.objects.filter(
+        organization=event.organization,
+        recurrence_rule=rule,
+        original_event=event,
+        exception_date__gte=time_min,
+        exception_date__lt=time_max,
+    ).select_related("modified_event")
+    exceptions_by_date = {exc.exception_date: exc for exc in exceptions}
+
+    # Fast-forward to first occurrence that could intersect [time_min, time_max)
+    if frequency == "DAILY":
+        step = timezone.timedelta(days=interval)
+    elif frequency == "WEEKLY":
+        step = timezone.timedelta(weeks=interval)
+    else:
+        # For now only basic DAILY/WEEKLY patterns are supported in expansion.
+        return []
+
+    # Honor the series bounds so a capped/split series stops generating.
+    # `until` is treated as exclusive (strict-less): an occurrence exactly at
+    # `until` belongs to the next (split) series, never the capped master.
+    rule_until = rule.until
+    rule_count = rule.count
+
+    # Skip occurrences that end at or before time_min (first that can intersect
+    # the window has start > time_min - duration).
+    occurrence_index = _count_occurrences_before(
+        event.start_datetime, time_min - duration, rule
+    )
+    current = event.start_datetime + (step * occurrence_index)
+
+    if rule_count is not None and occurrence_index >= rule_count:
+        return []
+    if rule_until is not None and current >= rule_until:
+        return []
+
+    while current + duration <= time_max and len(instances) < max_results:
+        if rule_count is not None and occurrence_index >= rule_count:
+            break
+        if rule_until is not None and current >= rule_until:
+            break
+
+        # Check intersection with requested window
+        if current < time_max and (current + duration) > time_min:
+            exc = exceptions_by_date.get(current)
+            if exc:
+                if exc.is_cancelled:
+                    # Skip cancelled instance
+                    pass
+                else:
+                    # Use modified event instance
+                    instances.append(exc.modified_event)
+            else:
+                # Create a lightweight instance based on the master event
+                attrs = {}
+                for field in Event._meta.fields:
+                    name = field.name
+                    attrs[name] = getattr(event, name)
+
+                # Override fields specific to this occurrence
+                attrs["id"] = event.id  # master id; original_start differentiates instances
+                attrs["start_datetime"] = current
+                attrs["end_datetime"] = current + duration
+                attrs["original_start"] = current
+
+                instance_obj = SimpleNamespace(**attrs)
+                instances.append(instance_obj)
+
+        current = current + step
+        occurrence_index += 1
+
+    return instances
+
+
+
+# ── MED-284: busy intervals for availability ─────────────────────────────
+
+
+def get_busy_intervals_by_calendar(
+    calendars, time_min: datetime, time_max: datetime
+) -> dict[str, list[tuple[datetime, datetime]]]:
+    """
+    Busy intervals per calendar within [time_min, time_max).
+
+    Recurring series are expanded to concrete instances, and each calendar's
+    intervals are merged so overlapping events collapse into one block.
+    Returns {calendar_id: [(start, end), ...]}.
+    """
+    result: dict[str, list[tuple[datetime, datetime]]] = {}
+
+    for calendar in calendars:
+        events = _events_intersecting_range(
+            time_min,
+            time_max,
+            Event.objects.filter(calendar=calendar, is_deleted=False).select_related(
+                "recurrence_rule"
+            ),
+        )
+
+        intervals: list[tuple[datetime, datetime]] = []
+        for event in events:
+            if event.is_recurring and event.recurrence_rule_id:
+                for instance in _expand_recurring_event(event, time_min, time_max):
+                    intervals.append((instance.start_datetime, instance.end_datetime))
+            else:
+                intervals.append((event.start_datetime, event.end_datetime))
+
+        result[str(calendar.id)] = merge_busy_intervals(intervals)
+
+    return result
+
+
+def get_busy_intervals(
+    calendars, time_min: datetime, time_max: datetime
+) -> list[tuple[datetime, datetime]]:
+    """
+    Busy intervals across all given calendars, flattened and merged.
+
+    This is the form booking availability needs: a single "when is this person
+    unavailable" timeline, rather than a per-calendar breakdown.
+    """
+    combined: list[tuple[datetime, datetime]] = []
+    for intervals in get_busy_intervals_by_calendar(calendars, time_min, time_max).values():
+        combined.extend(intervals)
+    return merge_busy_intervals(combined)
+
+
+def merge_busy_intervals(
+    intervals: list[tuple[datetime, datetime]]
+) -> list[tuple[datetime, datetime]]:
+    """Sort and coalesce overlapping or touching intervals."""
+    cleaned = [(start, end) for start, end in intervals if end > start]
+    if not cleaned:
+        return []
+    cleaned.sort(key=lambda pair: pair[0])
+
+    merged = [cleaned[0]]
+    for start, end in cleaned[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
