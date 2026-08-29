@@ -23,6 +23,8 @@ from .views import (
     AgendaView,
     FreeBusyView,
     EventReminderListCreateView,
+    PublicBookingLinkAvailabilityView,
+    PublicBookingCreateView,
 )
 
 
@@ -130,5 +132,19 @@ urlpatterns = [
         'derived-events/',
         CalendarEventListView.as_view(),
         name='calendar-derived-events',
+    ),
+
+    # MED-284: public booking links. Unauthenticated; the org slug in the path
+    # is what lets these resolve the tenant schema, since there is no user to
+    # resolve it from.
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/",
+        PublicBookingLinkAvailabilityView.as_view(),
+        name="public-booking-availability",
+    ),
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/bookings/",
+        PublicBookingCreateView.as_view(),
+        name="public-booking-create",
     ),
 ]

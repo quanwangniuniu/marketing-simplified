@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
+from datetime import timezone as dt_timezone
 from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.models import Organization
 from .models import (
+    BookingLink,
     Calendar,
     CalendarShare,
     CalendarSubscription,
@@ -736,3 +740,68 @@ class CalendarEventSerializer(serializers.ModelSerializer):
             'decision_id', 'task_id', 'decision_slug', 'task_slug', 'review_id', 'project_id',
             'created_at', 'updated_at',
         ]
+
+# ── MED-284: public booking link serializers ─────────────────────────────
+
+
+class PublicBookingLinkSerializer(serializers.ModelSerializer):
+    """
+    Booking link as shown to an anonymous visitor.
+
+    Deliberately narrow: the page needs to say who the meeting is with and how
+    long it runs, and nothing else. The owner's email, calendar id, internal
+    ids and the organisation record stay out — this payload is served to
+    anyone holding the URL.
+    """
+
+    owner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BookingLink
+        fields = [
+            "slug",
+            "title",
+            "description",
+            "duration_minutes",
+            "timezone",
+            "owner_name",
+        ]
+
+    def get_owner_name(self, obj):
+        owner = obj.owner
+        if not owner:
+            return ""
+        full_name = f"{owner.first_name or ''} {owner.last_name or ''}".strip()
+        return full_name or owner.username
+
+
+class BookingRequestSerializer(serializers.Serializer):
+    """An incoming booking from an anonymous visitor."""
+
+    name = serializers.CharField(max_length=255)
+    email = serializers.EmailField()
+    start = serializers.DateTimeField(
+        help_text="Slot start, ISO 8601 with offset. Must match an offered slot."
+    )
+    notes = serializers.CharField(
+        max_length=2000, required=False, allow_blank=True, default=""
+    )
+
+    def validate_name(self, value):
+        name = (value or "").strip()
+        if not name:
+            raise serializers.ValidationError("Name cannot be blank.")
+        return name
+
+    def validate_start(self, value):
+        # DRF makes a naive datetime aware using the server's current timezone
+        # before this runs, so `is_naive(value)` is always False and cannot be
+        # used to detect a missing offset. Inspect the raw input instead: a
+        # booking time without an offset is ambiguous and must be rejected
+        # rather than silently interpreted as server-local.
+        raw = str((self.initial_data or {}).get("start", "")).strip()
+        if not re.search(r"(Z|z|[+-]\d{2}:?\d{2})$", raw):
+            raise serializers.ValidationError(
+                "start must include a timezone offset (e.g. 2026-09-01T10:00:00Z)."
+            )
+        return value.astimezone(dt_timezone.utc)

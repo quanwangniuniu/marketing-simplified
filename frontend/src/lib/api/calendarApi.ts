@@ -1,3 +1,4 @@
+import axios from 'axios';
 import api from "../api";
 
 export type CalendarViewType = "day" | "week" | "month" | "year" | "agenda";
@@ -338,3 +339,84 @@ export function extractNavigationMetadata(eventDescription: string): any {
     return null;
   }
 }
+
+
+// ── MED-284: public booking links ────────────────────────────────────────
+
+/**
+ * Booking pages are viewed by external prospects who have no account, so these
+ * calls use their own axios instance with no auth interceptors — the shared
+ * `api` client attaches tokens and redirects on 401, neither of which makes
+ * sense here. Mirrors googleAdsPublicPreviewApi.
+ */
+const publicApi = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '',
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/plain, */*',
+  },
+});
+
+export interface BookingSlotDTO {
+  /** ISO 8601 UTC. */
+  start: string;
+  end: string;
+}
+
+export interface PublicBookingLinkDTO {
+  slug: string;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  /** The owner's timezone, for showing what time it is on their side. */
+  timezone: string;
+  owner_name: string;
+  slots: BookingSlotDTO[];
+}
+
+export interface BookingRequestPayload {
+  name: string;
+  email: string;
+  /** ISO 8601 with an explicit offset — the backend rejects naive datetimes. */
+  start: string;
+  notes?: string;
+}
+
+export interface BookingConfirmationDTO {
+  status: string;
+  start: string;
+  end: string;
+  title: string;
+  timezone: string;
+}
+
+function bookingBase(orgSlug: string, linkSlug: string): string {
+  return `/api/public/book/${encodeURIComponent(orgSlug)}/${encodeURIComponent(linkSlug)}`;
+}
+
+export const PublicBookingAPI = {
+  /** Link details plus bookable slots. `from`/`to` are ISO 8601. */
+  getAvailability: (
+    orgSlug: string,
+    linkSlug: string,
+    range?: { from?: string; to?: string },
+  ) =>
+    publicApi
+      .get<PublicBookingLinkDTO>(`${bookingBase(orgSlug, linkSlug)}/`, {
+        params: range,
+      })
+      .then((res) => res.data),
+
+  createBooking: (
+    orgSlug: string,
+    linkSlug: string,
+    payload: BookingRequestPayload,
+  ) =>
+    publicApi
+      .post<BookingConfirmationDTO>(
+        `${bookingBase(orgSlug, linkSlug)}/bookings/`,
+        payload,
+      )
+      .then((res) => res.data),
+};
