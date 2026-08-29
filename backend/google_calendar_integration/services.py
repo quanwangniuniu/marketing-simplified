@@ -671,3 +671,91 @@ def disconnect_user_calendar(user) -> None:
     conn.save()
     if cal:
         cal.delete()
+
+
+# ── MED-284: availability for booking links ──────────────────────────────
+
+
+def fetch_google_busy_intervals(
+    connection: GoogleCalendarConnection,
+    time_min: datetime,
+    time_max: datetime,
+    calendar_ids: list[str] | None = None,
+) -> list[tuple[datetime, datetime]]:
+    """
+    Busy intervals from Google Calendar for one connection, via the freeBusy API.
+
+    Returns timezone-aware UTC (start, end) tuples, unmerged and unsorted —
+    callers merge them together with the platform's own busy intervals.
+
+    Returns an empty list when the connection is unusable (disconnected, no
+    token, needs reconnect). A booking page must still render availability from
+    the in-app calendar when Google is unavailable; treating that as fatal would
+    take the whole page down for an integration problem. Callers that need to
+    distinguish "no busy time" from "could not reach Google" should check
+    `connection.is_active` / `needs_reconnect` themselves.
+    """
+    if connection is None or not connection.is_active or connection.needs_reconnect:
+        return []
+    if not connection.get_access_token():
+        return []
+
+    ids = calendar_ids or [connection.primary_calendar_id or "primary"]
+    body = {
+        "timeMin": _google_rfc3339(time_min),
+        "timeMax": _google_rfc3339(time_max),
+        "items": [{"id": cid} for cid in ids if cid],
+    }
+    if not body["items"]:
+        return []
+
+    def _query(token: str):
+        r = requests.post(
+            f"{GOOGLE_CALENDAR_API_BASE}/freeBusy",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=body,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    try:
+        payload = run_google_calendar_api(connection, _query)
+    except requests.RequestException:
+        logger.warning(
+            "Google freeBusy lookup failed for connection %s; "
+            "falling back to platform availability only.",
+            connection.pk,
+            exc_info=True,
+        )
+        return []
+
+    intervals: list[tuple[datetime, datetime]] = []
+    for calendar_id, entry in (payload.get("calendars") or {}).items():
+        # Google reports per-calendar errors inline rather than failing the call
+        # (e.g. notFound for a calendar the user lost access to).
+        errors = entry.get("errors")
+        if errors:
+            logger.warning(
+                "Google freeBusy returned errors for calendar %s: %s", calendar_id, errors
+            )
+            continue
+        for period in entry.get("busy") or []:
+            start = parse_datetime(period.get("start") or "")
+            end = parse_datetime(period.get("end") or "")
+            if not start or not end:
+                continue
+            if timezone.is_naive(start):
+                start = timezone.make_aware(start, timezone.utc)
+            if timezone.is_naive(end):
+                end = timezone.make_aware(end, timezone.utc)
+            if end > start:
+                intervals.append((start.astimezone(timezone.utc), end.astimezone(timezone.utc)))
+    return intervals
+
+
+def _google_rfc3339(value: datetime) -> str:
+    """Format a datetime for the Google API, which requires an explicit offset."""
+    if timezone.is_naive(value):
+        value = timezone.make_aware(value, timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
