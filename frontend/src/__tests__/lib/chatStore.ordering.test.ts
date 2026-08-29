@@ -37,6 +37,12 @@ describe('chat message sequence ordering', () => {
     ]).map((item) => item.seq)).toEqual([1, 2, 3]);
   });
 
+  it('returns an already ordered committed message list without rebuilding it', () => {
+    const ordered = [message(101, 1), message(102, 2), message(103, 3)];
+
+    expect(reorderMessagesBySequence(ordered)).toBe(ordered);
+  });
+
   it('reorders live messages that arrive out of order', () => {
     const store = useChatStore.getState();
     store.addMessage(3, message(103, 3));

@@ -33,6 +33,20 @@ function messageSequence(message: Message): number | null {
  * them with their committed payload.
  */
 export function reorderMessagesBySequence(messages: Message[]): Message[] {
+  let previousSeq = 0;
+  let alreadyOrdered = true;
+
+  for (const message of messages) {
+    const seq = messageSequence(message);
+    if (seq === null || seq <= previousSeq) {
+      alreadyOrdered = false;
+      break;
+    }
+    previousSeq = seq;
+  }
+
+  if (alreadyOrdered) return messages;
+
   const bySequence = new Map<number, Message>();
   const optimistic: Message[] = [];
 

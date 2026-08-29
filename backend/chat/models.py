@@ -1,5 +1,4 @@
 from django.db import models, transaction
-from django.db.models import Max
 from django.conf import settings
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.postgres.indexes import GinIndex
@@ -463,9 +462,13 @@ class Message(TimeStampedModel):
         if self._state.adding and self.seq is None:
             with transaction.atomic():
                 Chat.objects.select_for_update().only('pk').get(pk=self.chat_id)
-                current_max = type(self).objects.filter(chat_id=self.chat_id).aggregate(
-                    max_seq=Max('seq')
-                )['max_seq']
+                current_max = (
+                    type(self).objects
+                    .filter(chat_id=self.chat_id)
+                    .order_by('-seq')
+                    .values_list('seq', flat=True)
+                    .first()
+                )
                 self.seq = (current_max or 0) + 1
                 return super().save(*args, **kwargs)
         return super().save(*args, **kwargs)
