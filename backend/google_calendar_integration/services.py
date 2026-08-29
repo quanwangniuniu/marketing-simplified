@@ -759,3 +759,98 @@ def _google_rfc3339(value: datetime) -> str:
     if timezone.is_naive(value):
         value = timezone.make_aware(value, timezone.utc)
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def get_merged_busy_intervals(
+    calendars,
+    google_connection: GoogleCalendarConnection | None,
+    time_min: datetime,
+    time_max: datetime,
+) -> list[tuple[datetime, datetime]]:
+    """
+    One busy timeline for a person, combining the in-app calendar and Google.
+
+    Lives here rather than in `calendars` because this direction of dependency
+    already exists: google_calendar_integration imports calendars, not the
+    reverse.
+
+    Google contributes nothing when it is unavailable — see
+    fetch_google_busy_intervals — so the result degrades to platform-only
+    rather than failing.
+    """
+    from calendars.services import get_busy_intervals, merge_busy_intervals
+
+    intervals = list(get_busy_intervals(calendars, time_min, time_max))
+    if google_connection is not None:
+        intervals.extend(
+            fetch_google_busy_intervals(google_connection, time_min, time_max)
+        )
+    return merge_busy_intervals(intervals)
+
+
+def get_merged_availability(
+    *,
+    calendars,
+    google_connection: GoogleCalendarConnection | None,
+    rules,
+    windows,
+    tz_name: str,
+    range_start: datetime,
+    range_end: datetime,
+    now: datetime | None = None,
+) -> list[tuple[datetime, datetime]]:
+    """
+    Bookable slots for a booking link, as UTC intervals.
+
+    `rules` is a calendars.availability.BookingRules and `windows` a list of
+    WeeklyWindow. Both are passed in rather than read off a model, so this stays
+    usable regardless of how booking links end up being stored.
+
+    Note for callers: this makes a live Google API call, so a public endpoint
+    should cache per (link, range) rather than hitting it on every keystroke.
+    """
+    from calendars.availability import compute_available_slots
+
+    busy = get_merged_busy_intervals(
+        calendars, google_connection, range_start, range_end
+    )
+    return compute_available_slots(
+        windows=windows,
+        busy=busy,
+        rules=rules,
+        tz_name=tz_name,
+        range_start=range_start,
+        range_end=range_end,
+        now=now or timezone.now(),
+    )
+
+
+def is_slot_still_available(
+    *,
+    calendars,
+    google_connection: GoogleCalendarConnection | None,
+    rules,
+    windows,
+    tz_name: str,
+    slot_start: datetime,
+    now: datetime | None = None,
+) -> bool:
+    """
+    Re-check one slot at booking time.
+
+    Availability is shown from a snapshot, so a prospect can submit a slot that
+    was taken while the page sat open. The booking endpoint must call this
+    before writing the event, or two people can book the same time.
+    """
+    slot_end = slot_start + timedelta(minutes=rules.duration_minutes)
+    slots = get_merged_availability(
+        calendars=calendars,
+        google_connection=google_connection,
+        rules=rules,
+        windows=windows,
+        tz_name=tz_name,
+        range_start=slot_start,
+        range_end=slot_end,
+        now=now,
+    )
+    return (slot_start, slot_end) in slots
