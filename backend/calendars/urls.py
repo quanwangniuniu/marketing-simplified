@@ -25,6 +25,7 @@ from .views import (
     EventReminderListCreateView,
     PublicBookingLinkAvailabilityView,
     PublicBookingCreateView,
+    BookingLinkViewSet,
 )
 
 
@@ -132,6 +133,20 @@ urlpatterns = [
         'derived-events/',
         CalendarEventListView.as_view(),
         name='calendar-derived-events',
+    ),
+
+    # MED-284: owner-facing booking link management.
+    path(
+        "booking-links/",
+        BookingLinkViewSet.as_view({"get": "list", "post": "create"}),
+        name="booking-link-list",
+    ),
+    path(
+        "booking-links/<uuid:pk>/",
+        BookingLinkViewSet.as_view(
+            {"get": "retrieve", "patch": "partial_update", "put": "update", "delete": "destroy"}
+        ),
+        name="booking-link-detail",
     ),
 
     # MED-284: public booking links. Unauthenticated; the org slug in the path

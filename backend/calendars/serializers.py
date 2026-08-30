@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.models import Organization
+from .permissions import get_user_organization
 from .models import (
     BookingLink,
     Calendar,
@@ -805,3 +806,92 @@ class BookingRequestSerializer(serializers.Serializer):
                 "start must include a timezone offset (e.g. 2026-09-01T10:00:00Z)."
             )
         return value.astimezone(dt_timezone.utc)
+
+
+class BookingLinkSerializer(serializers.ModelSerializer):
+    """
+    Owner-facing CRUD for a booking link.
+
+    Distinct from PublicBookingLinkSerializer, which is the narrow anonymous
+    view. This one exposes the scheduling rules so an owner can manage them;
+    `owner` and `organization` are never accepted from the body — the view sets
+    them from the request.
+    """
+
+    calendar_id = serializers.UUIDField(write_only=True, required=False)
+
+    # Declared explicitly so a zero is rejected here as a 400. The model's
+    # clean() also guards these, but it raises Django's ValidationError from
+    # save(), which the DRF exception handler surfaces as a 500.
+    duration_minutes = serializers.IntegerField(min_value=1, required=False)
+    slot_increment_minutes = serializers.IntegerField(min_value=1, required=False)
+    max_advance_days = serializers.IntegerField(min_value=1, required=False)
+
+    class Meta:
+        model = BookingLink
+        fields = [
+            "id",
+            "slug",
+            "title",
+            "description",
+            "calendar_id",
+            "duration_minutes",
+            "slot_increment_minutes",
+            "buffer_before_minutes",
+            "buffer_after_minutes",
+            "min_notice_minutes",
+            "max_advance_days",
+            "timezone",
+            "availability_windows",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_slug(self, value):
+        slug = (value or "").strip().lower()
+        if not slug:
+            raise serializers.ValidationError("Slug cannot be blank.")
+        return slug
+
+    def validate_calendar_id(self, value):
+        """The target calendar must be one the requesting user owns."""
+        user = self.context["request"].user
+        calendar = Calendar.objects.filter(
+            id=value, owner=user, is_deleted=False
+        ).first()
+        if not calendar:
+            raise serializers.ValidationError(
+                "Calendar not found, or it is not owned by you."
+            )
+        return calendar
+
+    def validate(self, attrs):
+        # Surface the (organization, slug) constraint as a readable 400 rather
+        # than letting it surface as a 500 from IntegrityError.
+        organization = get_user_organization(self.context["request"].user)
+        slug = attrs.get("slug", getattr(self.instance, "slug", None))
+        clashes = BookingLink.objects.filter(
+            organization=organization, slug=slug, is_deleted=False
+        )
+        if self.instance is not None:
+            clashes = clashes.exclude(pk=self.instance.pk)
+        if clashes.exists():
+            raise serializers.ValidationError(
+                {"slug": "You already have a booking link with this slug."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        calendar = validated_data.pop("calendar_id", None)
+        if calendar is None:
+            raise serializers.ValidationError({"calendar_id": "This field is required."})
+        validated_data["calendar"] = calendar
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        calendar = validated_data.pop("calendar_id", None)
+        if calendar is not None:
+            validated_data["calendar"] = calendar
+        return super().update(instance, validated_data)

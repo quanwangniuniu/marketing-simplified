@@ -420,3 +420,73 @@ export const PublicBookingAPI = {
       )
       .then((res) => res.data),
 };
+
+
+// ── MED-284: owner-facing booking link management ────────────────────────
+
+/** A weekly availability window, in the owner's timezone. */
+export interface BookingWindowDTO {
+  /** Monday=0 … Sunday=6. */
+  weekday: number;
+  /** "HH:MM" */
+  start: string;
+  end: string;
+}
+
+export interface BookingLinkDTO {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  slot_increment_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  min_notice_minutes: number;
+  max_advance_days: number;
+  timezone: string;
+  availability_windows: BookingWindowDTO[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BookingLinkWritePayload = Partial<
+  Omit<BookingLinkDTO, 'id' | 'created_at' | 'updated_at'>
+> & {
+  /** Required on create: the calendar bookings are written to. */
+  calendar_id?: string;
+};
+
+const BOOKING_LINKS_BASE = '/api/booking-links';
+
+/** The list is unpaginated server-side; stay tolerant of an envelope anyway. */
+function unwrapList<T>(data: unknown): T[] {
+  return Array.isArray(data) ? data : ((data as { results?: T[] })?.results ?? []);
+}
+
+export const BookingLinkAPI = {
+  list: () =>
+    api
+      .get<BookingLinkDTO[] | { results: BookingLinkDTO[] }>(`${BOOKING_LINKS_BASE}/`)
+      .then((res) => unwrapList<BookingLinkDTO>(res.data)),
+
+  create: (payload: BookingLinkWritePayload) =>
+    api.post<BookingLinkDTO>(`${BOOKING_LINKS_BASE}/`, payload),
+
+  update: (id: string, payload: BookingLinkWritePayload) =>
+    api.patch<BookingLinkDTO>(`${BOOKING_LINKS_BASE}/${id}/`, payload),
+
+  destroy: (id: string) => api.delete(`${BOOKING_LINKS_BASE}/${id}/`),
+};
+
+/**
+ * The shareable URL for a link.
+ *
+ * The org slug is part of the path because the public endpoint has no
+ * authenticated user to resolve the tenant from — see the booking views.
+ */
+export function bookingLinkUrl(orgSlug: string, linkSlug: string): string {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  return `${origin}/book/${orgSlug}/${linkSlug}`;
+}

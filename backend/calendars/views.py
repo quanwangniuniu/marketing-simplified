@@ -69,6 +69,7 @@ from .serializers import (
     # MED-284
     PublicBookingLinkSerializer,
     BookingRequestSerializer,
+    BookingLinkSerializer,
 )
 from .exceptions import calendar_error_response
 
@@ -1732,3 +1733,50 @@ class PublicBookingCreateView(APIView):
             metadata={"source": "booking_link", "booking_link_slug": link.slug},
         )
         return event
+
+
+class BookingLinkViewSet(viewsets.ModelViewSet):
+    """
+    Owner-facing CRUD for booking links (MED-284).
+
+    Strictly owner-scoped: the queryset is filtered to the requesting user, so a
+    link is never listable or addressable by a colleague, even inside the same
+    organisation. `owner` and `organization` are set from the request rather
+    than accepted from the body.
+
+    The public counterparts (PublicBookingLinkAvailabilityView /
+    PublicBookingCreateView) are the anonymous read + book side of the same
+    model, and deliberately expose far less.
+    """
+
+    serializer_class = BookingLinkSerializer
+    permission_classes = [IsAuthenticatedInOrganization]
+    # An owner's links are a naturally small set and the management UI wants
+    # them all; the global PAGE_SIZE would silently truncate the list.
+    pagination_class = None
+
+    def get_queryset(self):
+        organization = get_user_organization(self.request.user)
+        if not organization:
+            return BookingLink.objects.none()
+        return (
+            BookingLink.objects.filter(
+                organization=organization,
+                owner=self.request.user,
+                is_deleted=False,
+            )
+            .select_related("calendar")
+            .order_by("title")
+        )
+
+    def perform_create(self, serializer):
+        organization = get_user_organization(self.request.user)
+        if not organization:
+            raise PermissionDenied("An organization is required to create booking links.")
+        serializer.save(owner=self.request.user, organization=organization)
+
+    def perform_destroy(self, instance):
+        # Soft delete, matching the rest of this app. The partial unique
+        # constraint excludes deleted rows, so the slug becomes reusable.
+        instance.is_deleted = True
+        instance.save(update_fields=["is_deleted", "updated_at"], validate=False)

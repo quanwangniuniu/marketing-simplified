@@ -11,7 +11,7 @@ import {
   Target, Mail, Notebook, Facebook, Video, Presentation,
   User as UserIcon, CreditCard, Plug, LogOut, Headset,
   Shield, UserCog, UserCheck, BarChart3, Sparkles, PiggyBank,
-  History,
+  History, Link2,
 } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/lib/authStore';
@@ -118,6 +118,10 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Meetings', href: '/meetings', icon: Users },
       { label: 'Calendar', href: '/calendar', icon: Calendar },
+      // Sibling rather than a child of Calendar: nesting would change
+      // Calendar's own href to '#', turning it into an expander and breaking
+      // the direct navigation the sidebar E2E test relies on.
+      { label: 'Booking Links', href: '/calendar/booking-links', icon: Link2 },
       { label: 'Messages', href: '/messages', icon: MessageSquare },
       { label: 'Miro', href: '/miro', icon: Presentation },
     ],
