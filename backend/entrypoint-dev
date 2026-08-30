@@ -32,7 +32,7 @@ python manage.py migrate --noinput
 # in settings.py for what actually makes the handshake fast.
 WS_CONNECT_TIMEOUT="${WS_CONNECT_TIMEOUT:-30}"
 if [ "${OTEL_ENABLED}" = "true" ] || [ "${OTEL_ENABLED}" = "True" ]; then
-  exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
+  exec opentelemetry-instrument daphne -b 0.0.0.0 -p 8000 --http-timeout 0 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
 else
-  exec daphne -b 0.0.0.0 -p 8000 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
+  exec daphne -b 0.0.0.0 -p 8000 --http-timeout 0 --websocket_connect_timeout "${WS_CONNECT_TIMEOUT}" backend.asgi:application
 fi

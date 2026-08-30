@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'django_filters',
     'django_fsm',
     'channels',
+    'audit.apps.AuditConfig',
     'authentication.apps.AuthenticationConfig',
     'core.apps.CoreConfig',
     'spreadsheet.apps.SpreadsheetConfig',
@@ -550,6 +551,15 @@ LINK_PREVIEW_PRUNE_AFTER_DAYS = config('LINK_PREVIEW_PRUNE_AFTER_DAYS', default=
 # large group cannot create an unbounded Redis command burst.
 CHAT_FANOUT_CONCURRENCY = config('CHAT_FANOUT_CONCURRENCY', default=25, cast=int)
 
+# A SubscriptionRegistry normally runs on its owning ASGI event loop. Calls
+# submitted from another OS thread must not wait forever if that loop stalls or
+# shuts down between availability checks.
+CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS = config(
+    'CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS',
+    default=5.0,
+    cast=float,
+)
+
 # Publish a chat message once to a per-chat channel-layer group instead of once
 # per recipient.
 #
@@ -759,6 +769,19 @@ INTERNAL_CRON_SECRET = config('INTERNAL_CRON_SECRET', default='')
 # Redis Configuration
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+
+# Notification SSE replay protection. Replay is delivered in bounded batches,
+# and repeated replay connections are limited per authenticated user using a
+# rolling Redis window.
+NOTIFICATION_SSE_REPLAY_BATCH_SIZE = config(
+    'NOTIFICATION_SSE_REPLAY_BATCH_SIZE', default=500, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_LIMIT = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_LIMIT', default=5, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS', default=30, cast=int
+)
 
 # Cache Configuration (for online status, etc.)
 CACHES = {

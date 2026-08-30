@@ -49,9 +49,11 @@ class TenantTestCase(TestCase):
     def setUp(self):
         super().setUp()
 
-        # Set search_path to tenant schema for this test
+        # Mirror the TenantSchemaMiddleware: tenant schema first, public as fallback.
+        # Including public allows models that live in the public schema (e.g.
+        # AdminAuditEvent) to be written/read even during tenant-scoped tests.
         with connection.cursor() as cursor:
-            cursor.execute(f"SET search_path TO {self.test_schema};")
+            cursor.execute(f"SET search_path TO {self.test_schema}, public;")
 
     def tearDown(self):
         # Don't explicitly restore schema here - Django's transaction rollback
@@ -77,9 +79,9 @@ class TenantTestCase(TestCase):
         try:
             user = User.objects.create_user(**kwargs)
         finally:
-            # Switch back to tenant schema
+            # Switch back to tenant schema (with public fallback)
             with connection.cursor() as cursor:
-                cursor.execute(f"SET search_path TO {self.test_schema};")
+                cursor.execute(f"SET search_path TO {self.test_schema}, public;")
 
         return user
 
@@ -119,9 +121,9 @@ class TenantTransactionTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
 
-        # Set search_path to tenant schema for this test
+        # Mirror the TenantSchemaMiddleware: tenant schema first, public as fallback.
         with connection.cursor() as cursor:
-            cursor.execute(f"SET search_path TO {self.test_schema};")
+            cursor.execute(f"SET search_path TO {self.test_schema}, public;")
 
     def tearDown(self):
         # Don't explicitly restore schema here - Django's transaction rollback

@@ -1,10 +1,10 @@
 // src/lib/api/permissionApi.ts - Connect to AUTH-06 backend API
-import { 
-  Organization, 
-  Team, 
-  Role, 
-  Permission, 
-  RolePermission, 
+import {
+  Organization,
+  Team,
+  Role,
+  Permission,
+  RolePermission,
   PermissionMatrix,
   ProjectPermissionMatrix,
   ApiResponse,
@@ -60,6 +60,9 @@ class ApiClient {
       ...options.headers,
     });
     
+    const authData = readPersistedAuthState();
+    const token = authData?.state?.token;
+
     const defaultOptions: RequestInit = {
       credentials: 'include', 
       ...options,
@@ -289,22 +292,45 @@ export class PermissionAPI {
 
 
 
-  // Current user's roles from auth store only — no network calls (avoids /api/access_control/roles/).
+  // Current user's roles with real rank values fetched from the API.
   static async getCurrentUserRoles(): Promise<Role[]> {
     try {
       const { useAuthStore } = await import('../authStore');
-      const currentUser = useAuthStore.getState().user;
+      // If Zustand hasn't hydrated yet, fall back to localStorage directly.
+      const currentUser = useAuthStore.getState().user ?? readPersistedAuthState()?.state?.user ?? null;
 
-      if (!currentUser?.roles || !Array.isArray(currentUser.roles) || currentUser.roles.length === 0) {
+      if (!currentUser) return [];
+
+      // Staff and org admins always get full access.
+      if (currentUser.is_staff || currentUser.is_org_admin) {
+        return [{
+          id: 'admin',
+          name: 'Admin',
+          description: 'Administrator',
+          rank: 1,
+          organizationId: undefined,
+          isReadOnly: false,
+        }];
+      }
+
+      if (!currentUser.roles || !Array.isArray(currentUser.roles) || currentUser.roles.length === 0) {
         return [];
       }
 
-      const defaultRank = 10;
+      // Fetch real roles from the API to get actual level/rank values.
+      const allRoles = await PermissionAPI.getRoles();
+      const userRoleNames = new Set(currentUser.roles.map((r: string) => r.toLowerCase()));
+      const matched = allRoles.filter(r => userRoleNames.has(r.name.toLowerCase()));
+
+      // If we matched at least one role, use those (with real ranks).
+      if (matched.length > 0) return matched;
+
+      // Fallback: role names from auth store but unknown rank — treat as no access.
       return currentUser.roles.map((name: string, index: number) => ({
         id: `auth-${index}-${name}`,
         name,
         description: `Role: ${name}`,
-        rank: defaultRank,
+        rank: 10,
         organizationId: undefined,
         isReadOnly: false,
       }));
