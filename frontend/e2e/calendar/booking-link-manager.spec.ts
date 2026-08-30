@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * MED-284: owner-side booking link management.
@@ -9,6 +11,31 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 const PAGE_URL = '/calendar/booking-links';
+const AUTH_FILE = path.resolve(__dirname, '../.auth/user.json');
+
+/**
+ * The org/project slugs the signed-in user actually has.
+ *
+ * The nested layout validates these against the API (and will switch orgs if
+ * they diverge), so placeholder slugs land on an error state instead of the
+ * page. auth.setup persists the active project, which is the same source the
+ * app reads.
+ */
+function activeSlugs(): { orgSlug: string; projectSlug: string } {
+  const state = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'));
+  for (const origin of state.origins ?? []) {
+    for (const item of origin.localStorage ?? []) {
+      if (item.name !== 'project-storage-v1') continue;
+      const project = JSON.parse(item.value)?.state?.activeProject;
+      const orgSlug = project?.organization?.slug;
+      const projectSlug = project?.slug ?? project?.id;
+      if (orgSlug && projectSlug) {
+        return { orgSlug: String(orgSlug), projectSlug: String(projectSlug) };
+      }
+    }
+  }
+  throw new Error('No active project in storage state.');
+}
 const LINKS_GLOB = '**/api/booking-links/';
 const CALENDARS_GLOB = /\/api\/calendars\/(\?.*)?$/;
 
@@ -91,6 +118,24 @@ test.describe('Booking link management', () => {
 
     await expect(page.getByTestId('booking-link-empty')).toBeVisible();
     await expect(page.getByTestId('booking-link-item')).toHaveCount(0);
+  });
+
+  test('is reachable on the nested org/project route the sidebar builds', async ({
+    page,
+  }) => {
+    // useBuildUrl prefixes every sidebar href with /[orgSlug]/[projectSlug], so
+    // the flat route alone is not reachable from navigation — that combination
+    // 404'd until the nested alias existed. The page reads org context from the
+    // auth store rather than the path, so the slugs here are only routing.
+    await mockCalendars(page);
+    await mockLinks(page, [EXISTING_LINK]);
+
+    const { orgSlug, projectSlug } = activeSlugs();
+    await page.goto(`/${orgSlug}/${projectSlug}/calendar/booking-links`);
+    await expect(page.getByTestId('booking-link-manager')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('booking-link-item')).toHaveCount(1);
   });
 
   test('lists existing links with their public path', async ({ page }) => {
