@@ -97,6 +97,37 @@ class BookingLinkCrudTests(TestCase):
         assert link.owner == self.user
         assert link.organization == self.org
 
+    def test_response_carries_the_owning_org_slug(self):
+        # The public URL is /book/<org>/<slug>, and the org is the *user's*, not
+        # whatever project happens to be active — a user can belong to projects
+        # in other organisations. The client must not have to guess it, or the
+        # copied link 404s.
+        response = self._create()
+        assert response.json()["organization_slug"] == self.org.slug
+
+    def test_organization_slug_cannot_be_set_by_the_client(self):
+        response = self.client.post(
+            LIST_URL,
+            {**self._payload(), "organization_slug": "somewhere-else"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["organization_slug"] == self.org.slug
+
+    def test_cannot_point_a_link_at_a_non_primary_calendar(self):
+        # Google export skips non-primary calendars, so such a link would take
+        # bookings that never sync. Reject at creation rather than silently.
+        secondary = Calendar.objects.create(
+            organization=self.org,
+            owner=self.user,
+            name="Secondary",
+            timezone="UTC",
+            is_primary=False,
+        )
+        response = self._create(calendar_id=str(secondary.id))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "calendar_id" in error_fields(response)
+
     def test_cannot_point_a_link_at_someone_elses_calendar(self):
         response = self._create(calendar_id=str(self.colleague_calendar.id))
         assert response.status_code == status.HTTP_400_BAD_REQUEST

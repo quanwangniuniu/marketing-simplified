@@ -89,7 +89,16 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         CalendarAPI.listCalendars().then((res) => res.data).catch(() => []),
       ]);
       setLinks(linkList);
-      setCalendars(Array.isArray(calendarList) ? calendarList : []);
+      // /api/calendars/ is paginated, so the payload is {count, results} rather
+      // than a bare array. Accept both — an array-only check silently yields an
+      // empty dropdown against the real API.
+      const all = Array.isArray(calendarList)
+        ? calendarList
+        : (calendarList as { results?: CalendarDTO[] })?.results ?? [];
+      // Only primary calendars: the API rejects anything else, because Google
+      // export skips events on non-primary calendars and the booking would
+      // never sync. Offering them here would just produce a 400.
+      setCalendars(all.filter((calendar) => calendar.is_primary));
     } catch (err) {
       setError(errorMessage(err, 'Could not load your booking links.'));
     } finally {
@@ -161,8 +170,12 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
     }
   };
 
+  // A link's own organization is authoritative: the server derives it from the
+  // user's organization, which can differ from the active project's org.
+  const linkOrg = (link: BookingLinkDTO) => link.organization_slug || orgSlug;
+
   const copyUrl = async (link: BookingLinkDTO) => {
-    const url = bookingLinkUrl(orgSlug, link.slug);
+    const url = bookingLinkUrl(linkOrg(link), link.slug);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(link.id);
@@ -372,7 +385,7 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                   )}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-gray-400">
-                  /book/{orgSlug}/{link.slug} · {link.duration_minutes} min
+                  /book/{linkOrg(link)}/{link.slug} · {link.duration_minutes} min
                 </p>
               </div>
 

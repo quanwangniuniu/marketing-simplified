@@ -820,6 +820,16 @@ class BookingLinkSerializer(serializers.ModelSerializer):
 
     calendar_id = serializers.UUIDField(write_only=True, required=False)
 
+    # The org that actually owns this link, so the client never has to guess it
+    # when building the public URL. It is taken from the user's own organization
+    # on create (see BookingLinkViewSet.perform_create), which is not
+    # necessarily the organization of whatever project happens to be active —
+    # a user can be a member of projects in other orgs. Guessing produces a
+    # link that 404s only after it has been sent to a prospect.
+    organization_slug = serializers.SlugField(
+        source="organization.slug", read_only=True
+    )
+
     # Declared explicitly so a zero is rejected here as a 400. The model's
     # clean() also guards these, but it raises Django's ValidationError from
     # save(), which the DRF exception handler surfaces as a 500.
@@ -832,6 +842,7 @@ class BookingLinkSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "slug",
+            "organization_slug",
             "title",
             "description",
             "calendar_id",
@@ -847,7 +858,7 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "organization_slug", "created_at", "updated_at"]
 
     def validate_slug(self, value):
         slug = (value or "").strip().lower()
@@ -856,7 +867,16 @@ class BookingLinkSerializer(serializers.ModelSerializer):
         return slug
 
     def validate_calendar_id(self, value):
-        """The target calendar must be one the requesting user owns."""
+        """
+        The target calendar must be one the requesting user owns, and primary.
+
+        The primary requirement is not arbitrary: Google export skips any event
+        whose calendar is not the owner's primary one (see
+        should_export_event_to_google). A link on a secondary calendar would
+        take bookings that silently never reach Google, breaking the promise
+        that a booking lands in both calendars. Rejecting it at creation fails
+        loudly instead.
+        """
         user = self.context["request"].user
         calendar = Calendar.objects.filter(
             id=value, owner=user, is_deleted=False
@@ -864,6 +884,11 @@ class BookingLinkSerializer(serializers.ModelSerializer):
         if not calendar:
             raise serializers.ValidationError(
                 "Calendar not found, or it is not owned by you."
+            )
+        if not calendar.is_primary:
+            raise serializers.ValidationError(
+                "Booking links must use your primary calendar, otherwise "
+                "bookings cannot be synced to Google Calendar."
             )
         return calendar
 

@@ -15,6 +15,7 @@ const CALENDARS_GLOB = /\/api\/calendars\/(\?.*)?$/;
 const EXISTING_LINK = {
   id: '11111111-1111-1111-1111-111111111111',
   slug: 'intro-call',
+  organization_slug: 'acme',
   title: 'Intro Call',
   description: 'A quick chat.',
   duration_minutes: 30,
@@ -39,9 +40,24 @@ async function mockCalendars(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([
-        { id: '22222222-2222-2222-2222-222222222222', name: 'Primary', timezone: 'UTC' },
-      ]),
+      body: JSON.stringify({
+        count: 2,
+        results: [
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            name: 'Primary',
+            timezone: 'UTC',
+            is_primary: true,
+          },
+          // Non-primary: must not be offered, since the API would reject it.
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            name: 'Secondary',
+            timezone: 'UTC',
+            is_primary: false,
+          },
+        ],
+      }),
     });
   });
 }
@@ -84,7 +100,8 @@ test.describe('Booking link management', () => {
 
     await expect(page.getByTestId('booking-link-item')).toHaveCount(1);
     await expect(page.getByText('Intro Call')).toBeVisible();
-    await expect(page.getByText(/\/book\/.+\/intro-call · 30 min/)).toBeVisible();
+    // The path uses the org the API reports for the link, not the active project's.
+    await expect(page.getByText('/book/acme/intro-call · 30 min')).toBeVisible();
   });
 
   test('an owner can generate a new link', async ({ page }) => {
@@ -109,6 +126,10 @@ test.describe('Booking link management', () => {
     await page.getByTestId('booking-link-new').click();
 
     await expect(page.getByTestId('booking-link-form')).toBeVisible();
+    // Only the primary calendar is offered: placeholder + one option.
+    await expect(
+      page.getByTestId('booking-link-calendar').locator('option'),
+    ).toHaveCount(2);
     await page.getByTestId('booking-link-title').fill('Discovery Call');
     await page.getByTestId('booking-link-slug').fill('discovery-call');
     await page.getByTestId('booking-link-calendar').selectOption({ index: 1 });

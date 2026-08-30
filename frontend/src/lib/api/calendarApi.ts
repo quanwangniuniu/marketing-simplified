@@ -436,6 +436,8 @@ export interface BookingWindowDTO {
 export interface BookingLinkDTO {
   id: string;
   slug: string;
+  /** The org that owns this link. Authoritative for building the public URL. */
+  organization_slug: string;
   title: string;
   description: string | null;
   duration_minutes: number;
@@ -488,5 +490,8 @@ export const BookingLinkAPI = {
  */
 export function bookingLinkUrl(orgSlug: string, linkSlug: string): string {
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
-  return `${origin}/book/${orgSlug}/${linkSlug}`;
+  // Encoded for the same reason bookingBase() encodes: both segments are
+  // slugs today, but this is the string a user copies and pastes, so it should
+  // stay a valid URL whatever it is handed.
+  return `${origin}/book/${encodeURIComponent(orgSlug)}/${encodeURIComponent(linkSlug)}`;
 }
