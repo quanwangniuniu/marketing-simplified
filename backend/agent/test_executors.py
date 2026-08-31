@@ -60,8 +60,8 @@ class ComputeColumnStatsTests(SimpleTestCase):
         result = _compute_column_stats(values, "number")
         self.assertEqual(result["null_count"], 3)
         self.assertEqual(result["unique_count"], 2)
-        self.assertIsNone(result["min_value"], "24.0")
-        self.assertIsNone(result["max_value"], "42.0")
+        self.assertEqual(result["min_value"], "24.0")
+        self.assertEqual(result["max_value"], "42.0")
         self.assertCountEqual(result["sample_values"], ["42", "24"])
 
     def test_duplicate_text_are_counted_once(self):
