@@ -57,7 +57,7 @@ class ComputeColumnStatsTests(SimpleTestCase):
 
     def test_empty_markers_do_not_affect_number(self):
         values = [None, "", "-", "42", "24"]
-        result = _compute_column_stats(values, "string")
+        result = _compute_column_stats(values, "number")
         self.assertEqual(result["null_count"], 3)
         self.assertEqual(result["unique_count"], 2)
         self.assertIsNone(result["min_value"], "24.0")
