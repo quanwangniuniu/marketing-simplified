@@ -341,7 +341,7 @@ export function extractNavigationMetadata(eventDescription: string): any {
 }
 
 
-// ── MED-284: public booking links ────────────────────────────────────────
+// ── Public booking links ────────────────────────────────────────
 
 /**
  * Booking pages are viewed by external prospects who have no account, so these
@@ -369,6 +369,8 @@ export interface PublicBookingLinkDTO {
   title: string;
   description: string | null;
   duration_minutes: number;
+  /** Lets the client expire slots that lapse while the page sits open. */
+  min_notice_minutes: number;
   /** The owner's timezone, for showing what time it is on their side. */
   timezone: string;
   owner_name: string;
@@ -422,7 +424,7 @@ export const PublicBookingAPI = {
 };
 
 
-// ── MED-284: owner-facing booking link management ────────────────────────
+// ── Owner-facing booking link management ────────────────────────
 
 /** A weekly availability window, in the owner's timezone. */
 export interface BookingWindowDTO {

@@ -1,4 +1,4 @@
-"""Tests for the Google free/busy lookup used by booking links (MED-284)."""
+"""Tests for the Google free/busy lookup used by booking links."""
 
 from datetime import datetime
 from datetime import timezone as dt_timezone

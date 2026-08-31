@@ -1,7 +1,11 @@
+"use client";
+
 import React from "react";
+import Link from "next/link";
 import type { CalendarViewType } from "@/lib/api/calendarApi";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Link2 } from "lucide-react";
 import { VIEW_LABELS } from "@/components/calendar/utils";
+import { useBuildUrl } from "@/lib/buildUrl";
 
 type CalendarToolbarProps = {
   headerTitle: string;
@@ -26,6 +30,8 @@ export function CalendarToolbar({
   onOffset,
   onAskAgent,
 }: CalendarToolbarProps) {
+  const buildUrl = useBuildUrl();
+
   return (
     <header
       className="flex flex-col gap-2 border-b border-gray-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2.5"
@@ -67,6 +73,18 @@ export function CalendarToolbar({
       </div>
 
       <div className="flex min-w-0 items-center gap-2 sm:gap-3" ref={viewSwitcherRef}>
+        {/*
+          Booking links are a calendar feature, so the entry point lives with
+          the calendar rather than in its own sidebar section.
+        */}
+        <Link
+          href={buildUrl("/calendar/booking-links")}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#3CCED7] bg-[#3CCED7]/10 px-3 py-1.5 text-xs font-medium text-[#0E8A96] transition-colors hover:bg-[#3CCED7]/20 sm:text-sm"
+          data-testid="calendar-create-booking-link"
+        >
+          <Link2 className="h-3.5 w-3.5" />
+          Create Booking link
+        </Link>
         {onAskAgent && (
           <button
             type="button"

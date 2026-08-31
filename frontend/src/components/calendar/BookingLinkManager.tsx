@@ -1,7 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Link2, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Clock,
+  Copy,
+  ExternalLink,
+  Link2,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import {
   BookingLinkAPI,
   bookingLinkUrl,
@@ -9,15 +20,20 @@ import {
   type BookingLinkWritePayload,
 } from '@/lib/api/calendarApi';
 import { CalendarAPI, type CalendarDTO } from '@/lib/api/calendarApi';
+import { googleCalendarApi } from '@/lib/api/googleCalendarApi';
+import { useProjectStore } from '@/lib/projectStore';
 import { detectTimezone } from './bookingSlots';
 
 /**
- * MED-284: owner-side management for booking links.
+ * Owner-side management for booking links.
  *
  * The public page is useless until someone can generate a link, which is what
  * this covers. Rules map one-to-one onto the availability layer, so anything
  * saved here is what the public page will offer.
  */
+
+/** The durations people actually pick; anything else goes through Custom. */
+const DURATION_PRESETS = [15, 30, 45, 60];
 
 const DEFAULT_FORM = {
   title: '',
@@ -30,12 +46,19 @@ const DEFAULT_FORM = {
   buffer_after_minutes: 0,
   min_notice_minutes: 60,
   max_advance_days: 60,
-  timezone: 'UTC',
 };
 
 /** Mirrors the backend: blank windows fall back to working hours, then Mon–Fri 9–5. */
 const WINDOW_HINT =
-  'Leave blank to use your calendar working hours, or Monday–Friday 09:00–17:00.';
+  'taken from your calendar working hours, or Monday–Friday 09:00–17:00 if you have none set.';
+
+function noticeLabel(minutes: number): string {
+  if (!minutes) return 'no';
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes % 60 === 0 && minutes < 1440) return `${minutes / 60}h`;
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  return `${Math.round(minutes / 60)}h`;
+}
 
 function slugify(value: string): string {
   return value
@@ -71,23 +94,41 @@ interface BookingLinkManagerProps {
 }
 
 export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps) {
+  const projectId = useProjectStore((state) => state.activeProject?.id ?? null);
   const [links, setLinks] = useState<BookingLinkDTO[]>([]);
   const [calendars, setCalendars] = useState<CalendarDTO[]>([]);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [creatingCalendar, setCreatingCalendar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [form, setForm] = useState({ ...DEFAULT_FORM });
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [customDuration, setCustomDuration] = useState(false);
+
+  // The project store hydrates after first render, so the initial fetch can be
+  // unscoped and land after the scoped one. Drop superseded responses rather
+  // than letting them repopulate the picker with out-of-project calendars.
+  const fetchSeq = useRef(0);
 
   const refresh = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     try {
-      const [linkList, calendarList] = await Promise.all([
+      const [linkList, calendarList, googleStatus] = await Promise.all([
         BookingLinkAPI.list(),
-        CalendarAPI.listCalendars().then((res) => res.data).catch(() => []),
+        CalendarAPI.listCalendars(projectId).then((res) => res.data).catch(() => []),
+        googleCalendarApi
+          .getStatus()
+          .then((status) => Boolean(status?.connected))
+          .catch(() => false),
       ]);
+      if (seq !== fetchSeq.current) return;
+      setGoogleConnected(googleStatus);
       setLinks(linkList);
       // /api/calendars/ is paginated, so the payload is {count, results} rather
       // than a bare array. Accept both — an array-only check silently yields an
@@ -95,32 +136,95 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
       const all = Array.isArray(calendarList)
         ? calendarList
         : (calendarList as { results?: CalendarDTO[] })?.results ?? [];
-      // Only primary calendars: the API rejects anything else, because Google
-      // export skips events on non-primary calendars and the booking would
-      // never sync. Offering them here would just produce a 400.
-      setCalendars(all.filter((calendar) => calendar.is_primary));
+      // Scoped to the active project on purpose. The calendar page filters its
+      // own view by project, so an unscoped picker can offer a calendar whose
+      // events that page will never display - the booking would succeed and
+      // then appear nowhere.
+      setCalendars(all);
     } catch (err) {
+      if (seq !== fetchSeq.current) return;
       setError(errorMessage(err, 'Could not load your booking links.'));
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  const hasCalendar = calendars.length > 0;
+  // Not a gate. Google export only picks up the primary calendar, and
+  // `is_primary` is set solely by the Google connect flow — so this is worth
+  // saying only when a Google connection actually exists.
+  const selected = calendars.find((c) => c.id === form.calendar_id);
+  const wontSyncToGoogle = googleConnected && !!selected && !selected.is_primary;
+
+  // Only reachable outside a project. The calendars API treats project_id as
+  // read-only, so anything created here is project-less - fine in the unscoped
+  // view, invisible inside a project.
+  const createCalendar = async () => {
+    if (creatingCalendar) return;
+    setCreatingCalendar(true);
+    setError(null);
+    try {
+      const created = await CalendarAPI.createCalendar({
+        name: 'My Calendar',
+        timezone: detectTimezone(),
+      });
+      await refresh();
+      setForm((current) => ({ ...current, calendar_id: created.data.id }));
+    } catch (err) {
+      setError(errorMessage(err, 'Could not create a calendar.'));
+    } finally {
+      setCreatingCalendar(false);
+    }
+  };
+
   const startCreating = () => {
-    setForm({
-      ...DEFAULT_FORM,
-      timezone: detectTimezone(),
-      calendar_id: calendars[0]?.id ?? '',
-    });
+    // No timezone here: the API derives it from the owner's calendar settings.
+    setForm({ ...DEFAULT_FORM, calendar_id: calendars[0]?.id ?? '' });
+    setEditingId(null);
+    setShowAdvanced(false);
+    setCustomDuration(false);
     setCreating(true);
     setError(null);
   };
 
-  const handleCreate = async (event: React.FormEvent) => {
+  const startEditing = (link: BookingLinkDTO) => {
+    setForm({
+      title: link.title,
+      slug: link.slug,
+      description: link.description ?? '',
+      calendar_id: '',
+      duration_minutes: link.duration_minutes,
+      slot_increment_minutes: link.slot_increment_minutes,
+      buffer_before_minutes: link.buffer_before_minutes,
+      buffer_after_minutes: link.buffer_after_minutes,
+      min_notice_minutes: link.min_notice_minutes,
+      max_advance_days: link.max_advance_days,
+    });
+    setEditingId(link.id);
+    // Open the advanced block when this link actually uses non-default rules,
+    // so an edit never silently hides the values being changed.
+    setShowAdvanced(
+      link.buffer_before_minutes > 0 ||
+        link.buffer_after_minutes > 0 ||
+        link.min_notice_minutes !== DEFAULT_FORM.min_notice_minutes ||
+        link.max_advance_days !== DEFAULT_FORM.max_advance_days ||
+        link.slot_increment_minutes !== DEFAULT_FORM.slot_increment_minutes,
+    );
+    setCustomDuration(!DURATION_PRESETS.includes(link.duration_minutes));
+    setCreating(true);
+    setError(null);
+  };
+
+  const closeForm = () => {
+    setCreating(false);
+    setEditingId(null);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
@@ -131,13 +235,32 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         slug: form.slug.trim() || slugify(form.title),
         description: form.description.trim() || null,
       };
-      const created = await BookingLinkAPI.create(payload);
-      setLinks((prev) =>
-        [...prev, created.data].sort((a, b) => a.title.localeCompare(b.title)),
-      );
-      setCreating(false);
+      if (editingId) {
+        // calendar_id is only sent when the user actually repointed the link;
+        // an empty string would fail validation.
+        if (!payload.calendar_id) delete payload.calendar_id;
+        const updated = await BookingLinkAPI.update(editingId, payload);
+        setLinks((prev) =>
+          prev
+            .map((l) => (l.id === editingId ? updated.data : l))
+            .sort((a, b) => a.title.localeCompare(b.title)),
+        );
+      } else {
+        const created = await BookingLinkAPI.create(payload);
+        setLinks((prev) =>
+          [...prev, created.data].sort((a, b) => a.title.localeCompare(b.title)),
+        );
+      }
+      closeForm();
     } catch (err) {
-      setError(errorMessage(err, 'Could not create the booking link.'));
+      setError(
+        errorMessage(
+          err,
+          editingId
+            ? 'Could not save your changes.'
+            : 'Could not create the booking link.',
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -199,7 +322,7 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
             type="button"
             onClick={startCreating}
             data-testid="booking-link-new"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#3CCED7] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD]"
           >
             <Plus className="h-4 w-4" />
             New link
@@ -218,10 +341,13 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
 
       {creating && (
         <form
-          onSubmit={handleCreate}
-          className="mb-6 rounded-xl border border-gray-200 bg-white p-5"
+          onSubmit={handleSubmit}
+          className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200"
           data-testid="booking-link-form"
         >
+          <h2 className="mb-4 text-sm font-semibold text-gray-900">
+            {editingId ? 'Edit booking link' : 'New booking link'}
+          </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="bl-title" className="block text-xs font-medium text-gray-600">
@@ -255,19 +381,82 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               </div>
             </div>
 
-            <div>
+            {/* Duration as presets: a free number field invites answers nobody
+                wants (37 minutes), and the common cases are four values. */}
+            <div className="sm:col-span-2">
+              <span className="block text-xs font-medium text-gray-600">Duration</span>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {DURATION_PRESETS.map((minutes) => (
+                  <button
+                    key={minutes}
+                    type="button"
+                    onClick={() => {
+                      setCustomDuration(false);
+                      setForm({ ...form, duration_minutes: minutes });
+                    }}
+                    data-testid={`booking-link-duration-${minutes}`}
+                    aria-pressed={!customDuration && form.duration_minutes === minutes}
+                    className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                      !customDuration && form.duration_minutes === minutes
+                        ? 'border-[#3CCED7] bg-[#3CCED7]/10 font-medium text-[#0E8A96]'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {minutes} min
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCustomDuration(true)}
+                  data-testid="booking-link-duration-custom"
+                  aria-pressed={customDuration}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                    customDuration
+                      ? 'border-[#3CCED7] bg-[#3CCED7]/10 font-medium text-[#0E8A96]'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Custom
+                </button>
+                {customDuration && (
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label="Custom duration in minutes"
+                      value={form.duration_minutes}
+                      onChange={(e) =>
+                        setForm({ ...form, duration_minutes: Number(e.target.value) })
+                      }
+                      data-testid="booking-link-duration_minutes"
+                      className="w-20 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none"
+                    />
+                    <span className="text-xs text-gray-400">min</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="sm:col-span-2">
               <label htmlFor="bl-calendar" className="block text-xs font-medium text-gray-600">
                 Book into
               </label>
               <select
                 id="bl-calendar"
-                required
+                required={!editingId}
+                disabled={!hasCalendar}
                 value={form.calendar_id}
                 onChange={(e) => setForm({ ...form, calendar_id: e.target.value })}
                 data-testid="booking-link-calendar"
-                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
               >
-                <option value="">Select a calendar…</option>
+                <option value="">
+                  {!hasCalendar
+                    ? 'No calendar available'
+                    : editingId
+                      ? 'Keep current calendar'
+                      : 'Select a calendar…'}
+                </option>
                 {calendars.map((calendar) => (
                   <option key={calendar.id} value={calendar.id}>
                     {calendar.name}
@@ -276,78 +465,158 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               </select>
             </div>
 
-            <div>
-              <label htmlFor="bl-timezone" className="block text-xs font-medium text-gray-600">
-                Timezone
-              </label>
-              <input
-                id="bl-timezone"
-                value={form.timezone}
-                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                data-testid="booking-link-timezone"
-                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-              />
-            </div>
-
-            {(
-              [
-                ['duration_minutes', 'Duration (min)'],
-                ['slot_increment_minutes', 'Slot every (min)'],
-                ['buffer_before_minutes', 'Buffer before (min)'],
-                ['buffer_after_minutes', 'Buffer after (min)'],
-                ['min_notice_minutes', 'Minimum notice (min)'],
-                ['max_advance_days', 'Bookable ahead (days)'],
-              ] as const
-            ).map(([field, label]) => (
-              <div key={field}>
-                <label htmlFor={`bl-${field}`} className="block text-xs font-medium text-gray-600">
-                  {label}
-                </label>
-                <input
-                  id={`bl-${field}`}
-                  type="number"
-                  min={field.startsWith('buffer') || field === 'min_notice_minutes' ? 0 : 1}
-                  value={form[field]}
-                  onChange={(e) =>
-                    setForm({ ...form, [field]: Number(e.target.value) })
-                  }
-                  data-testid={`booking-link-${field}`}
-                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                />
-              </div>
-            ))}
-
             <div className="sm:col-span-2">
               <label htmlFor="bl-description" className="block text-xs font-medium text-gray-600">
                 Description
+                <span className="ml-1 font-normal text-gray-400">(optional)</span>
               </label>
               <textarea
                 id="bl-description"
                 rows={2}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What should people expect from this meeting?"
                 data-testid="booking-link-description"
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
               />
-              <p className="mt-2 text-xs text-gray-400">{WINDOW_HINT}</p>
             </div>
           </div>
+
+          {/* Everything below is an advanced default most people never change,
+              so it stays out of the way until asked for. */}
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              data-testid="booking-link-advanced-toggle"
+              aria-expanded={showAdvanced}
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900"
+            >
+              <ChevronRight
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                  showAdvanced ? 'rotate-90' : ''
+                }`}
+              />
+              Scheduling rules
+              <span className="font-normal text-gray-400">
+                — buffers, notice, how far ahead
+              </span>
+            </button>
+
+            {showAdvanced && (
+              <div
+                data-testid="booking-link-advanced"
+                className="mt-3 grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-top-1 duration-200"
+              >
+                {(
+                  [
+                    ['slot_increment_minutes', 'Slot every', 'min', 1],
+                    ['min_notice_minutes', 'Minimum notice', 'min', 0],
+                    ['buffer_before_minutes', 'Buffer before', 'min', 0],
+                    ['buffer_after_minutes', 'Buffer after', 'min', 0],
+                    ['max_advance_days', 'Bookable ahead', 'days', 1],
+                  ] as const
+                ).map(([field, label, unit, min]) => (
+                  <div key={field}>
+                    <label
+                      htmlFor={`bl-${field}`}
+                      className="block text-xs font-medium text-gray-600"
+                    >
+                      {label}
+                      <span className="ml-1 font-normal text-gray-400">({unit})</span>
+                    </label>
+                    <input
+                      id={`bl-${field}`}
+                      type="number"
+                      min={min}
+                      value={form[field]}
+                      onChange={(e) =>
+                        setForm({ ...form, [field]: Number(e.target.value) })
+                      }
+                      data-testid={`booking-link-${field}`}
+                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                    />
+                  </div>
+                ))}
+
+                {/* Availability is not editable here yet, so say where the hours
+                    actually come from rather than leaving it a mystery. */}
+                <p className="sm:col-span-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                  <span className="font-medium text-gray-700">Availability:</span>{' '}
+                  {WINDOW_HINT}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {!hasCalendar && (
+            <div
+              data-testid="booking-link-no-calendar"
+              className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"
+            >
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div>
+                  <p>
+                    You don&apos;t have a calendar to book into. Calendars belong to
+                    projects, and this project doesn&apos;t have one yet.
+                  </p>
+                  {projectId == null ? (
+                    <button
+                      type="button"
+                      disabled={creatingCalendar}
+                      onClick={createCalendar}
+                      data-testid="booking-link-create-calendar"
+                      className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {creatingCalendar ? 'Creating…' : 'Create a calendar for me'}
+                    </button>
+                  ) : (
+                    <p className="mt-1.5 text-amber-700">
+                      Projects normally get a calendar automatically, so this is
+                      unexpected — ask an admin to provision one for the project.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {wontSyncToGoogle && (
+            <div
+              data-testid="booking-link-no-google-sync"
+              className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600"
+            >
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <span>
+                Bookings on this calendar won&apos;t appear in Google Calendar —
+                only your Google-synced calendar exports. They will still show in
+                your in-app calendar and availability.
+              </span>
+            </div>
+          )}
 
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setCreating(false)}
+              onClick={closeForm}
               className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !hasCalendar}
               data-testid="booking-link-save"
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white disabled:opacity-40"
+              className="rounded-lg bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD] disabled:opacity-60 disabled:shadow-none"
             >
-              {saving ? 'Creating…' : 'Create link'}
+              {saving
+                ? editingId
+                  ? 'Saving…'
+                  : 'Creating…'
+                : editingId
+                  ? 'Save changes'
+                  : 'Create link'}
             </button>
           </div>
         </form>
@@ -357,72 +626,170 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
         </div>
-      ) : links.length === 0 ? (
+      ) : links.length === 0 && !creating ? (
         <div
-          className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center"
+          className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center shadow-sm animate-in fade-in duration-300"
           data-testid="booking-link-empty"
         >
-          <Link2 className="mx-auto h-8 w-8 text-gray-300" />
-          <p className="mt-3 text-sm text-gray-500">
-            No booking links yet. Create one to start sharing your availability.
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-50">
+            <Link2 className="h-5 w-5 text-gray-400" />
+          </div>
+          <p className="mt-4 text-sm font-medium text-gray-900">No booking links yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
+            Create a link, share the URL, and people can book time from your available
+            slots without the back-and-forth.
           </p>
+          <button
+            type="button"
+            onClick={startCreating}
+            className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-[#3CCED7] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD]"
+          >
+            <Plus className="h-4 w-4" />
+            New link
+          </button>
         </div>
       ) : (
-        <ul className="space-y-2" data-testid="booking-link-list">
-          {links.map((link) => (
-            <li
-              key={link.id}
-              data-testid="booking-link-item"
-              className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <span className="truncate">{link.title}</span>
-                  {!link.is_active && (
-                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                      Inactive
-                    </span>
-                  )}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-gray-400">
-                  /book/{linkOrg(link)}/{link.slug} · {link.duration_minutes} min
-                </p>
-              </div>
+        <ul className="space-y-3" data-testid="booking-link-list">
+          {links.map((link, index) => {
+            const path = `/book/${linkOrg(link)}/${link.slug}`;
+            const isCopied = copied === link.id;
+            return (
+              <li
+                key={link.id}
+                data-testid="booking-link-item"
+                style={{ animationDelay: `${index * 40}ms`, animationFillMode: 'backwards' }}
+                className={`group rounded-2xl border bg-white p-4 transition-all duration-200 animate-in fade-in slide-in-from-bottom-1 ${
+                  link.is_active
+                    ? 'border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md'
+                    : 'border-gray-200 bg-gray-50/60 shadow-sm'
+                }`}
+              >
+                {/* Title row */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          link.is_active ? 'bg-emerald-500' : 'bg-gray-300'
+                        }`}
+                      />
+                      <h3 className="truncate text-sm font-semibold text-gray-900">
+                        {link.title}
+                      </h3>
+                      {!link.is_active && (
+                        <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                    {link.description && (
+                      <p className="mt-1 line-clamp-1 pl-3.5 text-xs text-gray-500">
+                        {link.description}
+                      </p>
+                    )}
+                  </div>
 
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => copyUrl(link)}
-                  aria-label={`Copy link for ${link.title}`}
-                  data-testid="booking-link-copy"
-                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
-                >
-                  {copied === link.id ? (
-                    <Check className="h-4 w-4 text-emerald-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleActive(link)}
-                  data-testid="booking-link-toggle"
-                  className="rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-                >
-                  {link.is_active ? 'Deactivate' : 'Activate'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(link)}
-                  aria-label={`Delete ${link.title}`}
-                  data-testid="booking-link-delete"
-                  className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </li>
-          ))}
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                    <Clock className="h-3 w-3 text-gray-400" />
+                    {link.duration_minutes} min
+                  </span>
+                </div>
+
+                {/* The URL is the artifact people actually share, so it gets the
+                    weight — a field you can read and copy, not caption text. */}
+                <div className="mt-3 flex items-stretch gap-2">
+                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <Link2 className="mr-2 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    <span className="truncate font-mono text-xs text-gray-600">
+                      {path}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyUrl(link)}
+                    aria-label={`Copy link for ${link.title}`}
+                    data-testid="booking-link-copy"
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-all duration-200 ${
+                      isCopied
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open booking page for ${link.title}`}
+                    data-testid="booking-link-open"
+                    className="inline-flex shrink-0 items-center rounded-lg border border-gray-200 px-2.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+
+                {/* Rules the owner set, so the card says what the link will do
+                    without opening anything. */}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                    <span>{noticeLabel(link.min_notice_minutes)} notice</span>
+                    <span aria-hidden>·</span>
+                    <span>up to {link.max_advance_days}d ahead</span>
+                    {(link.buffer_before_minutes > 0 || link.buffer_after_minutes > 0) && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span>
+                          {link.buffer_before_minutes}/{link.buffer_after_minutes} min buffer
+                        </span>
+                      </>
+                    )}
+                    <span aria-hidden>·</span>
+                    <span>{link.timezone}</span>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(link)}
+                      data-testid="booking-link-edit"
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(link)}
+                      data-testid="booking-link-toggle"
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                      {link.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(link)}
+                      aria-label={`Delete ${link.title}`}
+                      data-testid="booking-link-delete"
+                      className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

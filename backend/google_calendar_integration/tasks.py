@@ -39,6 +39,13 @@ def export_event_to_google_task(self, event_id: str, tenant_schema: str = 'publi
     TenantSchemaMiddleware, so without it the lookup runs against `public` and
     silently finds nothing. Defaults to 'public' so existing callers keep their
     current behaviour.
+
+    Known gaps, deliberately left for follow-up work:
+      - export only; there is no delete/update counterpart, so cancelling an
+        event locally leaves it in place on Google.
+      - only the primary calendar is picked up, and `is_primary` is set solely
+        by the Google connect flow.
+      - exercised against mocks only; not yet verified against live Google.
     """
     from calendars.models import Event
 

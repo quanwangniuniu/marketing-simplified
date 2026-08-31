@@ -1,5 +1,5 @@
 """
-Tests for the public booking endpoints (MED-284).
+Tests for the public booking endpoints.
 
 These are the only unauthenticated endpoints in the calendars app, so the tests
 lean on the security properties: tenant isolation, no enumeration, no PII in the
@@ -99,6 +99,8 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         body = response.json()
         assert body["title"] == "Intro Call"
         assert body["duration_minutes"] == 60
+        # The client needs the notice period to expire stale slots on its own.
+        assert body["min_notice_minutes"] == 0
         assert len(body["slots"]) > 0
 
     def test_payload_does_not_leak_owner_or_internal_identifiers(self):

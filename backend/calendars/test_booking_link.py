@@ -1,4 +1,4 @@
-"""Tests for the BookingLink model and its availability adapter (MED-284)."""
+"""Tests for the BookingLink model and its availability adapter."""
 
 from datetime import time
 
@@ -9,7 +9,7 @@ from django.db.utils import IntegrityError
 from django.test import TestCase
 
 from calendars.models import BookingLink, Calendar, CalendarSettings
-from calendars.services import rules_from_booking_link, windows_from_booking_link
+from calendars.services import rules_from_booking_link, schedule_from_booking_link
 from core.models import Organization
 
 User = get_user_model()
@@ -146,7 +146,7 @@ class BookingLinkAdapterTests(BookingLinkTestBase):
                 {"weekday": 3, "start": "14:00", "end": "16:00"},
             ]
         )
-        windows = windows_from_booking_link(link)
+        windows = schedule_from_booking_link(link).windows
         assert [(w.weekday, w.start, w.end) for w in windows] == [
             (1, time(10, 0), time(12, 0)),
             (3, time(14, 0), time(16, 0)),
@@ -161,7 +161,7 @@ class BookingLinkAdapterTests(BookingLinkTestBase):
             working_hours_end=time(16, 0),
             working_days=[1, 2, 3],  # Mon–Wed in the Sunday=0 convention
         )
-        windows = windows_from_booking_link(self._link())
+        windows = schedule_from_booking_link(self._link()).windows
         # Sunday=0 → Python Monday=0, so 1,2,3 become 0,1,2.
         assert [w.weekday for w in windows] == [0, 1, 2]
         assert windows[0].start == time(8, 0)
@@ -176,12 +176,12 @@ class BookingLinkAdapterTests(BookingLinkTestBase):
             working_hours_end=time(16, 0),
             working_days=[1],
         )
-        windows = windows_from_booking_link(self._link())
+        windows = schedule_from_booking_link(self._link()).windows
         assert [w.weekday for w in windows] == [0, 1, 2, 3, 4]
         assert windows[0].start == time(9, 0)
 
     def test_defaults_to_weekdays_nine_to_five(self):
-        windows = windows_from_booking_link(self._link())
+        windows = schedule_from_booking_link(self._link()).windows
         assert [w.weekday for w in windows] == [0, 1, 2, 3, 4]
         assert windows[0].start == time(9, 0)
         assert windows[0].end == time(17, 0)
@@ -195,5 +195,41 @@ class BookingLinkAdapterTests(BookingLinkTestBase):
             working_hours_end=time(17, 0),
             working_days=[0],  # Sunday
         )
-        windows = windows_from_booking_link(self._link())
+        windows = schedule_from_booking_link(self._link()).windows
         assert [w.weekday for w in windows] == [6]
+
+    def test_settings_windows_carry_the_settings_timezone(self):
+        """
+        Regression guard.
+
+        Working hours from CalendarSettings are wall-clock in the *settings*
+        timezone. Applying the link's timezone to them shifted a 09:00-17:00 day
+        by the offset between the two zones — a link created in UTC would offer
+        an owner in Sydney slots overnight.
+        """
+        CalendarSettings.objects.create(
+            organization=self.org,
+            user=self.user,
+            timezone="Australia/Sydney",
+            working_hours_enabled=True,
+            working_hours_start=time(9, 0),
+            working_hours_end=time(17, 0),
+            working_days=[1, 2, 3, 4, 5],
+        )
+        schedule = schedule_from_booking_link(self._link(timezone="UTC"))
+        assert schedule.timezone == "Australia/Sydney"
+
+    def test_explicit_windows_carry_the_link_timezone(self):
+        # The owner wrote these hours against the link's own zone.
+        schedule = schedule_from_booking_link(
+            self._link(
+                timezone="Europe/London",
+                availability_windows=[{"weekday": 0, "start": "09:00", "end": "17:00"}],
+            )
+        )
+        assert schedule.timezone == "Europe/London"
+
+    def test_default_windows_fall_back_to_the_link_timezone(self):
+        schedule = schedule_from_booking_link(self._link(timezone="Europe/Berlin"))
+        assert schedule.timezone == "Europe/Berlin"
+        assert [w.weekday for w in schedule.windows] == [0, 1, 2, 3, 4]

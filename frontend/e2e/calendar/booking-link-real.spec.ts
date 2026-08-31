@@ -127,6 +127,8 @@ test.describe('Public booking against the real backend', () => {
     await expect(page.getByTestId('booking-widget')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('E2E Real Booking')).toBeVisible();
 
+    // A date must be chosen before any times are offered.
+    await page.getByTestId('booking-date-available').first().click();
     // Slots come from the real availability merge, so pick whatever is offered.
     const slots = page.getByTestId('booking-slot');
     await expect(slots.first()).toBeVisible({ timeout: 30_000 });
@@ -134,6 +136,7 @@ test.describe('Public booking against the real backend', () => {
     expect(bookedStart).toBeTruthy();
 
     await slots.first().click();
+    await page.getByTestId('booking-next').click();
     await page.getByTestId('booking-name').fill('Grace Hopper');
     await page.getByTestId('booking-email').fill('grace@example.com');
     await page.getByTestId('booking-notes').fill('Booked by the real E2E.');
@@ -162,6 +165,10 @@ test.describe('Public booking against the real backend', () => {
     const page = await context.newPage();
 
     await page.goto(`/book/${ctx.orgSlug}/${SLUG}`);
+    await expect(page.getByTestId('booking-date-available').first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId('booking-date-available').first().click();
     await expect(page.getByTestId('booking-slot').first()).toBeVisible({ timeout: 30_000 });
 
     // The slot taken by the previous test must no longer be offered — proof the

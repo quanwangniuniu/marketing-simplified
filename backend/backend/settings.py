@@ -452,7 +452,7 @@ REST_FRAMEWORK = {
     ],
     'EXCEPTION_HANDLER': 'calendars.exceptions.calendar_exception_handler',
     'DEFAULT_THROTTLE_RATES': {
-        # MED-284: booking links are unauthenticated, so they are throttled by
+        # Booking links are unauthenticated, so they are throttled by
         # IP. Reads are generous (a prospect paging through weeks); writes are
         # tight, since each one creates a real calendar event.
         'public_booking_read': config('PUBLIC_BOOKING_READ_THROTTLE_RATE', default='60/minute'),

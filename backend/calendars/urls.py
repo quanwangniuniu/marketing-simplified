@@ -135,7 +135,7 @@ urlpatterns = [
         name='calendar-derived-events',
     ),
 
-    # MED-284: owner-facing booking link management.
+    # Owner-facing booking link management.
     path(
         "booking-links/",
         BookingLinkViewSet.as_view({"get": "list", "post": "create"}),
@@ -149,7 +149,7 @@ urlpatterns = [
         name="booking-link-detail",
     ),
 
-    # MED-284: public booking links. Unauthenticated; the org slug in the path
+    # Public booking links. Unauthenticated; the org slug in the path
     # is what lets these resolve the tenant schema, since there is no user to
     # resolve it from.
     path(

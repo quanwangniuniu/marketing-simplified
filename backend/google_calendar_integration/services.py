@@ -673,7 +673,7 @@ def disconnect_user_calendar(user) -> None:
         cal.delete()
 
 
-# ── MED-284: availability for booking links ──────────────────────────────
+# ── Availability for booking links ──────────────────────────────
 
 
 def fetch_google_busy_intervals(

@@ -27,9 +27,9 @@ from .services import (
     _events_intersecting_range,
     _expand_recurring_event,
     get_busy_intervals_by_calendar,
-    # MED-284
+    # Booking links
     rules_from_booking_link,
-    windows_from_booking_link,
+    schedule_from_booking_link,
 )
 
 from core.models import Organization, ProjectMember
@@ -39,6 +39,7 @@ from core.tenant_context import tenant_schema_context
 from .models import (
     BookingLink,
     Calendar,
+    CalendarSettings,
     CalendarShare,
     CalendarSubscription,
     Event,
@@ -66,7 +67,7 @@ from .serializers import (
     AttendeeCreateRequestSerializer,
     AttendeeResponseRequestSerializer,
     EventReminderSerializer,
-    # MED-284
+    # Booking links
     PublicBookingLinkSerializer,
     BookingRequestSerializer,
     BookingLinkSerializer,
@@ -1479,7 +1480,7 @@ class CalendarEventListView(generics.ListAPIView):
             project_id=resolve_project_pk(self.request.query_params.get('project_id')),
         )
 
-# ── MED-284: public booking links ────────────────────────────────────────
+# ── Public booking links ────────────────────────────────────────
 #
 # These are the only unauthenticated endpoints in this app. Two consequences
 # shape everything below:
@@ -1582,12 +1583,15 @@ class PublicBookingLinkAvailabilityView(APIView):
                 return _booking_not_found()
 
             payload = PublicBookingLinkSerializer(link).data
+            # Windows and their timezone must come from the same source — see
+            # AvailabilitySchedule.
+            schedule = schedule_from_booking_link(link)
             slots = get_merged_availability(
                 calendars=[link.calendar],
                 google_connection=_google_connection_for(link.owner_id),
                 rules=rules_from_booking_link(link),
-                windows=windows_from_booking_link(link),
-                tz_name=link.timezone,
+                windows=schedule.windows,
+                tz_name=schedule.timezone,
                 range_start=range_start,
                 range_end=range_end,
             )
@@ -1651,7 +1655,7 @@ class PublicBookingCreateView(APIView):
                 return _booking_not_found()
 
             rules = rules_from_booking_link(link)
-            windows = windows_from_booking_link(link)
+            schedule = schedule_from_booking_link(link)
             google_connection = _google_connection_for(link.owner_id)
 
             # Availability was rendered from a snapshot, so the slot may have
@@ -1661,8 +1665,8 @@ class PublicBookingCreateView(APIView):
                 calendars=[link.calendar],
                 google_connection=google_connection,
                 rules=rules,
-                windows=windows,
-                tz_name=link.timezone,
+                windows=schedule.windows,
+                tz_name=schedule.timezone,
                 slot_start=data["start"],
             ):
                 return calendar_error_response(
@@ -1672,7 +1676,7 @@ class PublicBookingCreateView(APIView):
                 )
 
             event = self._create_event(link, data, rules)
-            link_timezone = link.timezone
+            link_timezone = schedule.timezone
 
         # Export asynchronously after commit, as every other event write in this
         # module does. The local event is the source of truth: a Google outage
@@ -1737,7 +1741,7 @@ class PublicBookingCreateView(APIView):
 
 class BookingLinkViewSet(viewsets.ModelViewSet):
     """
-    Owner-facing CRUD for booking links (MED-284).
+    Owner-facing CRUD for booking links.
 
     Strictly owner-scoped: the queryset is filtered to the requesting user, so a
     link is never listable or addressable by a colleague, even inside the same
@@ -1754,6 +1758,13 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
     # An owner's links are a naturally small set and the management UI wants
     # them all; the global PAGE_SIZE would silently truncate the list.
     pagination_class = None
+
+    def get_serializer_context(self):
+        # Reuse the app's single definition of "calendars this user can use"
+        # rather than re-deriving it in the serializer.
+        context = super().get_serializer_context()
+        context["accessible_calendars"] = _get_accessible_calendars(self.request.user)
+        return context
 
     def get_queryset(self):
         organization = get_user_organization(self.request.user)
@@ -1773,7 +1784,19 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
         organization = get_user_organization(self.request.user)
         if not organization:
             raise PermissionDenied("An organization is required to create booking links.")
-        serializer.save(owner=self.request.user, organization=organization)
+
+        extra = {"owner": self.request.user, "organization": organization}
+        # Default the timezone from the owner's calendar settings rather than
+        # asking for it. A per-link zone is an override, not something every
+        # user should have to answer — and a wrong answer silently shifts every
+        # offered slot.
+        if not serializer.validated_data.get("timezone"):
+            settings_obj = CalendarSettings.objects.filter(
+                user=self.request.user
+            ).first()
+            extra["timezone"] = (settings_obj and settings_obj.timezone) or "UTC"
+
+        serializer.save(**extra)
 
     def perform_destroy(self, instance):
         # Soft delete, matching the rest of this app. The partial unique

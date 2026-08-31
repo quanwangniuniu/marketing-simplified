@@ -1,4 +1,4 @@
-"""Tests for merging in-app and Google availability for booking links (MED-284)."""
+"""Tests for merging in-app and Google availability for booking links."""
 
 from datetime import datetime, time, timedelta
 from datetime import timezone as dt_timezone

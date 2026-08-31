@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import BookingWidget from '@/components/calendar/BookingWidget';
 
 /**
- * MED-284: public booking page.
+ * Public booking page.
  *
  * Sits in the (public) route group, which has no auth gating — the whole point
  * is that an external prospect with no account can reach it. The org slug is in

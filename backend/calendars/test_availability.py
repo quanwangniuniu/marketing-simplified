@@ -1,5 +1,5 @@
 """
-Tests for booking-link availability math (MED-284).
+Tests for booking-link availability math.
 
 Pure-function tests: no DB, no HTTP. They pin the arithmetic that decides what
 a prospect is offered — half-open interval handling, buffer semantics, DST, and

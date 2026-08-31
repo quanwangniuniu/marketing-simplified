@@ -742,7 +742,7 @@ class CalendarEventSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
 
-# ── MED-284: public booking link serializers ─────────────────────────────
+# ── Public booking link serializers ─────────────────────────────
 
 
 class PublicBookingLinkSerializer(serializers.ModelSerializer):
@@ -764,6 +764,9 @@ class PublicBookingLinkSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "duration_minutes",
+            # The page is a snapshot; the client re-applies the notice period on
+            # a timer so slots that lapse while it sits open stop being offered.
+            "min_notice_minutes",
             "timezone",
             "owner_name",
         ]
@@ -829,6 +832,10 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     organization_slug = serializers.SlugField(
         source="organization.slug", read_only=True
     )
+    # Google export only picks up events on the owner's primary calendar, so a
+    # link elsewhere still works but will not sync. Surfaced so the UI can say
+    # so rather than silently dropping the sync.
+    syncs_to_google = serializers.SerializerMethodField()
 
     # Declared explicitly so a zero is rejected here as a 400. The model's
     # clean() also guards these, but it raises Django's ValidationError from
@@ -836,6 +843,9 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     duration_minutes = serializers.IntegerField(min_value=1, required=False)
     slot_increment_minutes = serializers.IntegerField(min_value=1, required=False)
     max_advance_days = serializers.IntegerField(min_value=1, required=False)
+    # Optional: the view fills it from the owner's calendar settings when the
+    # client doesn't send one.
+    timezone = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = BookingLink
@@ -843,6 +853,7 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "id",
             "slug",
             "organization_slug",
+            "syncs_to_google",
             "title",
             "description",
             "calendar_id",
@@ -858,7 +869,16 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "organization_slug", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "organization_slug",
+            "syncs_to_google",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_syncs_to_google(self, obj) -> bool:
+        return bool(obj.calendar and obj.calendar.is_primary)
 
     def validate_slug(self, value):
         slug = (value or "").strip().lower()
@@ -868,27 +888,27 @@ class BookingLinkSerializer(serializers.ModelSerializer):
 
     def validate_calendar_id(self, value):
         """
-        The target calendar must be one the requesting user owns, and primary.
+        The target calendar must be one the requesting user can use.
 
-        The primary requirement is not arbitrary: Google export skips any event
-        whose calendar is not the owner's primary one (see
-        should_export_event_to_google). A link on a secondary calendar would
-        take bookings that silently never reach Google, breaking the promise
-        that a booking lands in both calendars. Rejecting it at creation fails
-        loudly instead.
+        Accessibility, not ownership: calendars in this app are frequently
+        project-scoped and owned by whoever created them, so a strict owner
+        check locks out everyone else on the project.
+
+        Deliberately does NOT require a primary calendar. Only the Google export
+        cares about primary, and `is_primary` is set solely by the Google connect
+        flow — requiring it would mean no one could create a booking link without
+        connecting Google, even though availability is meant to work from the
+        in-app calendar alone.
         """
-        user = self.context["request"].user
-        calendar = Calendar.objects.filter(
-            id=value, owner=user, is_deleted=False
-        ).first()
+        accessible = self.context.get("accessible_calendars")
+        calendar = (
+            accessible.filter(id=value, is_deleted=False).first()
+            if accessible is not None
+            else None
+        )
         if not calendar:
             raise serializers.ValidationError(
-                "Calendar not found, or it is not owned by you."
-            )
-        if not calendar.is_primary:
-            raise serializers.ValidationError(
-                "Booking links must use your primary calendar, otherwise "
-                "bookings cannot be synced to Google Calendar."
+                "Calendar not found, or you do not have access to it."
             )
         return calendar
 

@@ -1,5 +1,5 @@
 """
-Tests that a booking actually reaches Google Calendar (MED-284).
+Tests that a booking actually reaches Google Calendar.
 
 The public booking tests assert the export task is *queued*; these assert the
 export itself builds the right Google API call. Everything below the HTTP

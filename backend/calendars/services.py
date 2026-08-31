@@ -6,6 +6,7 @@ Also hosts the recurring-event scope logic (this / this-and-future / all):
 keeping this business logic here keeps the views thin (fat core, thin edges).
 """
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -573,7 +574,7 @@ def _expand_recurring_event(
 
 
 
-# ── MED-284: busy intervals for availability ─────────────────────────────
+# ── Busy intervals for availability ─────────────────────────────
 
 
 def get_busy_intervals_by_calendar(
@@ -644,7 +645,7 @@ def merge_busy_intervals(
     return merged
 
 
-# ── MED-284: booking link → availability inputs ──────────────────────────
+# ── Booking link → availability inputs ──────────────────────────
 
 # Fallback when neither the link nor the owner's settings say otherwise.
 DEFAULT_WORKING_WINDOW = (time(9, 0), time(17, 0))
@@ -663,23 +664,44 @@ def rules_from_booking_link(link) -> BookingRules:
     )
 
 
-def windows_from_booking_link(link) -> list[WeeklyWindow]:
+@dataclass(frozen=True)
+class AvailabilitySchedule:
     """
-    Weekly availability windows for a link.
+    Weekly windows plus the timezone they are expressed in.
 
-    Precedence: the link's own `availability_windows`, else the owner's
-    CalendarSettings working hours, else Mon–Fri 09:00–17:00.
+    These travel together on purpose. Windows are wall-clock times, so they are
+    meaningless without the zone they were written in — and the two can come
+    from different places. Returning them separately let the link's timezone be
+    applied to windows inherited from CalendarSettings, which silently shifted
+    a 09:00-17:00 day by the offset between the two zones.
+    """
+
+    windows: list[WeeklyWindow]
+    timezone: str
+
+
+def schedule_from_booking_link(link) -> AvailabilitySchedule:
+    """
+    The link's weekly availability, and the zone it is written in.
+
+    Precedence, timezone always taken from the same source as the windows:
+      1. the link's own `availability_windows`, in the link's timezone;
+      2. the owner's CalendarSettings working hours, in the *settings* timezone;
+      3. Mon-Fri 09:00-17:00, in the link's timezone.
     """
     explicit = link.availability_windows or []
     if explicit:
-        return [
-            WeeklyWindow(
-                weekday=int(window["weekday"]),
-                start=_parse_hhmm(window["start"]),
-                end=_parse_hhmm(window["end"]),
-            )
-            for window in explicit
-        ]
+        return AvailabilitySchedule(
+            windows=[
+                WeeklyWindow(
+                    weekday=int(window["weekday"]),
+                    start=_parse_hhmm(window["start"]),
+                    end=_parse_hhmm(window["end"]),
+                )
+                for window in explicit
+            ],
+            timezone=link.timezone,
+        )
 
     settings_obj = CalendarSettings.objects.filter(user_id=link.owner_id).first()
     if settings_obj and settings_obj.working_hours_enabled:
@@ -687,15 +709,23 @@ def windows_from_booking_link(link) -> list[WeeklyWindow]:
         end = settings_obj.working_hours_end or DEFAULT_WORKING_WINDOW[1]
         weekdays = _weekdays_from_settings(settings_obj)
         if start < end and weekdays:
-            return [
-                WeeklyWindow(weekday=day, start=start, end=end) for day in weekdays
-            ]
+            return AvailabilitySchedule(
+                windows=[
+                    WeeklyWindow(weekday=day, start=start, end=end) for day in weekdays
+                ],
+                # The hours are wall-clock in the owner's settings zone, not the
+                # link's — using the link's zone here is what caused the shift.
+                timezone=settings_obj.timezone or link.timezone,
+            )
 
     start, end = DEFAULT_WORKING_WINDOW
-    return [
-        WeeklyWindow(weekday=day, start=start, end=end)
-        for day in DEFAULT_WORKING_WEEKDAYS
-    ]
+    return AvailabilitySchedule(
+        windows=[
+            WeeklyWindow(weekday=day, start=start, end=end)
+            for day in DEFAULT_WORKING_WEEKDAYS
+        ],
+        timezone=link.timezone,
+    )
 
 
 def _weekdays_from_settings(settings_obj) -> list[int]:

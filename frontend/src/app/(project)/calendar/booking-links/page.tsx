@@ -6,7 +6,7 @@ import BookingLinkManager from '@/components/calendar/BookingLinkManager';
 import { useAuthStore } from '@/lib/authStore';
 
 /**
- * MED-284: owner-side booking link management.
+ * Owner-side booking link management.
  *
  * The public booking page needs a link to exist; this is where one is
  * generated. The shareable URL is org-scoped, and the org must be the *user's*

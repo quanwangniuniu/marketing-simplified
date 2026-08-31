@@ -1,5 +1,5 @@
 """
-Availability math for booking links (MED-284).
+Availability math for booking links.
 
 Deliberately model-free: everything here takes plain values and returns plain
 values, so the same logic serves the in-app calendar, the Google merge, and the

@@ -1,5 +1,5 @@
 """
-Tests for owner-facing booking link CRUD (MED-284).
+Tests for owner-facing booking link CRUD.
 
 The public endpoints are covered separately; this file is about the management
 side, where the properties that matter are ownership scoping and not letting a
@@ -11,7 +11,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from calendars.models import BookingLink, Calendar
+from calendars.models import BookingLink, Calendar, CalendarSettings
 from core.models import Organization
 
 User = get_user_model()
@@ -73,7 +73,6 @@ class BookingLinkCrudTests(TestCase):
             "title": "Intro Call",
             "calendar_id": str(self.calendar.id),
             "duration_minutes": 30,
-            "timezone": "UTC",
         }
         payload.update(overrides)
         return payload
@@ -114,9 +113,10 @@ class BookingLinkCrudTests(TestCase):
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json()["organization_slug"] == self.org.slug
 
-    def test_cannot_point_a_link_at_a_non_primary_calendar(self):
-        # Google export skips non-primary calendars, so such a link would take
-        # bookings that never sync. Reject at creation rather than silently.
+    def test_a_non_primary_calendar_is_allowed(self):
+        # `is_primary` is only ever set by the Google connect flow, so requiring
+        # it would block booking links for anyone without Google connected —
+        # even though availability works from the in-app calendar alone.
         secondary = Calendar.objects.create(
             organization=self.org,
             owner=self.user,
@@ -125,10 +125,33 @@ class BookingLinkCrudTests(TestCase):
             is_primary=False,
         )
         response = self._create(calendar_id=str(secondary.id))
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "calendar_id" in error_fields(response)
+        assert response.status_code == status.HTTP_201_CREATED
+        # ...but the response says it won't reach Google, so the UI can warn.
+        assert response.json()["syncs_to_google"] is False
 
-    def test_cannot_point_a_link_at_someone_elses_calendar(self):
+    def test_primary_calendar_reports_google_sync(self):
+        response = self._create()
+        assert response.json()["syncs_to_google"] is True
+
+    def test_a_project_calendar_the_user_does_not_own_is_allowed(self):
+        # Calendars here are often project-scoped and owned by whoever made
+        # them; an ownership check locks out everyone else on the project.
+        from core.models import Project, ProjectMember
+
+        project = Project.objects.create(name="Shared", organization=self.org)
+        ProjectMember.objects.create(project=project, user=self.user, is_active=True)
+        project_calendar = Calendar.objects.create(
+            organization=self.org,
+            owner=self.colleague,
+            name="Project Calendar",
+            timezone="UTC",
+            project=project,
+        )
+        response = self._create(calendar_id=str(project_calendar.id))
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_cannot_point_a_link_at_an_inaccessible_calendar(self):
+        # A colleague's personal calendar, on no shared project.
         response = self._create(calendar_id=str(self.colleague_calendar.id))
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "calendar_id" in error_fields(response)
@@ -193,3 +216,23 @@ class BookingLinkCrudTests(TestCase):
             status.HTTP_401_UNAUTHORIZED,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_timezone_defaults_from_the_owners_calendar_settings(self):
+        # The form no longer asks for a timezone: a wrong answer silently shifts
+        # every offered slot, and the app already knows the owner's zone.
+        CalendarSettings.objects.create(
+            organization=self.org, user=self.user, timezone="Australia/Sydney"
+        )
+        response = self._create()
+        assert response.status_code == status.HTTP_201_CREATED
+        assert BookingLink.objects.get(slug="intro-call").timezone == "Australia/Sydney"
+
+    def test_timezone_falls_back_to_utc_without_settings(self):
+        response = self._create()
+        assert response.status_code == status.HTTP_201_CREATED
+        assert BookingLink.objects.get(slug="intro-call").timezone == "UTC"
+
+    def test_an_explicit_timezone_is_still_honoured(self):
+        response = self._create(timezone="Europe/London")
+        assert response.status_code == status.HTTP_201_CREATED
+        assert BookingLink.objects.get(slug="intro-call").timezone == "Europe/London"

@@ -13,6 +13,7 @@ import path from 'path';
 const PAGE_URL = '/calendar/booking-links';
 const AUTH_FILE = path.resolve(__dirname, '../.auth/user.json');
 
+
 /**
  * The org/project slugs the signed-in user actually has.
  *
@@ -145,8 +146,15 @@ test.describe('Booking link management', () => {
 
     await expect(page.getByTestId('booking-link-item')).toHaveCount(1);
     await expect(page.getByText('Intro Call')).toBeVisible();
-    // The path uses the org the API reports for the link, not the active project's.
-    await expect(page.getByText('/book/acme/intro-call · 30 min')).toBeVisible();
+    // The path uses the org the API reports for the link, not the active
+    // project's. Path and duration are now separate elements on the card.
+    await expect(page.getByText('/book/acme/intro-call')).toBeVisible();
+    await expect(page.getByText('30 min')).toBeVisible();
+    // The card exposes the public page directly, so a link can be previewed.
+    await expect(page.getByTestId('booking-link-open')).toHaveAttribute(
+      'href',
+      '/book/acme/intro-call',
+    );
   });
 
   test('an owner can generate a new link', async ({ page }) => {
@@ -171,14 +179,14 @@ test.describe('Booking link management', () => {
     await page.getByTestId('booking-link-new').click();
 
     await expect(page.getByTestId('booking-link-form')).toBeVisible();
-    // Only the primary calendar is offered: placeholder + one option.
+    // Every calendar the user can write to is offered — placeholder + both.
     await expect(
       page.getByTestId('booking-link-calendar').locator('option'),
-    ).toHaveCount(2);
+    ).toHaveCount(3);
     await page.getByTestId('booking-link-title').fill('Discovery Call');
     await page.getByTestId('booking-link-slug').fill('discovery-call');
     await page.getByTestId('booking-link-calendar').selectOption({ index: 1 });
-    await page.getByTestId('booking-link-duration_minutes').fill('45');
+    await page.getByTestId('booking-link-duration-45').click();
     await page.getByTestId('booking-link-save').click();
 
     await expect(page.getByTestId('booking-link-item')).toHaveCount(1);
@@ -220,5 +228,192 @@ test.describe('Booking link management', () => {
     await expect(page.getByTestId('booking-link-error')).toContainText(
       /already have a booking link/i,
     );
+  });
+
+  test('a non-primary calendar is offered, with a note that it will not sync', async ({
+    page,
+  }) => {
+    // is_primary is only set by the Google connect flow, so blocking on it
+    // would mean no booking links without Google. Warn, don't block.
+    await page.route(/\/api\/google-calendar\/status\//, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ connected: true }),
+      });
+    });
+    await mockCalendars(page);
+    await mockLinks(page, []);
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+
+    // Both calendars are selectable, primary or not.
+    await expect(
+      page.getByTestId('booking-link-calendar').locator('option'),
+    ).toHaveCount(3);
+    await expect(page.getByTestId('booking-link-save')).toBeEnabled();
+
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '33333333-3333-3333-3333-333333333333',
+    );
+    await expect(page.getByTestId('booking-link-no-google-sync')).toBeVisible();
+
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '22222222-2222-2222-2222-222222222222',
+    );
+    await expect(page.getByTestId('booking-link-no-google-sync')).toBeHidden();
+  });
+
+  test('no sync warning when Google is not connected', async ({ page }) => {
+    // Nothing to sync to, so the note would be noise.
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '33333333-3333-3333-3333-333333333333',
+    );
+    await expect(page.getByTestId('booking-link-no-google-sync')).toBeHidden();
+  });
+
+  test('the empty state is hidden while the create form is open', async ({ page }) => {
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await gotoManager(page);
+
+    await expect(page.getByTestId('booking-link-empty')).toBeVisible();
+    await page.getByTestId('booking-link-new').click();
+    // "No booking links yet" underneath the form is contradictory.
+    await expect(page.getByTestId('booking-link-empty')).toBeHidden();
+  });
+
+  test('advanced scheduling rules stay collapsed until asked for', async ({ page }) => {
+    // Buffers, notice and horizon are defaults most people never touch; putting
+    // them on the create step made every user answer six questions to make one
+    // link.
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+
+    await expect(page.getByTestId('booking-link-advanced')).toBeHidden();
+    await expect(page.getByTestId('booking-link-min_notice_minutes')).toBeHidden();
+
+    await page.getByTestId('booking-link-advanced-toggle').click();
+    await expect(page.getByTestId('booking-link-advanced')).toBeVisible();
+    await expect(page.getByTestId('booking-link-min_notice_minutes')).toBeVisible();
+  });
+
+  test('a custom duration is still reachable', async ({ page }) => {
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+
+    // Presets cover the common cases; the number input appears only on demand.
+    await expect(page.getByTestId('booking-link-duration_minutes')).toBeHidden();
+    await page.getByTestId('booking-link-duration-custom').click();
+    await expect(page.getByTestId('booking-link-duration_minutes')).toBeVisible();
+    await page.getByTestId('booking-link-duration_minutes').fill('25');
+    await expect(page.getByTestId('booking-link-duration_minutes')).toHaveValue('25');
+  });
+
+  test('the calendar page carries the entry point for booking links', async ({
+    page,
+  }) => {
+    // Booking links have no sidebar entry of their own; the way in is a button
+    // on the calendar toolbar, beside Ask Agent.
+    await page.goto('/calendar');
+    const entry = page.getByTestId('calendar-create-booking-link');
+    await expect(entry).toBeVisible({ timeout: 30_000 });
+    await expect(entry).toHaveText(/Create Booking link/);
+    await expect(entry).toHaveAttribute('href', /\/calendar\/booking-links$/);
+  });
+
+  test('offers only calendars scoped to the active project', async ({ page }) => {
+    // The calendar page filters its own view by project. If this picker were
+    // unscoped it could offer a calendar whose events that page never shows —
+    // the booking would succeed and then appear nowhere.
+    const requested: string[] = [];
+    await page.route(CALENDARS_GLOB, async (route) => {
+      requested.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: 0, results: [] }),
+      });
+    });
+    await mockLinks(page, []);
+
+    await gotoManager(page);
+    // The project store hydrates after first render, so an unscoped request can
+    // go out first; what matters is that the list finally rendered is scoped.
+    expect(requested.length).toBeGreaterThan(0);
+    expect(requested[requested.length - 1]).toContain('project_id=');
+  });
+
+  test('explains a missing project calendar rather than offering a dead button', async ({
+    page,
+  }) => {
+    // Projects auto-provision a calendar, and the calendars API treats
+    // project_id as read-only — so anything created from here would be
+    // project-less and would not come back in this project's picker at all.
+    await page.route(CALENDARS_GLOB, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: 0, results: [] }),
+      });
+    });
+    await mockLinks(page, []);
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+
+    await expect(page.getByTestId('booking-link-no-calendar')).toBeVisible();
+    await expect(page.getByTestId('booking-link-save')).toBeDisabled();
+    await expect(page.getByTestId('booking-link-create-calendar')).toHaveCount(0);
+    await expect(page.getByText(/ask an admin to provision one/i)).toBeVisible();
+  });
+
+  test('an owner can edit an existing link', async ({ page }) => {
+    // Every field was set-once until now: changing a duration or notice period
+    // meant deleting the link and reissuing the URL.
+    await mockCalendars(page);
+    await mockLinks(page, [EXISTING_LINK]);
+
+    let patched: Record<string, unknown> | null = null;
+    await page.route(/\/api\/booking-links\/[0-9a-f-]+\/$/, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        await route.fallback();
+        return;
+      }
+      patched = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...EXISTING_LINK, title: 'Renamed Call', duration_minutes: 45 }),
+      });
+    });
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-edit').click();
+
+    // The form opens prefilled, in edit mode.
+    await expect(page.getByTestId('booking-link-form')).toBeVisible();
+    await expect(page.getByText('Edit booking link')).toBeVisible();
+    await expect(page.getByTestId('booking-link-title')).toHaveValue('Intro Call');
+    await expect(page.getByTestId('booking-link-slug')).toHaveValue('intro-call');
+
+    await page.getByTestId('booking-link-title').fill('Renamed Call');
+    await page.getByTestId('booking-link-duration-45').click();
+    await page.getByTestId('booking-link-save').click();
+
+    await expect(page.getByText('Renamed Call')).toBeVisible();
+    expect(patched).toMatchObject({ title: 'Renamed Call', duration_minutes: 45 });
+    // The calendar was left alone, so no calendar_id is sent.
+    expect(patched).not.toHaveProperty('calendar_id');
   });
 });

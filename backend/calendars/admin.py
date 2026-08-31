@@ -6,7 +6,7 @@ from calendars.models import BookingLink
 @admin.register(BookingLink)
 class BookingLinkAdmin(admin.ModelAdmin):
     """
-    Admin for booking links (MED-284).
+    Admin for booking links.
 
     Note these are tenant-scoped rows: the admin runs on whatever schema the
     request resolves to, so a link only appears here for staff whose own

@@ -15,7 +15,9 @@ import { test, expect, type Page } from '@playwright/test';
 const ORG = 'acme';
 const LINK = 'intro-call';
 const BOOKING_URL = `/book/${ORG}/${LINK}`;
-const API_GLOB = `**/api/public/book/${ORG}/${LINK}/`;
+// Literal regex: the widget now sends ?from=&to=, and a plain glob would
+// also swallow the /bookings/ POST route.
+const API_GLOB = /\/api\/public\/book\/acme\/intro-call\/(\?[^/]*)?$/;
 const BOOKINGS_GLOB = `**/api/public/book/${ORG}/${LINK}/bookings/`;
 
 /** Fixed future slots so assertions don't drift with the clock. */
@@ -30,6 +32,7 @@ const LINK_PAYLOAD = {
   title: 'Intro Call',
   description: 'A quick chat about your campaigns.',
   duration_minutes: 60,
+  min_notice_minutes: 0,
   timezone: 'UTC',
   owner_name: 'Ada Lovelace',
   slots: SLOTS,
@@ -85,9 +88,16 @@ test.describe('Public booking link', () => {
 
     // Show times in a fixed zone so the assertions below are deterministic.
     await page.getByTestId('booking-timezone').selectOption('UTC');
-    await expect(page.getByTestId('booking-slot')).toHaveCount(3);
+    // Nothing is offered until a date is chosen.
+    await expect(page.getByTestId('booking-slot')).toHaveCount(0);
+    await expect(page.getByText('Pick a date to see available times.')).toBeVisible();
+    await expect(page.getByTestId('booking-date-available')).toHaveCount(2);
 
+    await page.locator('[data-date="2027-03-02"]').click();
+    await expect(page.getByTestId('booking-slot')).toHaveCount(2);
     await page.getByTestId('booking-slot').first().click();
+    // The chosen time stays visible and a confirm step appears beside it.
+    await page.getByTestId('booking-next').click();
 
     await expect(page.getByTestId('booking-form')).toBeVisible();
     await page.getByTestId('booking-name').fill('Grace Hopper');
@@ -98,6 +108,18 @@ test.describe('Public booking link', () => {
     await expect(page.getByTestId('booking-confirmed')).toBeVisible();
     await expect(page.getByText(/You're booked/)).toBeVisible();
 
+    // The visitor gets no email, so the confirmation must let them keep the
+    // booking: a prefilled Google link and a downloadable .ics.
+    const googleHref = await page.getByTestId('add-to-google').getAttribute('href');
+    expect(googleHref).toContain('calendar.google.com/calendar/render');
+    expect(googleHref).toContain('dates=20270302T090000Z%2F20270302T100000Z');
+
+    const download = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByTestId('download-ics').click(),
+    ]).then(([event]) => event);
+    expect(download.suggestedFilename()).toBe('intro-call-with-grace-hopper.ics');
+
     // The slot's exact instant must reach the API, not a re-derived local time.
     expect(submitted).toMatchObject({
       name: 'Grace Hopper',
@@ -106,21 +128,29 @@ test.describe('Public booking link', () => {
     });
   });
 
-  test('slots regroup when the visitor changes timezone', async ({ page }) => {
+  test('times re-render when the visitor changes timezone', async ({ page }) => {
     await mockAvailability(page);
     await gotoBooking(page);
 
     await page.getByTestId('booking-timezone').selectOption('UTC');
-    // Day labels come from Intl with the runtime's locale, so match on the parts
-    // that are locale-independent rather than a fixed "2 March" ordering.
-    await expect(
-      page.getByRole('heading', { name: /Tuesday.*(March|2)/ }),
-    ).toBeVisible();
+    await page.locator('[data-date="2027-03-02"]').click();
+    await expect(page.getByTestId('booking-slot').first()).toHaveText(/9:00/);
 
-    // 09:00Z on 2 March is 20:00 the same day in Sydney, so the heading stays
-    // on the 2nd but the displayed time shifts.
+    // 09:00Z on 2 March is 20:00 the same day in Sydney — same date, later time.
     await page.getByTestId('booking-timezone').selectOption('Australia/Sydney');
     await expect(page.getByTestId('booking-slot').first()).toHaveText(/8:00/);
+  });
+
+  test('picking another date swaps the times shown', async ({ page }) => {
+    await mockAvailability(page);
+    await gotoBooking(page);
+    await page.getByTestId('booking-timezone').selectOption('UTC');
+
+    // 2 March has two slots, 3 March has one.
+    await page.locator('[data-date="2027-03-02"]').click();
+    await expect(page.getByTestId('booking-slot')).toHaveCount(2);
+    await page.locator('[data-date="2027-03-03"]').click();
+    await expect(page.getByTestId('booking-slot')).toHaveCount(1);
   });
 
   test('a slot taken while the page was open is reported, not silently failed',
@@ -138,12 +168,18 @@ test.describe('Public booking link', () => {
       });
 
       await gotoBooking(page);
+      await page.locator('[data-date="2027-03-02"]').click();
       await page.getByTestId('booking-slot').first().click();
+      await page.getByTestId('booking-next').click();
       await page.getByTestId('booking-name').fill('Grace Hopper');
       await page.getByTestId('booking-email').fill('grace@example.com');
       await page.getByTestId('booking-submit').click();
 
-      await expect(page.getByTestId('booking-error')).toContainText(/just taken/i);
+      // Neutral wording: a 409 means taken *or* lapsed, and the client can't
+      // tell which.
+      await expect(page.getByTestId('booking-error')).toContainText(
+        /no longer available/i,
+      );
       // Back to the slot list so another time can be picked.
       await expect(page.getByTestId('booking-slots')).toBeVisible();
     });
@@ -167,5 +203,42 @@ test.describe('Public booking link', () => {
     await gotoBooking(page);
     await expect(page.getByText(/No times are available/)).toBeVisible();
     await expect(page.getByTestId('booking-slot')).toHaveCount(0);
+  });
+
+  test('the date grid is keyboard navigable', async ({ page }) => {
+    // WAI-ARIA date-picker pattern: one tabbable date, arrows move between
+    // them. Without it the grid is 30-odd tab stops with no date announced.
+    await mockAvailability(page);
+    await gotoBooking(page);
+    await page.getByTestId('booking-timezone').selectOption('UTC');
+
+    const selected = page.locator('[data-date="2027-03-02"]');
+    await selected.click();
+    await selected.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('[data-date="2027-03-03"]')).toBeFocused();
+
+    // Enter picks the focused date and its times replace the previous day's.
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('booking-slot')).toHaveCount(1);
+  });
+
+  test('time-of-day bands can be folded', async ({ page }) => {
+    await mockAvailability(page);
+    await gotoBooking(page);
+    await page.getByTestId('booking-timezone').selectOption('UTC');
+    await page.locator('[data-date="2027-03-02"]').click();
+
+    // Bands start open — a booking page should not hide availability by default.
+    await expect(page.getByTestId('booking-slot')).toHaveCount(2);
+    const toggle = page.getByTestId('booking-period-toggle').first();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('booking-slot')).toHaveCount(0);
+
+    await toggle.click();
+    await expect(page.getByTestId('booking-slot')).toHaveCount(2);
   });
 });

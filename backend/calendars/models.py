@@ -1320,7 +1320,7 @@ class CalendarEvent(TimeStampedModel):
 
 
 # -----------------------------
-# Booking Link (MED-284)
+# Booking Link
 # -----------------------------
 class BookingLink(TimeStampedModel):
     """
