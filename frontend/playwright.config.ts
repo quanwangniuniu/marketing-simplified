@@ -12,6 +12,13 @@ const useExistingServer =
   process.env.E2E_USE_EXISTING_SERVER === '1' ||
   process.env.E2E_USE_EXISTING_SERVER === 'true';
 
+const budgetRealE2eSpecs = [
+  /e2e[\\/]budget[\\/]budget-multi-step-chain\.spec\.ts$/,
+  /e2e[\\/]budget[\\/]budget-single-approver\.spec\.ts$/,
+  /e2e[\\/]budget[\\/]budget-reject-reopen-flow\.spec\.ts$/,
+  /e2e[\\/]budget[\\/]budget-admin-override-real\.spec\.ts$/,
+];
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -47,8 +54,8 @@ export default defineConfig({
       : undefined,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
-    
+    trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
 
   /* Configure projects */
@@ -64,7 +71,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: [/e2e[\\/]auth[\\/]/, ...budgetRealE2eSpecs],
     },
     {
       name: 'firefox',
@@ -73,7 +80,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: [/e2e[\\/]auth[\\/]/, ...budgetRealE2eSpecs],
     },
     {
       name: 'webkit',
@@ -82,7 +89,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: [/e2e[\\/]auth[\\/]/, ...budgetRealE2eSpecs],
     },
     {
       name: 'auth-chromium',
@@ -146,6 +153,14 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
       testMatch: /e2e[\\/]budget[\\/]budget-admin-override\.spec\.ts$/,
+    },
+    {
+      /* Real-backend budget flows: multi-user login via issue_budget_e2e_fixtures. */
+      name: 'budget-e2e',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      testMatch: budgetRealE2eSpecs,
     },
   ],
 });
