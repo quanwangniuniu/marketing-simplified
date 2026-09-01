@@ -285,7 +285,7 @@ function ProfileContent() {
     try {
       await authAPI.revokeSession(jti);
       setSessions((prev) => prev.filter((s) => s.jti !== jti));
-      toast.success('Session revoked.');
+      toast.success('Session revoked.', { position: 'top-center' });
     } catch {
       toast.error('Failed to revoke session.');
     } finally {
