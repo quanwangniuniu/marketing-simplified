@@ -1168,14 +1168,12 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.data.get('refresh_token')
-        if refresh_token:
-            try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-                SessionRegistry.delete_session(request.user.pk, str(token["jti"]))
-            except Exception:
-                logger.exception("Failed to blacklist refresh token during logout for user %s", request.user.id)
+        try:
+            refresh_jti = request.auth.get("refresh_jti") if request.auth else None
+            if refresh_jti:
+                SessionRegistry.remove_session(request.user.pk, refresh_jti)
+        except Exception:
+            logger.exception("Failed to remove session from registry during logout for user %s", request.user.id)
 
         try:
             from asgiref.sync import async_to_sync
@@ -1351,5 +1349,8 @@ class SessionRevokeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, jti):
+        sessions = SessionRegistry.list_sessions(request.user.pk)
+        if not any(s["jti"] == jti for s in sessions):
+            return Response({'error': 'Session not found.'}, status=status.HTTP_404_NOT_FOUND)
         SessionRegistry.delete_session(request.user.pk, jti)
         return Response({'message': 'Session revoked.'}, status=status.HTTP_200_OK)

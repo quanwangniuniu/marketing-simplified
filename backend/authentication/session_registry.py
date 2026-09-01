@@ -72,5 +72,15 @@ class SessionRegistry:
         return sessions
 
     @staticmethod
+    def remove_session(user_id, jti):
+        """Remove a session from the registry without blacklisting it (for normal logout)."""
+        register_key = REGISTER_KEY.format(user_id=user_id)
+        redis = cast(Redis, get_redis_connection("default"))
+        removed = redis.zrem(register_key, jti)
+        meta_key = META_KEY.format(jti=jti)
+        cache.delete(meta_key)
+        return removed
+
+    @staticmethod
     def delete_session(user_id, jti):
         SessionRegistry.evict_session(user_id, jti)
