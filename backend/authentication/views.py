@@ -1173,6 +1173,7 @@ class LogoutView(APIView):
             try:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
+                SessionRegistry.delete_session(request.user.pk, str(token["jti"]))
             except Exception:
                 logger.exception("Failed to blacklist refresh token during logout for user %s", request.user.id)
 
