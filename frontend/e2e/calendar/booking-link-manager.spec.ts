@@ -414,6 +414,86 @@ test.describe('Booking link management', () => {
     await expect(page.getByTestId('booking-link-host')).toBeDisabled();
   });
 
+  test('CSM clients on the project are selectable alongside colleagues', async ({
+    page,
+  }) => {
+    // Customers are usually not project members, so a picker that searched
+    // members alone left them unreachable even though the API accepts them.
+    // One has an account and joins as a participant; one does not and can only
+    // ever be an address.
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await page.route(/\/api\/core\/projects\/\d+\/members\/$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route(/\/api\/customers\/(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          results: [
+            {
+              id: 1,
+              user_id: 77,
+              email: 'signed.up@client.com',
+              full_name: 'Signed Up Client',
+              phone: '',
+              is_active: true,
+            },
+            {
+              id: 2,
+              user_id: null,
+              email: 'no.account@client.com',
+              full_name: 'No Account Client',
+              phone: '+44 123',
+              is_active: true,
+            },
+          ],
+        }),
+      });
+    });
+
+    let submitted: Record<string, unknown> | null = null;
+    await page.route(LINKS_GLOB, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.fallback();
+        return;
+      }
+      submitted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(EXISTING_LINK),
+      });
+    });
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+    await page.getByTestId('booking-link-title').fill('Client Call');
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '22222222-2222-2222-2222-222222222222',
+    );
+
+    await page.getByTestId('booking-link-invitee').fill('Client');
+    await expect(page.getByTestId('booking-link-invitee-option-customer')).toHaveCount(2);
+
+    // The one with an account.
+    await page.getByText('Signed Up Client').click();
+    await page.getByTestId('booking-link-invitee').fill('No Account');
+    await page.getByText('No Account Client').click();
+    await expect(page.getByTestId('booking-link-invitee-chip')).toHaveCount(2);
+
+    await page.getByTestId('booking-link-save').click();
+    // The account goes in as a participant, the contact record as an address.
+    await expect.poll(() => submitted?.invitee_ids).toEqual([77]);
+    await expect.poll(() => submitted?.invitee_emails).toEqual(['no.account@client.com']);
+  });
+
   test('several guests can be added, by name or by address', async ({ page }) => {
     // Two ways out of one box, as in a share dialog: a colleague we know, or an
     // address for someone we don't.

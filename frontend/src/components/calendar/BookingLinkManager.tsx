@@ -25,6 +25,8 @@ import { CalendarAPI, type CalendarDTO } from '@/lib/api/calendarApi';
 import { googleCalendarApi } from '@/lib/api/googleCalendarApi';
 import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+import { CustomerAPI } from '@/lib/api/customerApi';
+import type { Customer } from '@/types/customer';
 import { detectTimezone } from './bookingSlots';
 
 /**
@@ -104,6 +106,7 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
   const [links, setLinks] = useState<BookingLinkDTO[]>([]);
   const [calendars, setCalendars] = useState<CalendarDTO[]>([]);
   const [members, setMembers] = useState<ProjectMemberData[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   // What the user has typed into the guest box, before it resolves to either a
   // colleague or a plain address.
   const [inviteeQuery, setInviteeQuery] = useState('');
@@ -163,23 +166,40 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
     void refresh();
   }, [refresh]);
 
-  // Hosting a colleague's time is only allowed inside a shared project, so the
-  // candidates are exactly this project's members. Failure is non-fatal: the
-  // picker falls back to just you.
+  // Two populations count as "on this project": the colleagues working on it,
+  // and the CSM customers attached to it. Customers are usually not project
+  // members, so searching members alone would make them unreachable even
+  // though the API accepts them. Either fetch failing is non-fatal - the
+  // picker just offers less.
   useEffect(() => {
     if (projectId == null) {
       setMembers([]);
+      setCustomers([]);
       return;
     }
     let cancelled = false;
-    ProjectAPI
-      .getAllProjectMembers(projectId)
+
+    ProjectAPI.getAllProjectMembers(projectId)
       .then((rows) => {
         if (!cancelled) setMembers(rows.filter((row) => row.is_active));
       })
       .catch(() => {
         if (!cancelled) setMembers([]);
       });
+
+    // The store types a project id as string | number; this endpoint wants a
+    // number, and the null case is already returned above.
+    CustomerAPI.list({ project: Number(projectId), is_active: true })
+      .then((res) => {
+        // The endpoint is paginated; stay tolerant of a bare array too.
+        const data = res.data;
+        const rows = Array.isArray(data) ? data : data?.results ?? [];
+        if (!cancelled) setCustomers(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomers([]);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -197,29 +217,86 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
     ? links.find((link) => link.id === editingId)?.calendar
     : undefined;
   const hostCalendar = selected ?? calendars.find((c) => c.id === editingCalendarId);
+  // Hosting is members-only: the backend will not publish a customer's
+  // availability, and a customer has no calendar here to publish.
   const canHostOthers = Boolean(hostCalendar?.project_id) && members.length > 0;
   const hostCandidates = canHostOthers ? members : [];
+  // Naming guests is wider - it covers customers too, and needs only a project
+  // calendar to check them against.
+  const canNameGuests = Boolean(hostCalendar?.project_id);
 
   const memberLabel = (member: ProjectMemberData) =>
     member.user.name || member.user.username || member.user.email || '';
-  const chosenInvitees = members.filter((member) =>
-    form.invitee_ids.includes(member.user.id),
-  );
-  // Filtered client-side: a project's membership is already loaded and small
-  // enough that a round trip per keystroke would be slower, not faster.
+
+  /**
+   * Everyone on this project, colleagues and CSM customers alike.
+   *
+   * A customer with an account joins as a real participant; one without can
+   * only ever be an address, which is the same guest path someone typing an
+   * unknown email takes. Collapsing both into one list is what makes the
+   * "search and click" the supervisor asked for actually work — searching
+   * members alone left customers unreachable even though the API accepts them.
+   */
+  type Candidate = {
+    key: string;
+    label: string;
+    email: string;
+    /** Null when they have no account, so they can only be invited by email. */
+    userId: number | null;
+    source: 'member' | 'customer';
+  };
+
+  const candidates: Candidate[] = [
+    ...members.map((member) => ({
+      key: `m${member.user.id}`,
+      label: memberLabel(member),
+      email: member.user.email ?? '',
+      userId: member.user.id,
+      source: 'member' as const,
+    })),
+    ...customers
+      // A customer who is also a project member would otherwise appear twice.
+      .filter(
+        (customer) =>
+          customer.user_id == null ||
+          !members.some((member) => member.user.id === customer.user_id),
+      )
+      .map((customer) => ({
+        key: `c${customer.id}`,
+        label: customer.full_name || customer.email,
+        email: customer.email,
+        userId: customer.user_id,
+        source: 'customer' as const,
+      })),
+  ];
+
+  const isChosen = (candidate: Candidate) =>
+    candidate.userId != null
+      ? form.invitee_ids.includes(candidate.userId)
+      : form.invitee_emails.includes(candidate.email.toLowerCase());
+
+  // Chips resolve through the same list, so a customer with an account shows
+  // their name rather than a bare id just because they are not a member.
+  const chosenInvitees = form.invitee_ids.map((id) => {
+    const match = candidates.find((candidate) => candidate.userId === id);
+    return { id, label: match?.label ?? `User ${id}` };
+  });
+
+  // Filtered client-side: both lists are already loaded and small enough that a
+  // round trip per keystroke would be slower, not faster.
   const inviteeMatches =
-    canHostOthers && inviteeQuery.trim()
-      ? members
+    canNameGuests && inviteeQuery.trim()
+      ? candidates
           .filter(
-            (member) =>
-              // Already chosen people drop out of the results, the way a share
-              // dialog stops offering someone once they are on the list.
-              !form.invitee_ids.includes(member.user.id) &&
-              `${memberLabel(member)} ${member.user.email ?? ''}`
+            (candidate) =>
+              // Already chosen people drop out, the way a share dialog stops
+              // offering someone once they are on the list.
+              !isChosen(candidate) &&
+              `${candidate.label} ${candidate.email}`
                 .toLowerCase()
                 .includes(inviteeQuery.trim().toLowerCase()),
           )
-          .slice(0, 5)
+          .slice(0, 6)
       : [];
   const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeQuery.trim());
   const wontSyncToGoogle = googleConnected && !!selected && !selected.is_primary;
@@ -577,24 +654,24 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               */}
               {(chosenInvitees.length > 0 || form.invitee_emails.length > 0) && (
                 <ul className="mt-1 flex flex-wrap gap-1.5">
-                  {chosenInvitees.map((member) => (
+                  {chosenInvitees.map((person) => (
                     <li
-                      key={member.user.id}
+                      key={person.id}
                       data-testid="booking-link-invitee-chip"
                       className="flex items-center gap-1.5 rounded-full border border-[#3CCED7]/40 bg-[#3CCED7]/10 py-1 pl-2.5 pr-1.5 text-xs text-[#0E8A96]"
                     >
-                      <span className="max-w-[14rem] truncate">{memberLabel(member)}</span>
+                      <span className="max-w-[14rem] truncate">{person.label}</span>
                       <button
                         type="button"
                         onClick={() =>
                           setForm({
                             ...form,
                             invitee_ids: form.invitee_ids.filter(
-                              (id) => id !== member.user.id,
+                              (id) => id !== person.id,
                             ),
                           })
                         }
-                        aria-label={`Remove ${memberLabel(member)}`}
+                        aria-label={`Remove ${person.label}`}
                         className="shrink-0 rounded-full p-0.5 text-[#0E8A96]/70 transition-colors hover:text-[#0E8A96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
                       >
                         <X className="h-3 w-3" />
@@ -634,7 +711,7 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                 autoComplete="off"
                 value={inviteeQuery}
                 onChange={(e) => setInviteeQuery(e.target.value)}
-                placeholder="Search a colleague, or type an email address"
+                placeholder="Search a colleague or client, or type an email address"
                 data-testid="booking-link-invitee"
                 className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
               />
@@ -647,21 +724,39 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                   data-testid="booking-link-invitee-results"
                   className="mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
                 >
-                  {inviteeMatches.map((member) => (
-                    <li key={member.user.id}>
+                  {inviteeMatches.map((candidate) => (
+                    <li key={candidate.key}>
                       <button
                         type="button"
                         onClick={() => {
-                          setForm({
-                            ...form,
-                            invitee_ids: [...form.invitee_ids, member.user.id],
-                          });
+                          // An account joins as a participant; a contact record
+                          // with no account can only ever be an address.
+                          setForm(
+                            candidate.userId != null
+                              ? {
+                                  ...form,
+                                  invitee_ids: [...form.invitee_ids, candidate.userId],
+                                }
+                              : {
+                                  ...form,
+                                  invitee_emails: [
+                                    ...form.invitee_emails,
+                                    candidate.email.toLowerCase(),
+                                  ],
+                                },
+                          );
                           setInviteeQuery('');
                         }}
+                        data-testid={`booking-link-invitee-option-${candidate.source}`}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                       >
                         <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                        <span className="truncate">{memberLabel(member)}</span>
+                        <span className="min-w-0 flex-1 truncate">{candidate.label}</span>
+                        {candidate.source === 'customer' && (
+                          <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                            {candidate.userId != null ? 'Client' : 'Client · guest'}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
@@ -689,8 +784,8 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                   </button>
                 )}
               <p className="mt-1 text-[11px] text-gray-400">
-                {canHostOthers
-                  ? 'A colleague gets a notification. A guest just gets the link from you.'
+                {canNameGuests
+                  ? 'Colleagues and clients with an account get a notification. Anyone else just gets the link from you.'
                   : 'Type an email address for whoever this link is going to.'}
               </p>
             </div>
