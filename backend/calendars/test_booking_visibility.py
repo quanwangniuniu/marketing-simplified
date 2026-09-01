@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from calendars.models import Calendar, Event, EventAttendee
-from core.models import Organization
+from core.models import Organization, Project, ProjectMember
 
 User = get_user_model()
 
@@ -102,6 +102,43 @@ class AttendeeVisibilityTests(TestCase):
                 email=outsider.email, response_status="accepted",
             )
         assert "Intro Call with Grace" not in self._titles_for(outsider)
+
+    def test_a_guest_on_the_project_can_cancel_from_their_own_calendar(self):
+        # Seeing it is only half of Ray's "either party cancels". On a project
+        # calendar a member maps to `edit`, so the guest can act on it in-app
+        # rather than having to dig out the emailed token link.
+        project = Project.objects.create(
+            name="Vis Project", organization=self.org, owner=self.host
+        )
+        for user in (self.host, self.guest):
+            ProjectMember.objects.create(
+                project=project, user=user, role="member", is_active=True
+            )
+        project_calendar = Calendar.objects.create(
+            organization=self.org, owner=self.host, project=project,
+            name="Vis Project Calendar", timezone="UTC",
+        )
+        start = timezone.now() + timedelta(days=4)
+        event = Event.objects.create(
+            organization=self.org, calendar=project_calendar, created_by=self.host,
+            title="Project Booking", start_datetime=start,
+            end_datetime=start + timedelta(minutes=30), timezone="UTC",
+        )
+        EventAttendee.objects.create(
+            organization=self.org, event=event, user=self.guest,
+            email=self.guest.email, response_status="accepted",
+            metadata={"source": "booking_link"},
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=self.guest)
+        response = client.delete(f"{EVENTS_URL}{event.id}/")
+        assert response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+        ), getattr(response, "data", response.content)
+        event.refresh_from_db()
+        assert event.is_deleted is True
 
     def test_a_deleted_attendance_stops_conferring_visibility(self):
         attendance = EventAttendee.objects.get(event=self.event, user=self.guest)

@@ -133,6 +133,31 @@ class PublicAvailabilityTests(PublicBookingTestBase):
             guest = EventAttendee.objects.get(is_organizer=False)
         assert guest.phone == "+44 7700 900123"
 
+    def test_the_contact_details_land_where_the_host_can_read_them(self):
+        # Nothing in the calendar UI renders attendees, so details stored only
+        # on the attendee row would be collected and never seen. The
+        # description is the field the event dialog actually shows.
+        start = next_weekday_at(13)
+        response = self.client.post(
+            self.booking_url,
+            {
+                "name": "Grace Hopper",
+                "email": "grace@example.com",
+                "phone": "+44 7700 900123",
+                "notes": "Keen to talk pricing.",
+                "start": start.isoformat().replace("+00:00", "Z"),
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        with in_org(self.org):
+            event = Event.objects.get(start_datetime=start)
+        assert "Grace Hopper" in event.description
+        assert "grace@example.com" in event.description
+        assert "+44 7700 900123" in event.description
+        # The guest's own words survive alongside the contact block.
+        assert "Keen to talk pricing." in event.description
+
     def test_a_booking_without_a_phone_number_still_goes_through(self):
         # Optional: demanding one would lose bookings from people who won't
         # hand it over.

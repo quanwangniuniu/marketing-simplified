@@ -1840,6 +1840,25 @@ class PublicBookingCreateView(APIView):
             lambda: send_booking_confirmation_task.delay(**payload)
         )
 
+    @staticmethod
+    def _event_description(data) -> str:
+        """
+        Put the guest's contact details where the host will actually see them.
+
+        They are also stored properly on the EventAttendee row, but nothing in
+        the calendar UI renders attendees today - so a phone number recorded
+        only there would be collected and never read. The description is the
+        one field the event dialog shows, which makes it the honest place for
+        this until an attendee panel exists.
+        """
+        lines = [f"Booked by {data['name']}", data["email"]]
+        if data.get("phone"):
+            lines.append(data["phone"])
+        notes = (data.get("notes") or "").strip()
+        if notes:
+            lines += ["", notes]
+        return "\n".join(lines)
+
     @transaction.atomic
     def _create_event(self, link, data, rules):
         start = data["start"]
@@ -1850,7 +1869,7 @@ class PublicBookingCreateView(APIView):
             calendar=link.calendar,
             created_by=link.owner,
             title=f"{link.title} with {data['name']}",
-            description=data.get("notes") or "",
+            description=self._event_description(data),
             start_datetime=start,
             end_datetime=end,
             timezone=link.timezone,
