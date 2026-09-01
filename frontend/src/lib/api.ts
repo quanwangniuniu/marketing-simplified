@@ -350,17 +350,11 @@ function notifySessionEvicted() {
   if (_sessionEvictedPending) return;
   _sessionEvictedPending = true;
 
-  // 1. Synchronously clear in-memory zustand state via event so zustand
-  //    doesn't re-write tokens back to localStorage after we remove them.
-  window.dispatchEvent(new CustomEvent('auth:session-evicted'));
+  try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (_) {}
+  clearAuthSessionStorage();
+  clearCookieValue(AUTH_COOKIE_KEY);
+  try { sessionStorage.setItem('session_evicted', '1'); } catch (_) {}
 
-  // 2. Clear persisted tokens (now safe — in-memory is already cleared).
-  try {
-    localStorage.removeItem('auth-storage-v1');
-    sessionStorage.setItem('session_evicted', '1');
-  } catch (_) {}
-
-  // 3. Redirect immediately — no delay, no chance for components to re-render.
   window.location.href = '/login';
 }
 

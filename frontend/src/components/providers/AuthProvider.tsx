@@ -11,7 +11,7 @@ interface AuthProviderProps {
 
 // AuthProvider component that handles authentication state initialization
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { initializeAuth, hasHydrated, clearAuth } = useAuthStore();
+  const { initializeAuth, hasHydrated } = useAuthStore();
 
   // Initialize authentication state on component mount
   useEffect(() => {
@@ -28,12 +28,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     initAuth();
   }, [initializeAuth, hasHydrated]);
-
-  useEffect(() => {
-    const handler = () => clearAuth();
-    window.addEventListener('auth:session-evicted', handler);
-    return () => window.removeEventListener('auth:session-evicted', handler);
-  }, [clearAuth]);
 
   return <>{children}</>;
 };
