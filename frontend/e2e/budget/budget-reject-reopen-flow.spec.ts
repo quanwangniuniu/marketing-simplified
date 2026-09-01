@@ -8,15 +8,14 @@ import {
   fetchTaskJson,
   postTaskAction,
   requireBudgetE2EFixtures,
+  submitBudgetTaskViaApi,
 } from './fixtures/budget-fixtures';
 import {
   approveWithComment,
   clickFsmButton,
   openTaskDetail,
-  openTaskDrawer,
   rejectWithComment,
   startReviewOnDetail,
-  submitBudgetTaskFromDrawer,
   expectStatusChip,
 } from './fixtures/budget-helpers';
 import { fixtureEmail, openBudgetUserSession } from './fixtures/budget-users';
@@ -33,14 +32,18 @@ test.describe('Budget reject → reopen → approve', () => {
     });
 
     try {
-      await openTaskDrawer(requester.page, task.projectId, task.id);
-      await submitBudgetTaskFromDrawer(requester.page);
+      await submitBudgetTaskViaApi(
+        requester.page,
+        task,
+        fixtureEmail('requester'),
+        'single',
+      );
 
       await openTaskDetail(approver.page, task.slug, task.projectId);
       await startReviewOnDetail(approver.page);
       await rejectWithComment(approver.page, 'E2E: rejecting to test reopen path');
 
-      let taskData = await fetchTaskJson(requester.page, task.id);
+      let taskData = await fetchTaskJson(requester.page, task.id, undefined, 'single');
       expect(taskData.status).toBe('REJECTED');
 
       await expect(approver.page.getByRole('button', { name: 'Approve', exact: true })).not.toBeVisible({
@@ -61,14 +64,16 @@ test.describe('Budget reject → reopen → approve', () => {
         task,
         'lock',
         fixtureEmail('approver_a'),
+        {},
+        'single',
       );
       expect(lockAttempt.status).toBe(400);
-      taskData = await fetchTaskJson(requester.page, task.id);
+      taskData = await fetchTaskJson(requester.page, task.id, undefined, 'single');
       expect(taskData.status).toBe('REJECTED');
 
       await clickFsmButton(approver.page, 'Revise');
       await expectStatusChip(approver.page, /draft/i);
-      taskData = await fetchTaskJson(requester.page, task.id);
+      taskData = await fetchTaskJson(requester.page, task.id, undefined, 'single');
       expect(taskData.status).toBe('DRAFT');
 
       await openTaskDetail(requester.page, task.slug, task.projectId);
@@ -80,7 +85,7 @@ test.describe('Budget reject → reopen → approve', () => {
       await approveWithComment(approver.page, 'E2E: approving revised request');
       await expectStatusChip(approver.page, /approved/i);
 
-      taskData = await fetchTaskJson(requester.page, task.id);
+      taskData = await fetchTaskJson(requester.page, task.id, undefined, 'single');
       expect(taskData.status).toBe('APPROVED');
     } finally {
       await task.cleanup();

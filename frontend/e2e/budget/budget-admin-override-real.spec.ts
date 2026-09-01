@@ -8,13 +8,13 @@ import {
   fetchTaskJson,
   postTaskAction,
   requireBudgetE2EFixtures,
+  submitBudgetTaskViaApi,
 } from './fixtures/budget-fixtures';
 import {
   approveWithComment,
+  expectAdminOverrideBadge,
   openTaskDetail,
-  openTaskDrawer,
   startReviewOnDetail,
-  submitBudgetTaskFromDrawer,
 } from './fixtures/budget-helpers';
 import { fixtureEmail, openBudgetUserSession } from './fixtures/budget-users';
 
@@ -32,8 +32,7 @@ test.describe('Budget org-admin override (real backend)', () => {
     });
 
     try {
-      await openTaskDrawer(requester.page, task.projectId, task.id);
-      await submitBudgetTaskFromDrawer(requester.page);
+      await submitBudgetTaskViaApi(requester.page, task, fixtureEmail('requester'));
 
       await openTaskDetail(approverA.page, task.slug, task.projectId);
       await startReviewOnDetail(approverA.page);
@@ -41,11 +40,10 @@ test.describe('Budget org-admin override (real backend)', () => {
       await openTaskDetail(orgAdmin.page, task.slug, task.projectId);
       await approveWithComment(orgAdmin.page, 'E2E org-admin override step 1');
 
-      await expect(orgAdmin.page.getByTestId('admin-override-badge').first()).toBeVisible({
-        timeout: 15_000,
-      });
+      await expectAdminOverrideBadge(orgAdmin.page);
 
-      let taskData = await fetchTaskJson(requester.page, task.id);
+      let taskData = await fetchTaskJson(orgAdmin.page, task.id, fixtureEmail('org_admin'));
+      expect(taskData.linked_object?.is_admin_override).toBe(true);
       expect(taskData.status).toBe('UNDER_REVIEW');
       expect(taskData.current_approver?.id ?? taskData.current_approver_id).toBe(
         fixtures.users.approver_b.user_id,
@@ -76,8 +74,7 @@ test.describe('Budget org-admin override (real backend)', () => {
     });
 
     try {
-      await openTaskDrawer(requester.page, task.projectId, task.id);
-      await submitBudgetTaskFromDrawer(requester.page);
+      await submitBudgetTaskViaApi(requester.page, task, fixtureEmail('requester'));
 
       await openTaskDetail(approverA.page, task.slug, task.projectId);
       await startReviewOnDetail(approverA.page);

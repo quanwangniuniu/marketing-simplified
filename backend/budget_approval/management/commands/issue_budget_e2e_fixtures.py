@@ -142,6 +142,8 @@ class Command(BaseCommand):
             "project_id": project.id,
             "project_slug": project.slug,
             "project_name": project.name,
+            "team_id": team.id,
+            "role_name": ROLE_NAME,
             "budget_pool_id": pool.id,
             "ad_channel_id": channel.id,
             "budget_pool_composite": composite,

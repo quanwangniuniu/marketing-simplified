@@ -48,6 +48,8 @@ def test_issue_budget_e2e_fixtures_round_trip():
     payload = json.loads(out.getvalue())
 
     assert payload["project_id"] == project.id
+    assert payload["team_id"]
+    assert payload["role_name"] == "E2E Budget Approver"
     assert payload["users"]["requester"]["email"] == "e2e-budget-requester@example.com"
     assert payload["users"]["approver_a"]["access_token"]
     assert payload["single_approver_project_id"] != project.id

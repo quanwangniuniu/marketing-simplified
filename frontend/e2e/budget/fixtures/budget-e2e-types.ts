@@ -22,6 +22,8 @@ export type BudgetE2EFixturePayload = {
   single_approver_project_slug: string;
   single_approver_project_name: string;
   single_approver_budget_pool_composite: string;
+  team_id: number;
+  role_name: string;
   password: string;
   users: {
     requester: BudgetE2EUserFixture;
@@ -43,3 +45,59 @@ export const BUDGET_E2E_EMAILS = {
 } as const;
 
 export const BUDGET_E2E_DEFAULT_PASSWORD = 'password123!';
+
+export const BUDGET_E2E_DEFAULT_ROLE_NAME = 'E2E Budget Approver';
+
+export function resolveBudgetRbacHeaders(
+  fixtures: BudgetE2EFixturePayload,
+  email: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (email === fixtures.users.org_admin.email) {
+    headers['x-user-role'] = 'Org Admin';
+    return headers;
+  }
+
+  if (email === fixtures.users.regular.email) {
+    headers['x-user-role'] = 'Member';
+    return headers;
+  }
+
+  const teamId = fixtures.team_id;
+  if (!teamId) {
+    throw new Error(
+      'Budget E2E fixtures missing team_id. Re-run issue_budget_e2e_fixtures to regenerate budget-e2e-fixtures.json.',
+    );
+  }
+
+  headers['x-user-role'] = fixtures.role_name ?? BUDGET_E2E_DEFAULT_ROLE_NAME;
+  headers['x-team-id'] = String(teamId);
+  return headers;
+}
+
+export function resolveBudgetRbacAuthState(
+  fixtures: BudgetE2EFixturePayload,
+  email: string,
+): { roles: string[]; userTeams: number[]; selectedTeamId: number | null } {
+  if (email === fixtures.users.org_admin.email) {
+    return { roles: ['Org Admin'], userTeams: [], selectedTeamId: null };
+  }
+
+  if (email === fixtures.users.regular.email) {
+    return { roles: ['Member'], userTeams: [], selectedTeamId: null };
+  }
+
+  const teamId = fixtures.team_id;
+  if (!teamId) {
+    throw new Error(
+      'Budget E2E fixtures missing team_id. Re-run issue_budget_e2e_fixtures to regenerate budget-e2e-fixtures.json.',
+    );
+  }
+
+  return {
+    roles: [fixtures.role_name ?? BUDGET_E2E_DEFAULT_ROLE_NAME],
+    userTeams: [teamId],
+    selectedTeamId: teamId,
+  };
+}

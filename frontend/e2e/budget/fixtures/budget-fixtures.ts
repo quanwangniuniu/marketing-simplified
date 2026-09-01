@@ -5,6 +5,7 @@ import { deleteTaskById } from '../../tasks/tasks-helpers';
 import {
   BUDGET_E2E_DEFAULT_PASSWORD,
   BUDGET_E2E_EMAILS,
+  resolveBudgetRbacHeaders,
   type BudgetE2EFixturePayload,
 } from './budget-e2e-types';
 
@@ -48,6 +49,7 @@ export type BudgetTaskFixture = {
   id: number;
   slug: string;
   projectId: number;
+  projectSlug: string;
   cleanup: () => Promise<void>;
 };
 
@@ -104,7 +106,6 @@ export async function apiAuthHeaders(
   }
   const body = await loginResp.json();
   const token = body.token as string;
-  const user = body.user as { roles?: string[]; team_id?: number };
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -112,12 +113,20 @@ export async function apiAuthHeaders(
   if (body.organization_access_token) {
     headers['X-Organization-Token'] = body.organization_access_token;
   }
-  if (user?.roles?.length) {
-    headers['x-user-role'] = user.roles[0];
+
+  const fixtures = loadBudgetE2EFixtures();
+  if (fixtures) {
+    Object.assign(headers, resolveBudgetRbacHeaders(fixtures, email));
+  } else {
+    const user = body.user as { roles?: string[]; team_id?: number };
+    if (user?.roles?.length) {
+      headers['x-user-role'] = user.roles[0];
+    }
+    if (user?.team_id) {
+      headers['x-team-id'] = String(user.team_id);
+    }
   }
-  if (user?.team_id) {
-    headers['x-team-id'] = String(user.team_id);
-  }
+
   return headers;
 }
 
@@ -219,29 +228,49 @@ export async function createIsolatedBudgetTask(
   } = {},
 ): Promise<BudgetTaskFixture> {
   const fixtures = requireBudgetE2EFixtures();
+  const projectKind = opts.projectKind ?? 'chain';
   const projectId =
-    opts.projectKind === 'single' ? fixtures.single_approver_project_id : fixtures.project_id;
+    projectKind === 'single' ? fixtures.single_approver_project_id : fixtures.project_id;
+  const projectSlug =
+    projectKind === 'single' ? fixtures.single_approver_project_slug : fixtures.project_slug;
+  const approverId = opts.approverId ?? fixtures.users.approver_a.user_id;
   const task = await createBudgetTaskViaApi(
     page,
     projectId,
     summary,
-    opts.taskOverrides ?? {},
-    opts.projectKind ?? 'chain',
+    {
+      current_approver_id: approverId,
+      ...(opts.taskOverrides ?? {}),
+    },
+    projectKind,
   );
   await attachBudgetDetailsViaApi(page, task.id, {
     amount: opts.amount,
-    approverId: opts.approverId,
-    projectKind: opts.projectKind,
+    approverId,
+    projectKind,
   });
 
   return {
     id: task.id,
     slug: task.slug,
     projectId,
+    projectSlug,
     cleanup: async () => {
       await deleteTaskById(page, task.id).catch(() => {});
     },
   };
+}
+
+export async function submitBudgetTaskViaApi(
+  page: Page,
+  task: { slug: string },
+  requesterEmail: string,
+  projectKind: 'chain' | 'single' = 'chain',
+): Promise<void> {
+  const result = await postTaskAction(page, task, 'submit', requesterEmail, {}, projectKind);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Failed to submit budget task (${result.status}): ${JSON.stringify(result.body)}`);
+  }
 }
 
 export async function fetchTaskJson(

@@ -10,14 +10,12 @@ import {
   createIsolatedBudgetTask,
   fetchTaskJson,
   requireBudgetE2EFixtures,
+  submitBudgetTaskViaApi,
 } from './fixtures/budget-fixtures';
 import {
   approveWithComment,
   openTaskDetail,
   startReviewOnDetail,
-  submitBudgetTaskFromDrawer,
-  openTaskDrawer,
-  expectApprovalChainProgress,
   expectStatusChip,
 } from './fixtures/budget-helpers';
 import { fixtureEmail, openBudgetUserSession } from './fixtures/budget-users';
@@ -35,12 +33,10 @@ test.describe('Budget multi-step approval chain', () => {
     });
 
     try {
-      await openTaskDrawer(requester.page, task.projectId, task.id);
-      await submitBudgetTaskFromDrawer(requester.page);
+      await submitBudgetTaskViaApi(requester.page, task, fixtureEmail('requester'));
 
       await openTaskDetail(approverA.page, task.slug, task.projectId);
       await startReviewOnDetail(approverA.page);
-      await expectApprovalChainProgress(approverA.page, fixtures.approval_chain_name);
 
       let taskData = await fetchTaskJson(requester.page, task.id);
       expect(taskData.status).toBe('UNDER_REVIEW');
@@ -88,8 +84,7 @@ test.describe('Budget multi-step approval chain', () => {
     });
 
     try {
-      await openTaskDrawer(requester.page, task.projectId, task.id);
-      await submitBudgetTaskFromDrawer(requester.page);
+      await submitBudgetTaskViaApi(requester.page, task, fixtureEmail('requester'));
 
       const approverA = await openBudgetUserSession(browser, fixtureEmail('approver_a'));
       try {

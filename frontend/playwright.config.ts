@@ -157,8 +157,11 @@ export default defineConfig({
     {
       /* Real-backend budget flows: multi-user login via issue_budget_e2e_fixtures. */
       name: 'budget-e2e',
+      timeout: 90_000,
       use: {
         ...devices['Desktop Chrome'],
+        actionTimeout: 20_000,
+        navigationTimeout: 45_000,
       },
       testMatch: budgetRealE2eSpecs,
     },

@@ -1,6 +1,6 @@
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { waitForTasksPageReady } from '../../tasks/tasks-helpers';
-import { BUDGET_E2E_DEFAULT_PASSWORD, type BudgetE2EFixturePayload } from './budget-e2e-types';
+import { BUDGET_E2E_DEFAULT_PASSWORD, resolveBudgetRbacAuthState, type BudgetE2EFixturePayload } from './budget-e2e-types';
 import { loadBudgetE2EFixtures } from './budget-fixtures';
 
 type LoginPayload = {
@@ -43,10 +43,11 @@ async function seedAuthStorage(
   page: Page,
   auth: LoginPayload,
   project: ProjectSeed,
+  rbac: { roles: string[]; userTeams: number[]; selectedTeamId: number | null },
 ): Promise<void> {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.evaluate(
-    ({ authState, activeProject }) => {
+    ({ authState, activeProject, rbacState }) => {
       localStorage.setItem(
         'auth-storage-v1',
         JSON.stringify({
@@ -54,10 +55,14 @@ async function seedAuthStorage(
             token: authState.token,
             refreshToken: authState.refresh,
             organizationAccessToken: authState.organization_access_token ?? null,
-            user: authState.user,
+            user: {
+              ...authState.user,
+              roles: rbacState.roles,
+              team_id: rbacState.selectedTeamId ?? undefined,
+            },
             isAuthenticated: true,
-            userTeams: [],
-            selectedTeamId: null,
+            userTeams: rbacState.userTeams,
+            selectedTeamId: rbacState.selectedTeamId,
             loading: false,
             initialized: true,
             hasHydrated: true,
@@ -78,7 +83,7 @@ async function seedAuthStorage(
         }),
       );
     },
-    { authState: auth, activeProject: project },
+    { authState: auth, activeProject: project, rbacState: rbac },
   );
 }
 
@@ -132,7 +137,7 @@ export async function openBudgetUserSession(
     id: project.id,
     slug: project.slug,
     name: project.name,
-  });
+  }, resolveBudgetRbacAuthState(fixtures, email));
   await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
   await waitForTasksPageReady(page);
 
@@ -141,7 +146,7 @@ export async function openBudgetUserSession(
     context,
     page,
     close: async () => {
-      await context.close();
+      await context.close().catch(() => {});
     },
   };
 }
