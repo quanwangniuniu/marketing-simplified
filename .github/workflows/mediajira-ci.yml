@@ -560,9 +560,13 @@ jobs:
         if: always()
         run: |
           echo "Cleaning up containers and volumes..."
-          docker compose --profile ci down -v
+          # A prior step may have failed before the ".env" file was created.
+          # docker compose still needs it to resolve the "env_file" directive,
+          # and this cleanup must never fail the job, so guard both.
+          [ -f .env ] || touch .env
+          docker compose --profile ci --env-file .env down -v || true
           echo "Cleaning up unused Docker resources..."
-          docker system prune -f
+          docker system prune -f || true
 
   deploy:
     needs: [block, migration_guard, code_scan, image_scan, application_test]
