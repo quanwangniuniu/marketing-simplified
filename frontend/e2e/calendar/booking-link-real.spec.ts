@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * MED-284: external booking against the real backend — no API mocking.
+ * External booking against the real backend — no API mocking.
  *
  * Creates a booking link through the authenticated API, then books it through
  * the public page as an anonymous visitor would, and verifies the event was

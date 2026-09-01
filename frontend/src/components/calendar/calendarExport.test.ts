@@ -88,3 +88,24 @@ describe('icsFileName', () => {
     expect(icsFileName('!!!')).toBe('booking.ics');
   });
 });
+
+describe('cancel link', () => {
+  const withUrl = { ...entry, url: 'https://app.example/book/acme/intro/cancel?token=abc' };
+
+  it('rides into the calendar entry as URL, so a closed tab is recoverable', () => {
+    expect(buildIcs(withUrl, 'u')).toContain(
+      'URL:https://app.example/book/acme/intro/cancel?token=abc',
+    );
+  });
+
+  it('is omitted when there is none', () => {
+    expect(buildIcs(entry, 'u')).not.toContain('URL:');
+  });
+
+  it('rides along in details for Google, which has no URL field', () => {
+    const url = new URL(googleCalendarUrl({ ...withUrl, description: 'With Ray' }));
+    expect(url.searchParams.get('details')).toBe(
+      'With Ray\n\nhttps://app.example/book/acme/intro/cancel?token=abc',
+    );
+  });
+});

@@ -24,6 +24,7 @@ from .views import (
     FreeBusyView,
     EventReminderListCreateView,
     PublicBookingLinkAvailabilityView,
+    PublicBookingCancelView,
     PublicBookingCreateView,
     BookingLinkViewSet,
 )
@@ -161,5 +162,10 @@ urlpatterns = [
         "public/book/<slug:org_slug>/<slug:link_slug>/bookings/",
         PublicBookingCreateView.as_view(),
         name="public-booking-create",
+    ),
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/cancel/",
+        PublicBookingCancelView.as_view(),
+        name="public-booking-cancel",
     ),
 ]

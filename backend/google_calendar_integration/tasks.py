@@ -40,9 +40,11 @@ def export_event_to_google_task(self, event_id: str, tenant_schema: str = 'publi
     silently finds nothing. Defaults to 'public' so existing callers keep their
     current behaviour.
 
+    Deleting is the same call: re-queue the task after a soft delete and
+    export_event_to_google takes the `is_deleted` branch, which removes the
+    Google copy.
+
     Known gaps, deliberately left for follow-up work:
-      - export only; there is no delete/update counterpart, so cancelling an
-        event locally leaves it in place on Google.
       - only the primary calendar is picked up, and `is_primary` is set solely
         by the Google connect flow.
       - exercised against mocks only; not yet verified against live Google.

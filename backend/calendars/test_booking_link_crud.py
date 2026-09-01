@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from calendars.models import BookingLink, Calendar, CalendarSettings
-from core.models import Organization
+from core.models import Organization, Project, ProjectMember
 
 User = get_user_model()
 
@@ -236,3 +236,127 @@ class BookingLinkCrudTests(TestCase):
         response = self._create(timezone="Europe/London")
         assert response.status_code == status.HTTP_201_CREATED
         assert BookingLink.objects.get(slug="intro-call").timezone == "Europe/London"
+
+
+class BookingLinkHostTests(TestCase):
+    """
+    Setting up a link for a colleague.
+
+    The property under test is that publishing someone else's availability is
+    gated on a shared project — organisation membership alone is not enough,
+    or anyone could expose anyone else's diary.
+    """
+
+    def setUp(self):
+        self.org = Organization.objects.create(name="Host Org", slug="host-org")
+        self.creator = User.objects.create_user(
+            username="creator", email="creator@host.com", password="x",
+            organization=self.org,
+        )
+        self.boss = User.objects.create_user(
+            username="boss", email="boss@host.com", password="x",
+            organization=self.org,
+        )
+        self.outsider = User.objects.create_user(
+            username="outsider", email="outsider@host.com", password="x",
+            organization=self.org,
+        )
+
+        self.project = Project.objects.create(
+            name="Shared Project", organization=self.org, owner=self.creator
+        )
+        for user in (self.creator, self.boss):
+            ProjectMember.objects.create(
+                project=self.project, user=user, role="member", is_active=True
+            )
+
+        self.project_calendar = Calendar.objects.create(
+            organization=self.org, owner=self.creator, project=self.project,
+            name="Shared Project Calendar", timezone="UTC",
+        )
+        self.personal_calendar = Calendar.objects.create(
+            organization=self.org, owner=self.creator,
+            name="Personal", timezone="UTC",
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.creator)
+
+    def _create(self, **overrides):
+        payload = {
+            "slug": "with-the-boss",
+            "title": "With the boss",
+            "calendar_id": str(self.project_calendar.id),
+            "duration_minutes": 30,
+        }
+        payload.update(overrides)
+        return self.client.post(LIST_URL, payload, format="json")
+
+    def test_omitting_a_host_books_your_own_time(self):
+        # Explicit null, which is what an untouched picker posts.
+        response = self._create(host_id=None)
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert link.owner == self.creator
+        assert link.created_by == self.creator
+        # Nothing to say when you set up your own link.
+        assert response.json()["created_by_name"] == ""
+
+    def test_can_set_up_a_link_for_someone_in_the_same_project(self):
+        response = self._create(host_id=self.boss.id)
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert link.owner == self.boss
+        assert link.created_by == self.creator
+        assert response.json()["host"]["id"] == self.boss.id
+        assert response.json()["created_by_name"] == self.creator.get_username()
+
+    def test_cannot_publish_the_time_of_someone_outside_the_project(self):
+        response = self._create(host_id=self.outsider.id)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "host_id" in error_fields(response)
+        assert not BookingLink.objects.filter(slug="with-the-boss").exists()
+
+    def test_a_personal_calendar_cannot_host_someone_else(self):
+        # No project on the calendar means no shared project to check against.
+        response = self._create(
+            host_id=self.boss.id, calendar_id=str(self.personal_calendar.id)
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "host_id" in error_fields(response)
+
+    def test_an_unknown_host_is_rejected(self):
+        response = self._create(host_id=999999)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "host_id" in error_fields(response)
+
+    def test_the_timezone_defaults_to_the_hosts_zone_not_the_creators(self):
+        CalendarSettings.objects.create(
+            user=self.creator, organization=self.org, timezone="America/New_York"
+        )
+        CalendarSettings.objects.create(
+            user=self.boss, organization=self.org, timezone="Asia/Tokyo"
+        )
+
+        response = self._create(host_id=self.boss.id)
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        # The windows describe the host's working day, so the creator's zone
+        # would shift every offered slot.
+        assert BookingLink.objects.get(slug="with-the-boss").timezone == "Asia/Tokyo"
+
+    def test_both_the_host_and_the_creator_can_see_the_link(self):
+        assert self._create(host_id=self.boss.id).status_code == status.HTTP_201_CREATED
+
+        for user in (self.creator, self.boss):
+            client = APIClient()
+            client.force_authenticate(user=user)
+            listed = client.get(LIST_URL)
+            assert listed.status_code == status.HTTP_200_OK
+            assert [row["slug"] for row in listed.json()] == ["with-the-boss"]
+
+    def test_an_unrelated_colleague_still_sees_nothing(self):
+        assert self._create(host_id=self.boss.id).status_code == status.HTTP_201_CREATED
+
+        client = APIClient()
+        client.force_authenticate(user=self.outsider)
+        assert client.get(LIST_URL).json() == []

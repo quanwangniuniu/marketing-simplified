@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * MED-284: owner-side booking link management.
+ * Owner-side booking link management.
  *
  * The API is mocked so the spec doesn't depend on the signed-in E2E user
  * already having links or calendars. Ownership scoping and validation are
@@ -55,6 +55,11 @@ const EXISTING_LINK = {
   timezone: 'UTC',
   availability_windows: [],
   is_active: true,
+  calendar: '22222222-2222-2222-2222-222222222222',
+  host: { id: 1, name: 'Ada Lovelace' },
+  invitee: null,
+  invitee_email: '',
+  created_by_name: '',
   created_at: '2026-08-01T00:00:00Z',
   updated_at: '2026-08-01T00:00:00Z',
 };
@@ -76,6 +81,7 @@ async function mockCalendars(page: Page) {
             name: 'Primary',
             timezone: 'UTC',
             is_primary: true,
+            project_id: 7,
           },
           // Non-primary: must not be offered, since the API would reject it.
           {
@@ -318,6 +324,154 @@ test.describe('Booking link management', () => {
     await expect(page.getByTestId('booking-link-duration_minutes')).toBeVisible();
     await page.getByTestId('booking-link-duration_minutes').fill('25');
     await expect(page.getByTestId('booking-link-duration_minutes')).toHaveValue('25');
+  });
+
+  test('a colleague in the project can be named as the host', async ({ page }) => {
+    // The whole point of the picker: setting up time with someone else. The
+    // API decides who is eligible; the UI must send the choice through.
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await page.route(/\/api\/core\/projects\/\d+\/members\/$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 1,
+            user: { id: 42, name: 'Grace Hopper', username: 'grace' },
+            project: { id: 7, name: 'Shared' },
+            role: 'member',
+            is_active: true,
+          },
+        ]),
+      });
+    });
+
+    let submitted: Record<string, unknown> | null = null;
+    await page.route(LINKS_GLOB, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.fallback();
+        return;
+      }
+      submitted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...EXISTING_LINK,
+          host: { id: 42, name: 'Grace Hopper' },
+          created_by_name: 'Ada Lovelace',
+        }),
+      });
+    });
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+    await page.getByTestId('booking-link-title').fill('Intro Call');
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '22222222-2222-2222-2222-222222222222',
+    );
+    await page.getByTestId('booking-link-host').selectOption('42');
+    await page.getByTestId('booking-link-save').click();
+
+    await expect.poll(() => submitted?.host_id).toBe(42);
+    // Once saved, the card says whose time it is and who arranged it.
+    await expect(page.getByTestId('booking-link-host-note')).toContainText(
+      "Grace Hopper's time",
+    );
+  });
+
+  test('a calendar outside any project can only book your own time', async ({
+    page,
+  }) => {
+    // Hosting someone else is checked server-side against the calendar's
+    // project, so the picker must not offer what the API would reject.
+    await page.route(CALENDARS_GLOB, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 1,
+          results: [
+            {
+              id: '22222222-2222-2222-2222-222222222222',
+              name: 'Personal',
+              timezone: 'UTC',
+              is_primary: true,
+              project_id: null,
+            },
+          ],
+        }),
+      });
+    });
+    await mockLinks(page, []);
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '22222222-2222-2222-2222-222222222222',
+    );
+    await expect(page.getByTestId('booking-link-host')).toBeDisabled();
+  });
+
+  test('a guest can be picked by name, or entered as an address', async ({ page }) => {
+    // Two ways out of one box, as in a share dialog: a colleague we know, or an
+    // address for someone we don't.
+    await mockCalendars(page);
+    await mockLinks(page, []);
+    await page.route(/\/api\/core\/projects\/\d+\/members\/$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 1,
+            user: { id: 42, name: 'Grace Hopper', username: 'grace' },
+            project: { id: 7, name: 'Shared' },
+            role: 'member',
+            is_active: true,
+          },
+        ]),
+      });
+    });
+
+    let submitted: Record<string, unknown> | null = null;
+    await page.route(LINKS_GLOB, async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.fallback();
+        return;
+      }
+      submitted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(EXISTING_LINK),
+      });
+    });
+
+    await gotoManager(page);
+    await page.getByTestId('booking-link-new').click();
+    await page.getByTestId('booking-link-title').fill('Intro Call');
+    await page.getByTestId('booking-link-calendar').selectOption(
+      '22222222-2222-2222-2222-222222222222',
+    );
+
+    // A colleague, found by typing part of their name.
+    await page.getByTestId('booking-link-invitee').fill('grace');
+    await page.getByTestId('booking-link-invitee-results').getByText('Grace Hopper').click();
+    await expect(page.getByTestId('booking-link-invitee-chip')).toContainText('Grace Hopper');
+
+    // Clearing puts the box back, and an address commits as a plain guest.
+    await page.getByTestId('booking-link-invitee-clear').click();
+    await page.getByTestId('booking-link-invitee').fill('stranger@example.com');
+    await page.getByTestId('booking-link-invitee-email').click();
+    await expect(page.getByTestId('booking-link-invitee-chip')).toContainText(
+      'stranger@example.com',
+    );
+
+    await page.getByTestId('booking-link-save').click();
+    await expect.poll(() => submitted?.invitee_email).toBe('stranger@example.com');
+    await expect.poll(() => submitted?.invitee_id).toBe(null);
   });
 
   test('the calendar page carries the entry point for booking links', async ({

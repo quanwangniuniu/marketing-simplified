@@ -113,6 +113,18 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         # A display name is intentionally exposed so the page can say who it is.
         assert body["owner_name"] == "Ada Lovelace"
 
+    def test_the_intended_guest_is_never_exposed_to_whoever_holds_the_url(self):
+        # Anyone with the URL gets this payload. Naming the person it was sent
+        # to would hand a stranger an address the owner never published.
+        with in_org(self.org):
+            self.link.invitee_email = "private-guest@example.com"
+            self.link.save(update_fields=["invitee_email"])
+        with patch(FREEBUSY_PATH, return_value=[]):
+            body = self.client.get(self.availability_url).json()
+        assert "private-guest@example.com" not in str(body)
+        assert "invitee" not in body
+        assert "invitee_email" not in body
+
     def test_busy_time_is_excluded_from_offered_slots(self):
         blocked = next_weekday_at(12)
         with in_org(self.org):
@@ -284,3 +296,107 @@ class PublicBookingCreateTests(PublicBookingTestBase):
                     self.client.post(self.booking_url, payload, format="json").status_code
                 )
         assert status.HTTP_429_TOO_MANY_REQUESTS in statuses
+
+
+class PublicBookingCancelTests(PublicBookingTestBase):
+    """
+    Guest-side cancellation.
+
+    A guest has no account, so the token issued at booking time is the entire
+    authorisation. These tests are mostly about what that token must NOT let
+    someone do.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cancel_url = f"{self.availability_url}cancel/"
+
+    def _book(self, hour: int = 10):
+        start = next_weekday_at(hour)
+        response = self.client.post(
+            self.booking_url,
+            {
+                "name": "Grace Hopper",
+                "email": "grace@example.com",
+                "start": start.isoformat().replace("+00:00", "Z"),
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        return response.json()
+
+    def test_the_confirmation_carries_a_cancel_token(self):
+        assert self._book()["cancel_token"]
+
+    def test_a_guest_can_cancel_with_their_token(self):
+        token = self._book()["cancel_token"]
+        response = self.client.post(self.cancel_url, {"token": token}, format="json")
+        assert response.status_code == status.HTTP_200_OK, response.json()
+
+        with in_org(self.org):
+            event = Event.objects.get(title__startswith="Intro Call")
+        assert event.status == "cancelled"
+        # Soft-deleted so it leaves the calendar, and so the Google export takes
+        # its delete branch.
+        assert event.is_deleted is True
+
+    def test_cancelling_twice_is_not_an_error(self):
+        token = self._book()["cancel_token"]
+        assert self.client.post(self.cancel_url, {"token": token}, format="json").status_code == 200
+        again = self.client.post(self.cancel_url, {"token": token}, format="json")
+        assert again.status_code == status.HTTP_200_OK
+
+    def test_a_forged_token_cancels_nothing(self):
+        self._book()
+        response = self.client.post(
+            self.cancel_url, {"token": "clearly-not-signed"}, format="json"
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        with in_org(self.org):
+            assert Event.objects.get(title__startswith="Intro Call").is_deleted is False
+
+    def test_a_missing_token_cancels_nothing(self):
+        self._book()
+        assert self.client.post(self.cancel_url, {}, format="json").status_code == 404
+
+    def test_a_token_cannot_be_replayed_against_another_organisations_link(self):
+        token = self._book()["cancel_token"]
+        other = Organization.objects.create(name="Other", slug="other-co")
+        response = self.client.post(
+            f"/api/public/book/{other.slug}/{self.link.slug}/cancel/",
+            {"token": token},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        with in_org(self.org):
+            assert Event.objects.get(title__startswith="Intro Call").is_deleted is False
+
+    def test_cancelling_frees_the_slot_for_someone_else(self):
+        # The point of cancelling: the time has to come back on offer.
+        booked = self._book(hour=10)
+        self.client.post(
+            self.cancel_url, {"token": booked["cancel_token"]}, format="json"
+        )
+        again = self.client.post(
+            self.booking_url,
+            {
+                "name": "Alan Turing",
+                "email": "alan@example.com",
+                "start": next_weekday_at(10).isoformat().replace("+00:00", "Z"),
+            },
+            format="json",
+        )
+        assert again.status_code == status.HTTP_201_CREATED, again.json()
+
+    def test_cancelling_removes_the_google_copy_too(self):
+        token = self._book()["cancel_token"]
+        with patch("calendars.views.export_event_to_google_task") as task:
+            # TestCase never commits, so on_commit callbacks have to be run.
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(self.cancel_url, {"token": token}, format="json")
+        # The export is what deletes on Google; it must be told the schema, or
+        # the worker looks in `public` and finds nothing.
+        assert task.delay.called
+        assert task.delay.call_args.kwargs["tenant_schema"] == slug_to_schema_name(
+            self.org.slug
+        )

@@ -1,12 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * MED-284: external booking through a public link.
+ * External booking through a public link.
  *
- * The API is mocked (the `email_draft` specs do the same) for two reasons:
- * there is no owner-facing endpoint yet for creating a BookingLink, so a real
- * link cannot be provisioned from a test; and slot availability moves with the
- * clock, which would make assertions flaky. The server side — tenant
+ * The API is mocked (the `email_draft` specs do the same) because slot
+ * availability moves with the clock, which would make assertions flaky.
+ * booking-link-real.spec.ts covers the same journey unmocked. The server side — tenant
  * resolution, double-booking, throttling, PII — is covered by
  * backend/calendars/test_public_booking.py; this spec covers what the prospect
  * actually does.
@@ -75,6 +74,7 @@ test.describe('Public booking link', () => {
           end: SLOTS[0].end,
           title: 'Intro Call with Grace Hopper',
           timezone: 'UTC',
+          cancel_token: 'signed-token-abc',
         }),
       });
     });
@@ -119,6 +119,12 @@ test.describe('Public booking link', () => {
       page.getByTestId('download-ics').click(),
     ]).then(([event]) => event);
     expect(download.suggestedFilename()).toBe('intro-call-with-grace-hopper.ics');
+
+    // The guest's only route back to this booking.
+    await expect(page.getByTestId('confirmation-cancel-link')).toHaveAttribute(
+      'href',
+      /\/book\/acme\/intro-call\/cancel\?token=signed-token-abc$/,
+    );
 
     // The slot's exact instant must reach the API, not a re-derived local time.
     expect(submitted).toMatchObject({
@@ -240,5 +246,51 @@ test.describe('Public booking link', () => {
 
     await toggle.click();
     await expect(page.getByTestId('booking-slot')).toHaveCount(2);
+  });
+});
+
+test.describe('Cancelling a booking', () => {
+  const CANCEL_URL = `/book/${ORG}/${LINK}/cancel?token=signed-token-abc`;
+  const CANCEL_GLOB = `**/api/public/book/${ORG}/${LINK}/cancel/`;
+
+  test('a guest confirms before anything is cancelled', async ({ page }) => {
+    // Mail clients and chat apps prefetch links; cancelling on load would drop
+    // meetings nobody meant to drop.
+    let called = false;
+    await page.route(CANCEL_GLOB, async (route) => {
+      called = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+    });
+
+    await page.goto(CANCEL_URL);
+    await expect(page.getByTestId('booking-cancel')).toBeVisible();
+    expect(called).toBe(false);
+
+    await page.getByTestId('cancel-confirm').click();
+    await expect(page.getByText('Booking cancelled')).toBeVisible();
+    expect(called).toBe(true);
+  });
+
+  test('a stale or spent link says so rather than failing silently', async ({ page }) => {
+    await page.route(CANCEL_GLOB, async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'NOT_FOUND' }),
+      });
+    });
+
+    await page.goto(CANCEL_URL);
+    await page.getByTestId('cancel-confirm').click();
+    await expect(page.getByTestId('cancel-error')).toBeVisible();
+  });
+
+  test('a link with no code explains itself', async ({ page }) => {
+    await page.goto(`/book/${ORG}/${LINK}/cancel`);
+    await expect(page.getByTestId('cancel-missing-token')).toBeVisible();
   });
 });

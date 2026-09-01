@@ -258,6 +258,13 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         start: result.start,
         end: result.end,
         title: result.title,
+        // Absolute: this travels into the guest's own calendar app, where a
+        // relative path means nothing.
+        url: result.cancel_token
+          ? `${window.location.origin}/book/${encodeURIComponent(orgSlug)}/${encodeURIComponent(
+              linkSlug,
+            )}/cancel?token=${encodeURIComponent(result.cancel_token)}`
+          : undefined,
         description:
           [link?.description?.trim(), link?.owner_name && `With ${link.owner_name}`]
             .filter(Boolean)
@@ -352,6 +359,19 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
           <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
             The .ics file works with Apple Calendar, Outlook and most others.
           </p>
+          {/*
+            The same link is written into the .ics, so a guest who closes this
+            tab can still get back here from their own calendar entry.
+          */}
+          {confirmation.url && (
+            <a
+              href={confirmation.url}
+              data-testid="confirmation-cancel-link"
+              className="mt-4 inline-block text-xs text-gray-400 underline underline-offset-2 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+            >
+              Need to cancel?
+            </a>
+          )}
         </div>
       </div>
     );

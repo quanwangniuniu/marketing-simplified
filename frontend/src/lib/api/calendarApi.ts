@@ -391,6 +391,11 @@ export interface BookingConfirmationDTO {
   end: string;
   title: string;
   timezone: string;
+  /**
+   * The guest's only handle on this booking. Issued once, at the moment they
+   * can still save it — there is no way to reissue it to someone anonymous.
+   */
+  cancel_token: string;
 }
 
 function bookingBase(orgSlug: string, linkSlug: string): string {
@@ -420,6 +425,11 @@ export const PublicBookingAPI = {
         `${bookingBase(orgSlug, linkSlug)}/bookings/`,
         payload,
       )
+      .then((res) => res.data),
+
+  cancelBooking: (orgSlug: string, linkSlug: string, token: string) =>
+    publicApi
+      .post<{ status: string }>(`${bookingBase(orgSlug, linkSlug)}/cancel/`, { token })
       .then((res) => res.data),
 };
 
@@ -451,15 +461,31 @@ export interface BookingLinkDTO {
   timezone: string;
   availability_windows: BookingWindowDTO[];
   is_active: boolean;
+  /** Calendar the bookings land on. */
+  calendar: string;
+  /** Whose time the link books. Not necessarily whoever set it up. */
+  host: { id: number; name: string };
+  /** Who it was made for. id is null when they have no account here. */
+  invitee: { id: number | null; name: string; email: string } | null;
+  invitee_email: string;
+  /** Blank when the host set the link up themselves. */
+  created_by_name: string;
   created_at: string;
   updated_at: string;
 }
 
 export type BookingLinkWritePayload = Partial<
-  Omit<BookingLinkDTO, 'id' | 'created_at' | 'updated_at'>
+  Omit<
+    BookingLinkDTO,
+    'id' | 'created_at' | 'updated_at' | 'host' | 'calendar' | 'invitee'
+  >
 > & {
   /** Required on create: the calendar bookings are written to. */
   calendar_id?: string;
+  /** The host. Omitted or null books your own time. */
+  host_id?: number | null;
+  /** A colleague as the guest. Null clears whoever was named. */
+  invitee_id?: number | null;
 };
 
 const BOOKING_LINKS_BASE = '/api/booking-links';

@@ -15,6 +15,11 @@ export interface CalendarEntry {
   start: string;
   end: string;
   description?: string;
+  /**
+   * Travels into the guest's own calendar as the entry's URL, which is how
+   * someone who closed the confirmation tab can still find their way back.
+   */
+  url?: string;
 }
 
 /** ICS and Google both want YYYYMMDDTHHMMSSZ. */
@@ -58,6 +63,9 @@ export function buildIcs(entry: CalendarEntry, uid?: string): string {
   if (entry.description) {
     lines.push(`DESCRIPTION:${escapeIcsText(entry.description)}`);
   }
+  if (entry.url) {
+    lines.push(`URL:${escapeIcsText(entry.url)}`);
+  }
   lines.push('END:VEVENT', 'END:VCALENDAR');
   return lines.join('\r\n');
 }
@@ -69,7 +77,9 @@ export function googleCalendarUrl(entry: CalendarEntry): string {
     text: entry.title,
     dates: `${toCompactUtc(entry.start)}/${toCompactUtc(entry.end)}`,
   });
-  if (entry.description) params.set('details', entry.description);
+  // Google's template has no URL field, so the link rides along in details.
+  const details = [entry.description, entry.url].filter(Boolean).join('\n\n');
+  if (details) params.set('details', details);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 

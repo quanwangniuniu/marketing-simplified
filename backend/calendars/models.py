@@ -1324,7 +1324,12 @@ class CalendarEvent(TimeStampedModel):
 # -----------------------------
 class BookingLink(TimeStampedModel):
     """
-    A shareable link that lets an external prospect book time with one user.
+    A shareable link that lets someone book time with one user.
+
+    `owner` is the host - whose availability is published, whose calendar the
+    booking lands on, and whose Google connection and CalendarSettings are
+    read. `created_by` is whoever made the link, which may be a colleague
+    arranging time on the host's behalf.
 
     Tenant-scoped like the rest of this app, so a public request must resolve
     the organisation before it can read one. That is why the public URL carries
@@ -1349,7 +1354,20 @@ class BookingLink(TimeStampedModel):
         User,
         on_delete=models.CASCADE,
         related_name="booking_links",
-        help_text="The person whose time is being booked.",
+        help_text="The host: the person whose time is being booked.",
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_booking_links",
+        help_text=(
+            "Who set the link up. Differs from owner when a colleague arranges "
+            "time on the host's behalf. Null once that account is removed - the "
+            "link belongs to the host, so it outlives its creator."
+        ),
     )
 
     calendar = models.ForeignKey(
@@ -1357,6 +1375,25 @@ class BookingLink(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="booking_links",
         help_text="Calendar that bookings are written to.",
+    )
+
+    # Who the link was made for. Optional: a link can just as well be posted
+    # publicly with nobody in particular in mind.
+    invitee_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invited_booking_links",
+        help_text=(
+            "The intended guest, when they already have an account here. Gets "
+            "notified in-app; a booking they make is tied back to them."
+        ),
+    )
+    invitee_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="The intended guest when they have no account - address only.",
     )
 
     slug = models.SlugField(

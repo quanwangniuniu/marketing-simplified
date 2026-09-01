@@ -32,6 +32,8 @@ from .services import (
     schedule_from_booking_link,
 )
 
+from django.contrib.auth import get_user_model
+
 from core.models import Organization, ProjectMember
 from core.slug_mixins import resolve_project_pk
 from core.services.tenant import slug_to_schema_name
@@ -72,13 +74,20 @@ from .serializers import (
     BookingRequestSerializer,
     BookingLinkSerializer,
 )
+from .booking_notifications import (
+    notify_booking_cancelled,
+    notify_booking_made,
+    notify_link_created,
+)
+from .booking_tokens import make_cancel_token, read_cancel_token
 from .exceptions import calendar_error_response
-
 from google_calendar_integration.tasks import export_event_to_google_task
 from google_calendar_integration.services import (
     get_merged_availability,
     is_slot_still_available,
 )
+
+User = get_user_model()
 
 
 class CalendarViewSet(viewsets.ModelViewSet):
@@ -480,7 +489,7 @@ class EventViewSet(viewsets.ModelViewSet):
             created_by=request.user if request.user.is_authenticated else None,
         )
         eid = str(event.id)
-        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
+        self._queue_google_export(eid)
         output_serializer = EventSerializer(event)
         headers = self.get_success_headers(output_serializer.data)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -507,7 +516,7 @@ class EventViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         event = serializer.save()
         eid = str(event.id)
-        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
+        self._queue_google_export(eid)
         output_serializer = EventSerializer(event)
         return Response(output_serializer.data)
 
@@ -515,11 +524,55 @@ class EventViewSet(viewsets.ModelViewSet):
         kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
 
+    def _queue_google_export(self, event_id: str) -> None:
+        """
+        Hand the worker the schema explicitly.
+
+        A Celery worker never passes through TenantSchemaMiddleware, so the
+        default of 'public' silently finds nothing for an org with its own
+        schema - the export, and the delete that shares this path, would both
+        no-op there.
+        """
+        organization = get_user_organization(self.request.user)
+        schema = slug_to_schema_name(organization.slug) if organization else "public"
+        transaction.on_commit(
+            lambda: export_event_to_google_task.delay(event_id, tenant_schema=schema)
+        )
+
     def perform_destroy(self, instance: Event):
         eid = str(instance.id)
+        # Read the attendees before the row is marked deleted.
+        booked_guest = (
+            EventAttendee.objects.filter(
+                event=instance,
+                is_organizer=False,
+                metadata__source="booking_link",
+                is_deleted=False,
+            )
+            .exclude(user=None)
+            .first()
+        )
+        organizer = (
+            EventAttendee.objects.filter(event=instance, is_organizer=True)
+            .exclude(user=None)
+            .first()
+        )
+
         instance.is_deleted = True
         instance.save(update_fields=["is_deleted", "updated_at"])
-        transaction.on_commit(lambda: export_event_to_google_task.delay(eid))
+
+        # Only bookings, and only guests with an account. Ordinary events are
+        # deleted here too, and announcing every one of those would be noise -
+        # while a guest whose meeting just vanished genuinely needs telling.
+        if booked_guest:
+            notify_booking_cancelled(
+                instance,
+                host_id=organizer.user_id if organizer else instance.created_by_id,
+                guest_user_id=booked_guest.user_id,
+                actor=self.request.user,
+                by_guest=False,
+            )
+        self._queue_google_export(eid)
 
 
 class EventSearchView(generics.ListAPIView):
@@ -1675,8 +1728,9 @@ class PublicBookingCreateView(APIView):
                     status_code=status.HTTP_409_CONFLICT,
                 )
 
-            event = self._create_event(link, data, rules)
+            event, guest = self._create_event(link, data, rules)
             link_timezone = schedule.timezone
+            notify_booking_made(link, event, guest, data["name"])
 
         # Export asynchronously after commit, as every other event write in this
         # module does. The local event is the source of truth: a Google outage
@@ -1696,6 +1750,10 @@ class PublicBookingCreateView(APIView):
                 "end": event.end_datetime.isoformat().replace("+00:00", "Z"),
                 "title": event.title,
                 "timezone": link_timezone,
+                # The guest's only handle on this booking. Returned once, at the
+                # moment they can still save it - there is no way to re-issue it
+                # to someone we cannot identify.
+                "cancel_token": make_cancel_token(event.pk),
             },
             status=status.HTTP_201_CREATED,
         )
@@ -1717,8 +1775,8 @@ class PublicBookingCreateView(APIView):
             status="confirmed",
         )
 
-        # The owner organises; the prospect is an external attendee with no user
-        # account, identified only by the email they supplied.
+        # The host organises. The guest is usually external and has no account,
+        # but may turn out to be a colleague - see _guest_account.
         EventAttendee.objects.create(
             organization=link.organization,
             event=event,
@@ -1728,25 +1786,120 @@ class PublicBookingCreateView(APIView):
             is_organizer=True,
             response_status="accepted",
         )
+        guest = self._guest_account(link, data["email"])
         EventAttendee.objects.create(
             organization=link.organization,
             event=event,
+            user=guest,
             email=data["email"],
             display_name=data["name"],
             response_status="accepted",
             metadata={"source": "booking_link", "booking_link_slug": link.slug},
         )
-        return event
+        return event, guest
+
+    @staticmethod
+    def _guest_account(link, email: str):
+        """
+        Tie the booking to an account when the address belongs to one.
+
+        Only ever inferred, never revealed: the response says nothing about
+        whether a match was found, or the form would answer "does this person
+        have an account here?" for anyone who asks.
+        """
+        if link.invitee_user_id and link.invitee_user.email.lower() == email.lower():
+            return link.invitee_user
+        return (
+            User.objects.filter(
+                email__iexact=email,
+                is_active=True,
+                organization=link.organization,
+            ).first()
+        )
+
+
+class PublicBookingCancelView(APIView):
+    """
+    POST /api/public/book/<org_slug>/<link_slug>/cancel/
+
+    Let a guest call off a booking they made. The token is the whole of the
+    authorisation: it proves they hold something only issued to them at booking
+    time, which is as much as can be asked of someone with no account.
+
+    Cancelling from either side ends the meeting for both, matching how Google
+    and Outlook behave - a half-cancelled meeting is worse than none.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_booking_write"
+
+    def post(self, request, org_slug: str, link_slug: str):
+        organization = _resolve_booking_org(org_slug)
+        if not organization:
+            return _booking_not_found()
+
+        event_id = read_cancel_token((request.data or {}).get("token") or "")
+        if not event_id:
+            # Same answer as an unknown link: a bad token must not confirm that
+            # some other booking exists.
+            return _booking_not_found()
+
+        with tenant_schema_context(slug_to_schema_name(organization.slug)):
+            link = BookingLink.objects.filter(
+                organization=organization, slug=link_slug, is_deleted=False
+            ).first()
+            event = Event.objects.filter(
+                id=event_id, organization=organization
+            ).first()
+            # The token names an event; the URL has to name the same booking, or
+            # a token could be replayed against an unrelated link.
+            if not link or not event or event.calendar_id != link.calendar_id:
+                return _booking_not_found()
+
+            if event.is_deleted or event.status == "cancelled":
+                # Idempotent: a guest who clicks twice, or from a stale tab,
+                # should see the same outcome rather than an error.
+                return Response({"status": "cancelled"}, status=status.HTTP_200_OK)
+
+            guest = (
+                EventAttendee.objects.filter(event=event, is_organizer=False)
+                .exclude(user=None)
+                .first()
+            )
+            event.status = "cancelled"
+            event.is_deleted = True
+            event.save(update_fields=["status", "is_deleted", "updated_at"])
+
+            notify_booking_cancelled(
+                event,
+                host_id=link.owner_id,
+                guest_user_id=guest.user_id if guest else None,
+                actor=None,
+                by_guest=True,
+            )
+
+        # Soft-deleting is what makes the export remove the Google copy.
+        event_pk = str(event.pk)
+        schema = slug_to_schema_name(organization.slug)
+        transaction.on_commit(
+            lambda: export_event_to_google_task.delay(event_pk, tenant_schema=schema)
+        )
+        return Response({"status": "cancelled"}, status=status.HTTP_200_OK)
 
 
 class BookingLinkViewSet(viewsets.ModelViewSet):
     """
     Owner-facing CRUD for booking links.
 
-    Strictly owner-scoped: the queryset is filtered to the requesting user, so a
-    link is never listable or addressable by a colleague, even inside the same
-    organisation. `owner` and `organization` are set from the request rather
-    than accepted from the body.
+    Scoped to links you are party to - ones you host, and ones you set up for a
+    colleague. A link you are unconnected to is neither listable nor
+    addressable, even inside the same organisation, so update and delete
+    inherit that boundary from the queryset.
+
+    `organization` is set from the request. The host comes from the serializer,
+    which checks the requester shares a project with them.
 
     The public counterparts (PublicBookingLinkAvailabilityView /
     PublicBookingCreateView) are the anonymous read + book side of the same
@@ -1772,11 +1925,12 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
             return BookingLink.objects.none()
         return (
             BookingLink.objects.filter(
+                Q(owner=self.request.user) | Q(created_by=self.request.user),
                 organization=organization,
-                owner=self.request.user,
                 is_deleted=False,
             )
-            .select_related("calendar")
+            .select_related("calendar", "owner", "created_by")
+            .distinct()
             .order_by("title")
         )
 
@@ -1785,18 +1939,29 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
         if not organization:
             raise PermissionDenied("An organization is required to create booking links.")
 
-        extra = {"owner": self.request.user, "organization": organization}
-        # Default the timezone from the owner's calendar settings rather than
+        extra = {"organization": organization, "created_by": self.request.user}
+        # Default the timezone from the host's calendar settings rather than
         # asking for it. A per-link zone is an override, not something every
         # user should have to answer — and a wrong answer silently shifts every
-        # offered slot.
+        # offered slot. It must be the host's zone, not the creator's: the
+        # windows describe the host's working day.
         if not serializer.validated_data.get("timezone"):
-            settings_obj = CalendarSettings.objects.filter(
-                user=self.request.user
-            ).first()
+            host = serializer.validated_data.get("owner", self.request.user)
+            settings_obj = CalendarSettings.objects.filter(user=host).first()
             extra["timezone"] = (settings_obj and settings_obj.timezone) or "UTC"
 
-        serializer.save(**extra)
+        link = serializer.save(**extra)
+        notify_link_created(link, self.request.user)
+
+    def perform_update(self, serializer):
+        # Only the people newly attached need telling. Re-announcing the link on
+        # every rules tweak would train everyone to ignore the bell.
+        before = self.get_object()
+        previous = {before.owner_id, before.invitee_user_id}
+
+        link = serializer.save()
+        if {link.owner_id, link.invitee_user_id} - previous:
+            notify_link_created(link, self.request.user)
 
     def perform_destroy(self, instance):
         # Soft delete, matching the rest of this app. The partial unique

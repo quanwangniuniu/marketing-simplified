@@ -12,6 +12,8 @@ import {
   Loader2,
   Plus,
   Trash2,
+  User,
+  X,
 } from 'lucide-react';
 import {
   BookingLinkAPI,
@@ -22,6 +24,7 @@ import {
 import { CalendarAPI, type CalendarDTO } from '@/lib/api/calendarApi';
 import { googleCalendarApi } from '@/lib/api/googleCalendarApi';
 import { useProjectStore } from '@/lib/projectStore';
+import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
 import { detectTimezone } from './bookingSlots';
 
 /**
@@ -40,6 +43,9 @@ const DEFAULT_FORM = {
   slug: '',
   description: '',
   calendar_id: '',
+  host_id: '' as string,
+  invitee_id: '' as string,
+  invitee_email: '',
   duration_minutes: 30,
   slot_increment_minutes: 15,
   buffer_before_minutes: 0,
@@ -97,6 +103,10 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
   const projectId = useProjectStore((state) => state.activeProject?.id ?? null);
   const [links, setLinks] = useState<BookingLinkDTO[]>([]);
   const [calendars, setCalendars] = useState<CalendarDTO[]>([]);
+  const [members, setMembers] = useState<ProjectMemberData[]>([]);
+  // What the user has typed into the guest box, before it resolves to either a
+  // colleague or a plain address.
+  const [inviteeQuery, setInviteeQuery] = useState('');
   const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingCalendar, setCreatingCalendar] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -153,11 +163,61 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
     void refresh();
   }, [refresh]);
 
+  // Hosting a colleague's time is only allowed inside a shared project, so the
+  // candidates are exactly this project's members. Failure is non-fatal: the
+  // picker falls back to just you.
+  useEffect(() => {
+    if (projectId == null) {
+      setMembers([]);
+      return;
+    }
+    let cancelled = false;
+    ProjectAPI
+      .getAllProjectMembers(projectId)
+      .then((rows) => {
+        if (!cancelled) setMembers(rows.filter((row) => row.is_active));
+      })
+      .catch(() => {
+        if (!cancelled) setMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   const hasCalendar = calendars.length > 0;
   // Not a gate. Google export only picks up the primary calendar, and
   // `is_primary` is set solely by the Google connect flow — so this is worth
   // saying only when a Google connection actually exists.
   const selected = calendars.find((c) => c.id === form.calendar_id);
+  // Hosting a colleague is checked server-side against the calendar's project,
+  // so a project-less calendar can only ever book your own time. Mirror that
+  // here rather than letting the user pick something the API will reject.
+  const editingCalendarId = editingId
+    ? links.find((link) => link.id === editingId)?.calendar
+    : undefined;
+  const hostCalendar = selected ?? calendars.find((c) => c.id === editingCalendarId);
+  const canHostOthers = Boolean(hostCalendar?.project_id) && members.length > 0;
+  const hostCandidates = canHostOthers ? members : [];
+
+  const memberLabel = (member: ProjectMemberData) =>
+    member.user.name || member.user.username || member.user.email || '';
+  const chosenInvitee = members.find(
+    (member) => String(member.user.id) === form.invitee_id,
+  );
+  // Filtered client-side: a project's membership is already loaded and small
+  // enough that a round trip per keystroke would be slower, not faster.
+  const inviteeMatches =
+    canHostOthers && inviteeQuery.trim() && !form.invitee_id
+      ? members
+          .filter((member) =>
+            `${memberLabel(member)} ${member.user.email ?? ''}`
+              .toLowerCase()
+              .includes(inviteeQuery.trim().toLowerCase()),
+          )
+          .slice(0, 5)
+      : [];
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeQuery.trim());
   const wontSyncToGoogle = googleConnected && !!selected && !selected.is_primary;
 
   // Only reachable outside a project. The calendars API treats project_id as
@@ -197,6 +257,9 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
       slug: link.slug,
       description: link.description ?? '',
       calendar_id: '',
+      host_id: String(link.host?.id ?? ''),
+      invitee_id: link.invitee?.id ? String(link.invitee.id) : '',
+      invitee_email: link.invitee?.id ? '' : link.invitee?.email ?? '',
       duration_minutes: link.duration_minutes,
       slot_increment_minutes: link.slot_increment_minutes,
       buffer_before_minutes: link.buffer_before_minutes,
@@ -234,6 +297,10 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         ...form,
         slug: form.slug.trim() || slugify(form.title),
         description: form.description.trim() || null,
+        // Blank means "me"; the API reads null the same way.
+        host_id: form.host_id ? Number(form.host_id) : null,
+        invitee_id: form.invitee_id ? Number(form.invitee_id) : null,
+        invitee_email: form.invitee_id ? '' : form.invitee_email.trim(),
       };
       if (editingId) {
         // calendar_id is only sent when the user actually repointed the link;
@@ -466,6 +533,126 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
             </div>
 
             <div className="sm:col-span-2">
+              <label htmlFor="bl-host" className="block text-xs font-medium text-gray-600">
+                Whose time
+              </label>
+              <select
+                id="bl-host"
+                disabled={!canHostOthers}
+                value={form.host_id}
+                onChange={(e) => setForm({ ...form, host_id: e.target.value })}
+                data-testid="booking-link-host"
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">Me</option>
+                {hostCandidates.map((member) => (
+                  <option key={member.user.id} value={String(member.user.id)}>
+                    {member.user.name || member.user.username || member.user.email}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {canHostOthers
+                  ? 'Publishes their availability, and bookings land on their calendar.'
+                  : 'Pick a project calendar above to set this up for a colleague.'}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label htmlFor="bl-invitee" className="block text-xs font-medium text-gray-600">
+                Who it&apos;s for <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+
+              {chosenInvitee || form.invitee_email ? (
+                <div
+                  data-testid="booking-link-invitee-chip"
+                  className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-[#3CCED7]/40 bg-[#3CCED7]/10 px-3 py-2 text-sm text-[#0E8A96]"
+                >
+                  <span className="truncate">
+                    {chosenInvitee ? memberLabel(chosenInvitee) : form.invitee_email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, invitee_id: '', invitee_email: '' });
+                      setInviteeQuery('');
+                    }}
+                    data-testid="booking-link-invitee-clear"
+                    aria-label="Remove guest"
+                    className="shrink-0 rounded p-0.5 text-[#0E8A96]/70 transition-colors hover:text-[#0E8A96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    id="bl-invitee"
+                    type="text"
+                    autoComplete="off"
+                    value={inviteeQuery}
+                    onChange={(e) => setInviteeQuery(e.target.value)}
+                    placeholder="Search a colleague, or type an email address"
+                    data-testid="booking-link-invitee"
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  />
+                  {/*
+                    Two ways out of one box, as in a share dialog: pick someone
+                    we know, or commit an address for someone we don't.
+                  */}
+                  {inviteeMatches.length > 0 && (
+                    <ul
+                      data-testid="booking-link-invitee-results"
+                      className="mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+                    >
+                      {inviteeMatches.map((member) => (
+                        <li key={member.user.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm({
+                                ...form,
+                                invitee_id: String(member.user.id),
+                                invitee_email: '',
+                              });
+                              setInviteeQuery('');
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                          >
+                            <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span className="truncate">{memberLabel(member)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {inviteeMatches.length === 0 && looksLikeEmail && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm({
+                          ...form,
+                          invitee_id: '',
+                          invitee_email: inviteeQuery.trim(),
+                        });
+                        setInviteeQuery('');
+                      }}
+                      data-testid="booking-link-invitee-email"
+                      className="mt-1 w-full rounded-lg border border-dashed border-gray-300 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                      Invite <span className="font-medium">{inviteeQuery.trim()}</span> as a guest
+                    </button>
+                  )}
+                </>
+              )}
+              <p className="mt-1 text-[11px] text-gray-400">
+                {canHostOthers
+                  ? 'A colleague gets a notification. A guest just gets the link from you.'
+                  : 'Type an email address for whoever this link is going to.'}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
               <label htmlFor="bl-description" className="block text-xs font-medium text-gray-600">
                 Description
                 <span className="ml-1 font-normal text-gray-400">(optional)</span>
@@ -683,6 +870,20 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                         </span>
                       )}
                     </div>
+                    {/*
+                      created_by_name is blank when the host set the link up
+                      themselves, so this only appears when it says something
+                      the title does not.
+                    */}
+                    {link.created_by_name && (
+                      <p
+                        data-testid="booking-link-host-note"
+                        className="mt-1 flex items-center gap-1 pl-3.5 text-xs text-gray-500"
+                      >
+                        <User className="h-3 w-3 text-gray-400" />
+                        {link.host.name}&apos;s time · set up by {link.created_by_name}
+                      </p>
+                    )}
                     {link.description && (
                       <p className="mt-1 line-clamp-1 pl-3.5 text-xs text-gray-500">
                         {link.description}

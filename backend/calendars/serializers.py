@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from core.models import Organization
+from core.models import Organization, ProjectMember
 from .permissions import get_user_organization
 from .models import (
     BookingLink,
@@ -816,12 +816,28 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     Owner-facing CRUD for a booking link.
 
     Distinct from PublicBookingLinkSerializer, which is the narrow anonymous
-    view. This one exposes the scheduling rules so an owner can manage them;
-    `owner` and `organization` are never accepted from the body — the view sets
-    them from the request.
+    view. This one exposes the scheduling rules so an owner can manage them.
+    `organization` is never accepted from the body — the view sets it from the
+    request — and the host is resolved here, not taken on trust.
     """
 
     calendar_id = serializers.UUIDField(write_only=True, required=False)
+    # Readable counterpart: the UI needs the current calendar when editing, to
+    # know whether the link sits in a project and so can host a colleague.
+    calendar = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    # Who the link books time with. Omitted means "me", which is the common
+    # case; naming someone else requires sharing a project with them.
+    # allow_null: an empty picker posts null, which means "me" just as an
+    # absent field does.
+    host_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    host = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    # Who the link is for. Either a colleague who already has an account, or a
+    # bare address for someone who does not - never both.
+    invitee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    invitee = serializers.SerializerMethodField()
 
     # The org that actually owns this link, so the client never has to guess it
     # when building the public URL. It is taken from the user's own organization
@@ -857,6 +873,13 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "calendar_id",
+            "calendar",
+            "host_id",
+            "host",
+            "invitee_id",
+            "invitee",
+            "invitee_email",
+            "created_by_name",
             "duration_minutes",
             "slot_increment_minutes",
             "buffer_before_minutes",
@@ -873,12 +896,42 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "id",
             "organization_slug",
             "syncs_to_google",
+            "calendar",
+            "host",
+            "invitee",
+            "created_by_name",
             "created_at",
             "updated_at",
         ]
 
     def get_syncs_to_google(self, obj) -> bool:
         return bool(obj.calendar and obj.calendar.is_primary)
+
+    @staticmethod
+    def _display_name(user) -> str:
+        if not user:
+            return ""
+        return user.get_full_name() or user.get_username()
+
+    def get_host(self, obj) -> dict:
+        return {"id": obj.owner_id, "name": self._display_name(obj.owner)}
+
+    def get_invitee(self, obj) -> dict | None:
+        if obj.invitee_user_id:
+            return {
+                "id": obj.invitee_user_id,
+                "name": self._display_name(obj.invitee_user),
+                "email": obj.invitee_user.email,
+            }
+        if obj.invitee_email:
+            return {"id": None, "name": obj.invitee_email, "email": obj.invitee_email}
+        return None
+
+    def get_created_by_name(self, obj) -> str:
+        """Blank when the creator is the host, so the UI only shows it when it adds something."""
+        if obj.created_by_id in (None, obj.owner_id):
+            return ""
+        return self._display_name(obj.created_by)
 
     def validate_slug(self, value):
         slug = (value or "").strip().lower()
@@ -912,7 +965,88 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             )
         return calendar
 
+    def _resolve_host(self, attrs):
+        """
+        Work out whose time this link books, and prove the requester may offer it.
+
+        Publishing a colleague's availability is only legitimate inside a shared
+        project, so the check is anchored to the chosen calendar's project
+        rather than to the organisation: org membership alone would let anyone
+        expose anyone else's diary.
+        """
+        request_user = self.context["request"].user
+        host_id = attrs.pop("host_id", None)
+
+        if host_id is None:
+            return self.instance.owner if self.instance else request_user
+
+        if host_id == request_user.pk:
+            return request_user
+
+        host = User.objects.filter(pk=host_id, is_active=True).first()
+        if not host:
+            raise serializers.ValidationError({"host_id": "No such user."})
+
+        calendar = attrs.get("calendar_id") or getattr(self.instance, "calendar", None)
+        if calendar is None or calendar.project_id is None:
+            raise serializers.ValidationError(
+                {
+                    "host_id": (
+                        "Booking time for someone else needs a project calendar, "
+                        "so the shared project can be checked."
+                    )
+                }
+            )
+        shared = ProjectMember.objects.filter(
+            project_id=calendar.project_id, user=host, is_active=True
+        ).exists()
+        if not shared:
+            raise serializers.ValidationError(
+                {"host_id": "That person is not a member of this calendar's project."}
+            )
+        return host
+
+    def _resolve_invitee(self, attrs):
+        """
+        Pin the intended guest, when there is one.
+
+        A named colleague has to share the project for the same reason the host
+        does. An address is taken as given - the point of the email path is that
+        we know nothing about that person.
+        """
+        # Absent means "leave as-is"; an explicit null means "remove the guest",
+        # which is the only way to undo naming someone.
+        if "invitee_id" not in attrs:
+            return
+        invitee_id = attrs.pop("invitee_id")
+        if invitee_id is None:
+            attrs["invitee_user"] = None
+            return
+
+        invitee = User.objects.filter(pk=invitee_id, is_active=True).first()
+        if not invitee:
+            raise serializers.ValidationError({"invitee_id": "No such user."})
+
+        calendar = attrs.get("calendar_id") or getattr(self.instance, "calendar", None)
+        if calendar is None or calendar.project_id is None:
+            raise serializers.ValidationError(
+                {"invitee_id": "Naming a colleague needs a project calendar."}
+            )
+        if not ProjectMember.objects.filter(
+            project_id=calendar.project_id, user=invitee, is_active=True
+        ).exists():
+            raise serializers.ValidationError(
+                {"invitee_id": "That person is not a member of this calendar's project."}
+            )
+        attrs["invitee_user"] = invitee
+        # A known account supersedes any address typed alongside it, so the two
+        # can never disagree about who the guest is.
+        attrs["invitee_email"] = ""
+
     def validate(self, attrs):
+        attrs["owner"] = self._resolve_host(attrs)
+        self._resolve_invitee(attrs)
+
         # Surface the (organization, slug) constraint as a readable 400 rather
         # than letting it surface as a 500 from IntegrityError.
         organization = get_user_organization(self.context["request"].user)
