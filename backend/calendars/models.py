@@ -763,6 +763,15 @@ class EventAttendee(TimeStampedModel):
     # allow blank to support user autofill
     email = models.EmailField(blank=True, help_text="Attendee email address")
     display_name = models.CharField(max_length=255, blank=True, null=True)
+    phone = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text=(
+            "Optional contact number. Collected from guests booking through a "
+            "public link, who have no profile to look one up from."
+        ),
+    )
 
     attendee_type = models.CharField(max_length=20, choices=ATTENDEE_TYPE_CHOICES, default="required")
     response_status = models.CharField(max_length=20, choices=RESPONSE_STATUS_CHOICES, default="needs_action")
@@ -1377,23 +1386,25 @@ class BookingLink(TimeStampedModel):
         help_text="Calendar that bookings are written to.",
     )
 
-    # Who the link was made for. Optional: a link can just as well be posted
-    # publicly with nobody in particular in mind.
-    invitee_user = models.ForeignKey(
+    # Who the link was made for. Optional and plural: a link can be sent to
+    # several people, or posted with nobody in particular in mind.
+    invitee_users = models.ManyToManyField(
         User,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="invited_booking_links",
         help_text=(
-            "The intended guest, when they already have an account here. Gets "
-            "notified in-app; a booking they make is tied back to them."
+            "Intended guests who already have an account here. Each is notified "
+            "in-app, and a booking they make is tied back to them."
         ),
     )
-    invitee_email = models.EmailField(
+    invitee_emails = models.JSONField(
+        default=list,
         blank=True,
-        default="",
-        help_text="The intended guest when they have no account - address only.",
+        help_text=(
+            "Intended guests with no account, as a list of addresses. Kept "
+            "separate from invitee_users so a guest who later registers is not "
+            "silently promoted to an account they may not own."
+        ),
     )
 
     slug = models.SlugField(

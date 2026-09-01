@@ -44,8 +44,8 @@ const DEFAULT_FORM = {
   description: '',
   calendar_id: '',
   host_id: '' as string,
-  invitee_id: '' as string,
-  invitee_email: '',
+  invitee_ids: [] as number[],
+  invitee_emails: [] as string[],
   duration_minutes: 30,
   slot_increment_minutes: 15,
   buffer_before_minutes: 0,
@@ -202,18 +202,22 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
 
   const memberLabel = (member: ProjectMemberData) =>
     member.user.name || member.user.username || member.user.email || '';
-  const chosenInvitee = members.find(
-    (member) => String(member.user.id) === form.invitee_id,
+  const chosenInvitees = members.filter((member) =>
+    form.invitee_ids.includes(member.user.id),
   );
   // Filtered client-side: a project's membership is already loaded and small
   // enough that a round trip per keystroke would be slower, not faster.
   const inviteeMatches =
-    canHostOthers && inviteeQuery.trim() && !form.invitee_id
+    canHostOthers && inviteeQuery.trim()
       ? members
-          .filter((member) =>
-            `${memberLabel(member)} ${member.user.email ?? ''}`
-              .toLowerCase()
-              .includes(inviteeQuery.trim().toLowerCase()),
+          .filter(
+            (member) =>
+              // Already chosen people drop out of the results, the way a share
+              // dialog stops offering someone once they are on the list.
+              !form.invitee_ids.includes(member.user.id) &&
+              `${memberLabel(member)} ${member.user.email ?? ''}`
+                .toLowerCase()
+                .includes(inviteeQuery.trim().toLowerCase()),
           )
           .slice(0, 5)
       : [];
@@ -258,8 +262,12 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
       description: link.description ?? '',
       calendar_id: '',
       host_id: String(link.host?.id ?? ''),
-      invitee_id: link.invitee?.id ? String(link.invitee.id) : '',
-      invitee_email: link.invitee?.id ? '' : link.invitee?.email ?? '',
+      invitee_ids: (link.invitees ?? [])
+        .map((person) => person.id)
+        .filter((id): id is number => id != null),
+      invitee_emails: (link.invitees ?? [])
+        .filter((person) => person.id == null)
+        .map((person) => person.email),
       duration_minutes: link.duration_minutes,
       slot_increment_minutes: link.slot_increment_minutes,
       buffer_before_minutes: link.buffer_before_minutes,
@@ -299,8 +307,8 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         description: form.description.trim() || null,
         // Blank means "me"; the API reads null the same way.
         host_id: form.host_id ? Number(form.host_id) : null,
-        invitee_id: form.invitee_id ? Number(form.invitee_id) : null,
-        invitee_email: form.invitee_id ? '' : form.invitee_email.trim(),
+        invitee_ids: form.invitee_ids,
+        invitee_emails: form.invitee_emails,
       };
       if (editingId) {
         // calendar_id is only sent when the user actually repointed the link;
@@ -563,88 +571,123 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                 Who it&apos;s for <span className="font-normal text-gray-400">(optional)</span>
               </label>
 
-              {chosenInvitee || form.invitee_email ? (
-                <div
-                  data-testid="booking-link-invitee-chip"
-                  className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-[#3CCED7]/40 bg-[#3CCED7]/10 px-3 py-2 text-sm text-[#0E8A96]"
+              {/*
+                A list, not a single slot: one link can go to several people,
+                mixing colleagues who have accounts with plain addresses.
+              */}
+              {(chosenInvitees.length > 0 || form.invitee_emails.length > 0) && (
+                <ul className="mt-1 flex flex-wrap gap-1.5">
+                  {chosenInvitees.map((member) => (
+                    <li
+                      key={member.user.id}
+                      data-testid="booking-link-invitee-chip"
+                      className="flex items-center gap-1.5 rounded-full border border-[#3CCED7]/40 bg-[#3CCED7]/10 py-1 pl-2.5 pr-1.5 text-xs text-[#0E8A96]"
+                    >
+                      <span className="max-w-[14rem] truncate">{memberLabel(member)}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            invitee_ids: form.invitee_ids.filter(
+                              (id) => id !== member.user.id,
+                            ),
+                          })
+                        }
+                        aria-label={`Remove ${memberLabel(member)}`}
+                        className="shrink-0 rounded-full p-0.5 text-[#0E8A96]/70 transition-colors hover:text-[#0E8A96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                  {form.invitee_emails.map((address) => (
+                    <li
+                      key={address}
+                      data-testid="booking-link-invitee-chip"
+                      className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1.5 text-xs text-gray-700"
+                    >
+                      <span className="max-w-[14rem] truncate">{address}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            invitee_emails: form.invitee_emails.filter(
+                              (existing) => existing !== address,
+                            ),
+                          })
+                        }
+                        aria-label={`Remove ${address}`}
+                        className="shrink-0 rounded-full p-0.5 text-gray-400 transition-colors hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <input
+                id="bl-invitee"
+                type="text"
+                autoComplete="off"
+                value={inviteeQuery}
+                onChange={(e) => setInviteeQuery(e.target.value)}
+                placeholder="Search a colleague, or type an email address"
+                data-testid="booking-link-invitee"
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+              />
+              {/*
+                Two ways out of one box, as in a share dialog: pick someone we
+                know, or commit an address for someone we don't.
+              */}
+              {inviteeMatches.length > 0 && (
+                <ul
+                  data-testid="booking-link-invitee-results"
+                  className="mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
                 >
-                  <span className="truncate">
-                    {chosenInvitee ? memberLabel(chosenInvitee) : form.invitee_email}
-                  </span>
+                  {inviteeMatches.map((member) => (
+                    <li key={member.user.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm({
+                            ...form,
+                            invitee_ids: [...form.invitee_ids, member.user.id],
+                          });
+                          setInviteeQuery('');
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                        <span className="truncate">{memberLabel(member)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {inviteeMatches.length === 0 &&
+                looksLikeEmail &&
+                !form.invitee_emails.includes(inviteeQuery.trim().toLowerCase()) && (
                   <button
                     type="button"
                     onClick={() => {
-                      setForm({ ...form, invitee_id: '', invitee_email: '' });
+                      setForm({
+                        ...form,
+                        invitee_emails: [
+                          ...form.invitee_emails,
+                          inviteeQuery.trim().toLowerCase(),
+                        ],
+                      });
                       setInviteeQuery('');
                     }}
-                    data-testid="booking-link-invitee-clear"
-                    aria-label="Remove guest"
-                    className="shrink-0 rounded p-0.5 text-[#0E8A96]/70 transition-colors hover:text-[#0E8A96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
+                    data-testid="booking-link-invitee-email"
+                    className="mt-1 w-full rounded-lg border border-dashed border-gray-300 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    Invite <span className="font-medium">{inviteeQuery.trim()}</span> as a guest
                   </button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    id="bl-invitee"
-                    type="text"
-                    autoComplete="off"
-                    value={inviteeQuery}
-                    onChange={(e) => setInviteeQuery(e.target.value)}
-                    placeholder="Search a colleague, or type an email address"
-                    data-testid="booking-link-invitee"
-                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  />
-                  {/*
-                    Two ways out of one box, as in a share dialog: pick someone
-                    we know, or commit an address for someone we don't.
-                  */}
-                  {inviteeMatches.length > 0 && (
-                    <ul
-                      data-testid="booking-link-invitee-results"
-                      className="mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-                    >
-                      {inviteeMatches.map((member) => (
-                        <li key={member.user.id}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForm({
-                                ...form,
-                                invitee_id: String(member.user.id),
-                                invitee_email: '',
-                              });
-                              setInviteeQuery('');
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                          >
-                            <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                            <span className="truncate">{memberLabel(member)}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {inviteeMatches.length === 0 && looksLikeEmail && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm({
-                          ...form,
-                          invitee_id: '',
-                          invitee_email: inviteeQuery.trim(),
-                        });
-                        setInviteeQuery('');
-                      }}
-                      data-testid="booking-link-invitee-email"
-                      className="mt-1 w-full rounded-lg border border-dashed border-gray-300 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50"
-                    >
-                      Invite <span className="font-medium">{inviteeQuery.trim()}</span> as a guest
-                    </button>
-                  )}
-                </>
-              )}
+                )}
               <p className="mt-1 text-[11px] text-gray-400">
                 {canHostOthers
                   ? 'A colleague gets a notification. A guest just gets the link from you.'

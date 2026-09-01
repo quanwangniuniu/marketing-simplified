@@ -67,9 +67,12 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   // Keeping `end` as well as `start` so the confirmation can offer an
   // add-to-calendar entry without another round trip.
   const [confirmation, setConfirmation] = useState<CalendarEntry | null>(null);
+  // Kept beside the entry rather than inside it: a subscription URL is not part
+  // of the calendar entry, it is how the guest keeps that entry current.
+  const [feedUrl, setFeedUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', notes: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
 
   // Which month the picker is showing. Kept as plain year/month so paging never
   // drifts across timezones.
@@ -251,6 +254,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
       const result = await PublicBookingAPI.createBooking(orgSlug, linkSlug, {
         name: form.name.trim(),
         email: form.email.trim(),
+        phone: form.phone.trim(),
         start: selectedSlot.start,
         notes: form.notes.trim(),
       });
@@ -270,6 +274,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
             .filter(Boolean)
             .join('\n\n') || undefined,
       });
+      setFeedUrl(result.feed_url || '');
       setStage('booked');
     } catch (err) {
       const statusCode = (err as { response?: { status?: number } })?.response?.status;
@@ -330,8 +335,10 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         <p className="mt-1 text-xs text-gray-400">{timezoneLabel(timeZone)}</p>
 
         {/*
-          No confirmation email is sent yet, so this page is the visitor's only
-          record — give them a way to take the booking with them.
+          Three ways to keep the booking, because they fail differently. The
+          one-off file and the Google link work even if the confirmation email
+          bounces or never arrives; the subscription below is the only one that
+          stays correct when the meeting is later moved or cancelled.
         */}
         <div className="mt-6 border-t border-gray-100 pt-5">
           <p className="text-xs text-gray-500">Save it to your calendar</p>
@@ -359,6 +366,39 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
           <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
             The .ics file works with Apple Calendar, Outlook and most others.
           </p>
+
+          {/*
+            Subscribing beats downloading: a saved file is a snapshot and never
+            learns the meeting was called off, whereas a subscribed calendar
+            re-reads this URL and drops the entry on its own.
+          */}
+          {feedUrl && (
+            <div className="mt-4 border-t border-gray-100 pt-4 text-left">
+              <p className="text-xs font-medium text-gray-600">
+                Or subscribe, and it stays up to date
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+                Add this address to your calendar app. If the time changes or
+                the meeting is cancelled, your calendar follows.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <code
+                  data-testid="subscription-url"
+                  className="min-w-0 flex-1 truncate rounded-md bg-gray-50 px-2.5 py-1.5 text-[11px] text-gray-600"
+                >
+                  {feedUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(feedUrl)}
+                  data-testid="copy-subscription-url"
+                  className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          )}
           {/*
             The same link is written into the .ics, so a guest who closes this
             tab can still get back here from their own calendar entry.
@@ -489,6 +529,24 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     data-testid="booking-email"
+                    className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="booking-phone" className="block text-xs font-medium text-gray-600">
+                    Phone <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  {/*
+                    Optional deliberately: a number helps the host reach you if
+                    email bounces, but requiring one loses bookings.
+                  */}
+                  <input
+                    id="booking-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    data-testid="booking-phone"
                     className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
                   />
                 </div>

@@ -380,6 +380,8 @@ export interface PublicBookingLinkDTO {
 export interface BookingRequestPayload {
   name: string;
   email: string;
+  /** Optional: helps the host reach a guest whose email bounces. */
+  phone?: string;
   /** ISO 8601 with an explicit offset — the backend rejects naive datetimes. */
   start: string;
   notes?: string;
@@ -396,6 +398,8 @@ export interface BookingConfirmationDTO {
    * can still save it — there is no way to reissue it to someone anonymous.
    */
   cancel_token: string;
+  /** Subscribable calendar feed — stays in step if the booking is cancelled. */
+  feed_url: string;
 }
 
 function bookingBase(orgSlug: string, linkSlug: string): string {
@@ -465,9 +469,9 @@ export interface BookingLinkDTO {
   calendar: string;
   /** Whose time the link books. Not necessarily whoever set it up. */
   host: { id: number; name: string };
-  /** Who it was made for. id is null when they have no account here. */
-  invitee: { id: number | null; name: string; email: string } | null;
-  invitee_email: string;
+  /** Who it was made for. id is null for a guest with no account here. */
+  invitees: { id: number | null; name: string; email: string }[];
+  invitee_emails: string[];
   /** Blank when the host set the link up themselves. */
   created_by_name: string;
   created_at: string;
@@ -477,15 +481,15 @@ export interface BookingLinkDTO {
 export type BookingLinkWritePayload = Partial<
   Omit<
     BookingLinkDTO,
-    'id' | 'created_at' | 'updated_at' | 'host' | 'calendar' | 'invitee'
+    'id' | 'created_at' | 'updated_at' | 'host' | 'calendar' | 'invitees'
   >
 > & {
   /** Required on create: the calendar bookings are written to. */
   calendar_id?: string;
   /** The host. Omitted or null books your own time. */
   host_id?: number | null;
-  /** A colleague as the guest. Null clears whoever was named. */
-  invitee_id?: number | null;
+  /** Colleagues as guests. An empty list clears whoever was named. */
+  invitee_ids?: number[];
 };
 
 const BOOKING_LINKS_BASE = '/api/booking-links';

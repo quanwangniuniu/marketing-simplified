@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 
 from calendars.models import BookingLink, Calendar, CalendarSettings
 from core.models import Organization, Project, ProjectMember
+from customer.models import Customer
 
 User = get_user_model()
 
@@ -353,6 +354,64 @@ class BookingLinkHostTests(TestCase):
             listed = client.get(LIST_URL)
             assert listed.status_code == status.HTTP_200_OK
             assert [row["slug"] for row in listed.json()] == ["with-the-boss"]
+
+    def test_several_guests_can_be_named_at_once(self):
+        response = self._create(
+            host_id=self.boss.id, invitee_ids=[self.boss.id, self.creator.id]
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert set(link.invitee_users.values_list("pk", flat=True)) == {
+            self.boss.id,
+            self.creator.id,
+        }
+
+    def test_named_guests_and_plain_addresses_can_be_mixed(self):
+        response = self._create(
+            invitee_ids=[self.boss.id],
+            invitee_emails=["stranger@example.com", "Other@Example.com"],
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert list(link.invitee_users.values_list("pk", flat=True)) == [self.boss.id]
+        # Lower-cased so the same guest cannot be listed twice by casing alone.
+        assert link.invitee_emails == ["stranger@example.com", "other@example.com"]
+
+    def test_a_csm_customer_on_the_project_can_be_named(self):
+        # Ray's case: someone in CSM attached to this project is "already in the
+        # system", even though they are not a project member.
+        client_user = User.objects.create_user(
+            username="csmclient", email="client@acme-customer.com", password="x",
+            organization=self.org,
+        )
+        Customer.objects.create(
+            user=client_user,
+            email=client_user.email,
+            full_name="Acme Client",
+            project=self.project,
+        )
+        response = self._create(invitee_ids=[client_user.id])
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert list(link.invitee_users.values_list("pk", flat=True)) == [client_user.id]
+
+    def test_a_csm_customer_on_another_project_cannot_be_named(self):
+        other_project = Project.objects.create(
+            name="Other Project", organization=self.org, owner=self.creator
+        )
+        client_user = User.objects.create_user(
+            username="othersclient", email="other@acme-customer.com", password="x",
+            organization=self.org,
+        )
+        Customer.objects.create(
+            user=client_user,
+            email=client_user.email,
+            full_name="Other Client",
+            project=other_project,
+        )
+        response = self._create(invitee_ids=[client_user.id])
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "invitee_ids" in error_fields(response)
 
     def test_an_unrelated_colleague_still_sees_nothing(self):
         assert self._create(host_id=self.boss.id).status_code == status.HTTP_201_CREATED

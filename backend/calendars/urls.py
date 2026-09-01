@@ -26,6 +26,7 @@ from .views import (
     PublicBookingLinkAvailabilityView,
     PublicBookingCancelView,
     PublicBookingCreateView,
+    PublicBookingFeedView,
     BookingLinkViewSet,
 )
 
@@ -167,5 +168,12 @@ urlpatterns = [
         "public/book/<slug:org_slug>/<slug:link_slug>/cancel/",
         PublicBookingCancelView.as_view(),
         name="public-booking-cancel",
+    ),
+    # Named calendar.ics rather than a trailing-slash route: calendar clients
+    # key off the extension when deciding to subscribe.
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/calendar.ics",
+        PublicBookingFeedView.as_view(),
+        name="public-booking-feed",
     ),
 ]

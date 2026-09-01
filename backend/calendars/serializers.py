@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.models import Organization, ProjectMember
+from customer.models import Customer
 from .permissions import get_user_organization
 from .models import (
     BookingLink,
@@ -452,6 +453,7 @@ class EventAttendeeSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "email",
+            "phone",
             "display_name",
             "attendee_type",
             "response_status",
@@ -784,6 +786,12 @@ class BookingRequestSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=255)
     email = serializers.EmailField()
+    # Optional on purpose: a phone number helps the host reach a guest whose
+    # email bounces, but demanding one loses bookings from people who won't
+    # give it out.
+    phone = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, default=""
+    )
     start = serializers.DateTimeField(
         help_text="Slot start, ISO 8601 with offset. Must match an offered slot."
     )
@@ -834,10 +842,15 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     host = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
 
-    # Who the link is for. Either a colleague who already has an account, or a
-    # bare address for someone who does not - never both.
-    invitee_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    invitee = serializers.SerializerMethodField()
+    # Who the link is for. A link can be sent to several people at once, mixing
+    # colleagues who have accounts with plain addresses for those who don't.
+    invitee_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        allow_empty=True,
+    )
+    invitees = serializers.SerializerMethodField()
 
     # The org that actually owns this link, so the client never has to guess it
     # when building the public URL. It is taken from the user's own organization
@@ -876,9 +889,9 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "calendar",
             "host_id",
             "host",
-            "invitee_id",
-            "invitee",
-            "invitee_email",
+            "invitee_ids",
+            "invitees",
+            "invitee_emails",
             "created_by_name",
             "duration_minutes",
             "slot_increment_minutes",
@@ -898,7 +911,7 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             "syncs_to_google",
             "calendar",
             "host",
-            "invitee",
+            "invitees",
             "created_by_name",
             "created_at",
             "updated_at",
@@ -916,16 +929,17 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     def get_host(self, obj) -> dict:
         return {"id": obj.owner_id, "name": self._display_name(obj.owner)}
 
-    def get_invitee(self, obj) -> dict | None:
-        if obj.invitee_user_id:
-            return {
-                "id": obj.invitee_user_id,
-                "name": self._display_name(obj.invitee_user),
-                "email": obj.invitee_user.email,
-            }
-        if obj.invitee_email:
-            return {"id": None, "name": obj.invitee_email, "email": obj.invitee_email}
-        return None
+    def get_invitees(self, obj) -> list[dict]:
+        """Accounts first, then bare addresses — one flat list for the UI to render."""
+        people = [
+            {"id": user.pk, "name": self._display_name(user), "email": user.email}
+            for user in obj.invitee_users.all()
+        ]
+        people += [
+            {"id": None, "name": address, "email": address}
+            for address in (obj.invitee_emails or [])
+        ]
+        return people
 
     def get_created_by_name(self, obj) -> str:
         """Blank when the creator is the host, so the UI only shows it when it adds something."""
@@ -1006,46 +1020,77 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             )
         return host
 
-    def _resolve_invitee(self, attrs):
+    def _resolve_invitees(self, attrs):
         """
-        Pin the intended guest, when there is one.
+        Pin the intended guests, if any were named.
 
-        A named colleague has to share the project for the same reason the host
-        does. An address is taken as given - the point of the email path is that
-        we know nothing about that person.
+        Two populations count as "already in the system" for a project: the
+        colleagues on it, and the CSM customers attached to it. Both are checked
+        against the calendar's project for the same reason the host is - being
+        in the organisation is not consent to have your diary handed out.
+
+        Addresses are taken as given. The whole point of that path is that we
+        know nothing about the person behind it.
         """
-        # Absent means "leave as-is"; an explicit null means "remove the guest",
-        # which is the only way to undo naming someone.
-        if "invitee_id" not in attrs:
+        # Absent means "leave as-is". An empty list is how the last guest is
+        # removed, so the two cannot be collapsed.
+        if "invitee_ids" not in attrs:
             return
-        invitee_id = attrs.pop("invitee_id")
-        if invitee_id is None:
-            attrs["invitee_user"] = None
+        invitee_ids = attrs.pop("invitee_ids") or []
+        if not invitee_ids:
+            attrs["invitee_users"] = []
             return
-
-        invitee = User.objects.filter(pk=invitee_id, is_active=True).first()
-        if not invitee:
-            raise serializers.ValidationError({"invitee_id": "No such user."})
 
         calendar = attrs.get("calendar_id") or getattr(self.instance, "calendar", None)
         if calendar is None or calendar.project_id is None:
             raise serializers.ValidationError(
-                {"invitee_id": "Naming a colleague needs a project calendar."}
+                {"invitee_ids": "Naming people needs a project calendar."}
             )
-        if not ProjectMember.objects.filter(
-            project_id=calendar.project_id, user=invitee, is_active=True
-        ).exists():
+
+        found = list(User.objects.filter(pk__in=invitee_ids, is_active=True))
+        if len(found) != len(set(invitee_ids)):
+            raise serializers.ValidationError({"invitee_ids": "No such user."})
+
+        allowed = set(
+            ProjectMember.objects.filter(
+                project_id=calendar.project_id,
+                user_id__in=invitee_ids,
+                is_active=True,
+            ).values_list("user_id", flat=True)
+        )
+        allowed |= set(
+            Customer.objects.filter(
+                project_id=calendar.project_id,
+                user_id__in=invitee_ids,
+                is_active=True,
+            ).values_list("user_id", flat=True)
+        )
+        outside = [u for u in found if u.pk not in allowed]
+        if outside:
             raise serializers.ValidationError(
-                {"invitee_id": "That person is not a member of this calendar's project."}
+                {
+                    "invitee_ids": (
+                        f"Not on this calendar's project: "
+                        f"{', '.join(self._display_name(u) for u in outside)}."
+                    )
+                }
             )
-        attrs["invitee_user"] = invitee
-        # A known account supersedes any address typed alongside it, so the two
-        # can never disagree about who the guest is.
-        attrs["invitee_email"] = ""
+        attrs["invitee_users"] = found
+
+    def validate_invitee_emails(self, value):
+        """Addresses only, de-duplicated, so one guest cannot be mailed twice."""
+        cleaned: list[str] = []
+        for raw in value or []:
+            address = str(raw).strip().lower()
+            if not address:
+                continue
+            if address not in cleaned:
+                cleaned.append(address)
+        return cleaned
 
     def validate(self, attrs):
         attrs["owner"] = self._resolve_host(attrs)
-        self._resolve_invitee(attrs)
+        self._resolve_invitees(attrs)
 
         # Surface the (organization, slug) constraint as a readable 400 rather
         # than letting it surface as a 500 from IntegrityError.
@@ -1067,10 +1112,19 @@ class BookingLinkSerializer(serializers.ModelSerializer):
         if calendar is None:
             raise serializers.ValidationError({"calendar_id": "This field is required."})
         validated_data["calendar"] = calendar
-        return super().create(validated_data)
+        # A many-to-many cannot be set before the row exists.
+        invitees = validated_data.pop("invitee_users", None)
+        link = super().create(validated_data)
+        if invitees is not None:
+            link.invitee_users.set(invitees)
+        return link
 
     def update(self, instance, validated_data):
         calendar = validated_data.pop("calendar_id", None)
         if calendar is not None:
             validated_data["calendar"] = calendar
-        return super().update(instance, validated_data)
+        invitees = validated_data.pop("invitee_users", None)
+        link = super().update(instance, validated_data)
+        if invitees is not None:
+            link.invitee_users.set(invitees)
+        return link

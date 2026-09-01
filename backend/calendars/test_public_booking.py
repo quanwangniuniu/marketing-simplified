@@ -11,13 +11,14 @@ from datetime import time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from calendars.models import BookingLink, Calendar, Event
+from calendars.models import BookingLink, Calendar, Event, EventAttendee
 from core.models import Organization
 from core.services.tenant import slug_to_schema_name
 from core.tenant_context import tenant_schema_context
@@ -113,17 +114,51 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         # A display name is intentionally exposed so the page can say who it is.
         assert body["owner_name"] == "Ada Lovelace"
 
+    def test_a_phone_number_reaches_the_host_on_the_attendee(self):
+        # Ray asked for a contact number, so it has to land somewhere the host
+        # can actually read it, not just be accepted and dropped.
+        start = next_weekday_at(11)
+        response = self.client.post(
+            self.booking_url,
+            {
+                "name": "Grace Hopper",
+                "email": "grace@example.com",
+                "phone": "+44 7700 900123",
+                "start": start.isoformat().replace("+00:00", "Z"),
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        with in_org(self.org):
+            guest = EventAttendee.objects.get(is_organizer=False)
+        assert guest.phone == "+44 7700 900123"
+
+    def test_a_booking_without_a_phone_number_still_goes_through(self):
+        # Optional: demanding one would lose bookings from people who won't
+        # hand it over.
+        start = next_weekday_at(12)
+        response = self.client.post(
+            self.booking_url,
+            {
+                "name": "Alan Turing",
+                "email": "alan@example.com",
+                "start": start.isoformat().replace("+00:00", "Z"),
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+
     def test_the_intended_guest_is_never_exposed_to_whoever_holds_the_url(self):
         # Anyone with the URL gets this payload. Naming the person it was sent
         # to would hand a stranger an address the owner never published.
         with in_org(self.org):
-            self.link.invitee_email = "private-guest@example.com"
-            self.link.save(update_fields=["invitee_email"])
+            self.link.invitee_emails = ["private-guest@example.com"]
+            self.link.save(update_fields=["invitee_emails"])
         with patch(FREEBUSY_PATH, return_value=[]):
             body = self.client.get(self.availability_url).json()
         assert "private-guest@example.com" not in str(body)
-        assert "invitee" not in body
-        assert "invitee_email" not in body
+        assert "invitees" not in body
+        assert "invitee_emails" not in body
 
     def test_busy_time_is_excluded_from_offered_slots(self):
         blocked = next_weekday_at(12)
@@ -387,6 +422,78 @@ class PublicBookingCancelTests(PublicBookingTestBase):
             format="json",
         )
         assert again.status_code == status.HTTP_201_CREATED, again.json()
+
+    def test_the_feed_serves_the_booking_as_a_calendar(self):
+        token = self._book()["cancel_token"]
+        response = self.client.get(f"{self.availability_url}calendar.ics?token={token}")
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"].startswith("text/calendar")
+        body = response.content.decode()
+        assert "BEGIN:VEVENT" in body
+        assert "STATUS:CONFIRMED" in body
+
+    def test_the_feed_reports_a_cancellation_so_subscribers_drop_it(self):
+        # This is the only way a guest with no account hears that the host
+        # called the meeting off.
+        booked = self._book()
+        self.client.post(
+            self.cancel_url, {"token": booked["cancel_token"]}, format="json"
+        )
+        response = self.client.get(
+            f"{self.availability_url}calendar.ics?token={booked['cancel_token']}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert "STATUS:CANCELLED" in response.content.decode()
+
+    def test_the_feed_is_not_cached_or_the_cancellation_never_lands(self):
+        token = self._book()["cancel_token"]
+        response = self.client.get(f"{self.availability_url}calendar.ics?token={token}")
+        assert "no-store" in response["Cache-Control"]
+
+    def test_the_feed_refuses_a_forged_token(self):
+        self._book()
+        response = self.client.get(f"{self.availability_url}calendar.ics?token=nope")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_the_confirmation_carries_a_subscription_url(self):
+        assert "calendar.ics" in self._book()["feed_url"]
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_the_guest_is_emailed_the_booking_with_both_links(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            booked = self._book()
+
+        assert len(mail.outbox) == 1
+        message = mail.outbox[0]
+        assert message.to == ["grace@example.com"]
+        # Everything they need after closing the tab.
+        assert "cancel?token=" in message.body
+        assert "calendar.ics" in message.body
+        assert booked["title"] in message.subject
+        # The calendar entry itself rides along as an attachment.
+        assert message.attachments
+        assert message.attachments[0][0] == "booking.ics"
+        assert "BEGIN:VCALENDAR" in message.attachments[0][1]
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_a_mail_failure_does_not_fail_the_booking(self):
+        # The meeting is real whether or not the email got out.
+        with patch(
+            "calendars.tasks.EmailMultiAlternatives.send",
+            side_effect=RuntimeError("smtp down"),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                start = next_weekday_at(14)
+                response = self.client.post(
+                    self.booking_url,
+                    {
+                        "name": "Grace Hopper",
+                        "email": "grace@example.com",
+                        "start": start.isoformat().replace("+00:00", "Z"),
+                    },
+                    format="json",
+                )
+        assert response.status_code == status.HTTP_201_CREATED
 
     def test_cancelling_removes_the_google_copy_too(self):
         token = self._book()["cancel_token"]

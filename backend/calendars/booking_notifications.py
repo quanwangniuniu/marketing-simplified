@@ -47,12 +47,20 @@ def _notify(**kwargs):
         return None
 
 
-def notify_link_created(link, actor) -> None:
-    """Tell the host, and any named guest, that a link now exists."""
+def notify_link_created(link, actor, only_ids: set[int] | None = None) -> None:
+    """
+    Tell the host, and any named guests, that a link now exists.
+
+    `only_ids` narrows it to people newly attached, so editing a link to add one
+    guest does not re-announce it to everyone already on it.
+    """
     actor_id = getattr(actor, "pk", None)
     actor_name = _display_name(actor)
 
-    if link.owner_id:
+    def wanted(user_id) -> bool:
+        return only_ids is None or user_id in only_ids
+
+    if link.owner_id and wanted(link.owner_id):
         _notify(
             recipient_id=link.owner_id,
             actor_id=actor_id,
@@ -65,9 +73,13 @@ def notify_link_created(link, actor) -> None:
             action_url=LINKS_URL,
         )
 
-    if link.invitee_user_id and link.invitee_user_id != link.owner_id:
+    # Every named guest with an account, minus the host - who has already been
+    # told, in their own words, just above.
+    for invitee_id in link.invitee_users.values_list("pk", flat=True):
+        if invitee_id == link.owner_id or not wanted(invitee_id):
+            continue
         _notify(
-            recipient_id=link.invitee_user_id,
+            recipient_id=invitee_id,
             actor_id=actor_id,
             category=NotificationCategory.MEETINGS,
             event_type=NotificationEventType.MEETING_PARTICIPANT_ADDED,

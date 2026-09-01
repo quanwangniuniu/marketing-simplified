@@ -57,8 +57,8 @@ const EXISTING_LINK = {
   is_active: true,
   calendar: '22222222-2222-2222-2222-222222222222',
   host: { id: 1, name: 'Ada Lovelace' },
-  invitee: null,
-  invitee_email: '',
+  invitees: [],
+  invitee_emails: [],
   created_by_name: '',
   created_at: '2026-08-01T00:00:00Z',
   updated_at: '2026-08-01T00:00:00Z',
@@ -414,7 +414,7 @@ test.describe('Booking link management', () => {
     await expect(page.getByTestId('booking-link-host')).toBeDisabled();
   });
 
-  test('a guest can be picked by name, or entered as an address', async ({ page }) => {
+  test('several guests can be added, by name or by address', async ({ page }) => {
     // Two ways out of one box, as in a share dialog: a colleague we know, or an
     // address for someone we don't.
     await mockCalendars(page);
@@ -459,19 +459,16 @@ test.describe('Booking link management', () => {
     // A colleague, found by typing part of their name.
     await page.getByTestId('booking-link-invitee').fill('grace');
     await page.getByTestId('booking-link-invitee-results').getByText('Grace Hopper').click();
-    await expect(page.getByTestId('booking-link-invitee-chip')).toContainText('Grace Hopper');
+    await expect(page.getByTestId('booking-link-invitee-chip')).toHaveCount(1);
 
-    // Clearing puts the box back, and an address commits as a plain guest.
-    await page.getByTestId('booking-link-invitee-clear').click();
+    // A second guest, this time an address, alongside the first.
     await page.getByTestId('booking-link-invitee').fill('stranger@example.com');
     await page.getByTestId('booking-link-invitee-email').click();
-    await expect(page.getByTestId('booking-link-invitee-chip')).toContainText(
-      'stranger@example.com',
-    );
+    await expect(page.getByTestId('booking-link-invitee-chip')).toHaveCount(2);
 
     await page.getByTestId('booking-link-save').click();
-    await expect.poll(() => submitted?.invitee_email).toBe('stranger@example.com');
-    await expect.poll(() => submitted?.invitee_id).toBe(null);
+    await expect.poll(() => submitted?.invitee_ids).toEqual([42]);
+    await expect.poll(() => submitted?.invitee_emails).toEqual(['stranger@example.com']);
   });
 
   test('the calendar page carries the entry point for booking links', async ({

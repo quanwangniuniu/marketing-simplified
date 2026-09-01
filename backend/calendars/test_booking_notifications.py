@@ -73,14 +73,29 @@ class BookingLinkNotificationTests(TestCase):
         assert Notification.objects.count() == 0
 
     def test_a_named_guest_is_told(self):
-        response = self._create(host_id=self.host.id, invitee_id=self.guest.id)
+        response = self._create(host_id=self.host.id, invitee_ids=[self.guest.id])
         assert response.status_code == status.HTTP_201_CREATED, response.json()
         assert Notification.objects.filter(recipient=self.guest).count() == 1
+
+    def test_every_named_guest_is_told(self):
+        second = User.objects.create_user(
+            username="guest2", email="guest2@notify.com", password="x",
+            organization=self.org,
+        )
+        ProjectMember.objects.create(
+            project=self.project, user=second, role="member", is_active=True
+        )
+        response = self._create(
+            host_id=self.host.id, invitee_ids=[self.guest.id, second.id]
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        assert Notification.objects.filter(recipient=self.guest).count() == 1
+        assert Notification.objects.filter(recipient=second).count() == 1
 
     def test_an_emailed_guest_gets_no_in_app_notification(self):
         # Nothing to notify: an address is not an account.
         response = self._create(
-            host_id=self.host.id, invitee_email="stranger@example.com"
+            host_id=self.host.id, invitee_emails=["stranger@example.com"]
         )
         assert response.status_code == status.HTTP_201_CREATED, response.json()
         assert Notification.objects.filter(recipient=self.host).count() == 1
@@ -104,10 +119,32 @@ class BookingLinkNotificationTests(TestCase):
         Notification.objects.all().delete()
 
         response = self.client.patch(
-            f"{LIST_URL}{link_id}/", {"invitee_id": self.guest.id}, format="json"
+            f"{LIST_URL}{link_id}/", {"invitee_ids": [self.guest.id]}, format="json"
         )
         assert response.status_code == status.HTTP_200_OK, response.json()
         assert Notification.objects.filter(recipient=self.guest).count() == 1
+
+    def test_adding_a_second_guest_leaves_the_first_alone(self):
+        created = self._create(host_id=self.host.id, invitee_ids=[self.guest.id])
+        link_id = created.json()["id"]
+        Notification.objects.all().delete()
+
+        second = User.objects.create_user(
+            username="guest3", email="guest3@notify.com", password="x",
+            organization=self.org,
+        )
+        ProjectMember.objects.create(
+            project=self.project, user=second, role="member", is_active=True
+        )
+        response = self.client.patch(
+            f"{LIST_URL}{link_id}/",
+            {"invitee_ids": [self.guest.id, second.id]},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        # Only the newcomer is interrupted; the first guest already knew.
+        assert Notification.objects.filter(recipient=second).count() == 1
+        assert Notification.objects.filter(recipient=self.guest).count() == 0
 
     def test_a_failing_notification_does_not_sink_the_link(self):
         from unittest.mock import patch

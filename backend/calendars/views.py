@@ -74,6 +74,13 @@ from .serializers import (
     BookingRequestSerializer,
     BookingLinkSerializer,
 )
+from urllib.parse import quote
+
+from django.http import HttpResponse
+from django.urls import reverse
+
+from .booking_ics import build_booking_ics
+from .tasks import send_booking_confirmation_task
 from .booking_notifications import (
     notify_booking_cancelled,
     notify_booking_made,
@@ -417,9 +424,13 @@ class EventViewSet(viewsets.ModelViewSet):
                 return Event.objects.none()
 
         calendars = _get_accessible_calendars(user, project_id=project_id)
-        queryset = Event.objects.select_related("calendar", "created_by").filter(
-            calendar__in=calendars,
-            is_deleted=False,
+        queryset = (
+            Event.objects.select_related("calendar", "created_by")
+            .filter(
+                _visible_events_q(user, calendars, get_user_organization(user)),
+                is_deleted=False,
+            )
+            .distinct()
         )
 
         calendar_ids_param = self.request.query_params.get("calendar_ids")
@@ -593,9 +604,13 @@ class EventSearchView(generics.ListAPIView):
                 return Event.objects.none()
 
         calendars = _get_accessible_calendars(user, project_id=project_id)
-        queryset = Event.objects.select_related("calendar", "created_by").filter(
-            calendar__in=calendars,
-            is_deleted=False,
+        queryset = (
+            Event.objects.select_related("calendar", "created_by")
+            .filter(
+                _visible_events_q(user, calendars, get_user_organization(user)),
+                is_deleted=False,
+            )
+            .distinct()
         )
 
         q = self.request.query_params.get("q")
@@ -697,6 +712,24 @@ def _get_accessible_calendars(
 
 
 
+def _visible_events_q(user, calendars, organization) -> Q:
+    """
+    Events a user may see: on a calendar they can reach, or one they attend.
+
+    Attendance conferring visibility is what lets someone who booked time find
+    that meeting in their own week. The event lives on the host's calendar, so
+    without this clause an attendee is invisible to themselves.
+
+    The organisation is pinned explicitly on the attendee branch. Orgs without
+    their own schema share `public`, where an unscoped attendee lookup would
+    reach across tenants.
+    """
+    attending = Q(attendees__user=user, attendees__is_deleted=False)
+    if organization is not None:
+        attending &= Q(organization=organization)
+    return Q(calendar__in=calendars) | attending
+
+
 def _build_calendar_view_payload(
     user,
     start_dt,
@@ -706,22 +739,20 @@ def _build_calendar_view_payload(
     view_type: str,
 ):
     calendars = _get_accessible_calendars(user, calendar_ids, project_id=project_id)
-    if not calendars.exists():
-        return {
-            "view_type": view_type,
-            "start_date": start_dt.isoformat().replace("+00:00", "Z"),
-            "end_date": end_dt.isoformat().replace("+00:00", "Z"),
-            "events": [],
-            "calendars": [],
-        }
+    organization = get_user_organization(user)
 
+    # No early return on an empty calendar list: someone can attend a meeting
+    # on a calendar they cannot otherwise reach, and that is exactly the case
+    # a booked guest is in.
     events_qs = _events_intersecting_range(
         start_dt,
         end_dt,
-        Event.objects.select_related("calendar", "created_by", "recurrence_rule").filter(
-            calendar__in=calendars,
+        Event.objects.select_related("calendar", "created_by", "recurrence_rule")
+        .filter(
+            _visible_events_q(user, calendars, organization),
             is_deleted=False,
-        ),
+        )
+        .distinct(),
     )
 
     instances: list[Any] = []
@@ -1743,6 +1774,25 @@ class PublicBookingCreateView(APIView):
             lambda: export_event_to_google_task.delay(event_id, tenant_schema=schema)
         )
 
+        token = make_cancel_token(event.pk)
+        cancel_url = request.build_absolute_uri(
+            f"/book/{quote(org_slug)}/{quote(link_slug)}/cancel?token={quote(token)}"
+        )
+        feed_url = request.build_absolute_uri(
+            reverse(
+                "public-booking-feed",
+                kwargs={"org_slug": org_slug, "link_slug": link_slug},
+            )
+            + f"?token={quote(token)}"
+        )
+        self._queue_confirmation_email(
+            event=event,
+            link=link,
+            data=data,
+            cancel_url=cancel_url,
+            feed_url=feed_url,
+        )
+
         return Response(
             {
                 "status": "confirmed",
@@ -1750,12 +1800,44 @@ class PublicBookingCreateView(APIView):
                 "end": event.end_datetime.isoformat().replace("+00:00", "Z"),
                 "title": event.title,
                 "timezone": link_timezone,
-                # The guest's only handle on this booking. Returned once, at the
-                # moment they can still save it - there is no way to re-issue it
-                # to someone we cannot identify.
-                "cancel_token": make_cancel_token(event.pk),
+                # The guest's handle on this booking. Also emailed, so closing
+                # the tab is no longer the end of it.
+                "cancel_token": token,
+                # Subscribing keeps their calendar in step with ours - the only
+                # way a guest with no account hears about a cancellation.
+                "feed_url": feed_url,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+    def _queue_confirmation_email(self, *, event, link, data, cancel_url, feed_url):
+        """
+        Email is the guest's only channel: no account, so no notifications.
+
+        Fired after commit so a booking is never emailed before it is durable,
+        and never blocks the response.
+        """
+        ics_body = build_booking_ics(
+            uid=f"{event.pk}@marketing-simplified",
+            title=event.title,
+            start=event.start_datetime,
+            end=event.end_datetime,
+            description=event.description or "",
+            url=feed_url,
+            organizer_email=link.owner.email or "",
+        )
+        payload = {
+            "to_email": data["email"],
+            "guest_name": data["name"],
+            "host_name": link.owner.get_full_name() or link.owner.get_username(),
+            "title": event.title,
+            "when": event.start_datetime.strftime("%A %d %B %Y, %H:%M UTC"),
+            "ics_body": ics_body,
+            "cancel_url": cancel_url,
+            "feed_url": feed_url,
+        }
+        transaction.on_commit(
+            lambda: send_booking_confirmation_task.delay(**payload)
         )
 
     @transaction.atomic
@@ -1792,6 +1874,7 @@ class PublicBookingCreateView(APIView):
             event=event,
             user=guest,
             email=data["email"],
+            phone=data.get("phone", ""),
             display_name=data["name"],
             response_status="accepted",
             metadata={"source": "booking_link", "booking_link_slug": link.slug},
@@ -1807,8 +1890,9 @@ class PublicBookingCreateView(APIView):
         whether a match was found, or the form would answer "does this person
         have an account here?" for anyone who asks.
         """
-        if link.invitee_user_id and link.invitee_user.email.lower() == email.lower():
-            return link.invitee_user
+        named = link.invitee_users.filter(email__iexact=email).first()
+        if named:
+            return named
         return (
             User.objects.filter(
                 email__iexact=email,
@@ -1816,6 +1900,65 @@ class PublicBookingCreateView(APIView):
                 organization=link.organization,
             ).first()
         )
+
+
+class PublicBookingFeedView(APIView):
+    """
+    GET /api/public/book/<org_slug>/<link_slug>/calendar.ics?token=...
+
+    The guest's booking as a subscribable calendar feed.
+
+    Distinct from the .ics the browser builds at confirmation time, which is a
+    snapshot: once saved, it never learns that the host cancelled. A calendar
+    app subscribed to this URL re-fetches it, so a cancellation reaches the
+    guest even though they have no account and no notification of any kind.
+
+    Read-only and idempotent, so unlike the cancel endpoint it is safe for the
+    prefetching that mail and chat clients do.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_booking_read"
+
+    def get(self, request, org_slug: str, link_slug: str):
+        organization = _resolve_booking_org(org_slug)
+        if not organization:
+            return _booking_not_found()
+
+        event_id = read_cancel_token(request.query_params.get("token") or "")
+        if not event_id:
+            return _booking_not_found()
+
+        with tenant_schema_context(slug_to_schema_name(organization.slug)):
+            link = BookingLink.objects.filter(
+                organization=organization, slug=link_slug, is_deleted=False
+            ).first()
+            event = Event.objects.filter(
+                id=event_id, organization=organization
+            ).first()
+            if not link or not event or event.calendar_id != link.calendar_id:
+                return _booking_not_found()
+
+            cancelled = bool(event.is_deleted) or event.status == "cancelled"
+            body = build_booking_ics(
+                uid=f"{event.pk}@marketing-simplified",
+                title=event.title,
+                start=event.start_datetime,
+                end=event.end_datetime,
+                description=event.description or "",
+                url=request.build_absolute_uri(),
+                organizer_email=link.owner.email or "",
+                cancelled=cancelled,
+            )
+
+        response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
+        response["Content-Disposition"] = 'inline; filename="booking.ics"'
+        # The whole point is that subscribers see changes; a cached copy would
+        # keep showing a meeting that has been called off.
+        response["Cache-Control"] = "no-store, max-age=0"
+        return response
 
 
 class PublicBookingCancelView(APIView):
@@ -1957,11 +2100,15 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
         # Only the people newly attached need telling. Re-announcing the link on
         # every rules tweak would train everyone to ignore the bell.
         before = self.get_object()
-        previous = {before.owner_id, before.invitee_user_id}
+        previous = {before.owner_id} | set(
+            before.invitee_users.values_list("pk", flat=True)
+        )
 
         link = serializer.save()
-        if {link.owner_id, link.invitee_user_id} - previous:
-            notify_link_created(link, self.request.user)
+        current = {link.owner_id} | set(link.invitee_users.values_list("pk", flat=True))
+        newly_added = current - previous
+        if newly_added:
+            notify_link_created(link, self.request.user, only_ids=newly_added)
 
     def perform_destroy(self, instance):
         # Soft delete, matching the rest of this app. The partial unique

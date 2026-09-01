@@ -75,6 +75,7 @@ test.describe('Public booking link', () => {
           title: 'Intro Call with Grace Hopper',
           timezone: 'UTC',
           cancel_token: 'signed-token-abc',
+          feed_url: 'https://app.example/api/public/book/acme/intro-call/calendar.ics?token=signed-token-abc',
         }),
       });
     });
@@ -102,6 +103,7 @@ test.describe('Public booking link', () => {
     await expect(page.getByTestId('booking-form')).toBeVisible();
     await page.getByTestId('booking-name').fill('Grace Hopper');
     await page.getByTestId('booking-email').fill('grace@example.com');
+    await page.getByTestId('booking-phone').fill('+44 7700 900123');
     await page.getByTestId('booking-notes').fill('Looking forward to it.');
     await page.getByTestId('booking-submit').click();
 
@@ -125,6 +127,12 @@ test.describe('Public booking link', () => {
       'href',
       /\/book\/acme\/intro-call\/cancel\?token=signed-token-abc$/,
     );
+
+    // Subscribing is what keeps their calendar in step after a cancellation.
+    await expect(page.getByTestId('subscription-url')).toContainText('calendar.ics');
+
+    // Optional, but it has to reach the API when given.
+    expect(submitted).toMatchObject({ phone: '+44 7700 900123' });
 
     // The slot's exact instant must reach the API, not a re-derived local time.
     expect(submitted).toMatchObject({
