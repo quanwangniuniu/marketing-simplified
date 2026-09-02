@@ -316,10 +316,13 @@ class LoginView(APIView):
             "user_agent": request.META.get("HTTP_USER_AGENT", ""),
             "created_at": datetime.datetime.utcnow().isoformat(),
         }
-        cap = user.current_organization.max_concurrent_sessions if user.current_organization else 5
-        evicted_jtis = SessionRegistry.register_session(user.pk, jti, meta, cap)
-        for evicted_jti in evicted_jtis:
-            SessionRegistry.evict_session(user.pk, evicted_jti)
+        try:
+            cap = user.current_organization.max_concurrent_sessions if user.current_organization else 5
+            evicted_jtis = SessionRegistry.register_session(user.pk, jti, meta, cap)
+            for evicted_jti in evicted_jtis:
+                SessionRegistry.evict_session(user.pk, evicted_jti)
+        except Exception:
+            logger.exception("Failed to register session in Redis for user %s", user.pk)
 
         profile_data = UserProfileSerializer(user, context={'request': request}).data
         
