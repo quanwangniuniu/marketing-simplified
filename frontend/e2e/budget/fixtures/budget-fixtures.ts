@@ -297,7 +297,7 @@ export async function fetchTaskJson(
 
 export async function postTaskAction(
   page: Page,
-  taskRef: { id: number; slug: string } | number | string,
+  taskRef: { slug: string } | number | string,
   action: string,
   email: string,
   body: Record<string, unknown> = {},
