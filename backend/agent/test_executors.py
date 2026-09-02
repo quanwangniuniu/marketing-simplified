@@ -1,8 +1,19 @@
-""" Tests for functions inside executors.py """
+"""Tests for functions inside executors.py."""
+
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from .executors import _infer_value_type, _compute_column_stats
+from .approval_gate import ExternalCommitResult
+from .executors import CustomAPIExecutor, _compute_column_stats, _infer_value_type
+
+
+class _StepStub:
+    """Small stand-in for a workflow step with executor configuration."""
+
+    def __init__(self, config=None):
+        self.config = config or {}
+
 
 class InferValueTypeTests(SimpleTestCase):
     def test_empty_list_defaults_to_string(self):
@@ -44,6 +55,7 @@ class InferValueTypeTests(SimpleTestCase):
         values = ["1", "1", "0", "1", "0", "0"]
         result = _infer_value_type(values)
         self.assertEqual(result, "boolean")
+
 
 class ComputeColumnStatsTests(SimpleTestCase):
     def test_empty_markers_are_counted_as_null(self):
@@ -127,3 +139,210 @@ class ComputeColumnStatsTests(SimpleTestCase):
         self.assertIsNone(result["max_value"])
         self.assertEqual(len(result["sample_values"]), 5)
         self.assertTrue(set(result["sample_values"]).issubset(set(values)))
+
+
+class CustomAPIExecutorTests(SimpleTestCase):
+    # The executor imports this function when execute() runs. Patching it here
+    # keeps the executor real while preventing database work or an HTTP request
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_success_serializes_input_and_uses_approval_gate_output(
+        self, mock_request_commit
+    ):
+        input_data = {"campaign_id": 123}
+        gate_events = [
+            {
+                "type": "text",
+                "content": "Custom API call completed.",
+            }
+        ]
+        gate_output = {
+            "campaign_id": 123,
+            "api_response": {"ok": True},
+        }
+        # A real result object makes the mock follow the approval gate's actual
+        # return structure instead of silently inventing attributes as needed
+        mock_request_commit.return_value = ExternalCommitResult(
+            paused=False,
+            sse_events=gate_events,
+            pending_id=None,
+            output_data=gate_output,
+            workflow_run_patch={},
+        )
+        step = _StepStub(
+            {
+                "method": "post",
+                "url": "https://example.test/webhook",
+                "headers": {"Authorization": "Bearer test-token"},
+                "body_template": "__input__",
+                "timeout": 5,
+            }
+        )
+        workflow_run = object()
+        orchestrator = object()
+        step_execution = object()
+        executor = CustomAPIExecutor(
+            step=step,
+            workflow_run=workflow_run,
+            orchestrator=orchestrator,
+        )
+        # The workflow engine normally attaches this record just before execute()
+        # This unit test supplies an empty object because no database record is needed
+        executor.step_execution = step_execution
+
+        result = executor.execute(input_data)
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.output_data, gate_output)
+        self.assertEqual(result.sse_events, gate_events)
+        self.assertFalse(result.pause_external_approval)
+        # This checks the contract between the executor and approval gate
+        # including method normalization and JSON serialization of the input
+        mock_request_commit.assert_called_once_with(
+            orchestrator=orchestrator,
+            workflow_run=workflow_run,
+            step_execution=step_execution,
+            kind="custom_api",
+            draft={
+                "method": "POST",
+                "url": "https://example.test/webhook",
+                "headers": {"Authorization": "Bearer test-token"},
+                "body": '{"campaign_id": 123}',
+            },
+            commit_context={
+                "method": "POST",
+                "url": "https://example.test/webhook",
+                "headers": {"Authorization": "Bearer test-token"},
+                "timeout": 5,
+                "merge_output": {"campaign_id": 123},
+            },
+        )
+
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_missing_url_returns_failure_without_calling_gate(
+        self, mock_request_commit
+    ):
+        executor = CustomAPIExecutor(
+            step=_StepStub({"method": "POST"}),
+            workflow_run=object(),
+            orchestrator=object(),
+        )
+
+        result = executor.execute({"campaign_id": 123})
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error, "No URL configured for custom API step")
+        mock_request_commit.assert_not_called()
+
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_raw_body_template_is_passed_unchanged(self, mock_request_commit):
+        mock_request_commit.return_value = ExternalCommitResult(
+            paused=False,
+            sse_events=[],
+            pending_id=None,
+            output_data={"status": "sent"},
+            workflow_run_patch={},
+        )
+        executor = CustomAPIExecutor(
+            step=_StepStub(
+                {
+                    "url": "https://example.test/webhook",
+                    "body_template": '{"fixed": true}',
+                }
+            ),
+            workflow_run=object(),
+            orchestrator=object(),
+        )
+
+        result = executor.execute({"campaign_id": 123})
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.output_data, {"status": "sent"})
+        # call_args records the keyword arguments received by the patched gate
+        self.assertEqual(
+            mock_request_commit.call_args.kwargs["draft"]["body"],
+            '{"fixed": true}',
+        )
+
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_defaults_are_used_and_missing_gate_output_falls_back_to_input(
+        self, mock_request_commit
+    ):
+        input_data = {"campaign_id": 123}
+        mock_request_commit.return_value = ExternalCommitResult(
+            paused=False,
+            sse_events=[],
+            pending_id=None,
+            output_data=None,
+            workflow_run_patch={},
+        )
+        executor = CustomAPIExecutor(
+            step=_StepStub({"url": "https://example.test/webhook"}),
+            workflow_run=object(),
+            orchestrator=object(),
+        )
+
+        result = executor.execute(input_data)
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.output_data, input_data)
+        # Equal contents but a different object proves the fallback is a copy
+        # so top-level changes to the output cannot mutate the original dictionary
+        self.assertIsNot(result.output_data, input_data)
+        gate_arguments = mock_request_commit.call_args.kwargs
+        self.assertEqual(
+            gate_arguments["draft"],
+            {
+                "method": "POST",
+                "url": "https://example.test/webhook",
+                "headers": {},
+                "body": None,
+            },
+        )
+        self.assertEqual(gate_arguments["commit_context"]["timeout"], 30)
+
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_paused_gate_requests_external_approval(self, mock_request_commit):
+        input_data = {"campaign_id": 123}
+        gate_events = [
+            {
+                "type": "approval_request",
+                "content": "Approval required.",
+                "data": {"pending_id": "pending-123"},
+            }
+        ]
+        mock_request_commit.return_value = ExternalCommitResult(
+            paused=True,
+            sse_events=gate_events,
+            pending_id="pending-123",
+            output_data=None,
+            workflow_run_patch=None,
+        )
+        executor = CustomAPIExecutor(
+            step=_StepStub({"url": "https://example.test/webhook"}),
+            workflow_run=object(),
+            orchestrator=object(),
+        )
+
+        result = executor.execute(input_data)
+
+        self.assertTrue(result.success)
+        self.assertIs(result.output_data, input_data)
+        self.assertEqual(result.sse_events, gate_events)
+        self.assertTrue(result.pause_external_approval)
+
+    @patch("agent.approval_gate.request_external_commit", autospec=True)
+    def test_gate_exception_is_converted_to_failed_result(
+        self, mock_request_commit
+    ):
+        # side_effect makes the patched function raise when the executor calls it
+        mock_request_commit.side_effect = RuntimeError("API service unavailable")
+        executor = CustomAPIExecutor(
+            step=_StepStub({"url": "https://example.test/webhook"}),
+            workflow_run=object(),
+            orchestrator=object(),
+        )
+
+        result = executor.execute({"campaign_id": 123})
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error, "API service unavailable")
