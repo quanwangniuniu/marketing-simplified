@@ -43,6 +43,7 @@ def test_issue_budget_e2e_fixtures_round_trip():
         "issue_budget_e2e_fixtures",
         anchor_email=anchor.email,
         project_id=project.id,
+        allow_outside_debug=True,
         stdout=out,
     )
     payload = json.loads(out.getvalue())
