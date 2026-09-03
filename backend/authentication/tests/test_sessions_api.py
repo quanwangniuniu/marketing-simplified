@@ -291,3 +291,168 @@ class SessionCapEvictionTests(APITestCase):
         self._login()
 
         self.assertTrue(SessionRegistry.is_evicted(first_jti))
+
+
+@override_settings(CACHES=TEST_CACHES)
+class SessionEvictionEnforcementTests(APITestCase):
+    """Verify that a revoked session token is rejected on subsequent requests."""
+
+    def setUp(self):
+        cache.clear()
+        self.registry: dict = {}
+        self.mock_redis = make_mock_redis(self.registry)
+        self.redis_patcher = patch(
+            "authentication.session_registry.get_redis_connection",
+            return_value=self.mock_redis,
+        )
+        self.redis_patcher.start()
+
+        self.user = User.objects.create_user(
+            email="evict@example.com",
+            password="testpass123",
+            username="evictuser",
+            is_verified=True,
+            is_active=True,
+        )
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        cache.clear()
+
+    def _login(self):
+        resp = self.client.post(
+            reverse("login"),
+            {"email": "evict@example.com", "password": "testpass123"},
+        )
+        return resp.data["token"]
+
+    def test_evicted_token_returns_401_on_next_request(self):
+        token = self._login()
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        sessions_resp = self.client.get(reverse("session-list"), **headers)
+        jti = sessions_resp.data[0]["jti"]
+
+        # Revoke the session
+        self.client.delete(
+            reverse("session-revoke", kwargs={"jti": jti}), **headers
+        )
+
+        # The same token must now be rejected
+        resp = self.client.get(reverse("session-list"), **headers)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_non_revoked_token_still_works_after_another_session_revoked(self):
+        """Revoking one session must not affect other sessions."""
+        token1 = self._login()
+        token2 = self._login()
+        headers1 = {"HTTP_AUTHORIZATION": f"Bearer {token1}"}
+        headers2 = {"HTTP_AUTHORIZATION": f"Bearer {token2}"}
+
+        # Get sessions using token2, find token1's jti (oldest)
+        sessions_resp = self.client.get(reverse("session-list"), **headers2)
+        jti_to_revoke = sessions_resp.data[0]["jti"]
+
+        self.client.delete(
+            reverse("session-revoke", kwargs={"jti": jti_to_revoke}), **headers2
+        )
+
+        # token2 should still work
+        resp = self.client.get(reverse("session-list"), **headers2)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+@override_settings(CACHES=TEST_CACHES)
+class SessionLogoutTests(APITestCase):
+    """Verify that logout removes the session from the registry."""
+
+    def setUp(self):
+        cache.clear()
+        self.registry: dict = {}
+        self.mock_redis = make_mock_redis(self.registry)
+        self.redis_patcher = patch(
+            "authentication.session_registry.get_redis_connection",
+            return_value=self.mock_redis,
+        )
+        self.redis_patcher.start()
+
+        self.user = User.objects.create_user(
+            email="logout@example.com",
+            password="testpass123",
+            username="logoutuser",
+            is_verified=True,
+            is_active=True,
+        )
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        cache.clear()
+
+    def test_logout_removes_session_from_registry(self):
+        resp = self.client.post(
+            reverse("login"),
+            {"email": "logout@example.com", "password": "testpass123"},
+        )
+        token = resp.data["token"]
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        self.client.post(reverse("logout"), **headers)
+
+        sessions = SessionRegistry.list_sessions(self.user.pk)
+        self.assertEqual(sessions, [])
+
+    def test_logout_does_not_blacklist_token(self):
+        """Normal logout should not block the token — only eviction does."""
+        resp = self.client.post(
+            reverse("login"),
+            {"email": "logout@example.com", "password": "testpass123"},
+        )
+        token = resp.data["token"]
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        sessions_before = self.client.get(reverse("session-list"), **headers)
+        jti = sessions_before.data[0]["jti"]
+
+        self.client.post(reverse("logout"), **headers)
+
+        self.assertFalse(SessionRegistry.is_evicted(jti))
+
+
+@override_settings(CACHES=TEST_CACHES)
+class AuthTokensTests(APITestCase):
+    """Verify that refresh_jti is correctly embedded in refresh and access tokens."""
+
+    def setUp(self):
+        cache.clear()
+        self.registry: dict = {}
+        self.mock_redis = make_mock_redis(self.registry)
+        self.redis_patcher = patch(
+            "authentication.session_registry.get_redis_connection",
+            return_value=self.mock_redis,
+        )
+        self.redis_patcher.start()
+
+        self.user = User.objects.create_user(
+            email="tokenparity@example.com",
+            password="testpass123",
+            username="tokenparityuser",
+            is_verified=True,
+            is_active=True,
+        )
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        cache.clear()
+
+    def test_refresh_token_contains_refresh_jti_equal_to_its_own_jti(self):
+        from core.services.auth_tokens import build_user_refresh_token
+
+        refresh = build_user_refresh_token(self.user)
+        self.assertEqual(refresh["refresh_jti"], str(refresh["jti"]))
+
+    def test_access_token_inherits_refresh_jti_from_refresh_token(self):
+        from core.services.auth_tokens import build_user_refresh_token
+
+        refresh = build_user_refresh_token(self.user)
+        access = refresh.access_token
+        self.assertEqual(access["refresh_jti"], str(refresh["jti"]))

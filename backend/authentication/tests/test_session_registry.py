@@ -186,3 +186,65 @@ class TestListSessions(TestCase):
         sessions = SessionRegistry.list_sessions(1)
         self.assertEqual(sessions[0]["ip"], "5.5.5.5")
         self.assertEqual(sessions[0]["user_agent"], "Firefox")
+
+
+@override_settings(CACHES=TEST_CACHES)
+class TestRemoveSession(TestCase):
+    """remove_session removes from registry without blacklisting (normal logout path)."""
+
+    def setUp(self):
+        cache.clear()
+        self.redis = make_fake_redis()
+        self.patcher = patch(
+            "authentication.session_registry.get_redis_connection",
+            return_value=self.redis,
+        )
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        cache.clear()
+
+    def test_remove_session_deletes_from_registry(self):
+        SessionRegistry.register_session(1, "jti-rm", {}, cap=5)
+        SessionRegistry.remove_session(1, "jti-rm")
+        self.assertEqual(SessionRegistry.list_sessions(1), [])
+
+    def test_remove_session_does_not_add_to_blacklist(self):
+        SessionRegistry.register_session(1, "jti-rm2", {}, cap=5)
+        SessionRegistry.remove_session(1, "jti-rm2")
+        self.assertFalse(SessionRegistry.is_evicted("jti-rm2"))
+
+    def test_remove_session_clears_meta(self):
+        meta = {"ip": "1.1.1.1"}
+        SessionRegistry.register_session(1, "jti-rm3", meta, cap=5)
+        SessionRegistry.remove_session(1, "jti-rm3")
+        self.assertIsNone(cache.get("session:meta:jti-rm3"))
+
+
+@override_settings(CACHES=TEST_CACHES)
+class TestDeleteSession(TestCase):
+    """delete_session evicts the session — adds to blacklist and removes from registry."""
+
+    def setUp(self):
+        cache.clear()
+        self.redis = make_fake_redis()
+        self.patcher = patch(
+            "authentication.session_registry.get_redis_connection",
+            return_value=self.redis,
+        )
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        cache.clear()
+
+    def test_delete_session_adds_to_blacklist(self):
+        SessionRegistry.register_session(1, "jti-del", {}, cap=5)
+        SessionRegistry.delete_session(1, "jti-del")
+        self.assertTrue(SessionRegistry.is_evicted("jti-del"))
+
+    def test_delete_session_removes_from_registry(self):
+        SessionRegistry.register_session(1, "jti-del2", {}, cap=5)
+        SessionRegistry.delete_session(1, "jti-del2")
+        self.assertEqual(SessionRegistry.list_sessions(1), [])
