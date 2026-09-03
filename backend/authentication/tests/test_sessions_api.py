@@ -389,6 +389,8 @@ class SessionLogoutTests(APITestCase):
         cache.clear()
 
     def test_logout_removes_session_from_registry(self):
+        from authentication.session_registry import SessionRegistry
+
         resp = self.client.post(
             reverse("login"),
             {"email": "logout@example.com", "password": "testpass123"},
@@ -403,6 +405,8 @@ class SessionLogoutTests(APITestCase):
 
     def test_logout_does_not_blacklist_token(self):
         """Normal logout should not block the token — only eviction does."""
+        from authentication.session_registry import SessionRegistry
+
         resp = self.client.post(
             reverse("login"),
             {"email": "logout@example.com", "password": "testpass123"},
