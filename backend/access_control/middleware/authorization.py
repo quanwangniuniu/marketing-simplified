@@ -82,6 +82,10 @@ class AuthorizationMiddleware:
                 self._log_override(request, user, 'SUPERUSER', module_key, action_key)
             return None
 
+        # Propagate org-admin role context for downstream permission checks (MED-240).
+        # Default False; set True when a valid Organization Admin (level == 2) role exists.
+        request.is_org_admin = False
+
         # Org admins (role level == 2) bypass module-level permission checks.
         # Level 2 is the Organization Admin level created by assign_org_admin().
         # This matches the criterion used by is_org_admin() in admin_utils.py.
@@ -95,6 +99,7 @@ class AuthorizationMiddleware:
                 role__level=2,
                 valid_from__lte=_now,
             ).filter(Q(valid_to__gte=_now) | Q(valid_to__isnull=True)).exists():
+                request.is_org_admin = True
                 if has_permission_gate:
                     self._log_override(request, user, 'ORG_ADMIN', module_key, action_key)
                 return None

@@ -5,11 +5,11 @@ from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
+from core.services.auth_tokens import build_user_refresh_token
 
 from customer.models import Customer
 from csm.models import Conversation, ConversationMessage, Queue, SupportChannel
@@ -51,7 +51,7 @@ class PortalRegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user, customer = serializer.save()
 
-        refresh = RefreshToken.for_user(user)
+        refresh = build_user_refresh_token(user)
         return Response(
             {
                 'access': str(refresh.access_token),

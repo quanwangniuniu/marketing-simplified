@@ -76,6 +76,18 @@ export async function mockAuthenticatedUserApis(
 }
 
 export async function mockProjectShellApis(page: Page) {
+	await page.route('**/api/core/onboarding-status/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				needs_onboarding: false,
+				has_org: true,
+				has_project: true,
+			}),
+		});
+	});
+
 	await page.route('**/api/core/projects**', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -97,6 +109,14 @@ export async function mockProjectShellApis(page: Page) {
 	// Without a mock, the fake e2e token returns 401 from the real backend,
 	// triggering the axios interceptor's hard redirect to /login.
 	await page.route('**/api/notifications/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ count: 0, next: null, previous: null, results: [] }),
+		});
+	});
+
+	await page.route('**/api/csm/notifications**', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -208,7 +228,7 @@ export async function mockProjectShellApis(page: Page) {
 
 	await page.route('**/api/chat/chats/**', async (route) => {
 		const pathname = new URL(route.request().url()).pathname;
-		if (/\/api\/chat\/chats\/\d+\/pins\/?$/.test(pathname)) {
+		if (/\/api\/chat\/chats\/[^/]+\/pins\/?$/.test(pathname)) {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -233,9 +253,17 @@ export async function mockProjectShellApis(page: Page) {
 }
 
 export async function seedActiveProject(page: Page, project: MessagesProjectSeed) {
+	await page.context().addCookies([
+		{
+			name: 'active-project',
+			value: JSON.stringify(project),
+			url: process.env.BASE_URL || 'http://localhost:3000',
+		},
+	]);
+
 	await page.addInitScript((activeProject) => {
 		window.localStorage.setItem(
-			'project-storage',
+			'project-storage-v1',
 			JSON.stringify({
 				state: {
 					activeProject,
@@ -255,7 +283,7 @@ export async function seedActiveProject(page: Page, project: MessagesProjectSeed
 export async function clearProjectStore(page: Page) {
 	await page.addInitScript(() => {
 		window.localStorage.setItem(
-			'project-storage',
+			'project-storage-v1',
 			JSON.stringify({
 				state: {
 					activeProject: null,

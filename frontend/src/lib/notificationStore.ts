@@ -1,5 +1,11 @@
 import { create } from "zustand";
 
+export type NotificationConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting";
+
 export type ToastTag = "success" | "error" | "loading" | "info";
 
 export interface DedupeToastQueueItem {
@@ -43,12 +49,16 @@ interface NotificationStore {
   chatActivityCount: number;
   /** Timestamp of last refresh - used to trigger re-fetches */
   lastRefresh: number;
+  /** Health of the global notification SSE connection */
+  connectionStatus: NotificationConnectionStatus;
   /** Set the unread count */
   setUnreadCount: (count: number) => void;
   /** Set the chat-activity unread count */
   setChatActivityCount: (count: number) => void;
   /** Trigger a refresh across all notification consumers */
   triggerRefresh: () => void;
+  /** Update the global notification SSE connection health */
+  setConnectionStatus: (status: NotificationConnectionStatus) => void;
 
   // Toast dedupe state
   toastQueue: Record<string, DedupeToastQueueItem>;
@@ -65,11 +75,13 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   unreadCount: 0,
   chatActivityCount: 0,
   lastRefresh: Date.now(),
+  connectionStatus: "disconnected",
   setUnreadCount: (count) => set({ unreadCount: count }),
   setChatActivityCount: (count) => set({ chatActivityCount: count }),
   triggerRefresh: () => {
     set({ lastRefresh: Date.now() });
   },
+  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
 
   toastQueue: {},
   incrementToast: ({ message, type }) => {

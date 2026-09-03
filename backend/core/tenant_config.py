@@ -244,6 +244,12 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
     )
 
     # ------------------------------------------------------------------
+    # ad_copy_variation — org-scoped drafts. Depends on Project (tenant)
+    # and MetaAdCreative / CustomUser (public).
+    # ------------------------------------------------------------------
+    from ad_copy_variation.models import AdCopyVariation
+
+    # ------------------------------------------------------------------
     # Return in topological order
     # ------------------------------------------------------------------
     return [
@@ -378,4 +384,6 @@ def get_tenant_models():  # noqa: C901 — long but intentionally explicit
         BlockAction,
         MediaFile,
         NotionConnection,
+        # ad_copy_variation (depends on Project; creative/user stay in public)
+        AdCopyVariation,
     ]

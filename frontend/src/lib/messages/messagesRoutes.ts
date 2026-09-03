@@ -55,6 +55,18 @@ export function parseChatSlugFromPathname(pathname: string): string | null {
   }
 }
 
+/**
+ * Whether a message deep link belongs to the chat currently rendered.
+ * `routeChatSlug` is optional because the floating chat widget has no chat
+ * route of its own; full-page Messages always supplies it.
+ */
+export function isMessageDeepLinkForChat(
+  routeChatSlug: string | null | undefined,
+  activeChatSlug: string,
+): boolean {
+  return routeChatSlug == null || routeChatSlug === activeChatSlug;
+}
+
 export function hasLegacyMessagesQuery(searchParams: URLSearchParams): boolean {
   return LEGACY_CHAT_QUERY_KEYS.some((key) => searchParams.has(key));
 }

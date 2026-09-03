@@ -20,6 +20,8 @@ import type {
 import type { DashboardSummary } from '@/types/dashboard';
 import type { MeetingListItem } from '@/types/meeting';
 import type { AlertData, AlertSeverity, AlertType } from '@/lib/mock/dashboardMock';
+import { AdminAuditLogAPI } from '@/lib/api/auditLogApi';
+import type { AdminAuditEvent } from '@/types/audit';
 
 const EMPTY_SUMMARY: DashboardSummary = {
   time_metrics: {
@@ -43,6 +45,7 @@ const EMPTY_DATA: OverviewMock = {
   pendingAssetReviews: [],
   activeCampaigns: [],
   pendingInvitations: [],
+  recentAuditEvents: [],
 };
 
 function mapAlertSeverity(sev: AlertTask['severity']): AlertSeverity {
@@ -153,6 +156,7 @@ export function useOverviewData(projectId: number | string | null | undefined): 
         ProjectAPI.getMyPendingInvitations(pid),
         AssetAPI.getAssets(),
         AlertingAPI.listAlertTasks({ status: 'open' }),
+        AdminAuditLogAPI.list({ project_id: pid }),
       ]);
 
       if (cancelled) return;
@@ -263,6 +267,16 @@ export function useOverviewData(projectId: number | string | null | undefined): 
         nextErrors.alerts = errMessage(rAlerts.reason);
       }
 
+      let recentAuditEvents: AdminAuditEvent[] = [];
+      const rAudit = initial[8];
+      if (rAudit.status == 'fulfilled'){
+        const raw = rAudit.value.data as { results?: AdminAuditEvent[] } | AdminAuditEvent[];
+        recentAuditEvents = Array.isArray(raw) ? raw : (raw.results ?? []);
+      } else{
+        nextErrors.recentAuditEvents = errMessage(rAudit.reason);
+      }
+
+
       let actionItems: ActionItemDisplay[] = [];
       if (upcomingMeetings.length > 0) {
         const pool = upcomingMeetings.slice(0, 5);
@@ -307,6 +321,7 @@ export function useOverviewData(projectId: number | string | null | undefined): 
         pendingAssetReviews,
         activeCampaigns,
         pendingInvitations,
+        recentAuditEvents,
       });
       setAlerts(alertsOut);
       setErrors(nextErrors);

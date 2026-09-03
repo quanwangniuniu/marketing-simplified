@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from pathlib import Path
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 from celery.schedules import crontab
 
 
@@ -54,6 +55,7 @@ INSTALLED_APPS = [
     'django_filters',
     'django_fsm',
     'channels',
+    'audit.apps.AuditConfig',
     'authentication.apps.AuthenticationConfig',
     'core.apps.CoreConfig',
     'spreadsheet.apps.SpreadsheetConfig',
@@ -108,6 +110,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    # Protect PostgreSQL before tenant/auth/custom middleware opens a DB
+    # connection. Excess requests wait here instead of failing at max_connections.
+    'core.middleware.database_concurrency.DatabaseConcurrencyLimitMiddleware',
     'stripe_meta.middleware.UsageTrackingMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -121,6 +126,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.tenant_schema.TenantSchemaMiddleware',
+    'authentication.middleware.PasswordRotationMiddleware',
     'core.middleware.project_access.CheckProjectAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -130,6 +136,23 @@ MIDDLEWARE = [
     'tracking.middleware.ServerSideTrackingMiddleware',
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
+
+APP_ENV = os.environ.get("APP_ENV") or os.environ.get("DJANGO_ENV") or os.environ.get("ENVIRONMENT") or "development"
+APP_ENV = APP_ENV.lower()
+
+PASSWORD_ROTATION_ENABLED = os.environ.get('PASSWORD_ROTATION_ENABLED', 'true').lower() != 'false'
+PASSWORD_ROTATION_MAX_ALLOWED_AGE_DAYS = 180
+PASSWORD_ROTATION_MAX_AGE_DAYS = min(
+    int(os.environ.get('PASSWORD_ROTATION_MAX_AGE_DAYS', '90')),
+    PASSWORD_ROTATION_MAX_ALLOWED_AGE_DAYS,
+)
+PASSWORD_ROTATION_WARNING_DAYS = min(
+    int(os.environ.get('PASSWORD_ROTATION_WARNING_DAYS', '7')),
+    PASSWORD_ROTATION_MAX_AGE_DAYS,
+)
+
+if APP_ENV in {"production", "prod", "staging", "stage"} and not PASSWORD_ROTATION_ENABLED:
+    raise ImproperlyConfigured("PASSWORD_ROTATION_ENABLED cannot be false in production or staging.")
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -163,6 +186,56 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             "hosts": [('redis', 6379)],  # Use Redis container in Docker
+            # channels_redis defaults this to 100, and that default silently
+            # drops messages under load. Every WebSocket connection served by
+            # one ASGI process shares a single inbound queue (the Redis key is
+            # derived from the part of the channel name before "!", which is
+            # per-process, not per-connection), so the whole process gets 100
+            # slots between them. When group_send finds the queue full it skips
+            # the write, logs one INFO line, and raises nothing — the message is
+            # simply never delivered.
+            #
+            # Measured at 100 concurrent users in one channel:
+            #
+            #   capacity    drops logged    delivered
+            #   100         15,471          78
+            #   10,000       5,533          2,568
+            #   50,000           0          4,161-4,503
+            #
+            # Capacity bounds memory because queued messages also expire; see
+            # the expiry note below. Redis peaked at 17 MB across the 50,000
+            # runs, against 10 MB at 10,000.
+            #
+            # This is a safety valve, not the fix. The pressure comes from
+            # fanning one message out as one publish per recipient; a
+            # channel-level group would make it one publish and drop the queue
+            # depth by two orders of magnitude.
+            "capacity": config('CHANNEL_LAYER_CAPACITY', default=50000, cast=int),
+            # The second silent drop, and the one capacity does not cover.
+            # channels_redis expires queued messages, and every group_send
+            # sweeps each recipient channel with
+            # ZREMRANGEBYSCORE(key, 0, now - expiry) before writing. Anything a
+            # connection has not read within the window is deleted with no log
+            # line and no error — unlike a capacity drop, which at least logs.
+            #
+            # The default is 60s. Measured with 100 connections in one channel,
+            # driving ~1,700 deliveries/s against a ceiling of roughly 1,000/s
+            # on a single ASGI process, so the backlog grew past the window:
+            #
+            #   demand      p95 delivery    deliveries lost
+            #   ~1,550/s    33.5s            0 of 99,000
+            #   ~1,700/s    60.0s (pinned)   ~12,000 of 148,500 (~8%)
+            #
+            # The loss was one contiguous block of send order per connection —
+            # exactly the interval during which the backlog exceeded 60s — and
+            # p95 sat flat on the expiry value. Nothing else registered it:
+            # every message was committed, every outbox event published, every
+            # socket stayed open, and MessageStatus recorded them delivered.
+            #
+            # 300s is not headroom for a sustainable overload; a backlog that
+            # keeps growing reaches any window eventually. It buys time for a
+            # burst or a slow consumer to drain before delivery turns lossy.
+            "expiry": config('CHANNEL_LAYER_EXPIRY', default=300, cast=int),
         },
     },
 }
@@ -185,13 +258,46 @@ DATABASES = {
         'PASSWORD': config('POSTGRES_PASSWORD', default='cocofly4321'),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('POSTGRES_PORT', default='5432'),
+        # DO NOT set CONN_MAX_AGE here without a connection pooler in front of
+        # PostgreSQL. It was measured and reverted:
+        #
+        # Connection reuse is genuinely attractive on the WebSocket path —
+        # opening a connection to this database costs ~51 ms against ~1 ms for a
+        # query on an open one, and with CONN_MAX_AGE=60 a 100-connection burst
+        # went from 20% refused to 3%, handshake p95 4.8 s to 1.1 s.
+        #
+        # But Django's ASGI handler runs each HTTP request on its own thread,
+        # and a persistent connection is thread-local: it is not closed when the
+        # request ends (it is not yet obsolete) and it is not closed when the
+        # thread is destroyed. Under 100 concurrent requests that leaks roughly
+        # one connection per request — measured 99 of max_connections=100, 90 of
+        # them idle, and 94% of message sends then timed out.
+        #
+        # The safe version of this optimisation is PgBouncer (or raising
+        # max_connections to fit the real thread count), not this setting.
         # REMOVED: 'OPTIONS': {'options': '-c search_path=public'}
         # TenantSchemaMiddleware dynamically sets search_path per request
+        'OPTIONS': {
+            'application_name': config('PG_APPLICATION_NAME', default='django_web'),
+        },
         'TEST': {
             'NAME': 'test_mediajira_db',
         }
     }
 }
+
+# This is a per-web-process admission limit, not a replacement for PgBouncer.
+# Keep headroom for Celery, WebSocket ORM calls, migrations and monitoring.
+DATABASE_REQUEST_CONCURRENCY = config(
+    'DATABASE_REQUEST_CONCURRENCY',
+    default=20,
+    cast=int,
+)
+DATABASE_REQUEST_QUEUE_TIMEOUT_SECONDS = config(
+    'DATABASE_REQUEST_QUEUE_TIMEOUT_SECONDS',
+    default=30,
+    cast=float,
+)
 
 USE_SQLITE_FOR_TESTS = config('USE_SQLITE_FOR_TESTS', default=False, cast=bool)
 if USE_SQLITE_FOR_TESTS:
@@ -269,6 +375,30 @@ AGENT_CSV_DIR = config(
 
 # Gemini API (replaces Dify for all LLM workflow calls)
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+
+# AI-assisted spreadsheet analysis (agent <-> spreadsheet integration).
+# Global kill-switch; a per-project toggle (Project.ai_analysis_enabled) and
+# per-user, per-spreadsheet consent (spreadsheet.SpreadsheetAiConsent) gate it
+# further.
+AGENT_SPREADSHEET_AI_ENABLED = config(
+    'AGENT_SPREADSHEET_AI_ENABLED', default=True, cast=bool
+)
+# Hard caps on spreadsheet data handed to an LLM (spreadsheet.providers +
+# core.services.file_parser read these at call time).
+SPREADSHEET_AI_MAX_ROWS = config('SPREADSHEET_AI_MAX_ROWS', default=500, cast=int)
+SPREADSHEET_AI_MAX_COLS = config('SPREADSHEET_AI_MAX_COLS', default=50, cast=int)
+SPREADSHEET_AI_MAX_CELLS = config('SPREADSHEET_AI_MAX_CELLS', default=20000, cast=int)
+SPREADSHEET_AI_MAX_CELL_CHARS = config(
+    'SPREADSHEET_AI_MAX_CELL_CHARS', default=2000, cast=int
+)
+# Gemini HTTP guardrails (core.services.gemini_client).
+GEMINI_TIMEOUT_SECONDS = config('GEMINI_TIMEOUT_SECONDS', default=75, cast=int)
+GEMINI_TOTAL_DEADLINE_SECONDS = config(
+    'GEMINI_TOTAL_DEADLINE_SECONDS', default=150, cast=int
+)
+GEMINI_CB_THRESHOLD = config('GEMINI_CB_THRESHOLD', default=5, cast=int)
+GEMINI_CB_WINDOW_SECONDS = config('GEMINI_CB_WINDOW_SECONDS', default=60, cast=int)
+GEMINI_CB_COOLDOWN_SECONDS = config('GEMINI_CB_COOLDOWN_SECONDS', default=30, cast=int)
 
 # Dify LLM Platform integration (kept for reference / backward compat)
 DIFY_API_URL = config('DIFY_API_URL', default='')
@@ -398,8 +528,146 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = config('TIME_ZONE', default='UTC')
 broker_connection_retry_on_startup = True
 
+# Keep latency-sensitive chat delivery isolated from notifications, offline
+# recovery, scheduled sends, integrations, reports, and other default tasks.
+# Dedicated workers for these queues are defined in the compose/deployment
+# configuration. Missing queues are created by Celery when first published.
+CELERY_TASK_ROUTES = {
+    'chat.tasks.notify_new_message': {'queue': 'chat.realtime'},
+    'chat.tasks.notify_reaction_update': {'queue': 'chat.realtime'},
+    'chat.tasks.notify_pin_update': {'queue': 'chat.realtime'},
+    'chat.tasks.finalize_presence_offline': {'queue': 'chat.realtime'},
+    'chat.tasks.send_typing_indicator': {'queue': 'chat.realtime'},
+    'chat.tasks.update_message_status_task': {'queue': 'chat.realtime'},
+    'chat.tasks.notify_message_recipients': {'queue': 'chat.notifications'},
+    'chat.tasks.deliver_message_task': {'queue': 'chat.delivery'},
+    'chat.tasks.send_scheduled_message': {'queue': 'chat.delivery'},
+    # A link preview waits on a third-party site, so it gets its own low-priority
+    # queue with its own worker: one slow host must never sit in front of message
+    # delivery. Every deployment file consumes chat.link_previews — a queue nobody
+    # consumes would silently pile up previews, so they must stay in step.
+    'chat.tasks.fetch_link_preview_task': {'queue': 'chat.link_previews'},
+    'chat.tasks.prune_link_previews': {'queue': 'chat.link_previews'},
+}
+
+# --- Link previews (MED-279) -------------------------------------------------
+# How long an answer is reused before the URL is fetched again. Success and
+# failure are separate on purpose: a page that resolved fine is worth holding for
+# a day, but a host that timed out may well be back within the hour, and a URL the
+# safety guard refused is not going to become safe on its own.
+LINK_PREVIEW_SUCCESS_TTL_HOURS = config('LINK_PREVIEW_SUCCESS_TTL_HOURS', default=24, cast=int)
+LINK_PREVIEW_FAILURE_TTL_HOURS = config('LINK_PREVIEW_FAILURE_TTL_HOURS', default=1, cast=int)
+LINK_PREVIEW_BLOCKED_TTL_HOURS = config('LINK_PREVIEW_BLOCKED_TTL_HOURS', default=24, cast=int)
+
+# A pending row older than this is treated as abandoned, so a worker that died
+# mid-fetch cannot wedge a URL forever.
+LINK_PREVIEW_CLAIM_TTL_MINUTES = config('LINK_PREVIEW_CLAIM_TTL_MINUTES', default=5, cast=int)
+
+# Caching stops the same URL being fetched twice, but nothing stops one account
+# posting many *different* URLs, which is how this feature could be turned into a
+# request amplifier. Cache hits are free; only fetches of new URLs count.
+LINK_PREVIEW_RATE_LIMIT_PER_MINUTE = config('LINK_PREVIEW_RATE_LIMIT_PER_MINUTE', default=5, cast=int)
+
+# Rows older than this are pruned daily; without it the table only ever grows.
+LINK_PREVIEW_PRUNE_AFTER_DAYS = config('LINK_PREVIEW_PRUNE_AFTER_DAYS', default=30, cast=int)
+
+# Bound concurrent Channels publications inside one Celery/ASGI process so a
+# large group cannot create an unbounded Redis command burst.
+CHAT_FANOUT_CONCURRENCY = config('CHAT_FANOUT_CONCURRENCY', default=25, cast=int)
+
+# A SubscriptionRegistry normally runs on its owning ASGI event loop. Calls
+# submitted from another OS thread must not wait forever if that loop stalls or
+# shuts down between availability checks.
+CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS = config(
+    'CHAT_SUBSCRIPTION_THREAD_CALL_TIMEOUT_SECONDS',
+    default=5.0,
+    cast=float,
+)
+
+# Publish a chat message once to a per-chat channel-layer group instead of once
+# per recipient.
+#
+# Off by default. It changes where the authorisation decision lives: today the
+# server picks recipients per message, and a connection can only ever receive
+# from its own personal group. With chat groups, membership of
+# `chat_<id>` *is* the entitlement, so a stale membership means someone reads a
+# channel they were removed from. Turn it on only where the revocation path
+# (ChatService.invalidate_presence_recipients_for_chat -> chat_membership_changed
+# -> the consumer re-syncing its groups) has been exercised.
+#
+# Duplicate delivery is handled, not tolerated. A group publish reaches whoever
+# is in the group at that moment, which can include a connection that arrived
+# after the claim — its status row is still 'sent', so the delivery task sends
+# it again. Every write to a socket now goes through one method that drops a
+# message id it has already sent, so a race between the realtime fan-out, the
+# delivery task and reconnect recovery cannot reach the client.
+#
+# Measured over three consecutive 100-user runs on a barrier-enforced load test
+# (chat_ready_after_barrier = 0, meaning every client was ready before any of
+# them wrote):
+#
+#   flag on   9,900/9,900 delivered, 0 duplicates, delivery p95 4.69-5.10s
+#   flag off  9,900/9,900 delivered, 0 duplicates, delivery p95 9.40s
+#
+# Earlier runs of this flag looked non-deterministic, at 6,983-9,900 delivered.
+# That was the load test rather than the feature: its warm-up defaulted to zero,
+# so the first ready client sent while later clients were still connecting, and
+# a group publish cannot reach a socket that does not exist yet. Per-recipient
+# fan-out hid it because an absent user is simply not claimed and picks the
+# message up on connect.
+#
+# Still off by default pending a decision, not pending a fix: turning it on is
+# a behaviour change on the delivery path and the revocation route above should
+# be exercised in a preview environment first.
+CHAT_CHANNEL_GROUPS_ENABLED = config('CHAT_CHANNEL_GROUPS_ENABLED', default=False, cast=bool)
+
+# Bound independent post-accept ORM work. One thread serialized 100 sockets;
+# an unbounded executor would instead exhaust PostgreSQL connections.
+CHAT_CONNECTION_INIT_CONCURRENCY = config(
+    'CHAT_CONNECTION_INIT_CONCURRENCY',
+    default=10,
+    cast=int,
+)
+
+# Recovery is paged to keep individual queries bounded, but one reconnect must
+# not silently stop after the first 50 durable messages.
+CHAT_RECONNECT_RECOVERY_MAX_MESSAGES = config(
+    'CHAT_RECONNECT_RECOVERY_MAX_MESSAGES',
+    default=500,
+    cast=int,
+)
+
+# That recovery only finds rows still marked 'sent', and a message is marked
+# delivered when it is handed to the channel layer rather than when a socket
+# receives it. The two are not the same: a queued message the connection does
+# not read within the channel layer's expiry is deleted silently, and its row
+# already says delivered, so nothing ever resends it.
+#
+# So a reconnect also replays what was marked delivered recently. Anything the
+# client already has is dropped on arrival — the frontend keys messages by id —
+# which makes replaying more than necessary the cheap side of this trade.
+#
+# Keep the window at or above the channel layer expiry: it is the interval in
+# which a publish can be discarded after being recorded as delivered. Below it,
+# the hole reopens for the difference.
+CHAT_RECONNECT_REPLAY_SECONDS = config(
+    'CHAT_RECONNECT_REPLAY_SECONDS',
+    default=300,
+    cast=int,
+)
+CHAT_RECONNECT_REPLAY_MAX_MESSAGES = config(
+    'CHAT_RECONNECT_REPLAY_MAX_MESSAGES',
+    default=100,
+    cast=int,
+)
+
 # Celery Beat Configuration for Periodic Tasks
 CELERY_BEAT_SCHEDULE = {
+    'dispatch-pending-chat-outbox': {
+        'task': 'chat.tasks.dispatch_pending_chat_outbox',
+        'schedule': timedelta(seconds=1),
+        'options': {'queue': 'celery'},
+    },
     # 'reset-daily-usage': {   # disabled — UsageDaily replaced by token-based billing
     #     'task': 'stripe_meta.tasks.reset_daily_usage',
     #     'schedule': crontab(hour=0, minute=0),
@@ -430,6 +698,11 @@ CELERY_BEAT_SCHEDULE = {
     'cleanup-orphaned-chat-attachments': {
         'task': 'chat.tasks.cleanup_orphaned_attachments',
         'schedule': crontab(hour=4, minute=0),  # daily 04:00 UTC (low traffic period)
+        'options': {'timezone': 'UTC'},
+    },
+    'prune-link-previews': {
+        'task': 'chat.tasks.prune_link_previews',
+        'schedule': crontab(hour=4, minute=30),  # daily 04:30 UTC, after the sweep above
         'options': {'timezone': 'UTC'},
     },
     'google-calendar-import-every-15-min': {
@@ -520,6 +793,19 @@ INTERNAL_CRON_SECRET = config('INTERNAL_CRON_SECRET', default='')
 # Redis Configuration
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+
+# Notification SSE replay protection. Replay is delivered in bounded batches,
+# and repeated replay connections are limited per authenticated user using a
+# rolling Redis window.
+NOTIFICATION_SSE_REPLAY_BATCH_SIZE = config(
+    'NOTIFICATION_SSE_REPLAY_BATCH_SIZE', default=500, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_LIMIT = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_LIMIT', default=5, cast=int
+)
+NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS = config(
+    'NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS', default=30, cast=int
+)
 
 # Cache Configuration (for online status, etc.)
 CACHES = {
@@ -716,6 +1002,11 @@ formatter = json_log_formatter.JSONFormatter()
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'redact_secrets': {
+            '()': 'core.services.log_redaction.RedactSecretsFilter',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
@@ -728,21 +1019,24 @@ LOGGING = {
         'json': {
             '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
             'format': '%(asctime)s %(name)s %(levelname)s %(message)s'
-        },        
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['redact_secrets'],
         },
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'json',
-        },        
+            'filters': ['redact_secrets'],
+        },
     },
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
+        'filters': ['redact_secrets'],
     },
     'loggers': {
         'django': {

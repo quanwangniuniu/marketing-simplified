@@ -1,6 +1,7 @@
 import logging
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
@@ -12,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .sse import sse_event_generator
+from .sse import _allow_replay_attempt, sse_event_generator
 
 logger = logging.getLogger(__name__)
 
@@ -469,9 +470,11 @@ async def stream_notifications(request):
     Reconnect / Last-Event-ID
     -------------------------
     The browser automatically sends a ``Last-Event-ID`` header on reconnect.
-    The view replays up to 50 missed notifications from the DB before resuming
-    the live Redis Pub/Sub stream.  The query param ``?lastEventId=`` serves
-    as a fallback for polyfill clients.
+    It contains the UUID of the last received Notification, allowing the view
+    to replay later database rows before resuming the live Redis Pub/Sub
+    stream. The query param ``?lastEventId=`` serves as a fallback for manual
+    reconnects and polyfill clients. ``?lastEventCreatedAt=`` preserves a
+    timestamp fallback when the UUID cursor has already been deleted.
 
     Nginx integration
     -----------------
@@ -501,6 +504,12 @@ async def stream_notifications(request):
         logger.warning("SSE: invalid or expired token", exc_info=True)
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")
 
+    # NOTE: the database connection is released inside sse_event_generator, not
+    # here. Releasing it at this point does not work: TenantSchemaMiddleware
+    # resets search_path in a finally block that runs as soon as this view
+    # returns the response object, which re-opens the connection before a
+    # single byte of the stream has been sent.
+
     # ── 3. Resolve Last-Event-ID ─────────────────────────────────────────
     # Browser sets the ``Last-Event-ID`` *header* automatically on reconnect;
     # the query param is a manual fallback for the initial EventSource URL.
@@ -508,10 +517,30 @@ async def stream_notifications(request):
         request.headers.get("Last-Event-ID")
         or request.GET.get("lastEventId")
     )
+    last_event_created_at = request.GET.get("lastEventCreatedAt")
+
+    if last_event_id and not await sync_to_async(_allow_replay_attempt)(user.id):
+        retry_after = max(
+            1,
+            int(
+                getattr(
+                    settings,
+                    "NOTIFICATION_SSE_REPLAY_RATE_WINDOW_SECONDS",
+                    30,
+                )
+            ),
+        )
+        response = HttpResponse(
+            "Too Many Replay Requests",
+            status=429,
+            content_type="text/plain",
+        )
+        response["Retry-After"] = str(retry_after)
+        return response
 
     # ── 4. Return streaming response ─────────────────────────────────────
     response = StreamingHttpResponse(
-        sse_event_generator(user.id, last_event_id),
+        sse_event_generator(user.id, last_event_id, last_event_created_at),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"

@@ -238,6 +238,15 @@ class CustomUser(AbstractUser):
     google_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     google_registered = models.BooleanField(default=False)
     password_set = models.BooleanField(default=True)
+    password_last_changed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp used by elevated-role password rotation policy.",
+    )
+    auth_token_version = models.PositiveIntegerField(
+        default=0,
+        help_text="Incremented to invalidate previously issued JWTs after security-sensitive changes.",
+    )
 
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
 
@@ -276,6 +285,11 @@ class CustomUser(AbstractUser):
     REQUIRED_FIELDS = ['username']
 
     objects = CustomUserManager()
+
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        if raw_password is not None:
+            self.password_last_changed_at = timezone.now()
 
     def __str__(self):
         return self.email 
@@ -369,6 +383,10 @@ class Project(SluggedResourceModelMixin, TimeStampedModel):
     pacing_enabled = models.BooleanField(
         default=False,
         help_text="Whether pacing insights and alerts are enabled"
+    )
+    ai_analysis_enabled = models.BooleanField(
+        default=True,
+        help_text="Whether AI-assisted spreadsheet analysis is available for this project"
     )
     budget_config = models.JSONField(
         default=dict,
@@ -558,6 +576,89 @@ class DataExportRequest(TimeStampedModel):
 
     def __str__(self):
         return f"Data export {self.id} for {self.user_id} ({self.status})"
+
+
+class AuditEvent(models.Model):
+    """Central append-only audit event with per-row HMAC tamper detection."""
+
+    SIGNATURE_VERSION = "v2"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    event_type = models.CharField(max_length=120, db_index=True)
+    actor = models.ForeignKey(
+        "core.CustomUser",
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        db_constraint=False,
+    )
+    actor_email = models.EmailField(blank=True, default="")
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        db_constraint=False,
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        db_constraint=False,
+    )
+    target_type = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    target_id = models.CharField(max_length=120, blank=True, default="")
+    before = models.JSONField(null=True, blank=True)
+    after = models.JSONField(null=True, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    request_id = models.CharField(max_length=120, blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default="")
+    signature_version = models.CharField(max_length=20, default=SIGNATURE_VERSION)
+    signature_key_id = models.CharField(max_length=80, blank=True, default="")
+    signature_algorithm = models.CharField(max_length=40, blank=True, default="")
+    signature = models.CharField(max_length=128, editable=False)
+
+    class Meta:
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["organization", "-occurred_at"]),
+            models.Index(fields=["project", "-occurred_at"]),
+            models.Index(fields=["actor", "-occurred_at"]),
+            models.Index(fields=["event_type", "-occurred_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValueError("AuditEvent rows are append-only and cannot be updated.")
+        if self.actor_id and not self.actor_email:
+            self.actor_email = self.actor.email
+        if not self.signature_key_id:
+            from core.services.audit_events import active_audit_signature_key_id
+
+            self.signature_key_id = active_audit_signature_key_id()
+        if not self.signature_algorithm:
+            from core.services.audit_events import audit_signature_algorithm
+
+            self.signature_algorithm = audit_signature_algorithm()
+        if not self.signature:
+            from core.services.audit_events import sign_audit_event
+
+            self.signature = sign_audit_event(self)
+        super().save(*args, **kwargs)
+
+    def verify_signature(self) -> bool:
+        from core.services.audit_events import verify_audit_event_signature
+
+        return verify_audit_event_signature(self)
+
+    def __str__(self):
+        return f"AuditEvent({self.event_type}, {self.target_type}:{self.target_id})"
 
 
 class OrganizationMembership(TimeStampedModel):

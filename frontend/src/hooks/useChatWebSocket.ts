@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWsUrl } from '@/lib/ws';
 import { useAuthStore } from '@/lib/authStore';
 import { useChatStore } from '@/lib/chatStore';
+import type { MessageLinkPreview } from '@/types/chat';
 
 // WebSocket message types (server -> client)
 export type ChatWsEventType =
@@ -11,6 +12,8 @@ export type ChatWsEventType =
   | 'typing_indicator'
   | 'message_status_update'
   | 'reaction_update'
+  | 'pin_update'
+  | 'link_preview'
   | 'presence_update'
   | 'presence_snapshot'
   | 'in_app_notification'
@@ -32,6 +35,9 @@ export interface ChatWsEvent<T = any> {
   message_id?: number;
   status?: string;
   reaction?: any;
+  action?: 'pinned' | 'unpinned';
+  preview?: MessageLinkPreview | null;
+  pin?: any;
   notification?: any;
   timestamp?: string;
   version?: number | null;
@@ -44,6 +50,8 @@ export interface UseChatWebSocketHandlers {
   onTypingIndicator?: (e: ChatWsEvent) => void;
   onMessageStatusUpdate?: (e: ChatWsEvent) => void;
   onReactionUpdate?: (e: ChatWsEvent) => void;
+  onPinUpdate?: (e: ChatWsEvent) => void;
+  onLinkPreview?: (e: ChatWsEvent) => void;
   onPresenceUpdate?: (e: ChatWsEvent) => void;
   onPresenceSnapshot?: (e: ChatWsEvent) => void;
   onInAppNotification?: (e: ChatWsEvent) => void;
@@ -121,6 +129,25 @@ export function useChatWebSocket(
             case 'reaction_update':
               handlersRef.current.onReactionUpdate?.(data);
               break;
+            case 'pin_update':
+              if (data.action === 'pinned') {
+                const chatId = Number(data.chat_id);
+                if (Number.isFinite(chatId)) {
+                  useChatStore.getState().markChatPinUnseen(chatId);
+                }
+              }
+              handlersRef.current.onPinUpdate?.(data);
+              break;
+            case 'link_preview': {
+              // Attach centrally: a preview must land on the message whether or
+              // not the chat window that owns it is currently mounted.
+              const messageId = Number(data.message_id);
+              if (Number.isFinite(messageId) && data.preview) {
+                useChatStore.getState().applyLinkPreview(messageId, data.preview);
+              }
+              handlersRef.current.onLinkPreview?.(data);
+              break;
+            }
             case 'presence_update':
               handlersRef.current.onPresenceUpdate?.(data);
               break;
@@ -164,6 +191,12 @@ export function useChatWebSocket(
       };
 
       ws.onclose = (ev) => {
+        // A superseded socket can finish closing after a replacement socket
+        // has already been assigned to the shared ref (notably during React
+        // Strict Mode's development-only effect replay). Never let that stale
+        // close clear the live socket or its heartbeat.
+        if (wsRef.current !== ws) return;
+
         console.warn('[ChatWS] close', { code: ev.code, reason: ev.reason });
         setConnected(false);
         handlersRef.current.onClose?.(ev);

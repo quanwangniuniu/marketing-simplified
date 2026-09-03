@@ -11,6 +11,7 @@ from typing import Any
 
 from django.conf import settings
 
+from core.services.log_redaction import redact_string
 from stripe_meta.exceptions import QuotaError
 from stripe_meta.models import LLMCallLog
 from stripe_meta.services import (
@@ -132,7 +133,7 @@ def call_llm(
             output_cost_cents=0,
             total_cost_cents=0,
             success=False,
-            error_message=str(exc)[:500],
+            error_message=redact_string(str(exc))[:500],
         )
         raise
 
@@ -181,11 +182,11 @@ def _call_gemini(
 ) -> dict:
     """
     Non-streaming generateContent endpoint — usageMetadata is stable here.
-    DO NOT use streamGenerateContent (gemini_client.call_gemini) for billing:
+    DO NOT use streamGenerateContent (core.services.gemini_client.call_gemini) for billing:
     its usageMetadata is unreliable across chunks.
     Retry/backoff via shared _gemini_request_with_retry helper.
     """
-    from agent.gemini_client import _get_api_key, _GEMINI_BASE, _gemini_request_with_retry
+    from core.services.gemini_client import _get_api_key, _GEMINI_BASE, _gemini_request_with_retry
 
     api_key = _get_api_key()
     if not api_key:
@@ -207,7 +208,7 @@ def _call_gemini(
     logger.info("_call_gemini model=%s system_chars=%d user_chars=%d",
                 model, len(system_prompt), len(user_prompt))
 
-    response = _gemini_request_with_retry(url, body, timeout=300, stream=False)
+    response = _gemini_request_with_retry(url, body, timeout=None, stream=False)
     data = response.json()
 
     # Extract text

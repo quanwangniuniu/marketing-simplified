@@ -452,6 +452,7 @@ export const mockOverview: OverviewMock = {
   pendingAssetReviews,
   activeCampaigns,
   pendingInvitations,
+  recentAuditEvents: []
 };
 
 export {

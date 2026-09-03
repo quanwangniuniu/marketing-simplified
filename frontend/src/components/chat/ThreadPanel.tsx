@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, MessageSquare, Loader2 } from 'lucide-react';
+import MessageFlagChips from './MessageFlagChips';
 import { format } from 'date-fns';
 import type { ChatParticipant, Message } from '@/types/chat';
 import { useThreadData } from '@/hooks/useThreadData';
@@ -12,6 +13,8 @@ import type { RichSendData } from './ChatComposer';
 import MessageItem from './MessageItem';
 import MessageHoverActions from './MessageHoverActions';
 import ChatRichTextRenderer from './ChatRichTextRenderer';
+
+const JUMP_HIGHLIGHT_CLEAR_MS = 8300;
 
 // ── Avatar helper ─────────────────────────────────────────────────────────────
 
@@ -152,22 +155,11 @@ function RootMessageSummary({
             )
           )}
 
-          {(isPinned || isSaved) && (
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-              {isPinned && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-teal-600">
-                  <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
-                  Pinned to channel · visible to all members
-                </span>
-              )}
-              {isSaved && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-amber-500">
-                  <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-                  Saved for later · only visible to you
-                </span>
-              )}
-            </div>
-          )}
+          <MessageFlagChips
+            isPinned={isPinned}
+            isSaved={isSaved}
+            onUnpin={onPin ? () => onPin(message.id) : undefined}
+          />
         </div>
 
         {isHovering && !isEditing && (
@@ -256,7 +248,7 @@ export default function ThreadPanel({
   }, [replies.length, highlightMessageId]);
 
   // When a highlight target is set and replies are loaded, scroll the target
-  // into view and start a 4 s timer to clear the highlight (parent state).
+  // into view and retain the class through the animation's transparent frame.
   useEffect(() => {
     if (!highlightMessageId) return;
     if (isLoading) return;
@@ -267,7 +259,7 @@ export default function ThreadPanel({
     });
     const timer = window.setTimeout(() => {
       onHighlightCleared?.();
-    }, 4000);
+    }, JUMP_HIGHLIGHT_CLEAR_MS);
     return () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
@@ -370,9 +362,12 @@ export default function ThreadPanel({
   }, [rootMessage.id, updateMessage]);
 
   return (
-    <div className="flex h-full w-full flex-col border-l border-gray-200 bg-white">
+    <div
+      className="flex h-full w-full flex-col border-l border-gray-200 bg-white"
+      data-testid="thread-panel"
+    >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+      <div className="relative z-10 flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-gray-500" />
           <span className="text-sm font-semibold text-gray-800">Thread</span>

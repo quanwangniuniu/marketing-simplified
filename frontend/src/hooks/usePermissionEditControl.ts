@@ -140,13 +140,13 @@ export const usePermissionEditControl = (
       setLoading(true);
       setError(null);
 
-      // Get current user from auth store
+      // Get current user from auth store, fall back to localStorage if not yet hydrated.
       const { useAuthStore } = await import('@/lib/authStore');
+      const { readPersistedAuthState } = await import('@/lib/api');
       const authStore = useAuthStore.getState();
-      const isAuthenticated = authStore.user !== null;
-      const currentUser = authStore.user;
+      const currentUser = authStore.user ?? readPersistedAuthState()?.state?.user ?? null;
 
-      if (!isAuthenticated || !currentUser) {
+      if (!currentUser) {
         console.log('User not authenticated, setting empty roles');
         setUserRoles([]);
         return;

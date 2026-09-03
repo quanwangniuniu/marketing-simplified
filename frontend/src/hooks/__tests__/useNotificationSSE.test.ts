@@ -91,6 +91,7 @@ describe('useNotificationSSE', () => {
   // Per-test mock action references configured in beforeEach.
   let mockTriggerRefresh: jest.Mock;
   let mockSetUnreadCount: jest.Mock;
+  let mockSetConnectionStatus: jest.Mock;
   let mockTriggerChatActivity: jest.Mock;
   let mockIncrementGlobalUnreadCount: jest.Mock;
 
@@ -112,9 +113,11 @@ describe('useNotificationSSE', () => {
     // Notification store
     mockTriggerRefresh = jest.fn();
     mockSetUnreadCount = jest.fn();
+    mockSetConnectionStatus = jest.fn();
     (useNotificationStore.getState as jest.Mock).mockReturnValue({
       triggerRefresh: mockTriggerRefresh,
       setUnreadCount: mockSetUnreadCount,
+      setConnectionStatus: mockSetConnectionStatus,
     });
 
     // Chat store
@@ -133,6 +136,7 @@ describe('useNotificationSSE', () => {
       configurable: true,
     });
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   // ── 1. Connection setup ────────────────────────────────────────────────────
@@ -172,8 +176,14 @@ describe('useNotificationSSE', () => {
 
       // Simulate an event that carries a Last-Event-ID.
       fireMessage(
-        { type: 'notification', data: { event_type: 'task_assigned' } },
-        '2024-01-15T10:00:00Z', // lastEventId
+        {
+          type: 'notification',
+          data: {
+            created_at: '2026-08-22T10:00:00.000000Z',
+            event_type: 'task_assigned',
+          },
+        },
+        'aaaabbbb-0000-0000-0000-aabbccddeeff',
       );
 
       // Trigger a reconnect via visibility change (hidden → visible).
@@ -183,9 +193,28 @@ describe('useNotificationSSE', () => {
 
       expect(MockEventSource).toHaveBeenCalledTimes(1);
       const reconnectUrl: string = MockEventSource.mock.calls[0][0];
-      // The timestamp must be URL-encoded in the query string.
       expect(reconnectUrl).toContain('lastEventId=');
-      expect(reconnectUrl).toContain('2024-01-15');
+      expect(reconnectUrl).toContain('aaaabbbb-0000-0000-0000-aabbccddeeff');
+      expect(reconnectUrl).toContain('lastEventCreatedAt=');
+      expect(decodeURIComponent(reconnectUrl)).toContain('2026-08-22T10:00:00.000000Z');
+    });
+
+    it('tracks connecting and connected health states', () => {
+      renderHook(() => useNotificationSSE());
+
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('connecting');
+      act(() => latestES?.onopen?.(new Event('open')));
+      expect(mockSetConnectionStatus).toHaveBeenLastCalledWith('connected');
+    });
+
+    it('sets disconnected health when no token is available', () => {
+      (useAuthStore as unknown as jest.Mock).mockImplementation(
+        (selector: (s: { token: string | null }) => unknown) => selector({ token: null }),
+      );
+
+      renderHook(() => useNotificationSSE());
+
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('disconnected');
     });
   });
 
@@ -241,6 +270,22 @@ describe('useNotificationSSE', () => {
       });
 
       expect(mockTriggerRefresh).not.toHaveBeenCalled();
+    });
+
+    it('suppresses a replayed notification UUID already seen by this page', () => {
+      renderHook(() => useNotificationSSE());
+      const payload = {
+        type: 'notification',
+        data: {
+          created_at: '2026-08-22T10:00:00.000000Z',
+          event_type: 'task_assigned',
+        },
+      };
+
+      fireMessage(payload, 'aaaabbbb-0000-0000-0000-aabbccddeeff');
+      fireMessage(payload, 'aaaabbbb-0000-0000-0000-aabbccddeeff');
+
+      expect(mockTriggerRefresh).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -301,6 +346,7 @@ describe('useNotificationSSE', () => {
       act(() => setVisibility('hidden'));
 
       expect(closeMock).toHaveBeenCalled();
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('disconnected');
     });
 
     it('creates a new EventSource when the tab becomes visible again', () => {
@@ -339,6 +385,7 @@ describe('useNotificationSSE', () => {
       });
 
       expect(closeMock).toHaveBeenCalled();
+      expect(mockSetConnectionStatus).toHaveBeenCalledWith('reconnecting');
     });
 
     it('does not reconnect synchronously – waits for the back-off timer', () => {
@@ -366,6 +413,27 @@ describe('useNotificationSSE', () => {
         jest.advanceTimersByTime(4_000);
       });
 
+      expect(MockEventSource).toHaveBeenCalledTimes(1);
+    });
+
+    it('adds jitter to the reconnect delay', () => {
+      jest.spyOn(Math, 'random').mockReturnValue(0);
+      renderHook(() => useNotificationSSE());
+      MockEventSource.mockClear();
+
+      act(() => {
+        latestES?.onerror?.(new Event('error'));
+      });
+
+      // MIN_RETRY_MS with -20% jitter is 2,400 ms.
+      act(() => {
+        jest.advanceTimersByTime(2_399);
+      });
+      expect(MockEventSource).not.toHaveBeenCalled();
+
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
       expect(MockEventSource).toHaveBeenCalledTimes(1);
     });
 

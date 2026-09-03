@@ -1,16 +1,18 @@
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
+from core.consumers import InstrumentedAsyncWebsocketConsumer
 from .models import Asset
 
 
-class AssetConsumer(AsyncWebsocketConsumer):
+class AssetConsumer(InstrumentedAsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time asset updates.
     Handles connections to asset-specific groups for live updates.
     """
-    
+
+    ws_channel = 'asset'
+
     async def connect(self):
         """Handle WebSocket connection"""
         self.asset_id = self.scope['url_route']['kwargs']['asset_id']
