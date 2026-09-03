@@ -484,8 +484,8 @@ jobs:
             npx next lint --max-warnings 9999 &&
             echo 'Building frontend application...' &&
             npm run build &&
-            echo 'Running frontend tests...' &&
-            npm test
+            echo 'Running frontend tests with coverage gate...' &&
+            npm run test:ci
           "
 
       # The Studio service is a separate Next.js app that talks to the same
