@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 def retry_policy(max_retries=3,  retry_delay= 5,on_exhausted='fail'):
 
     """
-    retry_policy is a decorator that wraps a function with retry logic. 
-    It attempts to execute the function up to max_retries times in case of 
-    specific exceptions (anthropic.APITimeoutError or RuntimeError). 
+    retry_policy is a decorator that wraps a function with retry logic.
+    It attempts to execute the function up to max_retries times in case of
+    specific exceptions (anthropic.APITimeoutError or RuntimeError).
     If all retries are exhausted, it returns a StepResult indicating failure or skip based on the on_exhausted parameter.
 
     Args:
@@ -100,7 +100,7 @@ class BaseStepExecutor:
 
 class AnalyzeDataExecutor(BaseStepExecutor):
     """Runs the Dify->Claude analysis fallback chain via _run_analysis()."""
-    
+
     @retry_policy(max_retries=3, retry_delay=5, on_exhausted='fail')
     def execute(self, input_data):
         from .services import _run_analysis
@@ -109,12 +109,12 @@ class AnalyzeDataExecutor(BaseStepExecutor):
         if not spreadsheet_data:
             return StepResult(success=False, error='No spreadsheet_data in input')
 
+        from .generation_registry import (
+            GenerationValidationError,
+            filter_sse_analysis_payload,
+            normalize_generation_outputs,
+        )
         try:
-            from .generation_registry import (
-                GenerationValidationError,
-                filter_sse_analysis_payload,
-                normalize_generation_outputs,
-            )
 
             user_id = str(self.orchestrator.user.id)
             success_criteria = (
@@ -193,7 +193,7 @@ class CallDifyExecutor(BaseStepExecutor):
 
 class CallLLMExecutor(BaseStepExecutor):
     """Calls Claude directly, supports per-step config override."""
-    
+
     #Anthropic API call has default retry logic, so the retry policy is simple to avoid double retrying.
     @retry_policy(max_retries=1, retry_delay=0, on_exhausted='fail')
     def execute(self, input_data):
@@ -367,7 +367,7 @@ class CreateTasksExecutor(BaseStepExecutor):
 
 class GenerateMiroSnapshotExecutor(BaseStepExecutor):
     """Generate a validated Miro snapshot from workflow context via Gemini."""
-    
+
     @retry_policy(max_retries=3, retry_delay=5, on_exhausted='fail')
     def execute(self, input_data):
         from .miro_generation import (
