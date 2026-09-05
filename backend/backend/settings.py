@@ -37,6 +37,7 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0').s
     'volar-probankruptcy-orval.ngrok-free.dev',
     'christeen-gawkiest-carmelia.ngrok-free.dev',
     'upload-rinsing-tracing.ngrok-free.dev',
+    'tidiness-confusing-finished.ngrok-free.dev',
 ]
 
 
