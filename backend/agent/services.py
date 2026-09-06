@@ -100,6 +100,7 @@ def _extract_spreadsheet_data(spreadsheet):
 
 
 def _call_llm(client, spreadsheet_data):
+    """Deprecated by the unified LLM caller"""
     raise NotImplementedError("Use the `call_llm()` from llm_client module.")
     """Call Claude API to analyze spreadsheet data."""
     system_prompt = (
