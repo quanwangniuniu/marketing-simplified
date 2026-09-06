@@ -16,6 +16,7 @@ from .models import (
 from . import data_service
 from . import file_parser
 from .agent_utils import json_input, serialize_agent_messages
+from .llm_client import call_llm as _call_llm_unified
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ def _extract_spreadsheet_data(spreadsheet):
 
 
 def _call_llm(client, spreadsheet_data):
+    raise NotImplementedError("Use the `call_llm()` from llm_client module.")
     """Call Claude API to analyze spreadsheet data."""
     system_prompt = (
         "You are a media buying analyst AI. Analyze spreadsheet data and identify "
@@ -319,7 +321,6 @@ def _call_gemini_analysis(
     agent_session=None,
 ):
     """Call Gemini to analyze spreadsheet data."""
-    from .llm_client import call_llm as _call_llm_unified
     from .gemini_client import call_gemini_json
     from .generation_registry import (
         build_analysis_prompt,
@@ -530,7 +531,11 @@ def _run_analysis(
     client = _get_llm_client()
     if client:
         try:
-            raw = _call_llm(client, spreadsheet_data, agent_session=agent_session)
+            raw = _call_llm_unified(provider="anthropic",
+                model="claude-sonnet-5",
+                user_prompt=spreadsheet_data,
+                system_prompt=_ANALYSIS_SYSTEM_PROMPT,
+                agent_session=agent_session)["text"]
             return _assign_anomaly_ids(_coerce_llm_analysis_for_requested(raw, requested))
         except QuotaError:
             raise
@@ -2355,7 +2360,7 @@ class AgentOrchestrator:
                     execution.save(update_fields=['status', 'updated_at'])
 
                     logger.warning("Workflow step skipped after retries exhausted: run_id=%s, step=%s, step_type=%s", workflow_run.id, step.name, step.step_type)
-                    
+
                     #Provide explanation for users to understand why this step didn't run
                     yield {
                         'type': 'text',
@@ -2386,8 +2391,8 @@ class AgentOrchestrator:
 
                     yield {'type': 'error', 'content': result.error}
                     return
-            
-               
+
+
         workflow_run.status = 'completed'
         workflow_run.save(update_fields=['status', 'updated_at'])
         yield {

@@ -66,24 +66,6 @@ class AnthropicClientTests(SimpleTestCase):
         self.assertIs(result, expected_client)
         mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
 
-    def test_call_llm_parses_anthropic_json_response(self):
-        client = MagicMock()
-        client.messages.create.return_value = SimpleNamespace(
-            content=[SimpleNamespace(text=json.dumps({"anomalies": [], "recommended_tasks": []}))]
-        )
-        spreadsheet_data = {
-            "name": "Campaign report",
-            "sheets": [{"name": "Ads", "columns": ["Spend"], "rows": [{"Spend": 25}]}],
-        }
-
-        result = services._call_llm(client, spreadsheet_data)
-
-        self.assertEqual(result, {"anomalies": [], "recommended_tasks": []})
-        call = client.messages.create.call_args.kwargs
-        self.assertEqual(call["model"], "claude-sonnet-4-20250514")
-        self.assertEqual(call["max_tokens"], 2000)
-        self.assertIn('"Spend": 25', call["messages"][0]["content"])
-
 
 class SpreadsheetExtractionTests(SimpleTestCase):
     @patch("agent.services.Cell.objects.filter")

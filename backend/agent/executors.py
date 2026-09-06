@@ -10,6 +10,7 @@ from django.core.cache import cache
 import time
 import anthropic
 from .gemini_client import GeminiRetriesExhausted
+from .llm_client import call_llm as _call_llm_unified
 
 
 logger = logging.getLogger(__name__)
@@ -205,7 +206,13 @@ class CallLLMExecutor(BaseStepExecutor):
             if not client:
                 return StepResult(success=False, error='No LLM API key configured')
 
-            result = _call_llm(client, spreadsheet_data, agent_session=self.orchestrator.session)
+            from .services import _ANALYSIS_SYSTEM_PROMPT
+            result = _call_llm_unified(
+                provider="anthropic",
+                model="claude-sonnet-5",
+                user_prompt=spreadsheet_data,
+                system_prompt=_ANALYSIS_SYSTEM_PROMPT,
+                agent_session=self.orchestrator.session)
 
             return StepResult(
                 success=True,
