@@ -2056,6 +2056,12 @@ class PublicBookingFeedView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "public_booking_read"
 
+    def perform_content_negotiation(self, request, force=False):
+        # Successful responses are already rendered as text/calendar below.
+        # Calendar clients request that MIME type, which DRF's JSON renderers
+        # otherwise reject with 406 before get() runs. Keep JSON for errors.
+        return super().perform_content_negotiation(request, force=True)
+
     def get(self, request, org_slug: str, link_slug: str, token: str | None = None):
         organization = _resolve_booking_org(org_slug)
         if not organization:
