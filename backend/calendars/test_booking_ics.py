@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.test import TestCase
 
-from calendars.booking_ics import build_booking_ics, escape_text, fold_line
+from calendars.booking_ics import as_webcal_url, build_booking_ics, escape_text, fold_line
 
 START = datetime(2027, 3, 2, 9, 0, tzinfo=dt_timezone.utc)
 END = START + timedelta(hours=1)
@@ -61,11 +61,28 @@ class FoldingTests(TestCase):
         )
 
 
+class WebcalUrlTests(TestCase):
+    def test_https_becomes_webcal(self):
+        assert (
+            as_webcal_url("https://app.example/api/public/book/acme/intro/abc.ics")
+            == "webcal://app.example/api/public/book/acme/intro/abc.ics"
+        )
+
+    def test_http_becomes_webcal(self):
+        # Localhost is http; the scheme still has to say "subscribe".
+        assert as_webcal_url("http://localhost/feed.ics") == "webcal://localhost/feed.ics"
+
+    def test_an_already_webcal_url_is_left_alone(self):
+        assert as_webcal_url("webcal://app.example/feed.ics") == "webcal://app.example/feed.ics"
+
+
 class BuildTests(TestCase):
     def test_it_emits_one_complete_vevent(self):
         ics = build()
         assert ics.startswith("BEGIN:VCALENDAR")
-        assert ics.endswith("END:VCALENDAR")
+        assert ics.rstrip("\r\n").endswith("END:VCALENDAR")
+        assert ics.endswith("\r\n")
+        assert "X-WR-CALNAME:Intro Call" in ics
         assert ics.count("BEGIN:VEVENT") == 1
         assert "DTSTART:20270302T090000Z" in ics
         assert "DTEND:20270302T100000Z" in ics

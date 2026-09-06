@@ -67,7 +67,8 @@ export function buildIcs(entry: CalendarEntry, uid?: string): string {
     lines.push(`URL:${escapeIcsText(entry.url)}`);
   }
   lines.push('END:VEVENT', 'END:VCALENDAR');
-  return lines.join('\r\n');
+  // RFC 5545: the stream ends with CRLF. Outlook rejects a file that doesn't.
+  return `${lines.join('\r\n')}\r\n`;
 }
 
 /** Google's prefilled-event URL. No auth, no API — just a link. */
@@ -81,6 +82,25 @@ export function googleCalendarUrl(entry: CalendarEntry): string {
   const details = [entry.description, entry.url].filter(Boolean).join('\n\n');
   if (details) params.set('details', details);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+/** Outlook wants YYYY-MM-DDTHH:mm:SSZ, not the compact Google stamp. */
+export function toOutlookUtc(iso: string): string {
+  return new Date(iso).toISOString().replace(/\.\d{3}/, '');
+}
+
+/** Outlook on the web's prefilled-event URL. Same idea as Google's template. */
+export function outlookCalendarUrl(entry: CalendarEntry): string {
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: entry.title,
+    startdt: toOutlookUtc(entry.start),
+    enddt: toOutlookUtc(entry.end),
+  });
+  const body = [entry.description, entry.url].filter(Boolean).join('\n\n');
+  if (body) params.set('body', body);
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
 }
 
 /** Filename-safe slug for the downloaded file. */

@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CalendarX2, CheckCircle2, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { PublicBookingAPI } from '@/lib/api/calendarApi';
+import { clearBookingConfirmation } from './bookingConfirmationSession';
 
 interface BookingCancelProps {
   orgSlug: string;
@@ -28,6 +30,7 @@ export default function BookingCancel({ orgSlug, linkSlug, token }: BookingCance
     setStage('working');
     try {
       await PublicBookingAPI.cancelBooking(orgSlug, linkSlug, token);
+      clearBookingConfirmation(orgSlug, linkSlug);
       setStage('done');
     } catch {
       setStage('failed');
@@ -110,6 +113,13 @@ export default function BookingCancel({ orgSlug, linkSlug, token }: BookingCance
               {stage === 'working' && <Loader2 className="h-4 w-4 animate-spin" />}
               {stage === 'working' ? 'Cancelling…' : 'Cancel booking'}
             </button>
+            <Link
+              href={`/book/${encodeURIComponent(orgSlug)}/${encodeURIComponent(linkSlug)}`}
+              data-testid="cancel-keep"
+              className="mt-3 inline-block text-xs text-gray-400 underline underline-offset-2 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+            >
+              Keep this booking
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>

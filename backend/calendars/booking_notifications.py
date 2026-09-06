@@ -23,6 +23,23 @@ LINKS_URL = "/calendar/booking-links"
 CALENDAR_URL = "/calendar"
 
 
+def _public_book_url(link) -> str:
+    """Where a named guest opens the link — not the owner manager page."""
+    org = getattr(getattr(link, "organization", None), "slug", "") or ""
+    slug = getattr(link, "slug", "") or ""
+    if not org or not slug:
+        return CALENDAR_URL
+    return f"/book/{org}/{slug}"
+
+
+def _link_metadata(link) -> dict:
+    return {
+        "source": "booking_link",
+        "organization_slug": getattr(getattr(link, "organization", None), "slug", "") or "",
+        "link_slug": getattr(link, "slug", "") or "",
+    }
+
+
 def _display_name(user) -> str:
     if not user:
         return "Someone"
@@ -71,6 +88,7 @@ def notify_link_created(link, actor, only_ids: set[int] | None = None) -> None:
             related_object_type="booking_link",
             related_object_id=str(link.id),
             action_url=LINKS_URL,
+            metadata=_link_metadata(link),
         )
 
     # Every named guest with an account, minus the host - who has already been
@@ -87,7 +105,8 @@ def notify_link_created(link, actor, only_ids: set[int] | None = None) -> None:
             body=link.title,
             related_object_type="booking_link",
             related_object_id=str(link.id),
-            action_url=LINKS_URL,
+            action_url=_public_book_url(link),
+            metadata=_link_metadata(link),
         )
 
 
@@ -147,4 +166,21 @@ def notify_booking_cancelled(event, host_id: int, guest_user_id, actor, by_guest
             related_object_type="event",
             related_object_id=str(event.id),
             action_url=CALENDAR_URL,
+            metadata={"source": "booking_link"},
         )
+
+
+def notify_booking_rescheduled(link, event, booker_user, booker_name: str) -> None:
+    """Host hears that a named guest moved their slot."""
+    _notify(
+        recipient_id=link.owner_id,
+        actor_id=getattr(booker_user, "pk", None),
+        category=NotificationCategory.MEETINGS,
+        event_type=NotificationEventType.MEETING_UPDATED,
+        title=f"{booker_name} changed their booking time",
+        body=event.title,
+        related_object_type="event",
+        related_object_id=str(event.id),
+        action_url=CALENDAR_URL,
+        metadata={**_link_metadata(link), "start": event.start_datetime.isoformat()},
+    )

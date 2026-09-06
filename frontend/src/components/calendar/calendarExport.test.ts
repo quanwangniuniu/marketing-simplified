@@ -3,7 +3,9 @@ import {
   escapeIcsText,
   googleCalendarUrl,
   icsFileName,
+  outlookCalendarUrl,
   toCompactUtc,
+  toOutlookUtc,
   type CalendarEntry,
 } from '@/components/calendar/calendarExport';
 
@@ -46,7 +48,8 @@ describe('buildIcs', () => {
     expect(ics).toContain('DTSTART:20260910T143000Z');
     expect(ics).toContain('DTEND:20260910T150000Z');
     expect(ics).toContain('SUMMARY:Intro call');
-    expect(ics.endsWith('END:VCALENDAR')).toBe(true);
+    expect(ics.trimEnd().endsWith('END:VCALENDAR')).toBe(true);
+    expect(ics.endsWith('\r\n')).toBe(true);
   });
 
   it('separates lines with CRLF, as Outlook requires', () => {
@@ -107,5 +110,22 @@ describe('cancel link', () => {
     expect(url.searchParams.get('details')).toBe(
       'With Ray\n\nhttps://app.example/book/acme/intro/cancel?token=abc',
     );
+  });
+});
+
+describe('outlookCalendarUrl', () => {
+  it('builds a prefilled Outlook compose link', () => {
+    const url = new URL(outlookCalendarUrl(entry));
+    expect(url.origin + url.pathname).toBe(
+      'https://outlook.live.com/calendar/0/deeplink/compose',
+    );
+    expect(url.searchParams.get('rru')).toBe('addevent');
+    expect(url.searchParams.get('subject')).toBe('Intro call');
+    expect(url.searchParams.get('startdt')).toBe('2026-09-10T14:30:00Z');
+    expect(url.searchParams.get('enddt')).toBe('2026-09-10T15:00:00Z');
+  });
+
+  it('normalises compact stamps to Outlook’s ISO form', () => {
+    expect(toOutlookUtc('2026-09-10T16:30:00+02:00')).toBe('2026-09-10T14:30:00Z');
   });
 });

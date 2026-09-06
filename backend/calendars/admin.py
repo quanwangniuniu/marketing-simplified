@@ -20,9 +20,10 @@ class BookingLinkAdmin(admin.ModelAdmin):
         "organization",
         "duration_minutes",
         "is_active",
+        "invitees_only",
         "updated_at",
     ]
-    list_filter = ["is_active", "organization"]
+    list_filter = ["is_active", "invitees_only", "organization"]
     search_fields = ["slug", "title", "owner__email", "owner__username"]
     # raw_id rather than autocomplete: autocomplete_fields requires the related
     # models to have their own registered admin with search_fields, and Calendar
@@ -30,7 +31,7 @@ class BookingLinkAdmin(admin.ModelAdmin):
     raw_id_fields = ["owner", "calendar", "organization"]
     readonly_fields = ["id", "created_at", "updated_at"]
     fieldsets = (
-        (None, {"fields": ("id", "organization", "owner", "calendar", "is_active")}),
+        (None, {"fields": ("id", "organization", "owner", "calendar", "is_active", "invitees_only")}),
         ("Link", {"fields": ("slug", "title", "description")}),
         (
             "Scheduling rules",

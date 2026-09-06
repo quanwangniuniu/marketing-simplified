@@ -20,6 +20,21 @@ from datetime import datetime, timezone as dt_timezone
 PRODID = "-//Marketing Simplified//Booking//EN"
 
 
+def as_webcal_url(url: str) -> str:
+    """
+    Subscribe links use webcal://, not http://.
+
+    webcal is not a transport. The calendar app rewrites it to https (or
+    http on an explicitly insecure host) and GETs ordinary ICS. Publishing
+    http:// makes a browser download a file; publishing webcal:// makes
+    Outlook / Apple Calendar offer a subscription.
+    """
+    for prefix in ("https://", "http://"):
+        if url.startswith(prefix):
+            return "webcal://" + url[len(prefix) :]
+    return url
+
+
 def _stamp(value: datetime) -> str:
     return value.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -85,6 +100,7 @@ def build_booking_ics(
         f"PRODID:{PRODID}",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
+        f"X-WR-CALNAME:{escape_text(title)}",
         "BEGIN:VEVENT",
         f"UID:{uid}",
         f"DTSTAMP:{_stamp(datetime.now(dt_timezone.utc))}",
@@ -107,4 +123,5 @@ def build_booking_ics(
     folded: list[str] = []
     for line in lines:
         folded.extend(fold_line(line))
-    return "\r\n".join(folded)
+    # RFC 5545: the stream ends with CRLF. Outlook rejects a file that doesn't.
+    return "\r\n".join(folded) + "\r\n"

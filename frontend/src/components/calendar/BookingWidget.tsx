@@ -36,14 +36,29 @@ import {
   todayKey,
   TIMEZONE_CHOICES,
 } from './bookingSlots';
-import { downloadIcs, googleCalendarUrl, type CalendarEntry } from './calendarExport';
+import { downloadIcs, type CalendarEntry } from './calendarExport';
+import BookingFind from './BookingFind';
+import {
+  clearBookingConfirmation,
+  readBookingConfirmation,
+  saveBookingConfirmation,
+} from './bookingConfirmationSession';
+import { useAuthStore } from '@/lib/authStore';
+import { bookerDisplayName, isInternalBooker } from '@/lib/bookingBookerIdentity';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { CalendarScopeSwitch } from './CalendarScopeSwitch';
+import {
+  SAME_PROJECT_TEAM_MESSAGE,
+  bookerCanUseTeamScope,
+  type BookingScope,
+} from '@/lib/bookingLinkScope';
 
 interface BookingWidgetProps {
   orgSlug: string;
   linkSlug: string;
 }
 
-type Stage = 'loading' | 'picking' | 'confirming' | 'booked' | 'missing';
+type Stage = 'loading' | 'picking' | 'confirming' | 'finding' | 'booked' | 'missing';
 
 function errorMessage(error: unknown, fallback: string): string {
   const data = (error as { response?: { data?: unknown } })?.response?.data;
@@ -59,6 +74,13 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps) {
+  const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const internalBooker = hasHydrated && isInternalBooker(user, isAuthenticated);
+  const showGuestFields = hasHydrated && !internalBooker;
+
   const [stage, setStage] = useState<Stage>('loading');
   const [link, setLink] = useState<PublicBookingLinkDTO | null>(null);
   const [timeZone, setTimeZone] = useState<string>('UTC');
@@ -73,6 +95,8 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [bookerScope, setBookerScope] = useState<BookingScope>('personal');
+  const [sameProjectPrompt, setSameProjectPrompt] = useState(false);
 
   // Which month the picker is showing. Kept as plain year/month so paging never
   // drifts across timezones.
@@ -88,18 +112,44 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
     setTimeZone(detectTimezone());
   }, []);
 
+  useEffect(() => {
+    const stored = readBookingConfirmation(orgSlug, linkSlug);
+    if (!stored) return;
+    setConfirmation(stored.confirmation);
+    setFeedUrl(stored.feedUrl);
+    setStage('booked');
+  }, [orgSlug, linkSlug]);
+
   const load = useCallback(async () => {
     try {
       // Fetch only the visible month rather than a fixed window, so paging
       // forward actually shows more availability.
       const { from, to } = monthRange(view.year, view.month);
       const padded = new Date(from.getTime() - 86_400_000);
-      const data = await PublicBookingAPI.getAvailability(orgSlug, linkSlug, {
-        from: (padded > new Date() ? padded : new Date()).toISOString(),
-        to: new Date(to.getTime() + 86_400_000).toISOString(),
-      });
+      const data = await PublicBookingAPI.getAvailability(
+        orgSlug,
+        linkSlug,
+        {
+          from: (padded > new Date() ? padded : new Date()).toISOString(),
+          to: new Date(to.getTime() + 86_400_000).toISOString(),
+        },
+        token,
+      );
+      if (data.invitees_only && data.viewer_can_book === false) {
+        setLink(null);
+        setStage('missing');
+        return;
+      }
       setLink(data);
-      setStage((current) => (current === 'confirming' ? current : 'picking'));
+      setStage((current) => {
+        if (forcePickerRef.current) {
+          forcePickerRef.current = false;
+          return 'picking';
+        }
+        return current === 'confirming' || current === 'booked' || current === 'finding'
+          ? current
+          : 'picking';
+      });
     } catch (err) {
       const statusCode = (err as { response?: { status?: number } })?.response?.status;
       if (statusCode === 404) {
@@ -109,11 +159,23 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
       setError(errorMessage(err, 'Could not load availability. Please try again.'));
       setStage('picking');
     }
-  }, [orgSlug, linkSlug, view.year, view.month]);
+  }, [orgSlug, linkSlug, view.year, view.month, token]);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     void load();
-  }, [load]);
+  }, [hasHydrated, load]);
+
+  const resumePicker = () => {
+    forcePickerRef.current = true;
+    clearBookingConfirmation(orgSlug, linkSlug);
+    setConfirmation(null);
+    setFeedUrl('');
+    setSelectedSlot(null);
+    setError(null);
+    setStage('picking');
+    void load();
+  };
 
   // Availability is a snapshot. Without these two, a page left open keeps
   // offering times that have already passed, and the booking then fails at
@@ -200,6 +262,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
   const focusedCellRef = useRef<HTMLButtonElement | null>(null);
   const shouldRestoreFocus = useRef(false);
+  const forcePickerRef = useRef(false);
 
   useEffect(() => {
     setFocusedDate((current) => current ?? selectedDate);
@@ -251,14 +314,24 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
     setSubmitting(true);
     setError(null);
     try {
-      const result = await PublicBookingAPI.createBooking(orgSlug, linkSlug, {
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        start: selectedSlot.start,
-        notes: form.notes.trim(),
-      });
-      setConfirmation({
+      const identity = internalBooker && user
+        ? { name: bookerDisplayName(user), email: user.email.trim(), phone: '' }
+        : {
+            name: form.name.trim(),
+            email: form.email.trim(),
+            phone: form.phone.trim(),
+          };
+      const result = await PublicBookingAPI.createBooking(
+        orgSlug,
+        linkSlug,
+        {
+          ...identity,
+          start: selectedSlot.start,
+          notes: form.notes.trim(),
+        },
+        internalBooker ? token : undefined,
+      );
+      const confirmation = {
         start: result.start,
         end: result.end,
         title: result.title,
@@ -273,9 +346,12 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
           [link?.description?.trim(), link?.owner_name && `With ${link.owner_name}`]
             .filter(Boolean)
             .join('\n\n') || undefined,
-      });
-      setFeedUrl(result.feed_url || '');
+      };
+      const nextFeed = result.feed_url || '';
+      setConfirmation(confirmation);
+      setFeedUrl(nextFeed);
       setStage('booked');
+      saveBookingConfirmation(orgSlug, linkSlug, { confirmation, feedUrl: nextFeed });
     } catch (err) {
       const statusCode = (err as { response?: { status?: number } })?.response?.status;
       if (statusCode === 409) {
@@ -325,6 +401,15 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         className="mx-auto mt-24 max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm animate-in fade-in zoom-in-95 duration-300"
         data-testid="booking-confirmed"
       >
+        <button
+          type="button"
+          onClick={resumePicker}
+          data-testid="booking-back-to-slots"
+          className="mb-4 flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back
+        </button>
         <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
         <h1 className="mt-4 text-lg font-semibold text-gray-900">You&apos;re booked</h1>
         <p className="mt-2 text-sm text-gray-600">{confirmation.title}</p>
@@ -335,51 +420,20 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         <p className="mt-1 text-xs text-gray-400">{timezoneLabel(timeZone)}</p>
 
         {/*
-          Three ways to keep the booking, because they fail differently. The
-          one-off file and the Google link work even if the confirmation email
-          bounces or never arrives; the subscription below is the only one that
-          stays correct when the meeting is later moved or cancelled.
+          Subscribe first: a saved .ics is a snapshot and never learns the
+          meeting was called off. The feed token is in the path because
+          Outlook desktop drops ?query= on internet calendars.
         */}
         <div className="mt-6 border-t border-gray-100 pt-5">
-          <p className="text-xs text-gray-500">Save it to your calendar</p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <a
-              href={googleCalendarUrl(confirmation)}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="add-to-google"
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#3CCED7] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
-            >
-              <CalendarDays className="h-4 w-4" />
-              Google Calendar
-            </a>
-            <button
-              type="button"
-              onClick={() => downloadIcs(confirmation)}
-              data-testid="download-ics"
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
-            >
-              <Download className="h-4 w-4 text-gray-400" />
-              .ics file
-            </button>
-          </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
-            The .ics file works with Apple Calendar, Outlook and most others.
-          </p>
-
-          {/*
-            Subscribing beats downloading: a saved file is a snapshot and never
-            learns the meeting was called off, whereas a subscribed calendar
-            re-reads this URL and drops the entry on its own.
-          */}
           {feedUrl && (
-            <div className="mt-4 border-t border-gray-100 pt-4 text-left">
+            <div className="text-left">
               <p className="text-xs font-medium text-gray-600">
-                Or subscribe, and it stays up to date
+                Subscribe, and it stays up to date
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-                Add this address to your calendar app. If the time changes or
-                the meeting is cancelled, your calendar follows.
+                This is a webcal:// address. Classic Outlook and Apple
+                Calendar subscribe to that; a plain http:// link is treated
+                as a file download. The new Outlook app cannot subscribe.
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <code
@@ -399,21 +453,59 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
               </div>
             </div>
           )}
+
+          <div className={feedUrl ? 'mt-4 border-t border-gray-100 pt-4' : undefined}>
+            <p className="text-xs text-gray-500">Save a snapshot</p>
+            <button
+              type="button"
+              onClick={() => downloadIcs(confirmation)}
+              data-testid="download-ics"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+            >
+              <Download className="h-4 w-4 text-gray-400" />
+              .ics file
+            </button>
+            <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
+              A downloaded file will not update if the meeting is cancelled.
+              Classic Outlook can open it; the new Outlook app often cannot.
+            </p>
+          </div>
           {/*
             The same link is written into the .ics, so a guest who closes this
             tab can still get back here from their own calendar entry.
           */}
-          {confirmation.url && (
-            <a
-              href={confirmation.url}
-              data-testid="confirmation-cancel-link"
-              className="mt-4 inline-block text-xs text-gray-400 underline underline-offset-2 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={resumePicker}
+              data-testid="book-another"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
             >
-              Need to cancel?
-            </a>
-          )}
+              Book another time
+            </button>
+            {confirmation.url && (
+              <a
+                href={confirmation.url}
+                data-testid="confirmation-cancel-link"
+                className="inline-block text-xs text-gray-400 underline underline-offset-2 transition-colors hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+              >
+                Need to cancel?
+              </a>
+            )}
+          </div>
         </div>
       </div>
+    );
+  }
+
+  if (stage === 'finding') {
+    return (
+      <BookingFind
+        orgSlug={orgSlug}
+        linkSlug={linkSlug}
+        timeZone={timeZone}
+        onBack={() => setStage('picking')}
+      />
     );
   }
 
@@ -505,51 +597,76 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
               </p>
 
               <div className="space-y-3">
-                <div>
-                  <label htmlFor="booking-name" className="block text-xs font-medium text-gray-600">
-                    Name
-                  </label>
-                  <input
-                    id="booking-name"
-                    required
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    data-testid="booking-name"
-                    className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="booking-email" className="block text-xs font-medium text-gray-600">
-                    Email
-                  </label>
-                  <input
-                    id="booking-email"
-                    type="email"
-                    required
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    data-testid="booking-email"
-                    className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="booking-phone" className="block text-xs font-medium text-gray-600">
-                    Phone <span className="font-normal text-gray-400">(optional)</span>
-                  </label>
-                  {/*
-                    Optional deliberately: a number helps the host reach you if
-                    email bounces, but requiring one loses bookings.
-                  */}
-                  <input
-                    id="booking-phone"
-                    type="tel"
-                    autoComplete="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    data-testid="booking-phone"
-                    className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                  />
-                </div>
+                {showGuestFields ? (
+                  <>
+                    <div>
+                      <label htmlFor="booking-name" className="block text-xs font-medium text-gray-600">
+                        Name
+                      </label>
+                      <input
+                        id="booking-name"
+                        required
+                        value={form.name}
+                        onChange={(e) => setForm({ ...form, name: e.target.value })}
+                        data-testid="booking-name"
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="booking-email" className="block text-xs font-medium text-gray-600">
+                        Email
+                      </label>
+                      <input
+                        id="booking-email"
+                        type="email"
+                        required
+                        value={form.email}
+                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        data-testid="booking-email"
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="booking-phone" className="block text-xs font-medium text-gray-600">
+                        Phone <span className="font-normal text-gray-400">(optional)</span>
+                      </label>
+                      {/*
+                        Optional deliberately: a number helps the host reach you if
+                        email bounces, but requiring one loses bookings.
+                      */}
+                      <input
+                        id="booking-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        data-testid="booking-phone"
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                      />
+                    </div>
+                  </>
+                ) : null}
+                {internalBooker ? (
+                  <div>
+                    <p className="block text-xs font-medium text-gray-600">Calendar</p>
+                    <div className="mt-1">
+                      <CalendarScopeSwitch
+                        scope={bookerScope}
+                        onChange={(scope) => {
+                          if (
+                            scope === 'team' &&
+                            !bookerCanUseTeamScope(Boolean(link?.same_project))
+                          ) {
+                            setSameProjectPrompt(true);
+                            return;
+                          }
+                          setBookerScope(scope);
+                        }}
+                        testIdPrefix="booking-booker-scope"
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <div>
                   <label htmlFor="booking-notes" className="block text-xs font-medium text-gray-600">
                     Anything to share beforehand?
@@ -567,7 +684,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !hasHydrated}
                 data-testid="booking-submit"
                 className="mt-4 w-full rounded-lg bg-[#3CCED7] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD] disabled:opacity-60"
               >
@@ -773,6 +890,8 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
                                   <button
                                     type="button"
                                     onClick={() => {
+                                      setBookerScope('personal');
+                                      setSameProjectPrompt(false);
                                       setStage('confirming');
                                       setError(null);
                                     }}
@@ -817,6 +936,29 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
           </AnimatePresence>
         </main>
       </div>
+      <p className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setStage('finding');
+          }}
+          data-testid="booking-find-open"
+          className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600"
+        >
+          Already booked? Find your booking
+        </button>
+      </p>
+      <ConfirmDialog
+        isOpen={sameProjectPrompt}
+        type="info"
+        title="Same project"
+        message={SAME_PROJECT_TEAM_MESSAGE}
+        confirmText="Use personal calendar"
+        cancelText="Got it"
+        onConfirm={() => setSameProjectPrompt(false)}
+        onCancel={() => setSameProjectPrompt(false)}
+      />
     </div>
   );
 }

@@ -1439,6 +1439,15 @@ class BookingLink(TimeStampedModel):
     )
 
     is_active = models.BooleanField(default=True)
+    # Default stays open: anyone with the URL can book. Turning this on
+    # restricts the public write to people named on the link, signed in.
+    invitees_only = models.BooleanField(
+        default=False,
+        help_text=(
+            "When set, only named invitees who are signed in can book. "
+            "Guests and anyone else with the URL cannot."
+        ),
+    )
 
     class Meta:
         ordering = ["title"]

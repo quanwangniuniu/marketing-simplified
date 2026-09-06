@@ -102,7 +102,35 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         assert body["duration_minutes"] == 60
         # The client needs the notice period to expire stale slots on its own.
         assert body["min_notice_minutes"] == 0
+        assert body["invitees_only"] is False
+        assert body["viewer_can_book"] is True
         assert len(body["slots"]) > 0
+
+    def test_invitees_only_hides_slots_from_everyone_else(self):
+        invitee = User.objects.create_user(
+            username="named",
+            email="named@acme.com",
+            password="x",
+            organization=self.org,
+        )
+        with in_org(self.org):
+            self.link.invitees_only = True
+            self.link.save(update_fields=["invitees_only"])
+            self.link.invitee_users.add(invitee)
+
+        with patch(FREEBUSY_PATH, return_value=[]):
+            guest = self.client.get(self.availability_url)
+        assert guest.status_code == status.HTTP_404_NOT_FOUND
+        serialized = str(guest.json())
+        assert "Intro Call" not in serialized
+        assert "Ada" not in serialized
+
+        self.client.force_authenticate(user=invitee)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            allowed = self.client.get(self.availability_url)
+        assert allowed.status_code == status.HTTP_200_OK
+        assert allowed.json()["viewer_can_book"] is True
+        assert len(allowed.json()["slots"]) > 0
 
     def test_payload_does_not_leak_owner_or_internal_identifiers(self):
         with patch(FREEBUSY_PATH, return_value=[]):
@@ -113,6 +141,30 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         assert str(self.link.id) not in serialized
         # A display name is intentionally exposed so the page can say who it is.
         assert body["owner_name"] == "Ada Lovelace"
+        assert body["same_project"] is False
+
+    def test_a_signed_in_teammate_is_marked_same_project(self):
+        from core.models import Project, ProjectMember
+
+        teammate = User.objects.create_user(
+            username="teammate",
+            email="teammate@acme.com",
+            password="x",
+            organization=self.org,
+        )
+        with in_org(self.org):
+            project = Project.objects.create(name="Harbor", organization=self.org)
+            ProjectMember.objects.create(project=project, user=self.user, is_active=True)
+            ProjectMember.objects.create(project=project, user=teammate, is_active=True)
+
+        with patch(FREEBUSY_PATH, return_value=[]):
+            guest = self.client.get(self.availability_url)
+        assert guest.json()["same_project"] is False
+
+        self.client.force_authenticate(user=teammate)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            body = self.client.get(self.availability_url).json()
+        assert body["same_project"] is True
 
     def test_a_phone_number_reaches_the_host_on_the_attendee(self):
         # Ray asked for a contact number, so it has to land somewhere the host
@@ -326,6 +378,112 @@ class PublicBookingCreateTests(PublicBookingTestBase):
             )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_guest_must_send_name_and_email(self):
+        with patch(FREEBUSY_PATH, return_value=[]):
+            response = self.client.post(
+                self.booking_url,
+                {"start": next_weekday_at(10).isoformat(), "notes": "Hi"},
+                format="json",
+            )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        fields = {
+            item.get("field")
+            for item in response.json().get("details", [])
+            if isinstance(item, dict)
+        }
+        assert "name" in fields
+        assert "email" in fields
+
+    def test_signed_in_member_does_not_need_to_type_identity(self):
+        invitee = User.objects.create_user(
+            username="invitee",
+            email="invitee@acme.com",
+            password="x",
+            first_name="Grace",
+            last_name="Hopper",
+            organization=self.org,
+        )
+        self.client.force_authenticate(user=invitee)
+        start = next_weekday_at(10)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            response = self.client.post(
+                self.booking_url,
+                {"start": start.isoformat(), "notes": "See you then."},
+                format="json",
+            )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        assert "Grace Hopper" in response.json()["title"]
+
+        with in_org(self.org):
+            event = Event.objects.get(calendar=self.calendar)
+            emails = set(event.attendees.values_list("email", flat=True))
+            assert "invitee@acme.com" in emails
+            assert "Booked by Grace Hopper" in (event.description or "")
+
+    def test_signed_in_member_identity_comes_from_the_account(self):
+        invitee = User.objects.create_user(
+            username="spoof",
+            email="real@acme.com",
+            password="x",
+            first_name="Real",
+            last_name="Member",
+            organization=self.org,
+        )
+        self.client.force_authenticate(user=invitee)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            response = self.client.post(
+                self.booking_url,
+                self._payload(name="Not Me", email="fake@example.com"),
+                format="json",
+            )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        assert "Real Member" in response.json()["title"]
+        with in_org(self.org):
+            event = Event.objects.get(calendar=self.calendar)
+            emails = set(event.attendees.values_list("email", flat=True))
+            assert "real@acme.com" in emails
+            assert "fake@example.com" not in emails
+
+    def test_invitees_only_rejects_guests_and_uninvited_accounts(self):
+        invitee = User.objects.create_user(
+            username="allowed",
+            email="allowed@acme.com",
+            password="x",
+            first_name="Allowed",
+            last_name="Guest",
+            organization=self.org,
+        )
+        stranger = User.objects.create_user(
+            username="stranger",
+            email="stranger@acme.com",
+            password="x",
+            organization=self.org,
+        )
+        with in_org(self.org):
+            self.link.invitees_only = True
+            self.link.save(update_fields=["invitees_only"])
+            self.link.invitee_users.add(invitee)
+
+        start = next_weekday_at(10)
+        payload = self._payload(start)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            guest = self.client.post(self.booking_url, payload, format="json")
+        assert guest.status_code == status.HTTP_404_NOT_FOUND
+
+        self.client.force_authenticate(user=stranger)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            blocked = self.client.post(self.booking_url, payload, format="json")
+        assert blocked.status_code == status.HTTP_404_NOT_FOUND
+
+        self.client.force_authenticate(user=invitee)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            allowed = self.client.post(
+                self.booking_url,
+                {"start": start.isoformat(), "notes": "On my way."},
+                format="json",
+            )
+        assert allowed.status_code == status.HTTP_201_CREATED, allowed.json()
+
     def test_rejects_naive_start_without_offset(self):
         payload = self._payload()
         payload["start"] = "2026-09-01T10:00:00"  # no offset
@@ -457,6 +615,13 @@ class PublicBookingCancelTests(PublicBookingTestBase):
         assert "BEGIN:VEVENT" in body
         assert "STATUS:CONFIRMED" in body
 
+    def test_the_feed_accepts_the_token_in_the_path(self):
+        # Outlook desktop drops ?token= on internet calendars.
+        token = self._book()["cancel_token"]
+        response = self.client.get(f"{self.availability_url}{token}.ics")
+        assert response.status_code == status.HTTP_200_OK
+        assert "BEGIN:VEVENT" in response.content.decode()
+
     def test_the_feed_reports_a_cancellation_so_subscribers_drop_it(self):
         # This is the only way a guest with no account hears that the host
         # called the meeting off.
@@ -481,7 +646,11 @@ class PublicBookingCancelTests(PublicBookingTestBase):
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_the_confirmation_carries_a_subscription_url(self):
-        assert "calendar.ics" in self._book()["feed_url"]
+        url = self._book()["feed_url"]
+        assert url.startswith("webcal://")
+        assert url.endswith(".ics")
+        assert "?token=" not in url
+        assert "%3A" in url
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
     def test_the_guest_is_emailed_the_booking_with_both_links(self):
@@ -493,7 +662,7 @@ class PublicBookingCancelTests(PublicBookingTestBase):
         assert message.to == ["grace@example.com"]
         # Everything they need after closing the tab.
         assert "cancel?token=" in message.body
-        assert "calendar.ics" in message.body
+        assert ".ics" in message.body
         assert booked["title"] in message.subject
         # The calendar entry itself rides along as an attachment.
         assert message.attachments
@@ -532,3 +701,90 @@ class PublicBookingCancelTests(PublicBookingTestBase):
         assert task.delay.call_args.kwargs["tenant_schema"] == slug_to_schema_name(
             self.org.slug
         )
+
+
+class PublicBookingLookupTests(PublicBookingTestBase):
+    """
+    The confirmation mail is how a guest usually gets back. If it never
+    arrives they still know the name, email, or phone they typed, so the
+    public page can look the booking up and hand them the cancel token.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cancel_url = f"{self.availability_url}cancel/"
+        self.lookup_url = f"{self.availability_url}lookup/"
+
+    def _book(self, hour: int = 10, **overrides):
+        start = next_weekday_at(hour)
+        payload = {
+            "name": "Grace Hopper",
+            "email": "grace@example.com",
+            "phone": "+44 7700 900123",
+            "start": start.isoformat().replace("+00:00", "Z"),
+        }
+        payload.update(overrides)
+        response = self.client.post(self.booking_url, payload, format="json")
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        return response.json()
+
+    def test_the_guest_can_find_their_booking_by_email(self):
+        booked = self._book()
+        response = self.client.post(
+            self.lookup_url, {"email": "grace@example.com"}, format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        rows = response.json()["bookings"]
+        assert len(rows) == 1
+        assert rows[0]["cancel_token"] == booked["cancel_token"]
+        assert rows[0]["title"] == booked["title"]
+
+    def test_the_guest_can_find_their_booking_by_name(self):
+        booked = self._book()
+        response = self.client.post(
+            self.lookup_url, {"name": "Grace Hopper"}, format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        assert response.json()["bookings"][0]["cancel_token"] == booked["cancel_token"]
+
+    def test_the_guest_can_find_their_booking_by_phone(self):
+        booked = self._book()
+        response = self.client.post(
+            self.lookup_url, {"phone": "447700900123"}, format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK, response.json()
+        assert response.json()["bookings"][0]["cancel_token"] == booked["cancel_token"]
+
+    def test_lookup_is_case_insensitive(self):
+        self._book()
+        response = self.client.post(
+            self.lookup_url, {"email": "Grace@Example.com"}, format="json"
+        )
+        assert len(response.json()["bookings"]) == 1
+
+    def test_an_unknown_email_sees_an_empty_list(self):
+        self._book()
+        response = self.client.post(
+            self.lookup_url, {"email": "nobody@example.com"}, format="json"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["bookings"] == []
+
+    def test_lookup_requires_exactly_one_field(self):
+        self._book()
+        empty = self.client.post(self.lookup_url, {}, format="json")
+        assert empty.status_code == status.HTTP_400_BAD_REQUEST
+        both = self.client.post(
+            self.lookup_url,
+            {"name": "Grace Hopper", "email": "grace@example.com"},
+            format="json",
+        )
+        assert both.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_a_cancelled_booking_is_not_listed(self):
+        booked = self._book()
+        self.client.post(self.cancel_url, {"token": booked["cancel_token"]}, format="json")
+        response = self.client.post(
+            self.lookup_url, {"email": "grace@example.com"}, format="json"
+        )
+        assert response.json()["bookings"] == []

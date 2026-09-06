@@ -35,6 +35,8 @@ const LINK_PAYLOAD = {
   timezone: 'UTC',
   owner_name: 'Ada Lovelace',
   slots: SLOTS,
+  invitees_only: false,
+  viewer_can_book: true,
 };
 
 async function mockAvailability(page: Page, payload: unknown = LINK_PAYLOAD) {
@@ -75,7 +77,7 @@ test.describe('Public booking link', () => {
           title: 'Intro Call with Grace Hopper',
           timezone: 'UTC',
           cancel_token: 'signed-token-abc',
-          feed_url: 'https://app.example/api/public/book/acme/intro-call/calendar.ics?token=signed-token-abc',
+          feed_url: 'webcal://app.example/api/public/book/acme/intro-call/signed-token-abc.ics',
         }),
       });
     });
@@ -101,6 +103,7 @@ test.describe('Public booking link', () => {
     await page.getByTestId('booking-next').click();
 
     await expect(page.getByTestId('booking-form')).toBeVisible();
+    await expect(page.getByTestId('booking-booker-scope')).toHaveCount(0);
     await page.getByTestId('booking-name').fill('Grace Hopper');
     await page.getByTestId('booking-email').fill('grace@example.com');
     await page.getByTestId('booking-phone').fill('+44 7700 900123');
@@ -109,12 +112,10 @@ test.describe('Public booking link', () => {
 
     await expect(page.getByTestId('booking-confirmed')).toBeVisible();
     await expect(page.getByText(/You're booked/)).toBeVisible();
+    await expect(page.getByTestId('book-another')).toBeVisible();
+    await expect(page.getByTestId('booking-back-to-slots')).toBeVisible();
 
-    // The visitor gets no email, so the confirmation must let them keep the
-    // booking: a prefilled Google link and a downloadable .ics.
-    const googleHref = await page.getByTestId('add-to-google').getAttribute('href');
-    expect(googleHref).toContain('calendar.google.com/calendar/render');
-    expect(googleHref).toContain('dates=20270302T090000Z%2F20270302T100000Z');
+    await expect(page.getByTestId('subscription-url')).toContainText('.ics');
 
     const download = await Promise.all([
       page.waitForEvent('download'),
@@ -128,9 +129,6 @@ test.describe('Public booking link', () => {
       /\/book\/acme\/intro-call\/cancel\?token=signed-token-abc$/,
     );
 
-    // Subscribing is what keeps their calendar in step after a cancellation.
-    await expect(page.getByTestId('subscription-url')).toContainText('calendar.ics');
-
     // Optional, but it has to reach the API when given.
     expect(submitted).toMatchObject({ phone: '+44 7700 900123' });
 
@@ -138,6 +136,68 @@ test.describe('Public booking link', () => {
     expect(submitted).toMatchObject({
       name: 'Grace Hopper',
       email: 'grace@example.com',
+      start: SLOTS[0].start,
+    });
+  });
+
+  test('a signed-in member only confirms notes', async ({ page }) => {
+    await page.addInitScript(() => {
+      const persisted = {
+        state: {
+          token: 'signed-in-token',
+          user: {
+            email: 'ada@acme.com',
+            username: 'ada',
+            first_name: 'Ada',
+            last_name: 'Lovelace',
+            organization: null,
+            current_organization: null,
+            roles: [],
+          },
+          isAuthenticated: true,
+        },
+        version: 0,
+      };
+      window.localStorage.setItem('auth-storage-v1', JSON.stringify(persisted));
+    });
+    await mockAvailability(page);
+
+    let submitted: Record<string, unknown> | null = null;
+    await page.route(BOOKINGS_GLOB, async (route) => {
+      submitted = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'confirmed',
+          start: SLOTS[0].start,
+          end: SLOTS[0].end,
+          title: 'Intro Call with Ada Lovelace',
+          timezone: 'UTC',
+          cancel_token: 'signed-token-ada',
+          feed_url: 'webcal://app.example/api/public/book/acme/intro-call/signed-token-ada.ics',
+        }),
+      });
+    });
+
+    await gotoBooking(page);
+    await page.getByTestId('booking-timezone').selectOption('UTC');
+    await page.locator('[data-date="2027-03-02"]').click();
+    await page.getByTestId('booking-slot').first().click();
+    await page.getByTestId('booking-next').click();
+
+    await expect(page.getByTestId('booking-form')).toBeVisible();
+    await expect(page.getByTestId('booking-name')).toHaveCount(0);
+    await expect(page.getByTestId('booking-email')).toHaveCount(0);
+    await expect(page.getByTestId('booking-phone')).toHaveCount(0);
+    await page.getByTestId('booking-notes').fill('See you then.');
+    await page.getByTestId('booking-submit').click();
+
+    await expect(page.getByTestId('booking-confirmed')).toBeVisible();
+    expect(submitted).toMatchObject({
+      name: 'Ada Lovelace',
+      email: 'ada@acme.com',
+      notes: 'See you then.',
       start: SLOTS[0].start,
     });
   });
@@ -212,6 +272,21 @@ test.describe('Public booking link', () => {
       await expect(page.getByTestId('booking-missing')).toBeVisible({ timeout: 30_000 });
     });
 
+  test('an invitees-only link looks the same as a missing link', async ({
+    page,
+  }) => {
+    await mockAvailability(page, {
+      ...LINK_PAYLOAD,
+      invitees_only: true,
+      viewer_can_book: false,
+      slots: [],
+    });
+    await gotoBooking(page);
+    await expect(page.getByTestId('booking-missing')).toBeVisible();
+    await expect(page.getByText('Link unavailable')).toBeVisible();
+    await expect(page.getByTestId('booking-widget')).toHaveCount(0);
+  });
+
   test('a link with no free time says so', async ({ page }) => {
     await mockAvailability(page, { ...LINK_PAYLOAD, slots: [] });
     await gotoBooking(page);
@@ -276,6 +351,10 @@ test.describe('Cancelling a booking', () => {
 
     await page.goto(CANCEL_URL);
     await expect(page.getByTestId('booking-cancel')).toBeVisible();
+    await expect(page.getByTestId('cancel-keep')).toHaveAttribute(
+      'href',
+      `/book/${ORG}/${LINK}`,
+    );
     expect(called).toBe(false);
 
     await page.getByTestId('cancel-confirm').click();
@@ -300,5 +379,40 @@ test.describe('Cancelling a booking', () => {
   test('a link with no code explains itself', async ({ page }) => {
     await page.goto(`/book/${ORG}/${LINK}/cancel`);
     await expect(page.getByTestId('cancel-missing-token')).toBeVisible();
+  });
+
+  test('a guest can find a booking from the public page when mail never arrived', async ({
+    page,
+  }) => {
+    await mockAvailability(page);
+    await page.route(`**/api/public/book/${ORG}/${LINK}/lookup/`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          bookings: [
+            {
+              start: SLOTS[0].start,
+              end: SLOTS[0].end,
+              title: 'Intro Call with Grace Hopper',
+              cancel_token: 'signed-token-abc',
+            },
+          ],
+        }),
+      });
+    });
+
+    await gotoBooking(page);
+    await page.getByTestId('booking-find-open').click();
+    await expect(page.getByTestId('booking-find')).toBeVisible();
+    await expect(page.getByTestId('booking-find-kind-name')).toBeVisible();
+    await expect(page.getByTestId('booking-find-kind-phone')).toBeVisible();
+    await page.getByTestId('booking-find-value').fill('grace@example.com');
+    await page.getByTestId('booking-find-submit').click();
+    await expect(page.getByTestId('booking-find-results')).toBeVisible();
+    await expect(page.getByTestId('booking-find-cancel')).toHaveAttribute(
+      'href',
+      /\/book\/acme\/intro-call\/cancel\?token=signed-token-abc$/,
+    );
   });
 });

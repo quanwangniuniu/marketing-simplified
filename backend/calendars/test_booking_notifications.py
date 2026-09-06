@@ -75,7 +75,10 @@ class BookingLinkNotificationTests(TestCase):
     def test_a_named_guest_is_told(self):
         response = self._create(host_id=self.host.id, invitee_ids=[self.guest.id])
         assert response.status_code == status.HTTP_201_CREATED, response.json()
-        assert Notification.objects.filter(recipient=self.guest).count() == 1
+        note = Notification.objects.get(recipient=self.guest)
+        assert note.action_url == "/book/notify-org/catch-up"
+        assert note.metadata.get("link_slug") == "catch-up"
+        assert note.metadata.get("organization_slug") == "notify-org"
 
     def test_every_named_guest_is_told(self):
         second = User.objects.create_user(

@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   Check,
   ChevronRight,
   Clock,
   Copy,
-  ExternalLink,
   Link2,
   Loader2,
   Plus,
@@ -25,9 +25,25 @@ import { CalendarAPI, type CalendarDTO } from '@/lib/api/calendarApi';
 import { googleCalendarApi } from '@/lib/api/googleCalendarApi';
 import { useProjectStore } from '@/lib/projectStore';
 import { ProjectAPI, type ProjectMemberData } from '@/lib/api/projectApi';
+import { canRestrictToInvitees } from '@/lib/bookingLinkAccess';
+import {
+  calendarsForScope,
+  defaultBookingScope,
+  defaultCalendarId,
+  inferBookingScope,
+  type BookingScope,
+} from '@/lib/bookingLinkScope';
 import { CustomerAPI } from '@/lib/api/customerApi';
 import type { Customer } from '@/types/customer';
 import { detectTimezone } from './bookingSlots';
+import {
+  bookingRulesChanged,
+  formatLinkCreatedAt,
+  sortBookingLinks,
+} from '@/lib/bookingLinkList';
+import BookingLinkQuickInvite from './BookingLinkQuickInvite';
+import { CalendarScopeSwitch } from './CalendarScopeSwitch';
+import toast from 'react-hot-toast';
 
 /**
  * Owner-side management for booking links.
@@ -44,10 +60,11 @@ const DEFAULT_FORM = {
   title: '',
   slug: '',
   description: '',
+  scope: 'personal' as BookingScope,
   calendar_id: '',
-  host_id: '' as string,
   invitee_ids: [] as number[],
   invitee_emails: [] as string[],
+  invitees_only: false,
   duration_minutes: 30,
   slot_increment_minutes: 15,
   buffer_before_minutes: 0,
@@ -112,6 +129,7 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
   const [inviteeQuery, setInviteeQuery] = useState('');
   const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingCalendar, setCreatingCalendar] = useState(false);
+  const [autoCreatedCalendar, setAutoCreatedCalendar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,17 +160,13 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
       ]);
       if (seq !== fetchSeq.current) return;
       setGoogleConnected(googleStatus);
-      setLinks(linkList);
+      setLinks(sortBookingLinks(linkList));
       // /api/calendars/ is paginated, so the payload is {count, results} rather
       // than a bare array. Accept both — an array-only check silently yields an
       // empty dropdown against the real API.
       const all = Array.isArray(calendarList)
         ? calendarList
         : (calendarList as { results?: CalendarDTO[] })?.results ?? [];
-      // Scoped to the active project on purpose. The calendar page filters its
-      // own view by project, so an unscoped picker can offer a calendar whose
-      // events that page will never display - the booking would succeed and
-      // then appear nowhere.
       setCalendars(all);
     } catch (err) {
       if (seq !== fetchSeq.current) return;
@@ -205,25 +219,23 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
     };
   }, [projectId]);
 
-  const hasCalendar = calendars.length > 0;
-  // Not a gate. Google export only picks up the primary calendar, and
-  // `is_primary` is set solely by the Google connect flow — so this is worth
-  // saying only when a Google connection actually exists.
-  const selected = calendars.find((c) => c.id === form.calendar_id);
-  // Hosting a colleague is checked server-side against the calendar's project,
-  // so a project-less calendar can only ever book your own time. Mirror that
-  // here rather than letting the user pick something the API will reject.
-  const editingCalendarId = editingId
-    ? links.find((link) => link.id === editingId)?.calendar
-    : undefined;
-  const hostCalendar = selected ?? calendars.find((c) => c.id === editingCalendarId);
-  // Hosting is members-only: the backend will not publish a customer's
-  // availability, and a customer has no calendar here to publish.
-  const canHostOthers = Boolean(hostCalendar?.project_id) && members.length > 0;
-  const hostCandidates = canHostOthers ? members : [];
-  // Naming guests is wider - it covers customers too, and needs only a project
-  // calendar to check them against.
-  const canNameGuests = Boolean(hostCalendar?.project_id);
+  const scopedCalendars = useMemo(() => {
+    const pool = calendarsForScope(calendars, form.scope);
+    if (
+      editingId &&
+      form.calendar_id &&
+      !pool.some((calendar) => calendar.id === form.calendar_id)
+    ) {
+      const current = calendars.find((calendar) => calendar.id === form.calendar_id);
+      if (current) {
+        return [current, ...pool];
+      }
+    }
+    return pool;
+  }, [calendars, editingId, form.calendar_id, form.scope]);
+  const hasCalendar = scopedCalendars.length > 0;
+  // Colleagues/clients come from the active project, even on a personal link.
+  const canNameGuests = projectId != null;
 
   const memberLabel = (member: ProjectMemberData) =>
     member.user.name || member.user.username || member.user.email || '';
@@ -299,32 +311,89 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
           .slice(0, 6)
       : [];
   const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteeQuery.trim());
-  const wontSyncToGoogle = googleConnected && !!selected && !selected.is_primary;
 
-  // Only reachable outside a project. The calendars API treats project_id as
-  // read-only, so anything created here is project-less - fine in the unscoped
-  // view, invisible inside a project.
-  const createCalendar = async () => {
+  const setScope = (scope: BookingScope) => {
+    setForm((current) => ({
+      ...current,
+      scope,
+      calendar_id: defaultCalendarId(calendars, scope),
+    }));
+  };
+
+  const adoptPersonalCalendar = (calendar: CalendarDTO) => {
+    setCalendars((current) =>
+      current.some((item) => item.id === calendar.id)
+        ? current
+        : [...current, calendar],
+    );
+    setForm((current) => ({
+      ...current,
+      scope: 'personal',
+      calendar_id: calendar.id,
+    }));
+  };
+
+  const createCalendar = useCallback(async () => {
     if (creatingCalendar) return;
     setCreatingCalendar(true);
     setError(null);
     try {
+      const existing = calendarsForScope(calendars, 'personal').find(
+        (calendar) => calendar.is_primary,
+      ) ?? calendarsForScope(calendars, 'personal')[0];
+      if (existing) {
+        adoptPersonalCalendar(existing);
+        return;
+      }
+
+      const unscoped = await CalendarAPI.listCalendars()
+        .then((res) => {
+          const raw = res.data as CalendarDTO[] | { results?: CalendarDTO[] };
+          return Array.isArray(raw) ? raw : raw.results ?? [];
+        })
+        .catch(() => [] as CalendarDTO[]);
+      const found =
+        calendarsForScope(unscoped, 'personal').find((calendar) => calendar.is_primary)
+        ?? calendarsForScope(unscoped, 'personal')[0];
+      if (found) {
+        adoptPersonalCalendar(found);
+        return;
+      }
+
+      const usedNames = new Set(
+        [...calendars, ...unscoped].map((calendar) => calendar.name),
+      );
+      const name = usedNames.has('My Calendar')
+        ? 'Personal calendar'
+        : 'My Calendar';
       const created = await CalendarAPI.createCalendar({
-        name: 'My Calendar',
+        name,
         timezone: detectTimezone(),
+        visibility: 'private',
+        is_primary: true,
       });
-      await refresh();
-      setForm((current) => ({ ...current, calendar_id: created.data.id }));
+      adoptPersonalCalendar(created.data);
+      setAutoCreatedCalendar(created.data.name);
+      toast.success(`${created.data.name} was created automatically.`);
     } catch (err) {
       setError(errorMessage(err, 'Could not create a calendar.'));
     } finally {
       setCreatingCalendar(false);
     }
-  };
+  }, [calendars, creatingCalendar]);
 
   const startCreating = () => {
-    // No timezone here: the API derives it from the owner's calendar settings.
-    setForm({ ...DEFAULT_FORM, calendar_id: calendars[0]?.id ?? '' });
+    const scope = defaultBookingScope(calendars);
+    const calendarId = defaultCalendarId(calendars, scope);
+    setForm({
+      ...DEFAULT_FORM,
+      scope,
+      calendar_id: calendarId,
+    });
+    if (scope === 'personal' && !calendarId) {
+      setAutoCreatedCalendar(null);
+      void createCalendar();
+    }
     setEditingId(null);
     setShowAdvanced(false);
     setCustomDuration(false);
@@ -337,14 +406,15 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
       title: link.title,
       slug: link.slug,
       description: link.description ?? '',
-      calendar_id: '',
-      host_id: String(link.host?.id ?? ''),
+      scope: link.scope ?? inferBookingScope(calendars, link.calendar),
+      calendar_id: link.calendar ?? '',
       invitee_ids: (link.invitees ?? [])
         .map((person) => person.id)
         .filter((id): id is number => id != null),
       invitee_emails: (link.invitees ?? [])
         .filter((person) => person.id == null)
         .map((person) => person.email),
+      invitees_only: Boolean(link.invitees_only),
       duration_minutes: link.duration_minutes,
       slot_increment_minutes: link.slot_increment_minutes,
       buffer_before_minutes: link.buffer_before_minutes,
@@ -370,11 +440,19 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
   const closeForm = () => {
     setCreating(false);
     setEditingId(null);
+    setAutoCreatedCalendar(null);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    if (
+      form.invitees_only &&
+      !canRestrictToInvitees(form.invitee_ids, form.invitee_emails)
+    ) {
+      setError('Name at least one person before restricting this link to invitees.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -382,26 +460,35 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         ...form,
         slug: form.slug.trim() || slugify(form.title),
         description: form.description.trim() || null,
-        // Blank means "me"; the API reads null the same way.
-        host_id: form.host_id ? Number(form.host_id) : null,
         invitee_ids: form.invitee_ids,
         invitee_emails: form.invitee_emails,
       };
+      // Type already picks personal vs project calendar. Host stays the
+      // signed-in user on create; edits leave an older teammate-host as-is.
+      if (editingId) {
+        delete payload.host_id;
+      } else {
+        payload.host_id = null;
+      }
       if (editingId) {
         // calendar_id is only sent when the user actually repointed the link;
         // an empty string would fail validation.
         if (!payload.calendar_id) delete payload.calendar_id;
+        const previous = links.find((item) => item.id === editingId);
         const updated = await BookingLinkAPI.update(editingId, payload);
         setLinks((prev) =>
-          prev
-            .map((l) => (l.id === editingId ? updated.data : l))
-            .sort((a, b) => a.title.localeCompare(b.title)),
+          sortBookingLinks(
+            prev.map((l) => (l.id === editingId ? updated.data : l)),
+          ),
         );
+        if (previous && bookingRulesChanged(previous, payload)) {
+          toast.success(
+            'Existing bookings keep their times. New bookings will use the updated rules.',
+          );
+        }
       } else {
         const created = await BookingLinkAPI.create(payload);
-        setLinks((prev) =>
-          [...prev, created.data].sort((a, b) => a.title.localeCompare(b.title)),
-        );
+        setLinks((prev) => sortBookingLinks([...prev, created.data]));
       }
       closeForm();
     } catch (err) {
@@ -491,10 +578,16 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
         </div>
       )}
 
+      <AnimatePresence>
       {creating && (
-        <form
+        <motion.form
+          key="booking-link-form"
           onSubmit={handleSubmit}
-          className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200"
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
           data-testid="booking-link-form"
         >
           <h2 className="mb-4 text-sm font-semibold text-gray-900">
@@ -514,23 +607,6 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                 data-testid="booking-link-title"
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
               />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="bl-slug" className="block text-xs font-medium text-gray-600">
-                URL
-              </label>
-              <div className="mt-1 flex items-center gap-1 text-sm">
-                <span className="shrink-0 text-gray-400">/book/{orgSlug}/</span>
-                <input
-                  id="bl-slug"
-                  value={form.slug}
-                  onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                  placeholder={slugify(form.title) || 'intro-call'}
-                  data-testid="booking-link-slug"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-                />
-              </div>
             </div>
 
             {/* Duration as presets: a free number field invites answers nobody
@@ -590,8 +666,27 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
             </div>
 
             <div className="sm:col-span-2">
+              <p className="block text-xs font-medium text-gray-600">Type</p>
+              <div className="mt-1">
+                <CalendarScopeSwitch
+                  scope={form.scope}
+                  onChange={setScope}
+                  testIdPrefix="booking-link-scope"
+                />
+              </div>
+              <p
+                className="mt-1 text-[11px] text-gray-400"
+                data-testid="booking-link-scope-caption"
+              >
+                {form.scope === 'team'
+                  ? 'Slots and bookings use the project calendar.'
+                  : 'Slots and bookings use your personal calendar.'}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
               <label htmlFor="bl-calendar" className="block text-xs font-medium text-gray-600">
-                Book into
+                {form.scope === 'team' ? 'Project calendar' : 'Personal calendar'}
               </label>
               <select
                 id="bl-calendar"
@@ -604,48 +699,31 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               >
                 <option value="">
                   {!hasCalendar
-                    ? 'No calendar available'
-                    : editingId
-                      ? 'Keep current calendar'
-                      : 'Select a calendar…'}
+                    ? 'Creating a personal calendar…'
+                    : 'Select a calendar…'}
                 </option>
-                {calendars.map((calendar) => (
+                {scopedCalendars.map((calendar) => (
                   <option key={calendar.id} value={calendar.id}>
                     {calendar.name}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="bl-host" className="block text-xs font-medium text-gray-600">
-                Whose time
-              </label>
-              <select
-                id="bl-host"
-                disabled={!canHostOthers}
-                value={form.host_id}
-                onChange={(e) => setForm({ ...form, host_id: e.target.value })}
-                data-testid="booking-link-host"
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              >
-                <option value="">Me</option>
-                {hostCandidates.map((member) => (
-                  <option key={member.user.id} value={String(member.user.id)}>
-                    {member.user.name || member.user.username || member.user.email}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-gray-400">
-                {canHostOthers
-                  ? 'Publishes their availability, and bookings land on their calendar.'
-                  : 'Pick a project calendar above to set this up for a colleague.'}
-              </p>
+              {autoCreatedCalendar ? (
+                <p
+                  className="mt-1 text-[11px] text-gray-400"
+                  data-testid="booking-link-calendar-created"
+                >
+                  {autoCreatedCalendar} was created automatically.
+                </p>
+              ) : null}
             </div>
 
             <div className="sm:col-span-2">
               <label htmlFor="bl-invitee" className="block text-xs font-medium text-gray-600">
-                Who it&apos;s for <span className="font-normal text-gray-400">(optional)</span>
+                Who it&apos;s for
+                {form.invitees_only ? null : (
+                  <span className="ml-1 font-normal text-gray-400">(optional)</span>
+                )}
               </label>
 
               {/*
@@ -780,13 +858,64 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                     data-testid="booking-link-invitee-email"
                     className="mt-1 w-full rounded-lg border border-dashed border-gray-300 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50"
                   >
-                    Invite <span className="font-medium">{inviteeQuery.trim()}</span> as a guest
+                    Invite <span className="font-medium">{inviteeQuery.trim()}</span>
+                    {form.invitees_only ? '' : ' as a guest'}
                   </button>
                 )}
               <p className="mt-1 text-[11px] text-gray-400">
-                {canNameGuests
-                  ? 'Colleagues and clients with an account get a notification. Anyone else just gets the link from you.'
-                  : 'Type an email address for whoever this link is going to.'}
+                {form.invitees_only
+                  ? 'They must be signed in to book. Guests and anyone else with the link cannot.'
+                  : canNameGuests
+                    ? 'Colleagues and clients with an account get a notification. Anyone else just gets the link from you.'
+                    : 'Type an email address for whoever this link is going to.'}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <p className="block text-xs font-medium text-gray-600">Who can book</p>
+              <div
+                className="relative mt-1 grid grid-cols-2 rounded-lg bg-gray-100 p-1"
+                role="tablist"
+              >
+                <motion.span
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-md bg-white shadow-sm"
+                  animate={{ x: form.invitees_only ? '100%' : '0%' }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+                {(
+                  [
+                    { value: false, label: 'Anyone with the link' },
+                    { value: true, label: 'Invitees only' },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    role="tab"
+                    aria-selected={form.invitees_only === option.value}
+                    onClick={() => setForm({ ...form, invitees_only: option.value })}
+                    data-testid={
+                      option.value
+                        ? 'booking-link-access-invitees'
+                        : 'booking-link-access-anyone'
+                    }
+                    className={`relative z-10 rounded-md px-2 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                      form.invitees_only === option.value
+                        ? 'text-[#0E8A96]'
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {form.invitees_only
+                  ? canRestrictToInvitees(form.invitee_ids, form.invitee_emails)
+                    ? 'Only the people named above can book this link.'
+                    : 'Add at least one person above before creating an invitees-only link.'
+                  : 'Anyone who has the URL can pick a time, including guests.'}
               </p>
             </div>
 
@@ -824,14 +953,19 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               />
               Scheduling rules
               <span className="font-normal text-gray-400">
-                — buffers, notice, how far ahead
+                — buffers and notice
               </span>
             </button>
 
+            <AnimatePresence initial={false}>
             {showAdvanced && (
-              <div
+              <motion.div
                 data-testid="booking-link-advanced"
-                className="mt-3 grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-top-1 duration-200"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="mt-3 grid gap-4 overflow-hidden sm:grid-cols-2"
               >
                 {(
                   [
@@ -870,8 +1004,9 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                   <span className="font-medium text-gray-700">Availability:</span>{' '}
                   {WINDOW_HINT}
                 </p>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
 
           {!hasCalendar && (
@@ -882,44 +1017,38 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
               <div className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div>
-                  <p>
-                    You don&apos;t have a calendar to book into. Calendars belong to
-                    projects, and this project doesn&apos;t have one yet.
+                  <p data-testid="booking-link-creating-calendar">
+                    No personal calendar yet. One called My Calendar will be
+                    created automatically.
                   </p>
-                  {projectId == null ? (
+                  {!creatingCalendar ? (
                     <button
                       type="button"
-                      disabled={creatingCalendar}
-                      onClick={createCalendar}
+                      onClick={() => void createCalendar()}
                       data-testid="booking-link-create-calendar"
-                      className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
                     >
-                      {creatingCalendar ? 'Creating…' : 'Create a calendar for me'}
+                      Create a calendar for me
                     </button>
-                  ) : (
-                    <p className="mt-1.5 text-amber-700">
-                      Projects normally get a calendar automatically, so this is
-                      unexpected — ask an admin to provision one for the project.
-                    </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
           )}
 
-          {wontSyncToGoogle && (
-            <div
-              data-testid="booking-link-no-google-sync"
-              className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600"
-            >
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-              <span>
-                Bookings on this calendar won&apos;t appear in Google Calendar —
-                only your Google-synced calendar exports. They will still show in
-                your in-app calendar and availability.
-              </span>
-            </div>
-          )}
+          <div
+            data-testid="booking-link-scope-note"
+            className="mt-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600"
+          >
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <span>
+              {form.scope === 'team'
+                ? 'Bookings and free/busy use the project calendar only.'
+                : `Bookings and free/busy use your personal calendar${
+                    googleConnected ? ' and Google Calendar' : ''
+                  }.`}
+            </span>
+          </div>
 
           <div className="mt-4 flex justify-end gap-2">
             <button
@@ -931,7 +1060,12 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
             </button>
             <button
               type="submit"
-              disabled={saving || !hasCalendar}
+              disabled={
+                saving ||
+                !hasCalendar ||
+                (form.invitees_only &&
+                  !canRestrictToInvitees(form.invitee_ids, form.invitee_emails))
+              }
               data-testid="booking-link-save"
               className="rounded-lg bg-[#3CCED7] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#2AB5BD] disabled:opacity-60 disabled:shadow-none"
             >
@@ -944,8 +1078,9 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                   : 'Create link'}
             </button>
           </div>
-        </form>
+        </motion.form>
       )}
+      </AnimatePresence>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -1002,6 +1137,12 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                       <h3 className="truncate text-sm font-semibold text-gray-900">
                         {link.title}
                       </h3>
+                      <span
+                        data-testid="booking-link-scope-badge"
+                        className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600"
+                      >
+                        {link.scope === 'personal' ? 'Personal' : 'Team'}
+                      </span>
                       {!link.is_active && (
                         <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600">
                           Inactive
@@ -1025,6 +1166,14 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                     {link.description && (
                       <p className="mt-1 line-clamp-1 pl-3.5 text-xs text-gray-500">
                         {link.description}
+                      </p>
+                    )}
+                    {formatLinkCreatedAt(link.created_at) && (
+                      <p
+                        data-testid="booking-link-created"
+                        className="mt-1 pl-3.5 text-[11px] text-gray-400"
+                      >
+                        Created {formatLinkCreatedAt(link.created_at)}
                       </p>
                     )}
                   </div>
@@ -1067,17 +1216,22 @@ export default function BookingLinkManager({ orgSlug }: BookingLinkManagerProps)
                       </>
                     )}
                   </button>
-                  <a
-                    href={path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open booking page for ${link.title}`}
-                    data-testid="booking-link-open"
-                    className="inline-flex shrink-0 items-center rounded-lg border border-gray-200 px-2.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
                 </div>
+
+                <BookingLinkQuickInvite
+                  link={link}
+                  shareUrl={bookingLinkUrl(linkOrg(link), link.slug)}
+                  candidates={candidates}
+                  canSearchPeople={canNameGuests}
+                  onInvited={(updated) =>
+                    setLinks((prev) =>
+                      sortBookingLinks(
+                        prev.map((item) => (item.id === updated.id ? updated : item)),
+                      ),
+                    )
+                  }
+                  onError={(message) => setError(message)}
+                />
 
                 {/* Rules the owner set, so the card says what the link will do
                     without opening anything. */}

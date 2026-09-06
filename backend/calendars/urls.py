@@ -25,6 +25,7 @@ from .views import (
     EventReminderListCreateView,
     PublicBookingLinkAvailabilityView,
     PublicBookingCancelView,
+    PublicBookingLookupView,
     PublicBookingCreateView,
     PublicBookingFeedView,
     BookingLinkViewSet,
@@ -169,10 +170,24 @@ urlpatterns = [
         PublicBookingCancelView.as_view(),
         name="public-booking-cancel",
     ),
-    # Named calendar.ics rather than a trailing-slash route: calendar clients
-    # key off the extension when deciding to subscribe.
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/lookup/",
+        PublicBookingLookupView.as_view(),
+        name="public-booking-lookup",
+    ),
+    # Named *.ics rather than a trailing-slash route: calendar clients key
+    # off the extension when deciding to subscribe.
+    #
+    # Outlook desktop drops query strings on internet calendars, so the
+    # token lives in the path. The old ?token= URL stays so already-sent
+    # mail still resolves.
     path(
         "public/book/<slug:org_slug>/<slug:link_slug>/calendar.ics",
+        PublicBookingFeedView.as_view(),
+        name="public-booking-feed-query",
+    ),
+    path(
+        "public/book/<slug:org_slug>/<slug:link_slug>/<str:token>.ics",
         PublicBookingFeedView.as_view(),
         name="public-booking-feed",
     ),

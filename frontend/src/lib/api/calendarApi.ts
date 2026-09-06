@@ -41,6 +41,13 @@ export interface RecurrenceInput {
   until?: string | null;
 }
 
+export interface EventMetadata {
+  source?: string | null;
+  booking_link_slug?: string | null;
+  booking_role?: string | null;
+  [key: string]: unknown;
+}
+
 export interface EventDTO {
   id: string;
   calendar_id?: string;
@@ -57,6 +64,7 @@ export interface EventDTO {
   original_start?: string | null;
   color?: string;
   etag?: string;
+  metadata?: EventMetadata | null;
 }
 
 export type EventWritePayload = Partial<EventDTO> & {
@@ -375,6 +383,12 @@ export interface PublicBookingLinkDTO {
   timezone: string;
   owner_name: string;
   slots: BookingSlotDTO[];
+  /** When true, only named invitees who are signed in can book. */
+  invitees_only?: boolean;
+  /** False on an invitees-only link until the viewer is a named invitee. */
+  viewer_can_book?: boolean;
+  /** Signed-in viewer shares a project with the host. Guests never see this. */
+  same_project?: boolean;
 }
 
 export interface BookingRequestPayload {
@@ -394,12 +408,19 @@ export interface BookingConfirmationDTO {
   title: string;
   timezone: string;
   /**
-   * The guest's only handle on this booking. Issued once, at the moment they
-   * can still save it — there is no way to reissue it to someone anonymous.
+   * The guest's handle on this booking. Also re-issued by lookup if they
+   * still know the email they typed.
    */
   cancel_token: string;
   /** Subscribable calendar feed — stays in step if the booking is cancelled. */
   feed_url: string;
+}
+
+export interface FoundBookingDTO {
+  start: string;
+  end: string;
+  title: string;
+  cancel_token: string;
 }
 
 function bookingBase(orgSlug: string, linkSlug: string): string {
@@ -412,10 +433,14 @@ export const PublicBookingAPI = {
     orgSlug: string,
     linkSlug: string,
     range?: { from?: string; to?: string },
+    accessToken?: string | null,
   ) =>
     publicApi
       .get<PublicBookingLinkDTO>(`${bookingBase(orgSlug, linkSlug)}/`, {
         params: range,
+        headers: accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : undefined,
       })
       .then((res) => res.data),
 
@@ -423,17 +448,43 @@ export const PublicBookingAPI = {
     orgSlug: string,
     linkSlug: string,
     payload: BookingRequestPayload,
-  ) =>
-    publicApi
-      .post<BookingConfirmationDTO>(
-        `${bookingBase(orgSlug, linkSlug)}/bookings/`,
-        payload,
-      )
-      .then((res) => res.data),
+    accessToken?: string | null,
+  ) => {
+    const post = (token?: string | null) =>
+      publicApi
+        .post<BookingConfirmationDTO>(
+          `${bookingBase(orgSlug, linkSlug)}/bookings/`,
+          payload,
+          token
+            ? { headers: { Authorization: `Bearer ${token}` } }
+            : undefined,
+        )
+        .then((res) => res.data);
+
+    if (!accessToken) return post();
+    return post(accessToken).catch((error: { response?: { status?: number } }) => {
+      // Public page does not refresh tokens. An expired session should still
+      // book as the account identity already in the payload.
+      if (error.response?.status === 401) return post();
+      throw error;
+    });
+  },
 
   cancelBooking: (orgSlug: string, linkSlug: string, token: string) =>
     publicApi
       .post<{ status: string }>(`${bookingBase(orgSlug, linkSlug)}/cancel/`, { token })
+      .then((res) => res.data),
+
+  lookupBookings: (
+    orgSlug: string,
+    linkSlug: string,
+    query: { name?: string; email?: string; phone?: string },
+  ) =>
+    publicApi
+      .post<{ bookings: FoundBookingDTO[] }>(
+        `${bookingBase(orgSlug, linkSlug)}/lookup/`,
+        query,
+      )
       .then((res) => res.data),
 };
 
@@ -465,6 +516,8 @@ export interface BookingLinkDTO {
   timezone: string;
   availability_windows: BookingWindowDTO[];
   is_active: boolean;
+  /** Team (project calendar) or personal. */
+  scope: 'team' | 'personal';
   /** Calendar the bookings land on. */
   calendar: string;
   /** Whose time the link books. Not necessarily whoever set it up. */
@@ -472,6 +525,8 @@ export interface BookingLinkDTO {
   /** Who it was made for. id is null for a guest with no account here. */
   invitees: { id: number | null; name: string; email: string }[];
   invitee_emails: string[];
+  /** When true, only named invitees who are signed in can book. */
+  invitees_only: boolean;
   /** Blank when the host set the link up themselves. */
   created_by_name: string;
   created_at: string;

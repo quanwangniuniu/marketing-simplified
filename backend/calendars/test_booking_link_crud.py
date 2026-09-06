@@ -6,8 +6,11 @@ side, where the properties that matter are ownership scoping and not letting a
 caller set owner/organization from the request body.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -127,12 +130,25 @@ class BookingLinkCrudTests(TestCase):
         )
         response = self._create(calendar_id=str(secondary.id))
         assert response.status_code == status.HTTP_201_CREATED
-        # ...but the response says it won't reach Google, so the UI can warn.
-        assert response.json()["syncs_to_google"] is False
+        assert response.json()["scope"] == "personal"
+        assert response.json()["syncs_to_google"] is True
 
     def test_primary_calendar_reports_google_sync(self):
         response = self._create()
+        assert response.json()["scope"] == "personal"
         assert response.json()["syncs_to_google"] is True
+
+    def test_create_without_calendar_id_provisions_a_personal_calendar(self):
+        self.calendar.delete()
+        payload = self._payload()
+        del payload["calendar_id"]
+        response = self.client.post(LIST_URL, payload, format="json")
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        assert response.json()["scope"] == "personal"
+        created = Calendar.objects.get(pk=response.json()["calendar"])
+        assert created.owner_id == self.user.id
+        assert created.project_id is None
+        assert created.name == "My Calendar"
 
     def test_a_project_calendar_the_user_does_not_own_is_allowed(self):
         # Calendars here are often project-scoped and owned by whoever made
@@ -150,6 +166,8 @@ class BookingLinkCrudTests(TestCase):
         )
         response = self._create(calendar_id=str(project_calendar.id))
         assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["scope"] == "team"
+        assert response.json()["syncs_to_google"] is False
 
     def test_cannot_point_a_link_at_an_inaccessible_calendar(self):
         # A colleague's personal calendar, on no shared project.
@@ -161,7 +179,19 @@ class BookingLinkCrudTests(TestCase):
         self._create()
         response = self._create(title="Another")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "slug" in error_fields(response)
+        assert "title" in error_fields(response)
+
+    def test_links_are_listed_newest_first(self):
+        older = self._create(slug="older", title="Zebra")
+        newer = self._create(slug="newer", title="Apple")
+        assert older.status_code == status.HTTP_201_CREATED
+        assert newer.status_code == status.HTTP_201_CREATED
+        BookingLink.objects.filter(slug="older").update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+        listed = self.client.get(LIST_URL)
+        assert listed.status_code == status.HTTP_200_OK
+        assert [row["slug"] for row in listed.json()] == ["newer", "older"]
 
     def test_list_only_returns_the_callers_links(self):
         self._create()
@@ -243,9 +273,9 @@ class BookingLinkHostTests(TestCase):
     """
     Setting up a link for a colleague.
 
-    The property under test is that publishing someone else's availability is
-    gated on a shared project — organisation membership alone is not enough,
-    or anyone could expose anyone else's diary.
+    Publishing someone else's availability is gated on a shared project —
+    organisation membership alone is not enough, or anyone could expose
+    anyone else's diary — and further limited to project owners/admins.
     """
 
     def setUp(self):
@@ -317,6 +347,36 @@ class BookingLinkHostTests(TestCase):
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "host_id" in error_fields(response)
         assert not BookingLink.objects.filter(slug="with-the-boss").exists()
+
+    def test_a_regular_member_cannot_publish_a_colleagues_time(self):
+        self.client.force_authenticate(user=self.boss)
+        response = self._create(host_id=self.creator.id)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "host_id" in error_fields(response)
+        assert not BookingLink.objects.filter(slug="with-the-boss").exists()
+
+    def test_a_regular_member_can_still_book_their_own_time(self):
+        self.client.force_authenticate(user=self.boss)
+        response = self._create(host_id=None)
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert link.owner == self.boss
+        assert link.created_by == self.boss
+
+    def test_a_project_admin_can_publish_a_colleagues_time(self):
+        admin = User.objects.create_user(
+            username="projadmin", email="admin@host.com", password="x",
+            organization=self.org,
+        )
+        ProjectMember.objects.create(
+            project=self.project, user=admin, role="Organization Admin", is_active=True
+        )
+        self.client.force_authenticate(user=admin)
+        response = self._create(host_id=self.boss.id)
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert link.owner == self.boss
+        assert link.created_by == admin
 
     def test_a_personal_calendar_cannot_host_someone_else(self):
         # No project on the calendar means no shared project to check against.
@@ -395,6 +455,17 @@ class BookingLinkHostTests(TestCase):
         link = BookingLink.objects.get(slug="with-the-boss")
         assert list(link.invitee_users.values_list("pk", flat=True)) == [client_user.id]
 
+    def test_a_personal_link_can_still_name_guests(self):
+        response = self._create(
+            calendar_id=str(self.personal_calendar.id),
+            invitee_ids=[self.boss.id],
+            invitee_emails=["guest@example.com"],
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert list(link.invitee_users.values_list("pk", flat=True)) == [self.boss.id]
+        assert link.invitee_emails == ["guest@example.com"]
+
     def test_a_csm_customer_on_another_project_cannot_be_named(self):
         other_project = Project.objects.create(
             name="Other Project", organization=self.org, owner=self.creator
@@ -419,3 +490,18 @@ class BookingLinkHostTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.outsider)
         assert client.get(LIST_URL).json() == []
+
+    def test_invitees_only_requires_someone_to_be_named(self):
+        response = self._create(invitees_only=True)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "invitees_only" in error_fields(response)
+
+    def test_invitees_only_can_be_set_when_people_are_named(self):
+        response = self._create(
+            invitees_only=True,
+            invitee_ids=[self.creator.id],
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        link = BookingLink.objects.get(slug="with-the-boss")
+        assert link.invitees_only is True
+        assert list(link.invitee_users.values_list("pk", flat=True)) == [self.creator.id]
