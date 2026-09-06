@@ -536,11 +536,14 @@ def _run_analysis(
     client = _get_llm_client()
     if client:
         try:
-            raw = _call_llm_unified(provider="anthropic",
+            result = _call_llm_unified(
+                provider="anthropic",
                 model="claude-sonnet-5",
-                user_prompt=spreadsheet_data,
+                user_prompt=json_input(spreadsheet_data),
                 system_prompt=_ANALYSIS_SYSTEM_PROMPT,
-                agent_session=agent_session)["text"]
+                agent_session=agent_session,
+            )
+            raw = json.loads(result['text'])
             return _assign_anomaly_ids(_coerce_llm_analysis_for_requested(raw, requested))
         except QuotaError:
             raise

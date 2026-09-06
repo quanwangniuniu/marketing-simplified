@@ -608,7 +608,10 @@ def test_commit_task_handles_missing_decision_and_invalid_original_index(
             'recommended_tasks': [
                 {
                     'index': 'not-an-integer',
-                    'summary': '',
+                    # Keep the task valid so execution reaches the index fallback.
+                    'type': 'execution',
+                    'summary': 'Review campaign performance',
+                    'priority': 'MEDIUM',
                     'description': '',
                 }
             ]
@@ -625,7 +628,7 @@ def test_commit_task_handles_missing_decision_and_invalid_original_index(
     assert workflow_patch['created_tasks']
     created = events[0]['data']['created_tasks'][0]
     assert created['index'] == 0
-    assert created['summary'] == 'AI Agent Generated Task'
+    assert created['summary'] == 'Review campaign performance'
     assert events[0]['data']['decision_id'] is None
 
 

@@ -4,12 +4,14 @@ Step executors — strategy pattern for workflow step types.
 Each step_type maps to an Executor subclass that encapsulates
 the logic for that particular action.
 """
+import json
 import logging
 import os
 from django.core.cache import cache
 import time
 import anthropic
 from .gemini_client import GeminiRetriesExhausted
+from .agent_utils import json_input
 from .llm_client import call_llm as _call_llm_unified
 
 
@@ -198,7 +200,7 @@ class CallLLMExecutor(BaseStepExecutor):
     #Anthropic API call has default retry logic, so the retry policy is simple to avoid double retrying.
     @retry_policy(max_retries=1, retry_delay=0, on_exhausted='fail')
     def execute(self, input_data):
-        from .services import _call_llm, _get_llm_client
+        from .services import _ANALYSIS_SYSTEM_PROMPT, _get_llm_client
 
         spreadsheet_data = input_data.get('spreadsheet_data', input_data)
         try:
@@ -206,18 +208,22 @@ class CallLLMExecutor(BaseStepExecutor):
             if not client:
                 return StepResult(success=False, error='No LLM API key configured')
 
-            from .services import _ANALYSIS_SYSTEM_PROMPT
             result = _call_llm_unified(
                 provider="anthropic",
                 model="claude-sonnet-5",
-                user_prompt=spreadsheet_data,
+                user_prompt=json_input(spreadsheet_data),
                 system_prompt=_ANALYSIS_SYSTEM_PROMPT,
-                agent_session=self.orchestrator.session)
+                agent_session=self.orchestrator.session,
+            )
+            # The billed caller returns text and usage; downstream steps need the JSON object.
+            analysis = json.loads(result['text'])
+            if not isinstance(analysis, dict):
+                raise ValueError('Analysis response must be a JSON object')
 
             return StepResult(
                 success=True,
                 output_data={
-                    'analysis_result': result,
+                    'analysis_result': analysis,
                     'spreadsheet_data': spreadsheet_data,
                 },
                 sse_events=[{'type': 'text', 'content': 'LLM analysis completed.'}],

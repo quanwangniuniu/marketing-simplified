@@ -28,7 +28,7 @@ from .executors import (
     _infer_value_type,
     get_executor,
 )
-from .gemini_client import GeminiRetriesExhausted
+from core.services.gemini_client import GeminiRetriesExhausted
 from .services import _ANALYSIS_SYSTEM_PROMPT
 
 
@@ -747,7 +747,10 @@ class CallLLMExecutorTests(SimpleTestCase):
     ):
         client = object()
         mock_get_client.return_value = client
-        llm_response = {"text": "Healthy", "usage": {"input": 10, "output": 2}}
+        analysis = {"anomalies": [], "recommended_tasks": []}
+        llm_response = {
+            "text": json.dumps(analysis), "usage": {"input": 10, "output": 2}
+        }
         mock_call_llm.return_value = llm_response
         spreadsheet_data = {"rows": [{"spend": 10}]}
         orchestrator = _OrchestratorStub()
@@ -756,13 +759,13 @@ class CallLLMExecutorTests(SimpleTestCase):
         result = executor.execute({"spreadsheet_data": spreadsheet_data})
 
         self.assertTrue(result.success)
-        self.assertEqual(result.output_data["analysis_result"], llm_response)
+        self.assertEqual(result.output_data["analysis_result"], analysis)
         self.assertIs(result.output_data["spreadsheet_data"], spreadsheet_data)
         self.assertEqual(result.sse_events[0]["content"], "LLM analysis completed.")
         mock_call_llm.assert_called_once_with(
             provider="anthropic",
             model="claude-sonnet-5",
-            user_prompt=spreadsheet_data,
+            user_prompt=json.dumps(spreadsheet_data),
             system_prompt=_ANALYSIS_SYSTEM_PROMPT,
             agent_session=orchestrator.session,
         )
@@ -775,7 +778,8 @@ class CallLLMExecutorTests(SimpleTestCase):
         client = object()
         mock_get_client.return_value = client
         mock_call_llm.return_value = {
-            "text": "Healthy", "usage": {"input": 10, "output": 2}
+            "text": '{"anomalies": [], "recommended_tasks": []}',
+            "usage": {"input": 10, "output": 2},
         }
         input_data = {"rows": [{"spend": 10}]}
         orchestrator = _OrchestratorStub()
@@ -788,10 +792,44 @@ class CallLLMExecutorTests(SimpleTestCase):
         mock_call_llm.assert_called_once_with(
             provider="anthropic",
             model="claude-sonnet-5",
-            user_prompt=input_data,
+            user_prompt=json.dumps(input_data),
             system_prompt=_ANALYSIS_SYSTEM_PROMPT,
             agent_session=orchestrator.session,
         )
+
+    @patch("agent.executors._call_llm_unified", autospec=True)
+    @patch("agent.services._get_llm_client", return_value=object())
+    def test_invalid_json_returns_failure(self, _mock_get_client, mock_call_llm):
+        mock_call_llm.return_value = {
+            "text": "Not JSON", "usage": {"input": 10, "output": 2}
+        }
+        executor = CallLLMExecutor(
+            _StepStub(), _WorkflowRunStub(), _OrchestratorStub()
+        )
+
+        result = executor.execute({"spreadsheet_data": {"rows": []}})
+
+        self.assertFalse(result.success)
+        self.assertIsNone(result.output_data)
+        self.assertIn("Expecting value", result.error)
+
+    @patch("agent.executors._call_llm_unified", autospec=True)
+    @patch("agent.services._get_llm_client", return_value=object())
+    def test_json_non_objects_return_failure(self, _mock_get_client, mock_call_llm):
+        for response in ([], None, "Plain reply", 7):
+            with self.subTest(response=response):
+                mock_call_llm.return_value = {
+                    "text": json.dumps(response), "usage": {"input": 10, "output": 2}
+                }
+                executor = CallLLMExecutor(
+                    _StepStub(), _WorkflowRunStub(), _OrchestratorStub()
+                )
+
+                result = executor.execute({"spreadsheet_data": {"rows": []}})
+
+                self.assertFalse(result.success)
+                self.assertIsNone(result.output_data)
+                self.assertEqual(result.error, "Analysis response must be a JSON object")
 
     @patch(
         "agent.executors._call_llm_unified",
@@ -960,7 +998,7 @@ class CreateTasksExecutorTests(SimpleTestCase):
         mock_request_commit.assert_not_called()
 
     @patch("agent.approval_gate.request_external_commit")
-    def test_all_excluded_anomalies_are_successful_no_op(self, mock_request_commit):
+    def test_all_excluded_anomalies_still_submit_recommended_tasks(self, mock_request_commit):
         input_data = {
             "analysis_result": {
                 "anomalies": [{"metric": "ROAS"}],
@@ -969,16 +1007,28 @@ class CreateTasksExecutorTests(SimpleTestCase):
                 "recommended_tasks": [{"summary": "Review ROAS"}],
             }
         }
-        executor = CreateTasksExecutor(
-            _StepStub(), _WorkflowRunStub(), _OrchestratorStub()
+        # Task recommendations remain actionable when every anomaly is excluded.
+        mock_request_commit.return_value = ExternalCommitResult(
+            paused=False,
+            sse_events=[{"type": "text", "content": "Task created"}],
+            pending_id=None,
+            output_data=None,
+            workflow_run_patch={"created_tasks": ["task-1"]},
         )
+        workflow_run = _WorkflowRunStub()
+        executor = CreateTasksExecutor(_StepStub(), workflow_run, _OrchestratorStub())
 
         result = executor.execute(input_data)
 
         self.assertTrue(result.success)
-        self.assertIs(result.output_data, input_data)
-        self.assertIn("All anomalies were excluded", result.sse_events[0]["content"])
-        mock_request_commit.assert_not_called()
+        self.assertEqual(result.output_data["created_task_ids"], ["task-1"])
+        self.assertEqual(workflow_run.created_tasks, ["task-1"])
+        mock_request_commit.assert_called_once()
+        context = mock_request_commit.call_args.kwargs["commit_context"]
+        self.assertEqual(context["included_anomalies"], [])
+        self.assertEqual(
+            context["reviewed_anomalies"], [{"metric": "ROAS", "included": False}]
+        )
 
     @patch("agent.approval_gate.request_external_commit")
     def test_missing_recommended_tasks_returns_failure(self, mock_request_commit):
@@ -1090,7 +1140,7 @@ class CreateTasksExecutorTests(SimpleTestCase):
 
 class GenerateCriteriaExecutorTests(SimpleTestCase):
     @patch("agent.llm_client.call_llm")
-    @patch("agent.gemini_client._get_api_key", return_value="")
+    @patch("core.services.gemini_client._get_api_key", return_value="")
     def test_missing_api_key_skips_generation(self, mock_get_key, mock_call_llm):
         input_data = {"spreadsheet_data": {"sheets": []}}
         executor = GenerateCriteriaExecutor(
@@ -1106,7 +1156,7 @@ class GenerateCriteriaExecutorTests(SimpleTestCase):
         mock_call_llm.assert_not_called()
 
     @patch("agent.llm_client.call_llm")
-    @patch("agent.gemini_client._get_api_key", return_value="test-key")
+    @patch("core.services.gemini_client._get_api_key", return_value="test-key")
     def test_missing_columns_skips_generation(self, mock_get_key, mock_call_llm):
         input_data = {"spreadsheet_data": {"sheets": [{"rows": []}]}}
         executor = GenerateCriteriaExecutor(
@@ -1122,7 +1172,7 @@ class GenerateCriteriaExecutorTests(SimpleTestCase):
         mock_call_llm.assert_not_called()
 
     @patch("agent.llm_client.call_llm")
-    @patch("agent.gemini_client._get_api_key", return_value="test-key")
+    @patch("core.services.gemini_client._get_api_key", return_value="test-key")
     def test_success_deduplicates_columns_saves_criteria_and_builds_summary(
         self, mock_get_key, mock_call_llm
     ):
@@ -1172,7 +1222,7 @@ class GenerateCriteriaExecutorTests(SimpleTestCase):
         "agent.llm_client.call_llm",
         side_effect=GeminiRetriesExhausted("Gemini rate limited"),
     )
-    @patch("agent.gemini_client._get_api_key", return_value="test-key")
+    @patch("core.services.gemini_client._get_api_key", return_value="test-key")
     def test_gemini_retry_exhaustion_marks_step_skipped(
         self, mock_get_key, mock_call_llm
     ):
@@ -1194,7 +1244,7 @@ class GenerateCriteriaExecutorTests(SimpleTestCase):
         "agent.llm_client.call_llm",
         side_effect=RuntimeError("Gemini request timed out"),
     )
-    @patch("agent.gemini_client._get_api_key", return_value="test-key")
+    @patch("core.services.gemini_client._get_api_key", return_value="test-key")
     def test_runtime_error_is_handled_by_retry_policy(
         self, mock_get_key, mock_call_llm
     ):
@@ -1216,7 +1266,7 @@ class GenerateCriteriaExecutorTests(SimpleTestCase):
         mock_call_llm.assert_called_once()
 
     @patch("agent.llm_client.call_llm", return_value={"text": "not-json"})
-    @patch("agent.gemini_client._get_api_key", return_value="test-key")
+    @patch("core.services.gemini_client._get_api_key", return_value="test-key")
     def test_invalid_llm_response_continues_without_criteria(
         self, mock_get_key, mock_call_llm
     ):

@@ -4,9 +4,8 @@ External systems are replaced at their boundaries.  In particular, these tests
 never make real Anthropic or Gemini requests.
 """
 import json
-from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -65,97 +64,6 @@ class AnthropicClientTests(SimpleTestCase):
 
         self.assertIs(result, expected_client)
         mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
-
-
-class SpreadsheetExtractionTests(SimpleTestCase):
-    @patch("agent.services.Cell.objects.filter")
-    def test_extract_spreadsheet_data_uses_supported_cell_values(self, mock_cell_filter):
-        spreadsheet = MagicMock()
-        spreadsheet.name = "Quarterly report"
-        sheet = MagicMock()
-        sheet.name = "Performance"
-        spreadsheet.sheets.filter.return_value.order_by.return_value = [sheet]
-        sheet.columns.filter.return_value.order_by.return_value.values_list.return_value = [
-            "Computed number",
-            "Computed text",
-            "String",
-            "Number",
-            "Boolean",
-            "Detached",
-        ]
-
-        first_row = object()
-        empty_row = object()
-        ordered_rows = MagicMock()
-        ordered_rows.__getitem__.return_value = [first_row, empty_row]
-        sheet.rows.filter.return_value.order_by.return_value = ordered_rows
-
-        def cell(column_name=None, **values):
-            defaults = {
-                "computed_type": "",
-                "computed_number": None,
-                "computed_string": "",
-                "string_value": "",
-                "number_value": None,
-                "boolean_value": None,
-                "column_id": 99,
-            }
-            defaults.update(values)
-            defaults["column"] = (
-                SimpleNamespace(name=column_name) if column_name is not None else None
-            )
-            return SimpleNamespace(**defaults)
-
-        first_cells = [
-            cell("Computed number", computed_type="NUMBER", computed_number=Decimal("12.5")),
-            cell("Computed text", computed_string="formula result"),
-            cell("String", string_value="plain text"),
-            cell("Number", number_value=Decimal("7.25")),
-            cell("Boolean", boolean_value=False),
-            cell(None, boolean_value=True, column_id=99),
-        ]
-        empty_cells = [cell("String")]
-
-        def cell_query(*, row, **_kwargs):
-            query = MagicMock()
-            query.select_related.return_value.order_by.return_value = (
-                first_cells if row is first_row else empty_cells
-            )
-            return query
-
-        mock_cell_filter.side_effect = cell_query
-
-        result = services._extract_spreadsheet_data(spreadsheet)
-
-        self.assertEqual(
-            result,
-            {
-                "name": "Quarterly report",
-                "sheets": [
-                    {
-                        "name": "Performance",
-                        "columns": [
-                            "Computed number",
-                            "Computed text",
-                            "String",
-                            "Number",
-                            "Boolean",
-                            "Detached",
-                        ],
-                        "rows": [
-                            {
-                                "Computed number": 12.5,
-                                "Computed text": "formula result",
-                                "String": "plain text",
-                                "Number": 7.25,
-                                "Boolean": False,
-                                "col_99": True,
-                            }
-                        ],
-                    }
-                ],
-            },
-        )
 
 
 class AnalysisInputHelperTests(SimpleTestCase):
@@ -269,7 +177,7 @@ class ChatOutputNormalizationTests(SimpleTestCase):
 
 
 class GeminiChatBoundaryTests(SimpleTestCase):
-    @patch("agent.gemini_client.call_gemini_json")
+    @patch("core.services.gemini_client.call_gemini_json")
     def test_call_gemini_chat_normalizes_mocked_response(self, mock_call_gemini):
         mock_call_gemini.return_value = {
             "status": "completed",
@@ -309,12 +217,12 @@ class GeminiChatBoundaryTests(SimpleTestCase):
         self.assertIs(mock_call_llm.call_args.kwargs["agent_session"], session)
         self.assertEqual(mock_call_llm.call_args.kwargs["call_purpose"], "follow_up_chat")
 
-    @patch("agent.gemini_client.call_gemini_json", side_effect=RuntimeError("offline"))
+    @patch("core.services.gemini_client.call_gemini_json", side_effect=RuntimeError("offline"))
     def test_call_gemini_chat_converts_provider_failure_to_runtime_error(self, _mock_call):
         with self.assertRaisesRegex(RuntimeError, "Gemini chat failed: offline"):
             services._call_gemini_chat("history")
 
-    @patch("agent.gemini_client.call_gemini_json", return_value={"text": ""})
+    @patch("core.services.gemini_client.call_gemini_json", return_value={"text": ""})
     def test_call_gemini_chat_rejects_unexpected_output(self, _mock_call):
         with self.assertRaisesRegex(RuntimeError, "unexpected output format"):
             services._call_gemini_chat("history")

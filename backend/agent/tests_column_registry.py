@@ -505,7 +505,7 @@ class LearnedTemplateTests(SimpleTestCase):
 
 
 class LLMQuotaPropagationTests(SimpleTestCase):
-    @patch('agent.gemini_client._get_api_key', return_value='test-key')
+    @patch('core.services.gemini_client._get_api_key', return_value='test-key')
     @patch('agent.llm_client.call_llm')
     def test_quota_error_is_not_converted_to_unknown_result(self, mock_call_llm, _mock_key):
         from stripe_meta.exceptions import QuotaError
