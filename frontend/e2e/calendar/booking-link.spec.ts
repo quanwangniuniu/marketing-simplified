@@ -37,6 +37,7 @@ const LINK_PAYLOAD = {
   slots: SLOTS,
   invitees_only: false,
   viewer_can_book: true,
+  viewer_bookings: [],
 };
 
 async function mockAvailability(page: Page, payload: unknown = LINK_PAYLOAD) {
@@ -141,6 +142,11 @@ test.describe('Public booking link', () => {
       email: 'grace@example.com',
       start: SLOTS[0].start,
     });
+
+    await page.getByTestId('booking-back-to-slots').click();
+    await expect(page.getByTestId('booking-existing-reminder')).toContainText(
+      'You already have a booking on',
+    );
   });
 
   test('a signed-in member only confirms notes', async ({ page }) => {
@@ -291,6 +297,24 @@ test.describe('Public booking link', () => {
     await expect(page.getByTestId('booking-missing')).toBeVisible();
     await expect(page.getByText('Link unavailable')).toBeVisible();
     await expect(page.getByTestId('booking-widget')).toHaveCount(0);
+  });
+
+  test('a returning booker is reminded of their existing time', async ({ page }) => {
+    await mockAvailability(page, {
+      ...LINK_PAYLOAD,
+      viewer_bookings: [
+        {
+          start: SLOTS[0].start,
+          end: SLOTS[0].end,
+          title: 'Intro Call with Grace Hopper',
+        },
+      ],
+    });
+    await gotoBooking(page);
+    const reminder = page.getByTestId('booking-existing-reminder');
+    await expect(reminder).toBeVisible();
+    await expect(reminder).toContainText('You already have a booking on');
+    await expect(reminder).toContainText('at');
   });
 
   test('a link with no free time says so', async ({ page }) => {

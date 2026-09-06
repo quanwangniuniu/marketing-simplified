@@ -372,6 +372,12 @@ export interface BookingSlotDTO {
   end: string;
 }
 
+export interface ViewerBookingDTO {
+  start: string;
+  end: string;
+  title: string;
+}
+
 export interface PublicBookingLinkDTO {
   slug: string;
   title: string;
@@ -389,6 +395,8 @@ export interface PublicBookingLinkDTO {
   viewer_can_book?: boolean;
   /** Signed-in viewer shares a project with the host. Guests never see this. */
   same_project?: boolean;
+  /** Upcoming bookings this signed-in viewer already has on this link. */
+  viewer_bookings?: ViewerBookingDTO[];
 }
 
 export interface BookingRequestPayload {

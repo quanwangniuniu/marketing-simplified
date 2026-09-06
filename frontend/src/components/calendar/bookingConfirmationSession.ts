@@ -52,3 +52,48 @@ export function clearBookingConfirmation(orgSlug: string, linkSlug: string): voi
     // ignore
   }
 }
+
+function reminderKey(orgSlug: string, linkSlug: string): string {
+  return `booking-reminder:${orgSlug}:${linkSlug}`;
+}
+
+export type StoredViewerBooking = {
+  start: string;
+  end: string;
+  title: string;
+};
+
+export function saveBookingReminder(
+  orgSlug: string,
+  linkSlug: string,
+  bookings: StoredViewerBooking[],
+): void {
+  try {
+    sessionStorage.setItem(reminderKey(orgSlug, linkSlug), JSON.stringify(bookings));
+  } catch {
+    // Private mode or a full store: the picker still works without this.
+  }
+}
+
+export function readBookingReminder(
+  orgSlug: string,
+  linkSlug: string,
+): StoredViewerBooking[] {
+  try {
+    const raw = sessionStorage.getItem(reminderKey(orgSlug, linkSlug));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredViewerBooking[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item?.start && item.end && item.title);
+  } catch {
+    return [];
+  }
+}
+
+export function clearBookingReminder(orgSlug: string, linkSlug: string): void {
+  try {
+    sessionStorage.removeItem(reminderKey(orgSlug, linkSlug));
+  } catch {
+    // ignore
+  }
+}

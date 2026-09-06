@@ -5,7 +5,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CalendarX2, CheckCircle2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { PublicBookingAPI } from '@/lib/api/calendarApi';
-import { clearBookingConfirmation } from './bookingConfirmationSession';
+import {
+  clearBookingConfirmation,
+  clearBookingReminder,
+} from './bookingConfirmationSession';
 
 interface BookingCancelProps {
   orgSlug: string;
@@ -31,6 +34,7 @@ export default function BookingCancel({ orgSlug, linkSlug, token }: BookingCance
     try {
       await PublicBookingAPI.cancelBooking(orgSlug, linkSlug, token);
       clearBookingConfirmation(orgSlug, linkSlug);
+      clearBookingReminder(orgSlug, linkSlug);
       setStage('done');
     } catch {
       setStage('failed');

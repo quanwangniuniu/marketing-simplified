@@ -20,6 +20,7 @@ import {
   PublicBookingAPI,
   type BookingSlotDTO,
   type PublicBookingLinkDTO,
+  type ViewerBookingDTO,
 } from '@/lib/api/calendarApi';
 import {
   buildMonthGrid,
@@ -38,11 +39,15 @@ import {
 } from './bookingSlots';
 import { downloadIcs, type CalendarEntry } from './calendarExport';
 import BookingFind from './BookingFind';
+import { BookingExistingReminder } from './BookingExistingReminder';
 import {
   clearBookingConfirmation,
   readBookingConfirmation,
+  readBookingReminder,
   saveBookingConfirmation,
+  saveBookingReminder,
 } from './bookingConfirmationSession';
+import { resolveViewerBookings } from '@/lib/bookingViewerReminder';
 import { useAuthStore } from '@/lib/authStore';
 import { bookerDisplayName, isInternalBooker } from '@/lib/bookingBookerIdentity';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -98,6 +103,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   const [bookerScope, setBookerScope] = useState<BookingScope>('personal');
   const [confirmedScope, setConfirmedScope] = useState<BookingScope | null>(null);
   const [sameProjectPrompt, setSameProjectPrompt] = useState(false);
+  const [viewerBookings, setViewerBookings] = useState<ViewerBookingDTO[]>([]);
 
   // Which month the picker is showing. Kept as plain year/month so paging never
   // drifts across timezones.
@@ -143,6 +149,13 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         return;
       }
       setLink(data);
+      setViewerBookings(
+        resolveViewerBookings({
+          fromApi: data.viewer_bookings,
+          fromSession: readBookingReminder(orgSlug, linkSlug),
+          signedIn: Boolean(token),
+        }),
+      );
       setStage((current) => {
         if (forcePickerRef.current) {
           forcePickerRef.current = false;
@@ -170,6 +183,17 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
 
   const resumePicker = () => {
     forcePickerRef.current = true;
+    if (confirmation) {
+      const reminder = [
+        {
+          start: confirmation.start,
+          end: confirmation.end,
+          title: confirmation.title,
+        },
+      ];
+      saveBookingReminder(orgSlug, linkSlug, reminder);
+      setViewerBookings(reminder);
+    }
     clearBookingConfirmation(orgSlug, linkSlug);
     setConfirmation(null);
     setFeedUrl('');
@@ -718,6 +742,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
+              <BookingExistingReminder bookings={viewerBookings} timeZone={timeZone} />
               <h2 className="mb-4 text-base font-semibold text-gray-900">
                 Select a date &amp; time
               </h2>

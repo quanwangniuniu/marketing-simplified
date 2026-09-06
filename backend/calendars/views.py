@@ -83,7 +83,7 @@ from django.urls import reverse
 
 from .booking_access import booker_shares_project, can_book_public_link
 from .booking_ics import as_webcal_url, build_booking_ics
-from .booking_lookup import find_guest_bookings
+from .booking_lookup import find_guest_bookings, find_viewer_bookings, serialize_viewer_bookings
 from .booking_write import (
     calendars_for_booking_availability,
     cancel_booking_events,
@@ -1776,6 +1776,9 @@ class PublicBookingLinkAvailabilityView(APIView):
             payload = PublicBookingLinkSerializer(link).data
             payload["viewer_can_book"] = True
             payload["same_project"] = booker_shares_project(link, request.user)
+            payload["viewer_bookings"] = serialize_viewer_bookings(
+                find_viewer_bookings(link, request.user)
+            )
 
             # Windows and their timezone must come from the same source — see
             # AvailabilitySchedule.

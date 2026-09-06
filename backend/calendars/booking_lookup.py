@@ -87,3 +87,24 @@ def find_guest_bookings(
             matched.append(event)
 
     return _dedupe_canonical(matched)
+
+
+def find_viewer_bookings(link, user) -> list[Event]:
+    """Upcoming bookings on this link for the signed-in viewer only."""
+    if not getattr(user, "is_authenticated", False):
+        return []
+    email = (getattr(user, "email", None) or "").strip()
+    if not email:
+        return []
+    return find_guest_bookings(link=link, email=email)
+
+
+def serialize_viewer_bookings(events: list[Event]) -> list[dict]:
+    return [
+        {
+            "start": event.start_datetime.isoformat().replace("+00:00", "Z"),
+            "end": event.end_datetime.isoformat().replace("+00:00", "Z"),
+            "title": event.title,
+        }
+        for event in events
+    ]

@@ -104,6 +104,7 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         assert body["min_notice_minutes"] == 0
         assert body["invitees_only"] is False
         assert body["viewer_can_book"] is True
+        assert body["viewer_bookings"] == []
         assert len(body["slots"]) > 0
 
     def test_invitees_only_hides_slots_from_everyone_else(self):
@@ -165,6 +166,62 @@ class PublicAvailabilityTests(PublicBookingTestBase):
         with patch(FREEBUSY_PATH, return_value=[]):
             body = self.client.get(self.availability_url).json()
         assert body["same_project"] is True
+
+    def test_signed_in_booker_sees_their_upcoming_booking(self):
+        invitee = User.objects.create_user(
+            username="booker",
+            email="booker@acme.com",
+            password="x",
+            first_name="Grace",
+            last_name="Hopper",
+            organization=self.org,
+        )
+        self.client.force_authenticate(user=invitee)
+        start = next_weekday_at(10)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            booked = self.client.post(
+                self.booking_url,
+                {"start": start.isoformat(), "notes": "See you then."},
+                format="json",
+            )
+        assert booked.status_code == status.HTTP_201_CREATED, booked.json()
+
+        with patch(FREEBUSY_PATH, return_value=[]):
+            body = self.client.get(self.availability_url).json()
+        starts = [item["start"] for item in body["viewer_bookings"]]
+        assert booked.json()["start"] in starts
+        for item in body["viewer_bookings"]:
+            assert set(item) == {"start", "end", "title"}
+            assert "cancel_token" not in item
+
+    def test_another_signed_in_user_does_not_see_someone_elses_booking(self):
+        booker = User.objects.create_user(
+            username="booker2",
+            email="booker2@acme.com",
+            password="x",
+            first_name="Grace",
+            last_name="Hopper",
+            organization=self.org,
+        )
+        other = User.objects.create_user(
+            username="other",
+            email="other@acme.com",
+            password="x",
+            organization=self.org,
+        )
+        self.client.force_authenticate(user=booker)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            booked = self.client.post(
+                self.booking_url,
+                {"start": next_weekday_at(10).isoformat()},
+                format="json",
+            )
+        assert booked.status_code == status.HTTP_201_CREATED, booked.json()
+
+        self.client.force_authenticate(user=other)
+        with patch(FREEBUSY_PATH, return_value=[]):
+            body = self.client.get(self.availability_url).json()
+        assert body["viewer_bookings"] == []
 
     def test_a_phone_number_reaches_the_host_on_the_attendee(self):
         # Ray asked for a contact number, so it has to land somewhere the host
