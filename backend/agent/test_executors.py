@@ -29,6 +29,7 @@ from .executors import (
     get_executor,
 )
 from .gemini_client import GeminiRetriesExhausted
+from .services import _ANALYSIS_SYSTEM_PROMPT
 
 
 class _StepStub:
@@ -722,7 +723,8 @@ class AnalyzeDataExecutorTests(SimpleTestCase):
 
 
 class CallLLMExecutorTests(SimpleTestCase):
-    @patch("agent.services._call_llm")
+    # Patch the imported name used by the executor, keeping billing and HTTP out.
+    @patch("agent.executors._call_llm_unified", autospec=True)
     @patch("agent.services._get_llm_client", return_value=None)
     def test_missing_client_returns_configuration_failure(
         self, mock_get_client, mock_call_llm
@@ -738,13 +740,15 @@ class CallLLMExecutorTests(SimpleTestCase):
         mock_get_client.assert_called_once_with()
         mock_call_llm.assert_not_called()
 
-    @patch("agent.services._call_llm", return_value={"summary": "Healthy"})
+    @patch("agent.executors._call_llm_unified", autospec=True)
     @patch("agent.services._get_llm_client")
     def test_success_returns_analysis_and_spreadsheet(
         self, mock_get_client, mock_call_llm
     ):
         client = object()
         mock_get_client.return_value = client
+        llm_response = {"text": "Healthy", "usage": {"input": 10, "output": 2}}
+        mock_call_llm.return_value = llm_response
         spreadsheet_data = {"rows": [{"spend": 10}]}
         orchestrator = _OrchestratorStub()
         executor = CallLLMExecutor(_StepStub(), _WorkflowRunStub(), orchestrator)
@@ -752,22 +756,27 @@ class CallLLMExecutorTests(SimpleTestCase):
         result = executor.execute({"spreadsheet_data": spreadsheet_data})
 
         self.assertTrue(result.success)
-        self.assertEqual(result.output_data["analysis_result"], {"summary": "Healthy"})
+        self.assertEqual(result.output_data["analysis_result"], llm_response)
         self.assertIs(result.output_data["spreadsheet_data"], spreadsheet_data)
         self.assertEqual(result.sse_events[0]["content"], "LLM analysis completed.")
         mock_call_llm.assert_called_once_with(
-            client,
-            spreadsheet_data,
+            provider="anthropic",
+            model="claude-sonnet-5",
+            user_prompt=spreadsheet_data,
+            system_prompt=_ANALYSIS_SYSTEM_PROMPT,
             agent_session=orchestrator.session,
         )
 
-    @patch("agent.services._call_llm", return_value={"summary": "Healthy"})
+    @patch("agent.executors._call_llm_unified", autospec=True)
     @patch("agent.services._get_llm_client")
     def test_raw_input_is_used_when_spreadsheet_key_is_absent(
         self, mock_get_client, mock_call_llm
     ):
         client = object()
         mock_get_client.return_value = client
+        mock_call_llm.return_value = {
+            "text": "Healthy", "usage": {"input": 10, "output": 2}
+        }
         input_data = {"rows": [{"spend": 10}]}
         orchestrator = _OrchestratorStub()
         executor = CallLLMExecutor(_StepStub(), _WorkflowRunStub(), orchestrator)
@@ -777,12 +786,18 @@ class CallLLMExecutorTests(SimpleTestCase):
         self.assertTrue(result.success)
         self.assertIs(result.output_data["spreadsheet_data"], input_data)
         mock_call_llm.assert_called_once_with(
-            client,
-            input_data,
+            provider="anthropic",
+            model="claude-sonnet-5",
+            user_prompt=input_data,
+            system_prompt=_ANALYSIS_SYSTEM_PROMPT,
             agent_session=orchestrator.session,
         )
 
-    @patch("agent.services._call_llm", side_effect=ValueError("Invalid LLM response"))
+    @patch(
+        "agent.executors._call_llm_unified",
+        autospec=True,
+        side_effect=ValueError("Invalid LLM response"),
+    )
     @patch("agent.services._get_llm_client", return_value=object())
     def test_unexpected_llm_error_returns_failure(
         self, mock_get_client, mock_call_llm

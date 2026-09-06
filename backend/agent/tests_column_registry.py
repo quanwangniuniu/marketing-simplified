@@ -22,6 +22,7 @@ from .column_registry import (
     CAT_IDENTIFIER,
     CAT_PERFORMANCE_RATIO,
     CAT_UNKNOWN,
+    CAT_TEMPORAL,
     ColumnDetectionResult,
     detect_columns,
     normalize_spreadsheet,
@@ -429,6 +430,23 @@ class AutoCategorizationTests(SimpleTestCase):
         for canonical_name, expected in cases.items():
             with self.subTest(canonical_name=canonical_name):
                 self.assertEqual(registry.auto_categorize_by_name(canonical_name), expected)
+
+    def test_keyword_matching_does_not_use_partial_word_substrings(self):
+        self.assertEqual(
+            registry.auto_categorize_by_name("total_spend"),
+            CAT_FINANCIAL,
+        )
+        self.assertEqual(
+            registry.auto_categorize_by_name("week_end"),
+            CAT_TEMPORAL,
+        )
+
+
+    def test_compound_keywords_still_match(self):
+        self.assertEqual(
+            registry.auto_categorize_by_name("add_to_cart"),
+            CAT_CONVERSION,
+        )
 
 
 class DatabaseTemplateHelperTests(SimpleTestCase):

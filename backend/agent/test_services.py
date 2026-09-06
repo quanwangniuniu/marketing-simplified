@@ -191,6 +191,16 @@ class AnalysisInputHelperTests(SimpleTestCase):
         )
         self.assertEqual(services._build_criteria_text("not-json"), ("", []))
 
+    def test_build_criteria_text_rejects_valid_json_with_wrong_shape(self):
+        self.assertEqual(
+            services._build_criteria_text('["Revenue", "Spend"]'),
+            ("", []),
+        )
+        self.assertEqual(
+            services._build_criteria_text(["Revenue", "Spend"]),
+            ("", []),
+        )
+
     def test_resolve_analysis_columns_handles_direct_and_fallback_paths(self):
         cases = [
             ((["Spend"], [], None), ["Spend"]),

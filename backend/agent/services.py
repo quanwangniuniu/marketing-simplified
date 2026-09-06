@@ -201,6 +201,10 @@ def _build_criteria_text(success_criteria) -> tuple[str, list]:
             criteria = json.loads(success_criteria)
         else:
             criteria = success_criteria
+        # the code below this test expects the criteria to be a dict object
+        if not isinstance(criteria, dict):
+            return '', []
+
         key_cols = criteria.get('key_columns', [])
         lines = [f"Dataset type: {criteria.get('schema_type', 'unknown')}"]
         for c in criteria.get('criteria', []):
