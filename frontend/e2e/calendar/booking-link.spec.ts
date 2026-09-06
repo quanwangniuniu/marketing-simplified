@@ -112,6 +112,9 @@ test.describe('Public booking link', () => {
 
     await expect(page.getByTestId('booking-confirmed')).toBeVisible();
     await expect(page.getByText(/You're booked/)).toBeVisible();
+    await expect(page.getByTestId('booking-confirmed-next-step')).toHaveText(
+      /cancel or pick another time on this page/i,
+    );
     await expect(page.getByTestId('book-another')).toBeVisible();
     await expect(page.getByTestId('booking-back-to-slots')).toBeVisible();
 
@@ -194,6 +197,9 @@ test.describe('Public booking link', () => {
     await page.getByTestId('booking-submit').click();
 
     await expect(page.getByTestId('booking-confirmed')).toBeVisible();
+    await expect(page.getByTestId('booking-confirmed-next-step')).toHaveText(
+      /already on your personal calendar/i,
+    );
     expect(submitted).toMatchObject({
       name: 'Ada Lovelace',
       email: 'ada@acme.com',

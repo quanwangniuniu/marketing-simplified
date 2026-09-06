@@ -96,6 +96,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
   const [bookerScope, setBookerScope] = useState<BookingScope>('personal');
+  const [confirmedScope, setConfirmedScope] = useState<BookingScope | null>(null);
   const [sameProjectPrompt, setSameProjectPrompt] = useState(false);
 
   // Which month the picker is showing. Kept as plain year/month so paging never
@@ -117,6 +118,7 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
     if (!stored) return;
     setConfirmation(stored.confirmation);
     setFeedUrl(stored.feedUrl);
+    setConfirmedScope(stored.bookerScope ?? null);
     setStage('booked');
   }, [orgSlug, linkSlug]);
 
@@ -350,8 +352,13 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
       const nextFeed = result.feed_url || '';
       setConfirmation(confirmation);
       setFeedUrl(nextFeed);
+      setConfirmedScope(internalBooker ? bookerScope : null);
       setStage('booked');
-      saveBookingConfirmation(orgSlug, linkSlug, { confirmation, feedUrl: nextFeed });
+      saveBookingConfirmation(orgSlug, linkSlug, {
+        confirmation,
+        feedUrl: nextFeed,
+        bookerScope: internalBooker ? bookerScope : undefined,
+      });
     } catch (err) {
       const statusCode = (err as { response?: { status?: number } })?.response?.status;
       if (statusCode === 409) {
@@ -418,6 +425,18 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
           {formatTime(confirmation.start, timeZone)}
         </p>
         <p className="mt-1 text-xs text-gray-400">{timezoneLabel(timeZone)}</p>
+        {hasHydrated ? (
+          <p
+            data-testid="booking-confirmed-next-step"
+            className="mt-4 rounded-lg border border-[#3CCED7]/40 bg-[#3CCED7]/10 px-3 py-2.5 text-sm font-medium leading-relaxed text-[#0E8A96]"
+          >
+            {internalBooker
+              ? `This meeting is already on your ${
+                  (confirmedScope ?? bookerScope) === 'team' ? 'team' : 'personal'
+                } calendar. You can reschedule or cancel it from Calendar.`
+              : 'You can cancel or pick another time on this page.'}
+          </p>
+        ) : null}
 
         {/*
           Subscribe first: a saved .ics is a snapshot and never learns the

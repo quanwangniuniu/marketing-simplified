@@ -1,3 +1,4 @@
+import type { BookingScope } from '@/lib/bookingLinkScope';
 import type { CalendarEntry } from './calendarExport';
 
 /**
@@ -8,6 +9,7 @@ import type { CalendarEntry } from './calendarExport';
 export type StoredBookingConfirmation = {
   confirmation: CalendarEntry;
   feedUrl: string;
+  bookerScope?: BookingScope;
 };
 
 function storageKey(orgSlug: string, linkSlug: string): string {
