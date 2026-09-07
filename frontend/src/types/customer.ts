@@ -44,7 +44,7 @@ export interface UpdateCustomerData {
   status_label?: number | null;
 }
 
-// ── Customer Status Labels (MED-217 Part A) ───────────────────────────────────
+// ── Customer Status Labels ───────────────────────────────────
 
 export interface CustomerStatusLabel {
   id: number;
@@ -62,7 +62,7 @@ export interface CreateStatusLabelData {
   color: string;
 }
 
-// ── Internal Notes (MED-217 Part B) ───────────────────────────────────────────
+// ── Internal Notes ───────────────────────────────────────────
 
 export type NoteAuditEvent = 'note.created' | 'note.edited' | 'note.deleted';
 
