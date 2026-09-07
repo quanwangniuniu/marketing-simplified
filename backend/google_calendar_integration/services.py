@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -31,6 +32,29 @@ GOOGLE_OAUTH_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3"
+
+
+class GoogleAvailabilityUnavailable(Exception):
+    """A connected calendar could not be checked before confirming a booking."""
+
+
+def is_retryable_google_error(exc) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if not isinstance(exc, requests.HTTPError) or exc.response is None:
+        return False
+    code = exc.response.status_code
+    if code in (408, 429) or code >= 500:
+        return True
+    if code == 403:
+        try:
+            errors = exc.response.json().get("error", {}).get("errors", [])
+            return any(e.get("reason") in (
+                "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded"
+            ) for e in errors)
+        except (ValueError, TypeError, AttributeError):
+            return False
+    return False
 
 GOOGLE_CALENDAR_SCOPES = [
     "openid",
@@ -524,14 +548,23 @@ def export_event_to_google(event: Event) -> None:
     meta = dict(event.metadata or {})
     google_event_id = meta.get(METADATA_GOOGLE_EVENT_ID_KEY)
     google_etag = meta.get(METADATA_GOOGLE_ETAG_KEY)
+    # Google accepts caller-supplied base32hex IDs. Stable IDs make an insert
+    # retry safe even when Google accepted it but its response was lost.
+    insert_id = hashlib.sha256(
+        f"{event.organization_id}:{event.pk}".encode()
+    ).hexdigest()
 
     def _insert(token: str):
         r = requests.post(
             f"{GOOGLE_CALENDAR_API_BASE}/calendars/{quote(cid, safe='')}/events",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=body,
+            json={**body, "id": insert_id},
             timeout=30,
         )
+        if r.status_code == 409:
+            # The previous attempt may have succeeded. Update that same event
+            # so any local edits made while waiting for retry are applied too.
+            return _patch(token)
         r.raise_for_status()
         return r.json()
 
@@ -582,11 +615,14 @@ def export_event_to_google(event: Event) -> None:
 
     try:
         if event.is_deleted:
-            if google_event_id:
-                run_google_calendar_api(connection, _delete)
+            # Also remove an insert whose response was lost before its remote
+            # ID could be saved locally. A missing remote event is harmless.
+            google_event_id = google_event_id or insert_id
+            run_google_calendar_api(connection, _delete)
             return
 
         if not google_event_id:
+            google_event_id = insert_id
             created = run_google_calendar_api(connection, _insert)
             meta[METADATA_GOOGLE_EVENT_ID_KEY] = created.get("id")
             meta[METADATA_GOOGLE_ETAG_KEY] = created.get("etag", "")
@@ -604,14 +640,15 @@ def export_event_to_google(event: Event) -> None:
         connection.save(
             update_fields=["last_export_at", "last_error_message", "needs_reconnect", "updated_at"]
         )
-    except requests.HTTPError as exc:
+    except requests.RequestException as exc:
         msg = "Could not sync event to Google Calendar."
-        if exc.response is not None and exc.response.status_code in (401, 403):
+        if exc.response is not None and exc.response.status_code in (401, 403) and not is_retryable_google_error(exc):
             connection.needs_reconnect = True
             msg = "Google authorization expired. Reconnect in Settings."
         logger.warning("google_calendar export failed event=%s: %s", event.id, exc)
         connection.last_error_message = msg
         connection.save(update_fields=["needs_reconnect", "last_error_message", "updated_at"])
+        raise
 
 
 def export_primary_calendar_events_to_google(connection: GoogleCalendarConnection) -> None:
@@ -681,6 +718,8 @@ def fetch_google_busy_intervals(
     time_min: datetime,
     time_max: datetime,
     calendar_ids: list[str] | None = None,
+    *,
+    strict: bool = False,
 ) -> list[tuple[datetime, datetime]]:
     """
     Busy intervals from Google Calendar for one connection, via the freeBusy API.
@@ -695,9 +734,11 @@ def fetch_google_busy_intervals(
     distinguish "no busy time" from "could not reach Google" should check
     `connection.is_active` / `needs_reconnect` themselves.
     """
-    if connection is None or not connection.is_active or connection.needs_reconnect:
+    if connection is None or not connection.is_active:
         return []
-    if not connection.get_access_token():
+    if connection.needs_reconnect or not connection.get_access_token():
+        if strict:
+            raise GoogleAvailabilityUnavailable()
         return []
 
     ids = calendar_ids or [connection.primary_calendar_id or "primary"]
@@ -721,7 +762,9 @@ def fetch_google_busy_intervals(
 
     try:
         payload = run_google_calendar_api(connection, _query)
-    except requests.RequestException:
+    except (requests.RequestException, ValueError) as exc:
+        if strict:
+            raise GoogleAvailabilityUnavailable() from exc
         logger.warning(
             "Google freeBusy lookup failed for connection %s; "
             "falling back to platform availability only.",
@@ -730,12 +773,18 @@ def fetch_google_busy_intervals(
         )
         return []
 
+    if strict and not all(
+        item["id"] in (payload.get("calendars") or {}) for item in body["items"]
+    ):
+        raise GoogleAvailabilityUnavailable()
     intervals: list[tuple[datetime, datetime]] = []
     for calendar_id, entry in (payload.get("calendars") or {}).items():
         # Google reports per-calendar errors inline rather than failing the call
         # (e.g. notFound for a calendar the user lost access to).
         errors = entry.get("errors")
         if errors:
+            if strict:
+                raise GoogleAvailabilityUnavailable()
             logger.warning(
                 "Google freeBusy returned errors for calendar %s: %s", calendar_id, errors
             )
@@ -744,6 +793,8 @@ def fetch_google_busy_intervals(
             start = parse_datetime(period.get("start") or "")
             end = parse_datetime(period.get("end") or "")
             if not start or not end:
+                if strict:
+                    raise GoogleAvailabilityUnavailable()
                 continue
             if timezone.is_naive(start):
                 start = timezone.make_aware(start, timezone.utc)
@@ -766,6 +817,8 @@ def get_merged_busy_intervals(
     google_connection: GoogleCalendarConnection | None,
     time_min: datetime,
     time_max: datetime,
+    *,
+    strict_google: bool = False,
 ) -> list[tuple[datetime, datetime]]:
     """
     One busy timeline for a person, combining the in-app calendar and Google.
@@ -783,7 +836,7 @@ def get_merged_busy_intervals(
     intervals = list(get_busy_intervals(calendars, time_min, time_max))
     if google_connection is not None:
         intervals.extend(
-            fetch_google_busy_intervals(google_connection, time_min, time_max)
+            fetch_google_busy_intervals(google_connection, time_min, time_max, strict=strict_google)
         )
     return merge_busy_intervals(intervals)
 
@@ -798,6 +851,7 @@ def get_merged_availability(
     range_start: datetime,
     range_end: datetime,
     now: datetime | None = None,
+    strict_google: bool = False,
 ) -> list[tuple[datetime, datetime]]:
     """
     Bookable slots for a booking link, as UTC intervals.
@@ -812,7 +866,11 @@ def get_merged_availability(
     from calendars.availability import compute_available_slots
 
     busy = get_merged_busy_intervals(
-        calendars, google_connection, range_start, range_end
+        calendars,
+        google_connection,
+        range_start - timedelta(minutes=rules.buffer_before_minutes),
+        range_end + timedelta(minutes=rules.buffer_after_minutes),
+        strict_google=strict_google,
     )
     return compute_available_slots(
         windows=windows,
@@ -842,6 +900,10 @@ def is_slot_still_available(
     was taken while the page sat open. The booking endpoint must call this
     before writing the event, or two people can book the same time.
     """
+    now = now or timezone.now()
+    if not (now + timedelta(minutes=rules.min_notice_minutes) <= slot_start
+            <= now + timedelta(days=rules.max_advance_days)):
+        return False
     slot_end = slot_start + timedelta(minutes=rules.duration_minutes)
     slots = get_merged_availability(
         calendars=calendars,
@@ -852,5 +914,6 @@ def is_slot_still_available(
         range_start=slot_start,
         range_end=slot_end,
         now=now,
+        strict_google=True,
     )
     return (slot_start, slot_end) in slots

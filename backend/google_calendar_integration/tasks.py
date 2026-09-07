@@ -29,7 +29,7 @@ def sync_all_google_calendar_imports(self):
             logger.exception("google_calendar beat sync failed user=%s", conn.user_id)
 
 
-@shared_task(bind=True, ignore_result=True)
+@shared_task(bind=True, ignore_result=True, max_retries=5)
 def export_event_to_google_task(self, event_id: str, tenant_schema: str = 'public'):
     """
     Export one event to the owner's Google Calendar.
@@ -44,16 +44,14 @@ def export_event_to_google_task(self, event_id: str, tenant_schema: str = 'publi
     export_event_to_google takes the `is_deleted` branch, which removes the
     Google copy.
 
-    Known gaps, deliberately left for follow-up work:
-      - only the primary calendar is picked up, and `is_primary` is set solely
-        by the Google connect flow.
-      - exercised against mocks only; not yet verified against live Google.
+    Transient Google failures retry with exponential backoff. Permanent errors
+    remain failed tasks, with connection details available in Settings.
     """
     from calendars.models import Event
 
     from core.tenant_context import tenant_schema_context
 
-    from .services import export_event_to_google
+    from .services import export_event_to_google, is_retryable_google_error
 
     with tenant_schema_context(tenant_schema):
         ev = Event.objects.filter(id=event_id).first()
@@ -61,5 +59,8 @@ def export_event_to_google_task(self, event_id: str, tenant_schema: str = 'publi
             return
         try:
             export_event_to_google(ev)
-        except Exception:
+        except Exception as exc:
             logger.exception("google_calendar export failed event=%s", event_id)
+            if is_retryable_google_error(exc):
+                raise self.retry(exc=exc, countdown=min(30 * 2 ** self.request.retries, 600))
+            raise

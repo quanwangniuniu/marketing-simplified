@@ -413,6 +413,7 @@ test.describe('Booking link management', () => {
     await gotoManager(page);
     await page.getByTestId('booking-link-new').click();
     await page.getByTestId('booking-link-title').fill('Client Call');
+    await page.getByTestId('booking-link-scope-team').click();
     await page.getByTestId('booking-link-calendar').selectOption(
       '22222222-2222-2222-2222-222222222222',
     );
@@ -470,6 +471,7 @@ test.describe('Booking link management', () => {
     await gotoManager(page);
     await page.getByTestId('booking-link-new').click();
     await page.getByTestId('booking-link-title').fill('Intro Call');
+    await page.getByTestId('booking-link-scope-team').click();
     await page.getByTestId('booking-link-calendar').selectOption(
       '22222222-2222-2222-2222-222222222222',
     );
@@ -595,7 +597,7 @@ test.describe('Booking link management', () => {
 
     await expect(page.getByText('Renamed Call')).toBeVisible();
     expect(patched).toMatchObject({ title: 'Renamed Call', duration_minutes: 45 });
-    // The calendar was left alone, so no calendar_id is sent.
-    expect(patched).not.toHaveProperty('calendar_id');
+    // Editing preserves the existing calendar selection.
+    expect(patched).toHaveProperty('calendar_id', EXISTING_LINK.calendar);
   });
 });

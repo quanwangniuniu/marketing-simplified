@@ -134,3 +134,96 @@ class BookingExportToGoogleTests(TestCase):
             export_event_to_google(event)
 
         post.assert_not_called()
+
+    def test_retry_after_lost_insert_response_updates_same_google_event(self):
+        import requests
+        from google_calendar_integration.tasks import export_event_to_google_task
+        event = self._booking_event()
+        remote = {}
+        submitted_ids = []
+
+        def insert(*args, **kwargs):
+            payload = kwargs["json"]
+            submitted_ids.append(payload["id"])
+            if payload["id"] not in remote:
+                remote[payload["id"]] = payload
+                raise requests.Timeout("Google accepted the event; response was lost")
+            response = MagicMock(status_code=409)
+            return response
+
+        def update(url, **kwargs):
+            event_id = url.rsplit("/", 1)[-1]
+            assert event_id in remote
+            remote[event_id].update(kwargs["json"])
+            response = MagicMock(status_code=200)
+            response.json.return_value = {"id": event_id, "etag": "recovered"}
+            return response
+
+        with patch("google_calendar_integration.services.requests.post", side_effect=insert), patch(
+            "google_calendar_integration.services.requests.patch", side_effect=update
+        ):
+            result = export_event_to_google_task.apply(args=(str(event.pk),), throw=False)
+        assert result.successful()
+        assert len(submitted_ids) == 2 and submitted_ids[0] == submitted_ids[1]
+        assert len(remote) == 1
+        event.refresh_from_db()
+        self.connection.refresh_from_db()
+        assert event.metadata["google_calendar_event_id"] == submitted_ids[0]
+        assert self.connection.last_error_message is None
+
+    def test_retry_after_server_failure_exports_existing_local_booking(self):
+        import requests
+        from google_calendar_integration.tasks import export_event_to_google_task
+        event = self._booking_event()
+        failed = requests.Response()
+        failed.status_code = 503
+        error = requests.HTTPError(response=failed)
+        success = MagicMock(status_code=200)
+        success.json.return_value = {"id": "recovered-id", "etag": "etag"}
+        with patch("google_calendar_integration.services.requests.post", side_effect=[error, success]) as post:
+            result = export_event_to_google_task.apply(args=(str(event.pk),), throw=False)
+        assert result.successful()
+        assert post.call_count == 2
+        event.refresh_from_db()
+        assert event.status == "confirmed" and not event.is_deleted
+        assert event.metadata["google_calendar_event_id"] == "recovered-id"
+
+    def test_permanent_google_error_fails_without_retries(self):
+        import requests
+        from google_calendar_integration.tasks import export_event_to_google_task
+        event = self._booking_event()
+        failed = requests.Response()
+        failed.status_code = 403
+        failed._content = b'{"error":{"errors":[{"reason":"forbidden"}]}}'
+        with patch("google_calendar_integration.services.requests.post", side_effect=requests.HTTPError(response=failed)) as post:
+            result = export_event_to_google_task.apply(args=(str(event.pk),), throw=False)
+        assert result.failed()
+        assert post.call_count == 1
+        self.connection.refresh_from_db()
+        assert self.connection.needs_reconnect
+
+    def test_transient_failure_stops_after_retry_limit(self):
+        import requests
+        from google_calendar_integration.tasks import export_event_to_google_task
+        event = self._booking_event()
+        with patch("google_calendar_integration.services.requests.post", side_effect=requests.Timeout()) as post:
+            result = export_event_to_google_task.apply(args=(str(event.pk),), throw=False)
+        assert result.failed()
+        assert post.call_count == 6  # original attempt plus five retries
+        self.connection.refresh_from_db()
+        assert self.connection.last_error_message
+        assert not self.connection.needs_reconnect
+
+    def test_cancellation_removes_remote_insert_even_if_response_was_lost(self):
+        import requests
+        event = self._booking_event()
+        with patch("google_calendar_integration.services.requests.post", side_effect=requests.Timeout()) as post:
+            with self.assertRaises(requests.Timeout):
+                export_event_to_google(event)
+        inserted_id = post.call_args.kwargs["json"]["id"]
+        event.is_deleted = True
+        event.save(update_fields=["is_deleted"])
+        response = MagicMock(status_code=204)
+        with patch("google_calendar_integration.services.requests.delete", return_value=response) as delete:
+            export_event_to_google(event)
+        assert delete.call_args.args[0].endswith('/' + inserted_id)

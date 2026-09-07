@@ -577,6 +577,43 @@ def _expand_recurring_event(
 # ── Busy intervals for availability ─────────────────────────────
 
 
+def _recurring_busy_intervals(event, time_min, time_max):
+    """Expand every supported recurrence rule without truncating boundary overlaps."""
+    from zoneinfo import ZoneInfo
+    from dateutil.rrule import rrulestr
+    from django.utils.dateparse import parse_datetime
+
+    rule = event.recurrence_rule
+    duration = event.end_datetime - event.start_datetime
+    try:
+        starts = rrulestr(rule.generate_rrule_string(),
+                         dtstart=event.start_datetime.astimezone(ZoneInfo(event.timezone)))
+        excluded = {parse_datetime(value) for value in rule.exception_dates or []}
+    except (ValueError, TypeError, KeyError):
+        # Invalid imported recurrence data is unknown availability, never free.
+        return [(time_min, time_max)]
+    exceptions = {exc.exception_date: exc for exc in RecurrenceException.objects.filter(
+        original_event=event, recurrence_rule=rule,
+        exception_date__gt=time_min - duration, exception_date__lt=time_max,
+    ).select_related("modified_event")}
+    result = []
+    for occurrence in starts.xafter(time_min - duration, inc=False):
+        start = occurrence.astimezone(timezone.utc)
+        if start >= time_max or (rule.until and start >= rule.until):
+            break
+        if start in excluded:
+            continue
+        exception = exceptions.get(start)
+        if exception:
+            replacement = exception.modified_event
+            if exception.is_cancelled or not replacement or replacement.is_deleted or replacement.status == "cancelled":
+                continue
+            result.append((replacement.start_datetime, replacement.end_datetime))
+        else:
+            result.append((start, start + duration))
+    return result
+
+
 def get_busy_intervals_by_calendar(
     calendars, time_min: datetime, time_max: datetime
 ) -> dict[str, list[tuple[datetime, datetime]]]:
@@ -593,7 +630,7 @@ def get_busy_intervals_by_calendar(
         events = _events_intersecting_range(
             time_min,
             time_max,
-            Event.objects.filter(calendar=calendar, is_deleted=False).select_related(
+            Event.objects.filter(calendar=calendar, is_deleted=False).exclude(status="cancelled").select_related(
                 "recurrence_rule"
             ),
         )
@@ -601,8 +638,7 @@ def get_busy_intervals_by_calendar(
         intervals: list[tuple[datetime, datetime]] = []
         for event in events:
             if event.is_recurring and event.recurrence_rule_id:
-                for instance in _expand_recurring_event(event, time_min, time_max):
-                    intervals.append((instance.start_datetime, instance.end_datetime))
+                intervals.extend(_recurring_busy_intervals(event, time_min, time_max))
             else:
                 intervals.append((event.start_datetime, event.end_datetime))
 

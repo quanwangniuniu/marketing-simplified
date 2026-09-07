@@ -227,3 +227,32 @@ class AvailabilityMergeTests(TestCase):
             slots = self._availability()
         assert utc(2026, 9, 1, 10) in [s for s, _ in slots]
         assert len(slots) == 8
+
+    def test_submit_respects_busy_before_the_query_range(self):
+        self._add_event(utc(2026, 9, 1, 9), utc(2026, 9, 1, 10))
+        rules = BookingRules(duration_minutes=60, slot_increment_minutes=15, buffer_before_minutes=15)
+        for minute, expected in ((0, False), (15, True)):
+            assert is_slot_still_available(
+                calendars=[self.calendar], google_connection=None, rules=rules,
+                windows=WEEKDAYS_9_TO_5, tz_name="UTC",
+                slot_start=utc(2026, 9, 1, 10, minute), now=utc(2026, 8, 31, 12),
+            ) is expected
+
+    def test_submit_respects_busy_after_the_query_range(self):
+        self._add_event(utc(2026, 9, 1, 11), utc(2026, 9, 1, 12))
+        rules = BookingRules(duration_minutes=60, slot_increment_minutes=15, buffer_after_minutes=15)
+        for hour, minute, expected in ((10, 0, False), (9, 45, True)):
+            assert is_slot_still_available(
+                calendars=[self.calendar], google_connection=None, rules=rules,
+                windows=WEEKDAYS_9_TO_5, tz_name="UTC",
+                slot_start=utc(2026, 9, 1, hour, minute), now=utc(2026, 8, 31, 12),
+            ) is expected
+
+    def test_google_query_includes_both_buffers_without_expanding_slots(self):
+        rules = BookingRules(duration_minutes=60, slot_increment_minutes=15,
+                             buffer_before_minutes=15, buffer_after_minutes=30)
+        with patch(MERGE_PATH, return_value=[]) as fetch:
+            slots = self._availability(rules=rules, range_start=utc(2026, 9, 1, 10),
+                                       range_end=utc(2026, 9, 1, 11))
+        assert slots == [(utc(2026, 9, 1, 10), utc(2026, 9, 1, 11))]
+        assert fetch.call_args.args[1:] == (utc(2026, 9, 1, 9, 45), utc(2026, 9, 1, 11, 30))

@@ -129,3 +129,9 @@ describe('outlookCalendarUrl', () => {
     expect(toOutlookUtc('2026-09-10T16:30:00+02:00')).toBe('2026-09-10T14:30:00Z');
   });
 });
+
+describe('calendar text safety', () => {
+  it('escapes a bare carriage return instead of starting a new property', () => {
+    expect(escapeIcsText('Guest\rATTENDEE:intruder@example.com')).toBe('Guest\\nATTENDEE:intruder@example.com');
+  });
+});

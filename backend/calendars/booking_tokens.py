@@ -12,8 +12,10 @@ The token is scoped to one event and expires when that event's usefulness does
 from __future__ import annotations
 
 from django.core import signing
+from uuid import UUID
 
 SALT = "calendars.booking.cancel"
+FEED_SALT = "calendars.booking.feed"
 
 # Long enough to cover a booking made far in advance, since max_advance_days
 # already caps how far ahead a slot can be.
@@ -26,7 +28,25 @@ def make_cancel_token(event_id) -> str:
 
 def read_cancel_token(token: str) -> str | None:
     """The event id the token vouches for, or None if it is bad or stale."""
+    return _read_token(token, SALT)
+
+
+def make_feed_token(event_id) -> str:
+    """A calendar subscriber may read the feed, but cannot cancel the meeting."""
+    return signing.dumps(str(event_id), salt=FEED_SALT)
+
+
+def read_feed_token(token: str) -> str | None:
+    # Previously issued subscriptions used cancel tokens. Keep those working;
+    # newly issued feed tokens carry read-only authority.
+    return _read_token(token, FEED_SALT) or read_cancel_token(token)
+
+
+def _read_token(token, salt):
     try:
-        return signing.loads(token, salt=SALT, max_age=MAX_AGE_SECONDS)
-    except signing.BadSignature:
+        if not isinstance(token, str) or len(token) > 512:
+            return None
+        value = signing.loads(token, salt=salt, max_age=MAX_AGE_SECONDS)
+        return str(UUID(value)) if isinstance(value, str) else None
+    except (signing.BadSignature, ValueError, TypeError):
         return None

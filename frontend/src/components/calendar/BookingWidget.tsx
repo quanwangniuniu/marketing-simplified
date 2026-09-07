@@ -97,6 +97,33 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
   // Kept beside the entry rather than inside it: a subscription URL is not part
   // of the calendar entry, it is how the guest keeps that entry current.
   const [feedUrl, setFeedUrl] = useState<string>('');
+  const [feedProtocol, setFeedProtocol] = useState<'webcal' | 'http'>('webcal');
+  const [copyingFeed, setCopyingFeed] = useState(false);
+  const [feedCopyResult, setFeedCopyResult] = useState<{
+    url: string;
+    success: boolean;
+  } | null>(null);
+  // The API's webcal URL uses the public site's host. Restore its transport
+  // scheme for manual subscription without downgrading HTTPS sites.
+  const httpFeedUrl = feedUrl.replace(
+    /^webcal:/i,
+    typeof window !== 'undefined' ? window.location.protocol : 'https:',
+  );
+  const subscriptionUrl = feedProtocol === 'webcal'
+    ? feedUrl.replace(/^https?:/i, 'webcal:')
+    : httpFeedUrl;
+  const copySubscriptionUrl = async () => {
+    setCopyingFeed(true);
+    setFeedCopyResult(null);
+    try {
+      await navigator.clipboard.writeText(subscriptionUrl);
+      setFeedCopyResult({ url: subscriptionUrl, success: true });
+    } catch {
+      setFeedCopyResult({ url: subscriptionUrl, success: false });
+    } finally {
+      setCopyingFeed(false);
+    }
+  };
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
@@ -390,6 +417,8 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
         setSelectedSlot(null);
         setStage('picking');
         void load();
+      } else if (statusCode === 401) {
+        setError('Your session expired. Sign in again before booking.');
       } else if (statusCode === 429) {
         setError('Too many booking attempts. Please try again later.');
       } else {
@@ -474,26 +503,57 @@ export default function BookingWidget({ orgSlug, linkSlug }: BookingWidgetProps)
                 Subscribe, and it stays up to date
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
-                This is a webcal:// address. Classic Outlook and Apple
-                Calendar subscribe to that; a plain http:// link is treated
-                as a file download. The new Outlook app cannot subscribe.
+                Copy the link into your calendar app&apos;s subscription option.
+                If webcal does not work, try the HTTP link there.
               </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+                Changes appear when your calendar app refreshes the subscription.
+                Cancelled meetings may stay visible as cancelled entries.
+              </p>
+              <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+                Link format
+                <select
+                  value={feedProtocol}
+                  disabled={copyingFeed}
+                  onChange={(event) => {
+                    setFeedProtocol(event.target.value as 'webcal' | 'http');
+                    setFeedCopyResult(null);
+                  }}
+                  data-testid="subscription-protocol"
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7]"
+                >
+                  <option value="webcal">webcal://</option>
+                  <option value="http">{httpFeedUrl.startsWith('https:') ? 'https://' : 'http://'}</option>
+                </select>
+              </label>
               <div className="mt-2 flex items-center gap-2">
                 <code
                   data-testid="subscription-url"
-                  className="min-w-0 flex-1 truncate rounded-md bg-gray-50 px-2.5 py-1.5 text-[11px] text-gray-600"
+                  className="min-w-0 flex-1 select-all break-all rounded-md bg-gray-50 px-2.5 py-1.5 text-[11px] text-gray-600"
                 >
-                  {feedUrl}
+                  {subscriptionUrl}
                 </code>
                 <button
                   type="button"
-                  onClick={() => void navigator.clipboard?.writeText(feedUrl)}
+                  onClick={() => void copySubscriptionUrl()}
+                  disabled={copyingFeed}
                   data-testid="copy-subscription-url"
-                  className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2"
+                  className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3CCED7] focus-visible:ring-offset-2 disabled:opacity-50"
                 >
-                  Copy
+                  {copyingFeed ? 'Copying…' : 'Copy'}
                 </button>
               </div>
+              {feedCopyResult?.url === subscriptionUrl && (
+                <p
+                  role={feedCopyResult.success ? 'status' : 'alert'}
+                  data-testid="subscription-copy-feedback"
+                  className={`mt-2 text-xs ${feedCopyResult.success ? 'text-emerald-600' : 'text-red-600'}`}
+                >
+                  {feedCopyResult.success
+                    ? 'Link copied. Paste it into your calendar app to subscribe.'
+                    : 'Could not copy the link. Select and copy the full link above manually.'}
+                </p>
+              )}
             </div>
           )}
 

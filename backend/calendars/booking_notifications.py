@@ -13,6 +13,7 @@ any check here.
 from __future__ import annotations
 
 import logging
+from django.db import transaction
 
 from notifications.models import NotificationCategory, NotificationEventType
 from notifications.services import create_notification
@@ -54,7 +55,8 @@ def _notify(**kwargs):
     updated - the meeting is real either way.
     """
     try:
-        return create_notification(**kwargs)
+        with transaction.atomic():
+            return create_notification(**kwargs)
     except Exception:
         logger.exception(
             "booking notification failed event=%s recipient=%s",

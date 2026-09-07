@@ -1,6 +1,7 @@
 """Keep the original booking-link invite notification in step with the booking."""
 
 from django.utils import timezone
+from django.db.models import Q
 
 from notifications.models import Notification
 
@@ -79,8 +80,11 @@ def find_upcoming_guest_booking(link, user):
             organization=link.organization,
             start_datetime__gte=timezone.now(),
             metadata__source=BOOKING_SOURCE,
-            metadata__booking_link_slug=link.slug,
+        ).filter(
+            Q(metadata__booking_link_id=str(link.pk)) |
+            Q(metadata__booking_link_id__isnull=True, metadata__booking_link_slug=link.slug)
         )
+        .filter(Q(metadata__booking_role__isnull=True) | ~Q(metadata__booking_role="guest"))
         .order_by("start_datetime")
         .first()
     )

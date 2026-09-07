@@ -761,87 +761,40 @@ class PublicBookingCancelTests(PublicBookingTestBase):
 
 
 class PublicBookingLookupTests(PublicBookingTestBase):
-    """
-    The confirmation mail is how a guest usually gets back. If it never
-    arrives they still know the name, email, or phone they typed, so the
-    public page can look the booking up and hand them the cancel token.
-    """
+    """Matching contact details never authorizes access to a booking."""
 
     def setUp(self):
         super().setUp()
-        self.cancel_url = f"{self.availability_url}cancel/"
         self.lookup_url = f"{self.availability_url}lookup/"
 
-    def _book(self, hour: int = 10, **overrides):
-        start = next_weekday_at(hour)
-        payload = {
-            "name": "Grace Hopper",
-            "email": "grace@example.com",
-            "phone": "+44 7700 900123",
-            "start": start.isoformat().replace("+00:00", "Z"),
-        }
-        payload.update(overrides)
-        response = self.client.post(self.booking_url, payload, format="json")
-        assert response.status_code == status.HTTP_201_CREATED, response.json()
-        return response.json()
+    def test_known_and_unknown_addresses_have_identical_responses(self):
+        booked = self.client.post(self.booking_url, {"name": "Grace Hopper",
+            "email": "grace@example.com", "start": next_weekday_at(10).isoformat()}, format="json")
+        self.assertEqual(booked.status_code, 201)
+        with patch("calendars.views.send_booking_recovery_task.delay") as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                known = self.client.post(self.lookup_url, {"email": "grace@example.com"}, format="json")
+                unknown = self.client.post(self.lookup_url, {"email": "nobody@example.com"}, format="json")
+            self.assertEqual(enqueue.call_count, 2)
+        self.assertEqual(known.status_code, 202)
+        self.assertEqual(known.json(), unknown.json())
+        self.assertEqual(known.json(), {"status": "accepted"})
 
-    def test_the_guest_can_find_their_booking_by_email(self):
-        booked = self._book()
-        response = self.client.post(
-            self.lookup_url, {"email": "grace@example.com"}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK, response.json()
-        rows = response.json()["bookings"]
-        assert len(rows) == 1
-        assert rows[0]["cancel_token"] == booked["cancel_token"]
-        assert rows[0]["title"] == booked["title"]
+    def test_name_and_phone_cannot_recover_tokens(self):
+        for payload in [{}, {"name": "Grace Hopper"}, {"phone": "447700900123"},
+                        {"name": "Grace Hopper", "email": "grace@example.com"}]:
+            self.assertEqual(self.client.post(self.lookup_url, payload, format="json").status_code, 400)
 
-    def test_the_guest_can_find_their_booking_by_name(self):
-        booked = self._book()
-        response = self.client.post(
-            self.lookup_url, {"name": "Grace Hopper"}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK, response.json()
-        assert response.json()["bookings"][0]["cancel_token"] == booked["cancel_token"]
-
-    def test_the_guest_can_find_their_booking_by_phone(self):
-        booked = self._book()
-        response = self.client.post(
-            self.lookup_url, {"phone": "447700900123"}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK, response.json()
-        assert response.json()["bookings"][0]["cancel_token"] == booked["cancel_token"]
-
-    def test_lookup_is_case_insensitive(self):
-        self._book()
-        response = self.client.post(
-            self.lookup_url, {"email": "Grace@Example.com"}, format="json"
-        )
-        assert len(response.json()["bookings"]) == 1
-
-    def test_an_unknown_email_sees_an_empty_list(self):
-        self._book()
-        response = self.client.post(
-            self.lookup_url, {"email": "nobody@example.com"}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json()["bookings"] == []
-
-    def test_lookup_requires_exactly_one_field(self):
-        self._book()
-        empty = self.client.post(self.lookup_url, {}, format="json")
-        assert empty.status_code == status.HTTP_400_BAD_REQUEST
-        both = self.client.post(
-            self.lookup_url,
-            {"name": "Grace Hopper", "email": "grace@example.com"},
-            format="json",
-        )
-        assert both.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_a_cancelled_booking_is_not_listed(self):
-        booked = self._book()
-        self.client.post(self.cancel_url, {"token": booked["cancel_token"]}, format="json")
-        response = self.client.post(
-            self.lookup_url, {"email": "grace@example.com"}, format="json"
-        )
-        assert response.json()["bookings"] == []
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_recovery_delivers_only_to_recorded_email_and_limits_repeats(self):
+        from calendars.tasks import send_booking_recovery_task
+        booked = self.client.post(self.booking_url, {"name": "Grace",
+            "email": "grace@example.com", "start": next_weekday_at(10).isoformat()}, format="json")
+        kwargs = dict(org_slug=self.org.slug, link_slug=self.link.slug,
+                      email="grace@example.com", base_url="http://testserver")
+        send_booking_recovery_task.run(**kwargs)
+        send_booking_recovery_task.run(**kwargs)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["grace@example.com"])
+        from urllib.parse import unquote
+        self.assertIn(booked.json()["cancel_token"], unquote(mail.outbox[0].body))

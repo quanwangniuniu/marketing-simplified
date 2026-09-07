@@ -9,8 +9,8 @@ Two audiences, one format:
 The subscription is the reason this lives server-side rather than only in the
 browser. A downloaded file is a snapshot: if the host later cancels, the guest's
 calendar keeps showing a meeting that is not happening. A subscribed feed is
-re-read, so publishing STATUS:CANCELLED makes the entry disappear on its own -
-which matters most for guests with no account, who have no other way to hear.
+re-read, so publishing STATUS:CANCELLED marks the entry as cancelled on the next
+refresh. Clients may keep a crossed-out entry rather than hide it.
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ def escape_text(value: str) -> str:
         .replace(";", "\\;")
         .replace(",", "\\,")
         .replace("\r\n", "\\n")
+        .replace("\r", "\\n")
         .replace("\n", "\\n")
     )
 
@@ -108,7 +109,7 @@ def build_booking_ics(
         f"DTEND:{_stamp(end)}",
         f"SUMMARY:{escape_text(title)}",
         # Cancelled entries are published rather than dropped: a subscriber has
-        # to be told the meeting is off, and an absent event says nothing.
+        # to be told the meeting is off; clients decide how to display it.
         f"STATUS:{'CANCELLED' if cancelled else 'CONFIRMED'}",
         f"SEQUENCE:{1 if cancelled else 0}",
     ]
@@ -117,7 +118,7 @@ def build_booking_ics(
     if url:
         lines.append(f"URL:{escape_text(url)}")
     if organizer_email:
-        lines.append(f"ORGANIZER:mailto:{organizer_email}")
+        lines.append(f"ORGANIZER:mailto:{organizer_email.replace(chr(13), '').replace(chr(10), '')}")
     lines += ["END:VEVENT", "END:VCALENDAR"]
 
     folded: list[str] = []

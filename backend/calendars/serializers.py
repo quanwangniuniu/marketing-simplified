@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
-from datetime import timezone as dt_timezone
+from datetime import datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from types import SimpleNamespace
 from typing import Any
 
 from django.contrib.auth import get_user_model
@@ -11,7 +13,7 @@ from rest_framework import serializers
 from core.models import Organization, ProjectMember
 from core.permissions import can_manage_project_members
 from customer.models import Customer
-from .permissions import get_user_organization
+from .permissions import get_user_organization, CalendarAccessPermission
 from .models import (
     BookingLink,
     Calendar,
@@ -326,6 +328,20 @@ class EventCreateUpdateSerializer(serializers.ModelSerializer):
             "attachments",
             "metadata",
         ]
+
+    def validate_metadata(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Metadata must be an object.")
+        existing = (self.instance.metadata or {}) if self.instance else {}
+        protected = {key for key in set(value) | set(existing) if key.startswith("booking_")}
+        if value.get("source") == "booking_link" or existing.get("source") == "booking_link":
+            protected.add("source")
+        for key in protected:
+            if key in value and value[key] != existing.get(key):
+                raise serializers.ValidationError("Booking identity is managed by the server.")
+            if key in existing:
+                value[key] = existing[key]
+        return value
 
     def validate(self, attrs: dict) -> dict:
         is_recurring = attrs.get("is_recurring")
@@ -851,23 +867,14 @@ class BookingRequestSerializer(serializers.Serializer):
 
 
 class BookingLookupSerializer(serializers.Serializer):
-    """Exactly one of the three things the guest typed when they booked."""
+    """Recovery requires access to the recorded email inbox."""
 
-    name = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
-    email = serializers.EmailField(required=False, allow_blank=True, default="")
-    phone = serializers.CharField(required=False, allow_blank=True, default="", max_length=50)
+    email = serializers.EmailField(max_length=254)
 
     def validate(self, attrs):
-        name = (attrs.get("name") or "").strip()
-        email = (attrs.get("email") or "").strip()
-        phone = (attrs.get("phone") or "").strip()
-        if sum(bool(value) for value in (name, email, phone)) != 1:
-            raise serializers.ValidationError(
-                "Provide exactly one of name, email, or phone."
-            )
-        attrs["name"] = name
-        attrs["email"] = email
-        attrs["phone"] = phone
+        if set(self.initial_data) - {"email"}:
+            raise serializers.ValidationError("Use the email address you booked with.")
+        attrs["email"] = attrs["email"].strip().lower()
         return attrs
 
 
@@ -924,12 +931,16 @@ class BookingLinkSerializer(serializers.ModelSerializer):
     # Declared explicitly so a zero is rejected here as a 400. The model's
     # clean() also guards these, but it raises Django's ValidationError from
     # save(), which the DRF exception handler surfaces as a 500.
-    duration_minutes = serializers.IntegerField(min_value=1, required=False)
-    slot_increment_minutes = serializers.IntegerField(min_value=1, required=False)
-    max_advance_days = serializers.IntegerField(min_value=1, required=False)
+    duration_minutes = serializers.IntegerField(min_value=1, max_value=1440, required=False)
+    slot_increment_minutes = serializers.IntegerField(min_value=1, max_value=1440, required=False)
+    max_advance_days = serializers.IntegerField(min_value=1, max_value=365, required=False)
+    buffer_before_minutes = serializers.IntegerField(min_value=0, max_value=1440, required=False)
+    buffer_after_minutes = serializers.IntegerField(min_value=0, max_value=1440, required=False)
+    min_notice_minutes = serializers.IntegerField(min_value=0, max_value=525600, required=False)
+    invitee_emails = serializers.ListField(child=serializers.EmailField(max_length=254), max_length=100, required=False)
     # Optional: the view fills it from the owner's calendar settings when the
     # client doesn't send one.
-    timezone = serializers.CharField(required=False, allow_blank=True)
+    timezone = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
     class Meta:
         model = BookingLink
@@ -1040,10 +1051,12 @@ class BookingLinkSerializer(serializers.ModelSerializer):
             if accessible is not None
             else None
         )
-        if not calendar:
-            raise serializers.ValidationError(
-                "Calendar not found, or you do not have access to it."
-            )
+        if (not calendar or calendar.organization_id != get_user_organization(self.context["request"].user).id
+                or not CalendarAccessPermission().has_object_permission(
+                    self.context["request"], SimpleNamespace(required_permission="edit"), calendar)):
+            raise serializers.ValidationError("Calendar not found, or you do not have permission to book into it.")
+        if not calendar.project_id and calendar.owner_id != self.context["request"].user.pk:
+            raise serializers.ValidationError("Personal booking links must use your own calendar.")
         return calendar
 
     def _resolve_host(self, attrs):
@@ -1063,7 +1076,7 @@ class BookingLinkSerializer(serializers.ModelSerializer):
         host_id = attrs.pop("host_id", None)
 
         if host_id is None:
-            return self.instance.owner if self.instance else request_user
+            host_id = self.instance.owner_id if self.instance else request_user.pk
 
         if host_id == request_user.pk:
             return request_user
@@ -1209,7 +1222,36 @@ class BookingLinkSerializer(serializers.ModelSerializer):
                 cleaned.append(address)
         return cleaned
 
+    def validate_timezone(self, value):
+        if not value:
+            return value
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise serializers.ValidationError("Choose a valid IANA timezone.")
+        return value
+
+    def validate_availability_windows(self, value):
+        if not isinstance(value, list) or len(value) > 100:
+            raise serializers.ValidationError("Provide a list of at most 100 availability windows.")
+        for window in value:
+            if not isinstance(window, dict) or not {"weekday", "start", "end"} <= window.keys():
+                raise serializers.ValidationError("Each window needs weekday, start, and end.")
+            day = window["weekday"]
+            if type(day) is not int or not 0 <= day <= 6:
+                raise serializers.ValidationError("weekday must be an integer from 0 to 6.")
+            try:
+                start = datetime.strptime(window["start"], "%H:%M").time()
+                end = datetime.strptime(window["end"], "%H:%M").time()
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("Times must use HH:MM.")
+            if start >= end:
+                raise serializers.ValidationError("Window start must precede its end.")
+        return value
+
     def validate(self, attrs):
+        if self.instance and "calendar_id" not in attrs:
+            self.validate_calendar_id(self.instance.calendar_id)
         attrs["owner"] = self._resolve_host(attrs)
         self._resolve_invitees(attrs)
         self._require_invitees_when_restricted(attrs)

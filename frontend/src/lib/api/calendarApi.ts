@@ -416,19 +416,11 @@ export interface BookingConfirmationDTO {
   title: string;
   timezone: string;
   /**
-   * The guest's handle on this booking. Also re-issued by lookup if they
-   * still know the email they typed.
+   * The guest's handle on this booking. Recovery sends it to the booking email.
    */
   cancel_token: string;
   /** Subscribable calendar feed — stays in step if the booking is cancelled. */
   feed_url: string;
-}
-
-export interface FoundBookingDTO {
-  start: string;
-  end: string;
-  title: string;
-  cancel_token: string;
 }
 
 function bookingBase(orgSlug: string, linkSlug: string): string {
@@ -469,13 +461,8 @@ export const PublicBookingAPI = {
         )
         .then((res) => res.data);
 
-    if (!accessToken) return post();
-    return post(accessToken).catch((error: { response?: { status?: number } }) => {
-      // Public page does not refresh tokens. An expired session should still
-      // book as the account identity already in the payload.
-      if (error.response?.status === 401) return post();
-      throw error;
-    });
+    // An expired session must not silently downgrade a member to a guest.
+    return post(accessToken);
   },
 
   cancelBooking: (orgSlug: string, linkSlug: string, token: string) =>
@@ -486,10 +473,10 @@ export const PublicBookingAPI = {
   lookupBookings: (
     orgSlug: string,
     linkSlug: string,
-    query: { name?: string; email?: string; phone?: string },
+    query: { email: string },
   ) =>
     publicApi
-      .post<{ bookings: FoundBookingDTO[] }>(
+      .post<{ status: string }>(
         `${bookingBase(orgSlug, linkSlug)}/lookup/`,
         query,
       )

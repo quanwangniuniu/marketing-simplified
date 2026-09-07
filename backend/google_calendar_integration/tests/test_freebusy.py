@@ -131,3 +131,21 @@ class FetchGoogleBusyIntervalsTests(TestCase):
 
     def test_no_connection_is_not_an_error(self):
         assert fetch_google_busy_intervals(None, TIME_MIN, TIME_MAX) == []
+
+    def test_strict_check_rejects_transport_and_inline_failures(self):
+        from google_calendar_integration.services import GoogleAvailabilityUnavailable
+        for outcome in (requests.Timeout(), {"calendars": {"primary": {"errors": [{"reason": "internalError"}]}}}, {"calendars": {}}):
+            with patch("google_calendar_integration.services.run_google_calendar_api") as call:
+                if isinstance(outcome, Exception):
+                    call.side_effect = outcome
+                else:
+                    call.return_value = outcome
+                with self.assertRaises(GoogleAvailabilityUnavailable):
+                    fetch_google_busy_intervals(self.connection, TIME_MIN, TIME_MAX, strict=True)
+
+    def test_strict_check_rejects_expired_authorization_but_allows_no_connection(self):
+        from google_calendar_integration.services import GoogleAvailabilityUnavailable
+        self.connection.needs_reconnect = True
+        with self.assertRaises(GoogleAvailabilityUnavailable):
+            fetch_google_busy_intervals(self.connection, TIME_MIN, TIME_MAX, strict=True)
+        assert fetch_google_busy_intervals(None, TIME_MIN, TIME_MAX, strict=True) == []

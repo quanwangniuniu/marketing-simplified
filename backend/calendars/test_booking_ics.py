@@ -113,3 +113,8 @@ class BuildTests(TestCase):
     def test_a_naive_free_datetime_is_normalised_to_utc(self):
         ics = build(start=datetime(2027, 3, 2, 11, 0, tzinfo=dt_timezone(timedelta(hours=2))))
         assert "DTSTART:20270302T090000Z" in ics
+
+
+def test_bare_carriage_return_is_escaped():
+    from calendars.booking_ics import escape_text
+    assert escape_text("Guest\rATTENDEE:intruder@example.com") == "Guest\\nATTENDEE:intruder@example.com"

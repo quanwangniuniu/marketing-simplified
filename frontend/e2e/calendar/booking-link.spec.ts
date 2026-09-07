@@ -11,6 +11,9 @@ import { test, expect, type Page } from '@playwright/test';
  * actually does.
  */
 
+// Public tests start signed out; the member scenario seeds its own session.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 const ORG = 'acme';
 const LINK = 'intro-call';
 const BOOKING_URL = `/book/${ORG}/${LINK}`;
@@ -150,6 +153,10 @@ test.describe('Public booking link', () => {
   });
 
   test('a signed-in member only confirms notes', async ({ page }) => {
+    await page.route('**/auth/me/', route => route.fulfill({
+      json: { id: 99, email: 'ada@acme.com', username: 'ada', first_name: 'Ada', last_name: 'Lovelace', roles: [] },
+    }));
+    await page.route('**/auth/me/teams/', route => route.fulfill({ json: { team_ids: [] } }));
     await page.addInitScript(() => {
       const persisted = {
         state: {
@@ -293,7 +300,7 @@ test.describe('Public booking link', () => {
       viewer_can_book: false,
       slots: [],
     });
-    await gotoBooking(page);
+    await page.goto(BOOKING_URL);
     await expect(page.getByTestId('booking-missing')).toBeVisible();
     await expect(page.getByText('Link unavailable')).toBeVisible();
     await expect(page.getByTestId('booking-widget')).toHaveCount(0);
@@ -411,38 +418,17 @@ test.describe('Cancelling a booking', () => {
     await expect(page.getByTestId('cancel-missing-token')).toBeVisible();
   });
 
-  test('a guest can find a booking from the public page when mail never arrived', async ({
-    page,
-  }) => {
+  test('recovery requests never expose another guest booking or cancel token', async ({ page }) => {
     await mockAvailability(page);
     await page.route(`**/api/public/book/${ORG}/${LINK}/lookup/`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          bookings: [
-            {
-              start: SLOTS[0].start,
-              end: SLOTS[0].end,
-              title: 'Intro Call with Grace Hopper',
-              cancel_token: 'signed-token-abc',
-            },
-          ],
-        }),
-      });
+      expect(route.request().postDataJSON()).toEqual({ email: 'grace@example.com' });
+      await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ status: 'accepted' }) });
     });
-
     await gotoBooking(page);
     await page.getByTestId('booking-find-open').click();
-    await expect(page.getByTestId('booking-find')).toBeVisible();
-    await expect(page.getByTestId('booking-find-kind-name')).toBeVisible();
-    await expect(page.getByTestId('booking-find-kind-phone')).toBeVisible();
     await page.getByTestId('booking-find-value').fill('grace@example.com');
     await page.getByTestId('booking-find-submit').click();
-    await expect(page.getByTestId('booking-find-results')).toBeVisible();
-    await expect(page.getByTestId('booking-find-cancel')).toHaveAttribute(
-      'href',
-      /\/book\/acme\/intro-call\/cancel\?token=signed-token-abc$/,
-    );
+    await expect(page.getByTestId('booking-find-results')).toContainText('If an upcoming booking matches');
+    await expect(page.getByTestId('booking-find-cancel')).toHaveCount(0);
   });
 });

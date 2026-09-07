@@ -15,6 +15,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
+
 from .models import Calendar, Event, EventAttendee
 
 BOOKING_SOURCE = "booking_link"
@@ -44,6 +47,7 @@ def host_primary_calendar(link) -> Calendar | None:
     ).first()
 
 
+@transaction.atomic
 def ensure_personal_calendar(*, organization, owner, timezone: str = "UTC") -> Calendar:
     """
     The host's personal diary. Created on demand so a booking link is never
@@ -52,6 +56,8 @@ def ensure_personal_calendar(*, organization, owner, timezone: str = "UTC") -> C
     Never promotes a project calendar: those stay the team's shared week view,
     and `is_primary` is what the Google connect flow keys off.
     """
+    # Serialize first-time creation even when bookings use different calendars.
+    get_user_model().objects.select_for_update(no_key=True).get(pk=owner.pk)
     existing = Calendar.objects.filter(
         organization=organization,
         owner=owner,
@@ -128,12 +134,11 @@ def event_belongs_to_booking_link(event, link) -> bool:
     host primary instead — those still match by booking_link_slug.
     """
     meta = event.metadata or {}
-    if (
-        meta.get("source") == BOOKING_SOURCE
-        and meta.get("booking_link_slug") == link.slug
-    ):
-        return True
-    return event.calendar_id == link.calendar_id
+    if event.organization_id != link.organization_id or meta.get("source") != BOOKING_SOURCE:
+        return False
+    if meta.get("booking_link_id"):
+        return meta["booking_link_id"] == str(link.pk)
+    return meta.get("booking_link_slug") == link.slug
 
 
 def booking_siblings(event):
@@ -147,8 +152,21 @@ def booking_siblings(event):
     )
 
 
+def lock_booking_event(event):
+    """Use the host calendar lock for writes through any copy of a booking.
+
+    Call inside an atomic block and reload after waiting, so an old edit cannot
+    resurrect an event that another request has just cancelled.
+    """
+    canonical = booking_siblings(event).exclude(metadata__booking_role=GUEST_ROLE).order_by("pk").first()
+    Calendar.objects.select_for_update(no_key=True).get(pk=(canonical or event).calendar_id)
+    return Event.objects.select_for_update().get(pk=event.pk)
+
+
+@transaction.atomic
 def cancel_booking_events(event) -> list[Event]:
     """Soft-delete every copy of this booking. Idempotent per row."""
+    event = lock_booking_event(event)
     updated: list[Event] = []
     for sibling in booking_siblings(event):
         if sibling.is_deleted and sibling.status == "cancelled":
@@ -161,6 +179,7 @@ def cancel_booking_events(event) -> list[Event]:
     return updated
 
 
+@transaction.atomic
 def sync_booking_siblings(event) -> list[Event]:
     """
     Keep the project copy (or the personal copy) in step after a host edit.
@@ -212,6 +231,7 @@ def prefer_visible_booking_copy(events, visible_calendar_ids) -> list:
     return ungrouped + chosen
 
 
+@transaction.atomic
 def create_booking_events(
     *,
     link,
@@ -248,6 +268,7 @@ def create_booking_events(
         guest_phone=guest_phone,
         metadata={
             "source": BOOKING_SOURCE,
+            "booking_link_id": str(link.pk),
             "booking_link_slug": link.slug,
             "booking_role": role,
             "booking_group": group,
@@ -259,6 +280,7 @@ def create_booking_events(
         guest_user is not None
         and getattr(guest_user, "pk", None)
         and guest_user.pk != getattr(link, "owner_id", None)
+        and guest_user.organization_id == link.organization_id
     ):
         guest_calendar = ensure_personal_calendar(
             organization=link.organization,
@@ -279,6 +301,7 @@ def create_booking_events(
                 guest_phone=guest_phone,
                 metadata={
                     "source": BOOKING_SOURCE,
+                    "booking_link_id": str(link.pk),
                     "booking_link_slug": link.slug,
                     "booking_role": GUEST_ROLE,
                     "booking_group": group,

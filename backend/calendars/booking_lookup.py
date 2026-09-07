@@ -1,16 +1,16 @@
 """
 Find a guest's booking again without the mail they never received.
 
-Name, email, or phone — exactly one — is enough. The cancel token is
-re-issued so they can cancel from the public page.
+Contact matching is for delivery to the recorded email address. It does not
+prove the caller owns a booking and must never expose cancellation tokens.
 """
 
 from __future__ import annotations
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from .booking_write import CANONICAL_ROLES, event_belongs_to_booking_link
+from .booking_write import BOOKING_SOURCE, GUEST_ROLE, event_belongs_to_booking_link
 from .models import Event, EventAttendee
 
 
@@ -38,8 +38,10 @@ def _upcoming_guest_attendees(link) -> QuerySet[EventAttendee]:
             is_organizer=False,
             event__is_deleted=False,
             event__start_datetime__gte=timezone.now(),
+            event__metadata__source=BOOKING_SOURCE,
         )
         .exclude(event__status="cancelled")
+        .filter(Q(event__metadata__booking_role__isnull=True) | ~Q(event__metadata__booking_role=GUEST_ROLE))
         .select_related("event")
     )
 
@@ -48,9 +50,8 @@ def _dedupe_canonical(events: list[Event]) -> list[Event]:
     by_group: dict[str, Event] = {}
     for event in events:
         group = (event.metadata or {}).get("booking_group") or str(event.pk)
-        role = (event.metadata or {}).get("booking_role")
         existing = by_group.get(group)
-        if existing is None or role in CANONICAL_ROLES:
+        if existing is None:
             by_group[group] = event
     return sorted(by_group.values(), key=lambda event: event.start_datetime)
 
@@ -74,6 +75,10 @@ def find_guest_bookings(
     phone = (phone or "").strip()
 
     attendees = _upcoming_guest_attendees(link)
+    if email:
+        attendees = attendees.filter(email__iexact=email)
+    elif name:
+        attendees = attendees.filter(display_name__iexact=name)
     matched: list[Event] = []
     for attendee in attendees:
         event = attendee.event

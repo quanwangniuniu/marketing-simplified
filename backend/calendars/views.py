@@ -89,11 +89,13 @@ from .booking_write import (
     cancel_booking_events,
     create_booking_events,
     event_belongs_to_booking_link,
+    ensure_personal_calendar,
     is_team_booking_calendar,
+    lock_booking_event,
     prefer_visible_booking_copy,
     sync_booking_siblings,
 )
-from .tasks import send_booking_confirmation_task
+from .tasks import send_booking_confirmation_task, send_booking_recovery_task, queue_booking_task
 from .booking_notifications import (
     notify_booking_cancelled,
     notify_booking_made,
@@ -105,10 +107,11 @@ from .booking_invite_state import (
     mark_invite_booked,
     mark_invite_unbooked,
 )
-from .booking_tokens import make_cancel_token, read_cancel_token
+from .booking_tokens import make_cancel_token, read_cancel_token, make_feed_token, read_feed_token
 from .exceptions import calendar_error_response
 from google_calendar_integration.tasks import export_event_to_google_task
 from google_calendar_integration.services import (
+    GoogleAvailabilityUnavailable,
     get_merged_availability,
     is_slot_still_available,
 )
@@ -526,12 +529,19 @@ class EventViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(output_serializer.data)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         """
         Update event and return full Event representation.
         """
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        if (instance.metadata or {}).get("source") == "booking_link":
+            instance = lock_booking_event(instance)
+            if instance.is_deleted or instance.status == "cancelled":
+                return calendar_error_response("BOOKING_CANCELLED", "This booking has been cancelled.", status_code=409)
+            if request.data.get("calendar_id") and str(request.data["calendar_id"]) != str(instance.calendar_id):
+                return calendar_error_response("BAD_REQUEST", "A booking cannot be moved to another calendar.", status_code=400)
 
         # ETag / If-Match handling (optimistic concurrency)
         if_match = request.META.get("HTTP_IF_MATCH")
@@ -547,6 +557,8 @@ class EventViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         event = serializer.save()
+        if (event.metadata or {}).get("source") == "booking_link" and event.status == "cancelled":
+            self.perform_destroy(event)
         for sibling in sync_booking_siblings(event):
             self._queue_google_export(str(sibling.id))
         eid = str(event.id)
@@ -569,11 +581,13 @@ class EventViewSet(viewsets.ModelViewSet):
         """
         organization = get_user_organization(self.request.user)
         schema = slug_to_schema_name(organization.slug) if organization else "public"
-        transaction.on_commit(
-            lambda: export_event_to_google_task.delay(event_id, tenant_schema=schema)
-        )
+        queue_booking_task(export_event_to_google_task, event_id, tenant_schema=schema)
 
+    @transaction.atomic
     def perform_destroy(self, instance: Event):
+        instance = lock_booking_event(instance)
+        if instance.is_deleted:
+            return
         eid = str(instance.id)
         # Read the attendees before the row is marked deleted.
         booked_guest = (
@@ -1697,11 +1711,30 @@ def _load_active_booking_link(link_slug: str, organization):
             slug=link_slug,
             is_active=True,
             is_deleted=False,
+            owner__is_active=True,
+            calendar__is_deleted=False,
         )
         .select_related("owner", "calendar")
         .prefetch_related("invitee_users")
         .first()
     )
+
+
+def _booking_from_token(event_id, organization, link_slug):
+    event = Event.objects.filter(id=event_id, organization=organization).first()
+    if not event:
+        return None, None
+    meta = event.metadata or {}
+    links = BookingLink.objects.filter(organization=organization)
+    if meta.get("booking_link_id"):
+        link = links.filter(pk=meta["booking_link_id"]).first()
+        if not link or link_slug not in {link.slug, meta.get("booking_link_slug")}:
+            return None, None
+    else:
+        link = links.filter(slug=link_slug).order_by("-created_at").first()
+    if not link or not event_belongs_to_booking_link(event, link):
+        return None, None
+    return link, event
 
 
 def _booking_not_found():
@@ -1760,9 +1793,9 @@ class PublicBookingLinkAvailabilityView(APIView):
 
         try:
             range_start, range_end = self._parse_range(request)
-        except ValueError as exc:
+        except (ValueError, OverflowError) as exc:
             return calendar_error_response(
-                "BAD_REQUEST", str(exc), status_code=status.HTTP_400_BAD_REQUEST
+                "BAD_REQUEST", "Invalid availability range.", status_code=status.HTTP_400_BAD_REQUEST
             )
 
         with tenant_schema_context(slug_to_schema_name(organization.slug)):
@@ -1850,7 +1883,7 @@ class PublicBookingCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        with tenant_schema_context(slug_to_schema_name(organization.slug)):
+        with tenant_schema_context(slug_to_schema_name(organization.slug)), transaction.atomic():
             link = _load_active_booking_link(link_slug, organization)
             if not link:
                 return _booking_not_found()
@@ -1858,31 +1891,77 @@ class PublicBookingCreateView(APIView):
             if not can_book_public_link(link, request.user):
                 return _booking_not_found()
 
+            # Lock every diary we will write, in a stable order. Reciprocal
+            # member bookings otherwise lock A then B / B then A and deadlock.
+            # NO KEY UPDATE also lets unrelated foreign-key inserts proceed.
+            initial_owner_id = link.owner_id
+            calendar_ids = {link.calendar_id}
+            guest = self._guest_account(link, data["email"])
+            booker = request.user if getattr(request.user, "is_authenticated", False) else None
+            existing = find_upcoming_guest_booking(link, booker) if booker else None
+            if existing:
+                calendar_ids.add(existing.calendar_id)
+            if guest and guest.pk != link.owner_id and guest.organization_id == link.organization_id:
+                guest_calendar = ensure_personal_calendar(
+                    organization=link.organization, owner=guest, timezone=link.timezone,
+                )
+                calendar_ids.add(guest_calendar.pk)
+            locked = list(Calendar.objects.select_for_update(no_key=True).filter(
+                pk__in=calendar_ids, is_deleted=False,
+            ).order_by("pk"))
+            calendar = next((item for item in locked if item.pk == link.calendar_id), None)
+            if calendar is None:
+                return _booking_not_found()
+            # Re-read permissions and rules after waiting; the host may have
+            # disabled or changed this link while another booking held the lock.
+            link = BookingLink.objects.select_for_update().get(pk=link.pk)
+            if (link.is_deleted or not link.is_active or link.owner_id != initial_owner_id
+                    or not link.owner.is_active or link.calendar_id != calendar.pk
+                    or not can_book_public_link(link, request.user)):
+                return _booking_not_found()
+            link.calendar = calendar
+            if data["email"].strip().lower() == (link.owner.email or "").strip().lower():
+                return calendar_error_response("BAD_REQUEST", "The host cannot book their own link.", status_code=400)
+
             rules = rules_from_booking_link(link)
             schedule = schedule_from_booking_link(link)
             google_connection = _google_busy_for_link(link)
 
+            booker = request.user if getattr(request.user, "is_authenticated", False) else None
+            existing = find_upcoming_guest_booking(link, booker) if booker else None
+            if existing and existing.start_datetime == data["start"]:
+                return calendar_error_response(
+                    "SLOT_UNAVAILABLE", "You already booked this time.",
+                    status_code=status.HTTP_409_CONFLICT,
+                )
+            replaced = cancel_booking_events(existing) if existing else []
+
             # Availability was rendered from a snapshot, so the slot may have
             # been taken while the page sat open. Without this re-check the same
             # slot can be booked twice.
-            if not is_slot_still_available(
-                calendars=calendars_for_booking_availability(link),
-                google_connection=google_connection,
-                rules=rules,
-                windows=schedule.windows,
-                tz_name=schedule.timezone,
-                slot_start=data["start"],
-            ):
+            try:
+                slot_available = is_slot_still_available(
+                    calendars=calendars_for_booking_availability(link),
+                    google_connection=google_connection,
+                    rules=rules,
+                    windows=schedule.windows,
+                    tz_name=schedule.timezone,
+                    slot_start=data["start"],
+                )
+            except GoogleAvailabilityUnavailable:
+                transaction.set_rollback(True)
+                return calendar_error_response(
+                    "AVAILABILITY_UNAVAILABLE",
+                    "We couldn't verify this time. Please try again shortly.",
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if not slot_available:
+                transaction.set_rollback(True)
                 return calendar_error_response(
                     "SLOT_UNAVAILABLE",
                     "That time is no longer available. Please pick another slot.",
                     status_code=status.HTTP_409_CONFLICT,
                 )
-
-            booker = request.user if getattr(request.user, "is_authenticated", False) else None
-            existing = find_upcoming_guest_booking(link, booker) if booker else None
-            if existing:
-                cancel_booking_events(existing)
 
             event, guest = self._create_event(link, data, rules)
             link_timezone = schedule.timezone
@@ -1892,6 +1971,9 @@ class PublicBookingCreateView(APIView):
                 notify_booking_made(link, event, guest, data["name"])
             if guest:
                 mark_invite_booked(link, guest, event, make_cancel_token(event.pk))
+            for old_copy in replaced:
+                queue_booking_task(export_event_to_google_task, str(old_copy.pk),
+                                   tenant_schema=slug_to_schema_name(organization.slug))
 
         # Export asynchronously after commit, as every other event write in this
         # module does. The local event is the source of truth: a Google outage
@@ -1901,9 +1983,7 @@ class PublicBookingCreateView(APIView):
         event_id = str(event.pk)
         schema = slug_to_schema_name(organization.slug)
         if not is_team_booking_calendar(getattr(link, "calendar", None)):
-            transaction.on_commit(
-                lambda: export_event_to_google_task.delay(event_id, tenant_schema=schema)
-            )
+            queue_booking_task(export_event_to_google_task, event_id, tenant_schema=schema)
 
         token = make_cancel_token(event.pk)
         cancel_url = request.build_absolute_uri(
@@ -1921,7 +2001,7 @@ class PublicBookingCreateView(APIView):
                 "link_slug": link_slug,
                 "token": placeholder,
             },
-        ).replace(placeholder, quote(token, safe=""))
+        ).replace(placeholder, quote(make_feed_token(event.pk), safe=""))
         feed_url = as_webcal_url(request.build_absolute_uri(feed_path))
         self._queue_confirmation_email(
             event=event,
@@ -1974,9 +2054,7 @@ class PublicBookingCreateView(APIView):
             "cancel_url": cancel_url,
             "feed_url": feed_url,
         }
-        transaction.on_commit(
-            lambda: send_booking_confirmation_task.delay(**payload)
-        )
+        queue_booking_task(send_booking_confirmation_task, **payload)
 
     @staticmethod
     def _event_description(data) -> str:
@@ -2002,11 +2080,11 @@ class PublicBookingCreateView(APIView):
         start = data["start"]
         end = start + timedelta(minutes=rules.duration_minutes)
         guest = self._guest_account(link, data["email"])
-        # Canonical row on the host's primary (Google / personal diary);
-        # a second row on the link calendar when that is the project week view.
+        # The selected calendar receives the host event. A verified account
+        # also receives a personal copy; an anonymous email proves no identity.
         event, _guest = create_booking_events(
             link=link,
-            title=f"{link.title} with {data['name']}",
+            title=f"{link.title} with {data['name']}"[:255],
             description=self._event_description(data),
             start=start,
             end=end,
@@ -2017,25 +2095,15 @@ class PublicBookingCreateView(APIView):
         )
         return event, guest
 
-    @staticmethod
-    def _guest_account(link, email: str):
-        """
-        Tie the booking to an account when the address belongs to one.
-
-        Only ever inferred, never revealed: the response says nothing about
-        whether a match was found, or the form would answer "does this person
-        have an account here?" for anyone who asks.
-        """
-        named = link.invitee_users.filter(email__iexact=email).first()
-        if named:
-            return named
-        return (
-            User.objects.filter(
-                email__iexact=email,
-                is_active=True,
-                organization=link.organization,
-            ).first()
-        )
+    def _guest_account(self, link, email: str):
+        user = self.request.user
+        if not getattr(user, "is_authenticated", False):
+            return None
+        if user.organization_id == link.organization_id:
+            return user
+        if is_team_booking_calendar(link.calendar) and link.invitee_users.filter(pk=user.pk).exists():
+            return user
+        return None
 
 
 class PublicBookingFeedView(APIView):
@@ -2070,17 +2138,12 @@ class PublicBookingFeedView(APIView):
         if not organization:
             return _booking_not_found()
 
-        event_id = read_cancel_token(token or request.query_params.get("token") or "")
+        event_id = read_feed_token(token or request.query_params.get("token") or "")
         if not event_id:
             return _booking_not_found()
 
         with tenant_schema_context(slug_to_schema_name(organization.slug)):
-            link = BookingLink.objects.filter(
-                organization=organization, slug=link_slug, is_deleted=False
-            ).first()
-            event = Event.objects.filter(
-                id=event_id, organization=organization
-            ).first()
+            link, event = _booking_from_token(event_id, organization, link_slug)
             if not link or not event or not event_belongs_to_booking_link(event, link):
                 return _booking_not_found()
 
@@ -2132,18 +2195,14 @@ class PublicBookingCancelView(APIView):
             # some other booking exists.
             return _booking_not_found()
 
-        with tenant_schema_context(slug_to_schema_name(organization.slug)):
-            link = BookingLink.objects.filter(
-                organization=organization, slug=link_slug, is_deleted=False
-            ).first()
-            event = Event.objects.filter(
-                id=event_id, organization=organization
-            ).first()
+        with tenant_schema_context(slug_to_schema_name(organization.slug)), transaction.atomic():
+            link, event = _booking_from_token(event_id, organization, link_slug)
             # The token names an event; the URL has to name the same booking, or
             # a token could be replayed against an unrelated link.
             if not link or not event or not event_belongs_to_booking_link(event, link):
                 return _booking_not_found()
 
+            event = lock_booking_event(event)
             already_cancelled = bool(event.is_deleted) or event.status == "cancelled"
             guest = (
                 EventAttendee.objects.filter(event=event, is_organizer=False)
@@ -2168,57 +2227,33 @@ class PublicBookingCancelView(APIView):
         schema = slug_to_schema_name(organization.slug)
         export_ids = {str(event.pk)} | {str(sibling.pk) for sibling in siblings}
         for event_pk in export_ids:
-            transaction.on_commit(
-                lambda pk=event_pk: export_event_to_google_task.delay(
-                    pk, tenant_schema=schema
-                )
-            )
+            queue_booking_task(export_event_to_google_task, event_pk, tenant_schema=schema)
         return Response({"status": "cancelled"}, status=status.HTTP_200_OK)
 
 
 class PublicBookingLookupView(APIView):
-    """
-    POST /api/public/book/<org_slug>/<link_slug>/lookup/
-
-    The guest still knows the name, email, or phone they typed. If the
-    confirmation mail never arrived, this re-issues the cancel token for
-    upcoming bookings on this link so they can cancel from the public page.
-    """
+    """Request recovery by email without disclosing bookings or bearer tokens."""
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "public_booking_read"
+    throttle_scope = "public_booking_write"
 
     def post(self, request, org_slug: str, link_slug: str):
-        organization = _resolve_booking_org(org_slug)
-        if not organization:
-            return _booking_not_found()
-
         serializer = BookingLookupSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-
-        with tenant_schema_context(slug_to_schema_name(organization.slug)):
-            link = _load_active_booking_link(link_slug, organization)
-            if not link:
-                return _booking_not_found()
-            events = find_guest_bookings(
-                link=link,
-                name=serializer.validated_data["name"],
+        try:
+            send_booking_recovery_task.delay(
+                org_slug=org_slug, link_slug=link_slug,
                 email=serializer.validated_data["email"],
-                phone=serializer.validated_data["phone"],
+                base_url=request.build_absolute_uri("/").rstrip("/"),
             )
-            bookings = [
-                {
-                    "start": event.start_datetime.isoformat().replace("+00:00", "Z"),
-                    "end": event.end_datetime.isoformat().replace("+00:00", "Z"),
-                    "title": event.title,
-                    "cancel_token": make_cancel_token(event.pk),
-                }
-                for event in events
-            ]
-
-        return Response({"bookings": bookings}, status=status.HTTP_200_OK)
+        except Exception:
+            return calendar_error_response(
+                "RECOVERY_UNAVAILABLE", "Recovery is temporarily unavailable. Please try again later.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"status": "accepted"}, status=status.HTTP_202_ACCEPTED)
 
 
 class BookingLinkViewSet(viewsets.ModelViewSet):
@@ -2244,6 +2279,21 @@ class BookingLinkViewSet(viewsets.ModelViewSet):
     # An owner's links are a naturally small set and the management UI wants
     # them all; the global PAGE_SIZE would silently truncate the list.
     pagination_class = None
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        Organization.objects.select_for_update(no_key=True).get(pk=request.user.organization_id)
+        return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        BookingLink.objects.select_for_update().get(pk=self.get_object().pk)
+        return super().update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        BookingLink.objects.select_for_update().get(pk=self.get_object().pk)
+        return super().destroy(request, *args, **kwargs)
 
     def get_serializer_context(self):
         # Reuse the app's single definition of "calendars this user can use"

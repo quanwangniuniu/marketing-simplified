@@ -213,7 +213,7 @@ def _align_to_increment(
     if step <= 0:
         return moment
     steps = int(-(-elapsed.total_seconds() // step))  # ceiling division
-    aligned_local = midnight + timedelta(seconds=steps * step)
+    aligned_local = (midnight + timedelta(seconds=steps * step)).replace(fold=local.fold)
     aligned = aligned_local.astimezone(dt_timezone.utc)
     return aligned if aligned >= moment else moment
 

@@ -77,7 +77,9 @@ export default function BookingCancel({ orgSlug, linkSlug, token }: BookingCance
               The time has been released and everyone involved has been told.
             </p>
             <p className="mt-3 text-xs text-gray-400">
-              Remove it from your own calendar if you saved it there.
+              Subscribed calendars update on their next refresh and may show a
+              cancelled entry. If you imported an .ics file, remove that saved
+              copy manually.
             </p>
           </motion.div>
         ) : (
@@ -94,7 +96,7 @@ export default function BookingCancel({ orgSlug, linkSlug, token }: BookingCance
             </h1>
             <p className="mt-2 text-sm text-gray-600">
               The slot goes back on offer and the meeting is removed from both
-              calendars. This can&apos;t be undone.
+              in-app calendars. This can&apos;t be undone.
             </p>
 
             {stage === 'failed' && (

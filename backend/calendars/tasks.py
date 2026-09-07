@@ -13,12 +13,67 @@ confirmed booking must never depend on an SMTP round trip.
 from __future__ import annotations
 
 import logging
+import hashlib
+from urllib.parse import quote
 
 from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.cache import cache
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
+
+
+def queue_booking_task(task, *args, **kwargs):
+    """A broker outage must not turn an already committed booking into a 500."""
+    def enqueue():
+        try:
+            task.delay(*args, **kwargs)
+        except Exception:
+            logger.exception("Could not enqueue booking task %s", task.name)
+
+    transaction.on_commit(enqueue)
+
+
+@shared_task(bind=True, ignore_result=True, autoretry_for=(Exception,), retry_backoff=60,
+             retry_kwargs={"max_retries": 3})
+def send_booking_recovery_task(self, *, org_slug, link_slug, email, base_url):
+    """Deliver recovery tokens only to the booking's recorded email address."""
+    from core.models import Organization
+    from core.services.tenant import slug_to_schema_name
+    from core.tenant_context import tenant_schema_context
+    from .booking_lookup import find_guest_bookings
+    from .booking_tokens import make_cancel_token
+    from .models import BookingLink
+
+    organization = Organization.objects.filter(slug=org_slug, is_active=True).first()
+    if not organization:
+        return
+    with tenant_schema_context(slug_to_schema_name(org_slug)):
+        link = BookingLink.objects.filter(organization=organization, slug=link_slug,
+                                          is_deleted=False).first()
+        if not link:
+            return
+        events = find_guest_bookings(link=link, email=email)
+        if not events:
+            return
+        key = "booking-recovery:" + hashlib.sha256(
+            f"{org_slug}:{email.lower()}".encode()
+        ).hexdigest()
+        if not cache.add(key, True, timeout=300):
+            return
+        try:
+            lines = ["Use these links to manage your upcoming bookings:", ""]
+            for event in events[:20]:
+                lines.extend([event.title, event.start_datetime.isoformat(),
+                    f"{base_url}/book/{quote(org_slug)}/{quote(link_slug)}/cancel?token={quote(make_cancel_token(event.pk))}", ""])
+            EmailMultiAlternatives(subject="Your booking recovery links",
+                body="\n".join(lines), from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[email]).send(fail_silently=False)
+        except Exception:
+            cache.delete(key)
+            raise
 
 
 def _plain_body(*, guest_name, title, when, host_name, cancel_url, feed_url) -> str:

@@ -13,6 +13,7 @@ import path from 'path';
 
 const AUTH_FILE = path.resolve(__dirname, '../.auth/user.json');
 const SLUG = `e2e-real-${Date.now().toString(36)}`;
+const TITLE = `E2E Real Booking ${SLUG}`;
 
 interface Ctx {
   baseUrl: string;
@@ -78,6 +79,9 @@ test.describe('Public booking against the real backend', () => {
   let ctx: Ctx;
   let linkId: string | null = null;
   let bookedStart: string | null = null;
+  let cancelUrl: string;
+  let subscriptionPath: string;
+  let subscriptionUid: string;
 
   test.beforeAll(async ({ browser }) => {
     const page = await browser.newPage();
@@ -89,7 +93,7 @@ test.describe('Public booking against the real backend', () => {
       headers: ctx.headers,
       data: {
         slug: SLUG,
-        title: 'E2E Real Booking',
+        title: TITLE,
         description: 'Created by the booking E2E.',
         calendar_id: ctx.calendarId,
         duration_minutes: 30,
@@ -112,6 +116,16 @@ test.describe('Public booking against the real backend', () => {
   test.afterAll(async ({ browser }) => {
     if (!linkId) return;
     const page = await browser.newPage();
+    const events = await page.request.get(`${ctx.baseUrl}/api/events/`, {
+      headers: ctx.headers, params: { search: TITLE },
+    });
+    if (events.ok()) {
+      for (const event of unwrap<{ id: string; title: string }>(await events.json())) {
+        if (event.title.startsWith(TITLE)) {
+          await page.request.delete(`${ctx.baseUrl}/api/events/${event.id}/`, { headers: ctx.headers });
+        }
+      }
+    }
     await page.request.delete(`${ctx.baseUrl}/api/booking-links/${linkId}/`, {
       headers: ctx.headers,
     });
@@ -125,7 +139,7 @@ test.describe('Public booking against the real backend', () => {
 
     await page.goto(`/book/${ctx.orgSlug}/${SLUG}`);
     await expect(page.getByTestId('booking-widget')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('E2E Real Booking')).toBeVisible();
+    await expect(page.getByText(TITLE)).toBeVisible();
 
     // A date must be chosen before any times are offered.
     await page.getByTestId('booking-date-available').first().click();
@@ -143,13 +157,23 @@ test.describe('Public booking against the real backend', () => {
     await page.getByTestId('booking-submit').click();
 
     await expect(page.getByTestId('booking-confirmed')).toBeVisible({ timeout: 30_000 });
+    cancelUrl = (await page.getByTestId('confirmation-cancel-link').getAttribute('href'))!;
+    const feedUrl = new URL((await page.getByTestId('subscription-url').innerText()).replace(/^webcal:/, 'http:'));
+    subscriptionPath = feedUrl.pathname + feedUrl.search;
+    const feed = await page.request.get(`${ctx.baseUrl}${subscriptionPath}`, {
+      headers: { Accept: 'text/calendar' },
+    });
+    expect(feed.status()).toBe(200);
+    const ics = await feed.text();
+    expect(ics).toContain('STATUS:CONFIRMED');
+    subscriptionUid = ics.match(/^UID:(.+)\r?$/m)![1].trim();
     await context.close();
 
     // The booking must exist server-side, not just on screen.
     const verifier = await browser.newPage();
     const events = await verifier.request.get(`${ctx.baseUrl}/api/events/`, {
       headers: ctx.headers,
-      params: { search: 'E2E Real Booking' },
+      params: { search: TITLE },
     });
     expect(events.ok(), 'listing events as the owner').toBeTruthy();
     const found = unwrap<{ title: string }>(await events.json());
@@ -182,4 +206,78 @@ test.describe('Public booking against the real backend', () => {
 
     await context.close();
   });
+
+  test('concurrent external submissions confirm exactly one booking', async ({ playwright }) => {
+    const guest = await playwright.request.newContext({ baseURL: ctx.baseUrl });
+    try {
+      const availability = await guest.get(`/api/public/book/${ctx.orgSlug}/${SLUG}/`);
+      expect(availability.ok()).toBeTruthy();
+      const start = (await availability.json()).slots[0].start;
+      const responses = await Promise.all(['A', 'B'].map((suffix) => guest.post(
+        `/api/public/book/${ctx.orgSlug}/${SLUG}/bookings/`, {
+          data: { name: `Race ${suffix}`, email: `race-${suffix.toLowerCase()}@example.com`, start },
+        },
+      )));
+      expect(responses.map((response) => response.status()).sort()).toEqual([201, 409]);
+      const events = await guest.get('/api/events/', { headers: ctx.headers, params: { search: TITLE } });
+      expect(events.ok()).toBeTruthy();
+      const rows = unwrap<{ title: string; start_datetime: string }>(await events.json());
+      expect(rows.filter((event) => event.title.startsWith(TITLE) &&
+        new Date(event.start_datetime).getTime() === new Date(start).getTime())).toHaveLength(1);
+    } finally {
+      await guest.dispose();
+    }
+  });
+
+  test('a direct submission cannot bypass the before buffer', async ({ playwright }) => {
+    const guest = await playwright.request.newContext({ baseURL: ctx.baseUrl });
+    try {
+      const changed = await guest.patch(`/api/booking-links/${linkId}/`, {
+        headers: ctx.headers, data: { buffer_before_minutes: 15 },
+      });
+      expect(changed.ok()).toBeTruthy();
+      const start = new Date(new Date(bookedStart!).getTime() + 30 * 60_000).toISOString();
+      const response = await guest.post(`/api/public/book/${ctx.orgSlug}/${SLUG}/bookings/`, {
+        data: { name: 'Buffer Guest', email: 'buffer@example.com', start },
+      });
+      expect(response.status()).toBe(409);
+    } finally {
+      await guest.dispose();
+    }
+  });
+
+  test('guest cancellation updates the subscription and releases the slot', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: undefined });
+    try {
+      const page = await context.newPage();
+      const cancellation = new URL(cancelUrl);
+      await page.goto(`${ctx.baseUrl}${cancellation.pathname}${cancellation.search}`);
+      await page.getByTestId('cancel-confirm').click();
+      await expect(page.getByRole('heading', { name: 'Booking cancelled' })).toBeVisible();
+      const feed = await page.request.get(`${ctx.baseUrl}${subscriptionPath}`, {
+        headers: { Accept: 'text/calendar' },
+      });
+      expect(feed.status()).toBe(200);
+      expect(feed.headers()['cache-control']).toContain('no-store');
+      const ics = await feed.text();
+      expect(ics).toContain(`UID:${subscriptionUid}`);
+      expect(ics).toContain('STATUS:CANCELLED');
+      expect(ics).toContain('SEQUENCE:1');
+      const events = await page.request.get(`${ctx.baseUrl}/api/events/`, {
+        headers: ctx.headers, params: { search: TITLE },
+      });
+      expect(events.ok()).toBeTruthy();
+      expect(unwrap<{ title: string }>(await events.json()).some(
+        event => event.title.startsWith(TITLE) && event.title.includes('Grace Hopper'),
+      )).toBe(false);
+      const availability = await page.request.get(`${ctx.baseUrl}/api/public/book/${ctx.orgSlug}/${SLUG}/`);
+      expect(availability.ok()).toBeTruthy();
+      expect((await availability.json()).slots.some(
+        (slot: { start: string }) => new Date(slot.start).getTime() === new Date(bookedStart!).getTime(),
+      )).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+
 });
