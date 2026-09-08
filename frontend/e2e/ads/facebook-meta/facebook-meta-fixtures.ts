@@ -58,7 +58,7 @@ export const test = base.extend<{ ads: Ads }>({
         try { expect((await account.api.delete(url)).status(), `Clean up ${url}`).toBe(200); }
         catch (error) { errors.push(error); }
       }
-      if (errors.length) throw new AggregateError(errors, `Ads record cleanup failed:\n${errors.map(String).join('\n')}`);
+      if (errors.length) throw new Error(`Ads record cleanup failed:\n${errors.map(String).join('\n')}`);
     }
   }, { auto: true }],
 });

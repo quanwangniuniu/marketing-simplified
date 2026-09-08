@@ -25,7 +25,7 @@ export const test = base.extend<{ ads: { create: () => Promise<Ad> } }>({
           expect(response.status(), `Delete owned Google Ads draft ${ad.id}`).toBe(204);
         } catch (error) { errors.push(error); }
       }
-      if (errors.length) throw new AggregateError(errors, `Google Ads cleanup failed:\n${errors.map(String).join('\n')}`);
+      if (errors.length) throw new Error(`Google Ads cleanup failed:\n${errors.map(String).join('\n')}`);
     }
   },
 });

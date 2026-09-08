@@ -70,7 +70,7 @@ export const test = base.extend<{ ads: Ads }>({
       for (const remove of cleanup) {
         try { await remove(); } catch (error) { errors.push(error); }
       }
-      if (errors.length) throw new AggregateError(errors, `TikTok cleanup failed:\n${errors.map(String).join('\n')}`);
+      if (errors.length) throw new Error(`TikTok cleanup failed:\n${errors.map(String).join('\n')}`);
     }
   }, { auto: true }],
 });
