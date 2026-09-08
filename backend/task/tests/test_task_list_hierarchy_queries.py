@@ -18,6 +18,63 @@ def _tasks_from_response(response):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize('scenario', [
+    'empty_list', 'no_parent', 'missing_hierarchy',
+    'parent_outside_page', 'shared_parent',
+])
+def test_task_list_hierarchy_edge_cases(
+    authenticated_client, project, user, monkeypatch, scenario,
+):
+    from rest_framework.pagination import PageNumberPagination
+
+    user.active_project = project
+    user.save(update_fields=['active_project'])
+    monkeypatch.setattr(PageNumberPagination, 'page_size', 20)
+
+    def create_task(summary, **kwargs):
+        return Task.objects.create(
+            summary=summary, type='asset', project=project,
+            owner=user, created_by=user, **kwargs,
+        )
+
+    expected = {}
+    parent = None
+    if scenario in ('no_parent', 'missing_hierarchy'):
+        task = create_task('Standalone task', is_subtask=scenario == 'missing_hierarchy')
+        expected[task.id] = None
+    elif scenario in ('parent_outside_page', 'shared_parent'):
+        parent = create_task('Parent', order_in_project=10)
+        relation = [{
+            'parent_task_id': parent.id,
+            'parent_task_slug': parent.slug,
+            'parent_task_summary': parent.summary,
+        }]
+        for index in range(3 if scenario == 'shared_parent' else 1):
+            child = create_task(f'Child {index}', is_subtask=True, order_in_project=0)
+            TaskHierarchy.objects.create(parent_task=parent, child_task=child)
+            expected[child.id] = relation
+        if scenario == 'parent_outside_page':
+            monkeypatch.setattr(PageNumberPagination, 'page_size', 1)
+        else:
+            expected[parent.id] = None
+
+    with CaptureQueriesContext(connection) as queries:
+        response = authenticated_client.get(
+            reverse('task-list'), {'include_subtasks': 'true'},
+        )
+    assert response.status_code == status.HTTP_200_OK
+    assert len(queries) <= 12, [q['sql'] for q in queries]
+    tasks = _tasks_from_response(response)
+    assert {task['id']: task['parent_relationship'] for task in tasks} == expected
+    if scenario == 'parent_outside_page':
+        assert response.data['count'] == 2
+        assert response.data['next'] is not None
+        assert parent.id not in {task['id'] for task in tasks}
+    if scenario == 'missing_hierarchy':
+        assert tasks[0]['is_subtask'] is True
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize('child_count', [1, 19, 199])
 def test_task_list_prefetches_parent_hierarchy_within_query_budget(
     authenticated_client,
