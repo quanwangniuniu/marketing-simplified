@@ -376,6 +376,30 @@ AGENT_CSV_DIR = config(
 # Gemini API (replaces Dify for all LLM workflow calls)
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 
+# AI-assisted spreadsheet analysis (agent <-> spreadsheet integration).
+# Global kill-switch; a per-project toggle (Project.ai_analysis_enabled) and
+# per-user, per-spreadsheet consent (spreadsheet.SpreadsheetAiConsent) gate it
+# further.
+AGENT_SPREADSHEET_AI_ENABLED = config(
+    'AGENT_SPREADSHEET_AI_ENABLED', default=True, cast=bool
+)
+# Hard caps on spreadsheet data handed to an LLM (spreadsheet.providers +
+# core.services.file_parser read these at call time).
+SPREADSHEET_AI_MAX_ROWS = config('SPREADSHEET_AI_MAX_ROWS', default=500, cast=int)
+SPREADSHEET_AI_MAX_COLS = config('SPREADSHEET_AI_MAX_COLS', default=50, cast=int)
+SPREADSHEET_AI_MAX_CELLS = config('SPREADSHEET_AI_MAX_CELLS', default=20000, cast=int)
+SPREADSHEET_AI_MAX_CELL_CHARS = config(
+    'SPREADSHEET_AI_MAX_CELL_CHARS', default=2000, cast=int
+)
+# Gemini HTTP guardrails (core.services.gemini_client).
+GEMINI_TIMEOUT_SECONDS = config('GEMINI_TIMEOUT_SECONDS', default=75, cast=int)
+GEMINI_TOTAL_DEADLINE_SECONDS = config(
+    'GEMINI_TOTAL_DEADLINE_SECONDS', default=150, cast=int
+)
+GEMINI_CB_THRESHOLD = config('GEMINI_CB_THRESHOLD', default=5, cast=int)
+GEMINI_CB_WINDOW_SECONDS = config('GEMINI_CB_WINDOW_SECONDS', default=60, cast=int)
+GEMINI_CB_COOLDOWN_SECONDS = config('GEMINI_CB_COOLDOWN_SECONDS', default=30, cast=int)
+
 # Dify LLM Platform integration (kept for reference / backward compat)
 DIFY_API_URL = config('DIFY_API_URL', default='')
 DIFY_API_KEY = config('DIFY_API_KEY', default='')
@@ -980,7 +1004,7 @@ LOGGING = {
     'disable_existing_loggers': False,
     'filters': {
         'redact_secrets': {
-            '()': 'agent.log_redaction.RedactSecretsFilter',
+            '()': 'core.services.log_redaction.RedactSecretsFilter',
         },
     },
     'formatters': {
