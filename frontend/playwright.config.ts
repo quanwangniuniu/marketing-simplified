@@ -64,7 +64,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: /e2e[\\/](auth|ads)[\\/]/,
     },
     {
       name: 'firefox',
@@ -73,7 +73,7 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: /e2e[\\/](auth|ads)[\\/]/,
     },
     {
       name: 'webkit',
@@ -82,8 +82,17 @@ export default defineConfig({
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-      testIgnore: /e2e[\\/]auth[\\/]/,
+      testIgnore: /e2e[\\/](auth|ads)[\\/]/,
     },
+    // Ads fixtures provision their own real accounts; no shared login dependency.
+    ...(['chromium', 'firefox', 'webkit'] as const).map((browserName) => ({
+      name: `ads-${browserName}`,
+      use: {
+        ...devices[browserName === 'chromium' ? 'Desktop Chrome' : browserName === 'firefox' ? 'Desktop Firefox' : 'Desktop Safari'],
+      },
+      testMatch: /e2e[\\/]ads[\\/].*\.spec\.ts$/,
+      timeout: 90_000,
+    })),
     {
       name: 'auth-chromium',
       use: {
