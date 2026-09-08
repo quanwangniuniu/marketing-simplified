@@ -90,7 +90,7 @@ export const test = base.extend<{}, { account: Account }>({
       }
       if (api !== guest) await api.dispose();
       await guest.dispose();
-      if (errors.length) throw new AggregateError(errors, `Ads account cleanup failed:\n${errors.map(String).join('\n')}`);
+      if (errors.length) throw new Error(`Ads account cleanup failed:\n${errors.map(String).join('\n')}`);
     }
   }, { scope: 'worker', timeout: 120_000 }],
   storageState: async ({ account }, use) => use(account.storageState),
