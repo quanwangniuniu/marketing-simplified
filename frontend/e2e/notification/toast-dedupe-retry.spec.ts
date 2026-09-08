@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { goToKlaviyoList } from '../email_draft/email-draft-helpers';
 
 /**
- * MED-308: identical error toasts from a retry loop must merge into one toast
+ * identical error toasts from a retry loop must merge into one toast
  * with a visible ×N count badge (via toastDeduped + notificationStore).
  */
 test.describe('Toast dedupe on retry', () => {
