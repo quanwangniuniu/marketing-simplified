@@ -1,9 +1,10 @@
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { test as base, expect, type APIRequestContext } from '@playwright/test';
 
 type Account = {
   api: APIRequestContext;
   storageState: Awaited<ReturnType<APIRequestContext['storageState']>>;
+  projectPath: string;
   facebookPath: string;
 };
 
@@ -15,7 +16,8 @@ export const test = base.extend<{}, { account: Account }>({
       throw new Error('Ads account provisioning requires a loopback BASE_URL. Do not run against production.');
     }
     const id = randomUUID();
-    const credentials = { email: `ads-${id}@example.test`, password: `E2e!${randomUUID()}` };
+    // A second UUID can fail Django's email-similarity password validator.
+    const credentials = { email: `ads-${id}@example.test`, password: `E2e!${randomBytes(24).toString('base64url')}` };
     const guest = await playwright.request.newContext({ baseURL, timeout: 60_000 });
     let api = guest;
     const cleanup: Array<() => Promise<void>> = [];
@@ -78,7 +80,8 @@ export const test = base.extend<{}, { account: Account }>({
           } }) },
         ] }],
       };
-      await use({ api, storageState, facebookPath: `/${organization.slug}/${project.slug}/facebook-meta` });
+      const projectPath = `/${organization.slug}/${project.slug}`;
+      await use({ api, storageState, projectPath, facebookPath: `${projectPath}/facebook-meta` });
     } finally {
       // Attempt every cleanup even when an earlier one fails. Never touch pre-existing records.
       const errors: unknown[] = [];
